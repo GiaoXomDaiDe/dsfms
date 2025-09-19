@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
   provider = "prisma-client-js"
@@ -12,4 +7,199 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  SUSPENDED
+}
+
+enum GenderStatus {
+  MALE
+  FEMALE
+}
+
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+}
+
+model User {
+  id                String       @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  eid               String       @db.VarChar(8)
+  firstName         String
+  middleName        String?
+  lastName          String
+  address           String?      @db.Text
+  email             String       @db.Citext
+  passwordHash      String
+  status            UserStatus   @default(ACTIVE)
+  signatureImageUrl String?      @db.Text
+  roleId            String       @db.Uuid
+  gender            GenderStatus
+  avatarUrl         String?      @db.Text
+  phoneNumber       String?      @db.VarChar(20)
+  departmentId      String?      @db.Uuid
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now()) @updatedAt
+  deletedAt         DateTime?
+
+  createdById       String?      @db.Uuid
+  updatedById       String?      @db.Uuid
+
+  // Relations
+  role        Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  department  Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy   User?       @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?       @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   
+  // Self-relations backrefs
+  createdUsers User[]     @relation("UserCreatedBy")
+  updatedUsers User[]     @relation("UserUpdatedBy")
+
+  // Department relations
+  headOfDepartments Department[] @relation("DepartmentHead")
+
+  // Role relations
+  createdRoles Role[] @relation("RoleCreatedBy")
+  updatedRoles Role[] @relation("RoleUpdatedBy")
+
+  // Permission relations
+  createdPermissions Permission[] @relation("PermissionCreatedBy")
+  updatedPermissions Permission[] @relation("PermissionUpdatedBy")
+
+  // TrainerProfile relations
+  createdTrainerProfiles TrainerProfile[] @relation("TrainerCreatedBy")
+  updatedTrainerProfiles TrainerProfile[] @relation("TrainerUpdatedBy")
+
+  // TraineeProfile relations
+  createdTraineeProfiles TraineeProfile[] @relation("TraineeCreatedBy")
+  updatedTraineeProfiles TraineeProfile[] @relation("TraineeUpdatedBy")
+
+  // Department creation/update relations
+  createdDepartments Department[] @relation("DeptCreatedBy")
+  updatedDepartments Department[] @relation("DeptUpdatedBy")
+
+  // Profiles
+  trainerProfile  TrainerProfile?
+  traineeProfile  TraineeProfile?
+
+  @@map("User")
+  @@index([deletedAt])
+}
+
+model Role {
+  id          String   @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  name        String
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  deletedAt   DateTime?
+
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  createdBy   User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  users       User[]
+
+  @@map("Role")
+  @@index([deletedAt])
+}
+
+model Permission {
+  id          String     @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  method      HttpMethod
+  path        String
+  name        String
+  module      String
+  description String?
+
+  createdById String?    @db.Uuid
+  updatedById String?    @db.Uuid
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
+  deletedAt   DateTime?
+
+  createdBy   User?      @relation("PermissionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?      @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("Permission")
+  @@index([deletedAt])
+}
+
+model TrainerProfile {
+  userId             String  @id @db.Uuid
+  specialization     String
+  certificationNumber String?
+  yearsOfExp         Int     @default(0)
+  bio                String? @db.Text
+
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdBy User?  @relation("TrainerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?  @relation("TrainerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("Trainer_Profile")
+  @@index([deletedAt])
+}
+
+model TraineeProfile {
+  userId         String   @id @db.Uuid
+  dob            DateTime
+  enrollmentDate DateTime
+  trainingBatch  String
+  passportNo     String?
+  nation         String
+
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  deletedAt   DateTime?
+
+  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdBy User?  @relation("TraineeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?  @relation("TraineeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("Trainee_Profile")
+  @@index([deletedAt])
+}
+
+model Department {
+  id          String   @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  name        String
+  description String?  @db.Text
+  headUserId  String?  @db.Uuid
+  isActive    Boolean  @default(true)
+
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  deletedAt   DateTime?
+
+  headUser  User?  @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
+  createdBy User?  @relation("DeptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?  @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  users     User[] @relation("DepartmentMembers")
+
+  @@map("Department")
+  @@index([deletedAt])
+}
