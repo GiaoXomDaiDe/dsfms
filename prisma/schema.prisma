@@ -99,7 +99,7 @@ model Role {
   name        String
   description String?  @db.Text
   isActive    Boolean  @default(true)
-
+  permissions Permission[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   deletedAt   DateTime?
@@ -122,7 +122,7 @@ model Permission {
   name        String
   module      String
   description String?
-
+  roles       Role[]
   createdById String?    @db.Uuid
   updatedById String?    @db.Uuid
 
