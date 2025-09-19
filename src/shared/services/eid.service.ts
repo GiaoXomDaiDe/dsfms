@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -19,7 +20,7 @@ export class EidService {
       throw new Error('Không có EID cho vai trò này')
     }
 
-    return await this.prisma.$transaction(async ({ user }) => {
+    return await this.prisma.$transaction(async ({ user }: Prisma.TransactionClient) => {
       const lastUser = await user.findFirst({
         where: { eid: { startsWith: prefix } },
         orderBy: { eid: 'desc' },

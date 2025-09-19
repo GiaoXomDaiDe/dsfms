@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core'
+import { Permission } from '@prisma/client'
 import { AppModule } from '~/app.module'
 import { HTTPMethod } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -36,15 +37,15 @@ async function bootstrap() {
 
   // Tạo object permissionInDbMap với key là [method-path]
   const permissionInDbMap: Record<string, (typeof permissionsInDb)[0]> = permissionsInDb.reduce(
-    (acc, item) => {
+    (acc: Record<string, Permission>, item: Permission) => {
       acc[`${item.method}-${item.path}`] = item
       return acc
     },
-    {} as Record<string, (typeof permissionsInDb)[0]>
+    {} as Record<string, Permission>
   )
   // Tạo object availableRoutesMap với key là [method-path]
   const availableRoutesMap: Record<string, (typeof availableRoutes)[0]> = availableRoutes.reduce(
-    (acc, item) => {
+    (acc: Record<string, (typeof availableRoutes)[0]>, item: (typeof availableRoutes)[0]) => {
       acc[`${item.method}-${item.path}`] = item
       return acc
     },
@@ -52,7 +53,7 @@ async function bootstrap() {
   )
 
   // Tìm permissions trong database mà không tồn tại trong availableRoutes
-  const permissionsToDelete = permissionsInDb.filter((item) => {
+  const permissionsToDelete = permissionsInDb.filter((item: Permission) => {
     return !availableRoutesMap[`${item.method}-${item.path}`]
   })
   // Xóa permissions trong database không tồn tại trong availableRoutes
@@ -60,7 +61,7 @@ async function bootstrap() {
     const deleteResult = await prisma.permission.deleteMany({
       where: {
         id: {
-          in: permissionsToDelete.map((item) => item.id)
+          in: permissionsToDelete.map((item: Permission) => item.id)
         }
       }
     })
@@ -91,7 +92,7 @@ async function bootstrap() {
   })
   console.log('Total permissions in DB:', updatedPermissionsInDb)
 
-  const adminPermissionIds = updatedPermissionsInDb.map((item) => ({ id: item.id }))
+  const adminPermissionIds = updatedPermissionsInDb.map((item: Permission) => ({ id: item.id }))
   await updateRole(adminPermissionIds, 'ADMINISTRATOR')
   process.exit(0)
 }
