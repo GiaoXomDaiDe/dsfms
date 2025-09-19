@@ -52,16 +52,18 @@ model User {
 
   createdById       String?      @db.Uuid
   updatedById       String?      @db.Uuid
+  deletedById       String?      @db.Uuid
 
   // Relations
-  role        Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  department  Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
-  createdBy   User?       @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy   User?       @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  
+  role        Role        @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department  Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  createdBy   User?       @relation("UserCreatedBy", fields: [createdById], references: [id],  onDelete: SetNull, onUpdate: NoAction)
+  updatedBy   User?       @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy   User?       @relation("UserDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   // Self-relations backrefs
   createdUsers User[]     @relation("UserCreatedBy")
   updatedUsers User[]     @relation("UserUpdatedBy")
+  deletedUsers User[]     @relation("UserDeletedBy")
 
   // Department relations
   headOfDepartments Department[] @relation("DepartmentHead")
@@ -69,22 +71,27 @@ model User {
   // Role relations
   createdRoles Role[] @relation("RoleCreatedBy")
   updatedRoles Role[] @relation("RoleUpdatedBy")
+  deletedRoles Role[] @relation("RoleDeletedBy")
 
   // Permission relations
   createdPermissions Permission[] @relation("PermissionCreatedBy")
   updatedPermissions Permission[] @relation("PermissionUpdatedBy")
+  deletedPermissions Permission[] @relation("PermissionDeletedBy")
 
   // TrainerProfile relations
   createdTrainerProfiles TrainerProfile[] @relation("TrainerCreatedBy")
   updatedTrainerProfiles TrainerProfile[] @relation("TrainerUpdatedBy")
+  deletedTrainerProfiles TrainerProfile[] @relation("TrainerDeletedBy")
 
   // TraineeProfile relations
   createdTraineeProfiles TraineeProfile[] @relation("TraineeCreatedBy")
   updatedTraineeProfiles TraineeProfile[] @relation("TraineeUpdatedBy")
+  deletedTraineeProfiles TraineeProfile[] @relation("TraineeDeletedBy")
 
   // Department creation/update relations
   createdDepartments Department[] @relation("DeptCreatedBy")
   updatedDepartments Department[] @relation("DeptUpdatedBy")
+  deletedDepartments Department[] @relation("DeptDeletedBy")
 
   // Profiles
   trainerProfile  TrainerProfile?
@@ -106,9 +113,11 @@ model Role {
 
   createdById String?  @db.Uuid
   updatedById String?  @db.Uuid
+  deletedById String?  @db.Uuid
 
-  createdBy   User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy   User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdBy   User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy   User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy   User?    @relation("RoleDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   users       User[]
 
   @@map("Role")
@@ -125,14 +134,15 @@ model Permission {
   roles       Role[]
   createdById String?    @db.Uuid
   updatedById String?    @db.Uuid
+  deletedById String?    @db.Uuid
 
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @default(now()) @updatedAt
   deletedAt   DateTime?
 
-  createdBy   User?      @relation("PermissionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy   User?      @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-
+  createdBy   User?      @relation("PermissionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy   User?      @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy   User?      @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   @@map("Permission")
   @@index([deletedAt])
 }
@@ -146,15 +156,17 @@ model TrainerProfile {
 
   createdById String? @db.Uuid
   updatedById String? @db.Uuid
+  deletedById String? @db.Uuid
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   deletedAt   DateTime?
 
   // Relations
-  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
-  createdBy User?  @relation("TrainerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?  @relation("TrainerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  user      User   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy User?  @relation("TrainerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy User?  @relation("TrainerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy User?  @relation("TrainerDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@map("Trainer_Profile")
   @@index([deletedAt])
@@ -170,14 +182,16 @@ model TraineeProfile {
 
   createdById String? @db.Uuid
   updatedById String? @db.Uuid
+  deletedById String? @db.Uuid
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   deletedAt   DateTime?
 
-  user      User   @relation(fields: [userId], references: [id], onDelete: Restrict)
-  createdBy User?  @relation("TraineeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?  @relation("TraineeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  user      User   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy User?  @relation("TraineeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy User?  @relation("TraineeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy User?  @relation("TraineeDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@map("Trainee_Profile")
   @@index([deletedAt])
@@ -192,14 +206,16 @@ model Department {
 
   createdById String?  @db.Uuid
   updatedById String?  @db.Uuid
+  deletedById String?  @db.Uuid
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   deletedAt   DateTime?
 
-  headUser  User?  @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
-  createdBy User?  @relation("DeptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?  @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  headUser  User?  @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  createdBy User?  @relation("DeptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy User?  @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy User?  @relation("DeptDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   users     User[] @relation("DepartmentMembers")
 
   @@map("Department")
