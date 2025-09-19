@@ -25,6 +25,8 @@ enum HttpMethod {
   PUT
   PATCH
   DELETE
+  OPTIONS
+  HEAD
 }
 
 model User {
