@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core'
-import { Permission } from '@prisma/client'
 import { AppModule } from '~/app.module'
+import { PermissionType } from '~/routes/permission/permission.model'
 import { HTTPMethod } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -36,12 +36,12 @@ async function bootstrap() {
       .filter((item: any) => item !== undefined)
 
   // Tạo object permissionInDbMap với key là [method-path]
-  const permissionInDbMap: Record<string, (typeof permissionsInDb)[0]> = permissionsInDb.reduce(
-    (acc: Record<string, Permission>, item: Permission) => {
+  const permissionInDbMap: Record<string, PermissionType> = permissionsInDb.reduce(
+    (acc: Record<string, PermissionType>, item: PermissionType) => {
       acc[`${item.method}-${item.path}`] = item
       return acc
     },
-    {} as Record<string, Permission>
+    {} as Record<string, PermissionType>
   )
   // Tạo object availableRoutesMap với key là [method-path]
   const availableRoutesMap: Record<string, (typeof availableRoutes)[0]> = availableRoutes.reduce(
@@ -53,7 +53,7 @@ async function bootstrap() {
   )
 
   // Tìm permissions trong database mà không tồn tại trong availableRoutes
-  const permissionsToDelete = permissionsInDb.filter((item: Permission) => {
+  const permissionsToDelete = permissionsInDb.filter((item: PermissionType) => {
     return !availableRoutesMap[`${item.method}-${item.path}`]
   })
   // Xóa permissions trong database không tồn tại trong availableRoutes
@@ -61,7 +61,7 @@ async function bootstrap() {
     const deleteResult = await prisma.permission.deleteMany({
       where: {
         id: {
-          in: permissionsToDelete.map((item: Permission) => item.id)
+          in: permissionsToDelete.map((item: PermissionType) => item.id)
         }
       }
     })
@@ -92,7 +92,7 @@ async function bootstrap() {
   })
   console.log('Total permissions in DB:', updatedPermissionsInDb)
 
-  const adminPermissionIds = updatedPermissionsInDb.map((item: Permission) => ({ id: item.id }))
+  const adminPermissionIds = updatedPermissionsInDb.map((item: PermissionType) => ({ id: item.id }))
   await updateRole(adminPermissionIds, 'ADMINISTRATOR')
   process.exit(0)
 }
@@ -113,7 +113,5 @@ const updateRole = async (permissionIds: { id: string }[], roleName: string) => 
       permissions: { set: permissionIds }
     }
   })
-
-  process.exit(0)
 }
 bootstrap()
