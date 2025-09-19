@@ -92,10 +92,11 @@ async function bootstrap() {
   console.log('Total permissions in DB:', updatedPermissionsInDb)
 
   const adminPermissionIds = updatedPermissionsInDb.map((item) => ({ id: item.id }))
+  await updateRole(adminPermissionIds, 'ADMINISTRATOR')
   process.exit(0)
 }
 
-const updateRole = async (permissionIds: { id: number }[], roleName: string) => {
+const updateRole = async (permissionIds: { id: string }[], roleName: string) => {
   // Cập nhật lại các permissions trong Admin Role
   const role = await prisma.role.findFirstOrThrow({
     where: {
@@ -108,9 +109,7 @@ const updateRole = async (permissionIds: { id: number }[], roleName: string) => 
       id: role.id
     },
     data: {
-      permissions: {
-        set: permissionIds
-      }
+      permissions: { set: permissionIds }
     }
   })
 
