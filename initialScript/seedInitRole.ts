@@ -1,3 +1,4 @@
+import { Role } from '@prisma/client'
 import envConfig from '~/shared/config'
 import { GenderStatus, RoleName } from '~/shared/constants/auth.constant'
 import { EidService } from '~/shared/services/eid.service'
@@ -23,7 +24,7 @@ const main = async () => {
     ]
   })
 
-  const adminRole = roles.find((role) => role.name === RoleName.ADMINISTRATOR)
+  const adminRole = roles.find((role: Role) => role.name === RoleName.ADMINISTRATOR)
 
   const hashedPassword = await hashingService.hashPassword(envConfig.ADMIN_PASSWORD)
 
