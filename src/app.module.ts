@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
+import { ZodSerializerInterceptor } from 'nestjs-zod'
+import { HttpExceptionFilter } from '~/shared/filters/http-exception.filter'
+import CustomZodValidationPipe from '~/shared/pipes/custom-zod-vaidation.pipe'
 import { SharedModule } from '~/shared/shared.module'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { AuthModule } from './auth/auth.module'
 import { EmailModule } from './email/email.module'
+import { PermissionModule } from './routes/permission/permission.module'
 
 @Module({
   imports: [
@@ -14,9 +19,24 @@ import { EmailModule } from './email/email.module'
     }),
     SharedModule,
     AuthModule,
-    EmailModule
+    EmailModule,
+    PermissionModule
   ],
   controllers: [AppController],
-  providers: [AppService]
+  providers: [
+    AppService,
+    {
+      provide: APP_PIPE,
+      useClass: CustomZodValidationPipe
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ZodSerializerInterceptor
+    },
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter
+    }
+  ]
 })
 export class AppModule {}
