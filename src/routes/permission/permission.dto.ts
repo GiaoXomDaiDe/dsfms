@@ -13,7 +13,7 @@ export class GetPermissionParamsDTO extends createZodDto(GetPermissionParamsSche
 
 export class GetPermissionDetailResDTO extends createZodDto(GetPermissionDetailResSchema) {}
 
-export class CreatePermissioonBodyDTO extends createZodDto(CreatePermissionBodySchema) {}
+export class CreatePermissionBodyDTO extends createZodDto(CreatePermissionBodySchema) {}
 
 export class UpdatePermissionBodyDTO extends createZodDto(CreatePermissionBodySchema) {}
 

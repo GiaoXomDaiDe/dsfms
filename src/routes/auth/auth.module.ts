@@ -11,10 +11,11 @@ import { JwtStrategy } from './strategies/jwt.strartegy';
     PassportModule,
     JwtModule.register({
       secret: 'daylasecretkeysieudaihehe',
-      signOptions: { expiresIn: '10m' },
+      signOptions: { expiresIn: '15m' }, // Default cho access token
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JwtStrategy]
+  providers: [AuthService, LocalStrategy, JwtStrategy],
+  exports: [AuthService, JwtModule]
 })
 export class AuthModule {}
