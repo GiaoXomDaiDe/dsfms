@@ -1,3 +1,5 @@
+export const REQUEST_USER_KEY = 'user'
+
 export const RoleName = {
   ADMINISTRATOR: 'ADMINISTRATOR',
   TRAINEE: 'TRAINEE',
