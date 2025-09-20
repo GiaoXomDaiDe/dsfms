@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
+import { PrismaService } from '../../shared/services/prisma.service';
+import { HashingService } from '../../shared/services/hashing.service';
 import { JwtService } from '@nestjs/jwt';
 
 describe('AuthService', () => {
@@ -10,9 +12,24 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         {
+          provide: PrismaService,
+          useValue: {
+            user: {
+              findFirst: jest.fn(),
+            },
+          },
+        },
+        {
+          provide: HashingService,
+          useValue: {
+            comparePassword: jest.fn(),
+          },
+        },
+        {
           provide: JwtService,
           useValue: {
-            sign: jest.fn().mockReturnValue('mock-jwt-token'),
+            sign: jest.fn(),
+            verify: jest.fn(),
           },
         },
       ],

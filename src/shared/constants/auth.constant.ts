@@ -20,3 +20,21 @@ export const HTTPMethod = {
   OPTIONS: 'OPTIONS',
   HEAD: 'HEAD'
 } as const
+
+export const MESSAGES = {
+  401: 'Unauthorized access',
+  403: 'Forbidden',
+  404: 'Not Found',
+  500: 'Internal Server Error'
+} as const;
+
+export const STATUS_CONST = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  PENDING: 'PENDING',
+  SUSPENDED: 'SUSPENDED'
+} as const;
+
+export const ERROR_MESSAGES = {
+  INVALID_EMAIL: 'Invalid email address format',
+} as const;
