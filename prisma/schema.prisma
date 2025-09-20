@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,6 +5,167 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eid                    String           @db.VarChar(8)
+  firstName              String
+  middleName             String?
+  lastName               String
+  address                String?
+  email                  String           @db.Citext
+  passwordHash           String
+  status                 UserStatus       @default(ACTIVE)
+  signatureImageUrl      String?
+  roleId                 String           @db.Uuid
+  gender                 GenderStatus
+  avatarUrl              String?
+  phoneNumber            String?          @db.VarChar(20)
+  departmentId           String?          @db.Uuid
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @default(now()) @updatedAt
+  deletedAt              DateTime?
+  createdById            String?          @db.Uuid
+  updatedById            String?          @db.Uuid
+  deletedById            String?          @db.Uuid
+  createdDepartments     Department[]     @relation("DeptCreatedBy")
+  deletedDepartments     Department[]     @relation("DeptDeletedBy")
+  headOfDepartments      Department[]     @relation("DepartmentHead")
+  updatedDepartments     Department[]     @relation("DeptUpdatedBy")
+  createdPermissions     Permission[]     @relation("PermissionCreatedBy")
+  deletedPermissions     Permission[]     @relation("PermissionDeletedBy")
+  updatedPermissions     Permission[]     @relation("PermissionUpdatedBy")
+  createdRoles           Role[]           @relation("RoleCreatedBy")
+  deletedRoles           Role[]           @relation("RoleDeletedBy")
+  updatedRoles           Role[]           @relation("RoleUpdatedBy")
+  createdTraineeProfiles TraineeProfile[] @relation("TraineeCreatedBy")
+  deletedTraineeProfiles TraineeProfile[] @relation("TraineeDeletedBy")
+  updatedTraineeProfiles TraineeProfile[] @relation("TraineeUpdatedBy")
+  traineeProfile         TraineeProfile?
+  createdTrainerProfiles TrainerProfile[] @relation("TrainerCreatedBy")
+  deletedTrainerProfiles TrainerProfile[] @relation("TrainerDeletedBy")
+  updatedTrainerProfiles TrainerProfile[] @relation("TrainerUpdatedBy")
+  trainerProfile         TrainerProfile?
+  createdBy              User?            @relation("UserCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  createdUsers           User[]           @relation("UserCreatedBy")
+  deletedBy              User?            @relation("UserDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  deletedUsers           User[]           @relation("UserDeletedBy")
+  department             Department?      @relation("DepartmentMembers", fields: [departmentId], references: [id], onUpdate: NoAction)
+  role                   Role             @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedBy              User?            @relation("UserUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  updatedUsers           User[]           @relation("UserUpdatedBy")
+
+  @@index([deletedAt])
+  @@map("User")
+}
+
+model Role {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
+  deletedAt   DateTime?
+  createdById String?      @db.Uuid
+  updatedById String?      @db.Uuid
+  deletedById String?      @db.Uuid
+  createdBy   User?        @relation("RoleCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy   User?        @relation("RoleDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  updatedBy   User?        @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  users       User[]
+  permissions Permission[] @relation("PermissionToRole")
+
+  @@index([deletedAt])
+  @@map("Role")
+}
+
+model Permission {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  method      HttpMethod
+  path        String
+  name        String
+  module      String
+  description String?
+  createdById String?    @db.Uuid
+  updatedById String?    @db.Uuid
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
+  deletedAt   DateTime?
+  deletedById String?    @db.Uuid
+  createdBy   User?      @relation("PermissionCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy   User?      @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  updatedBy   User?      @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  roles       Role[]     @relation("PermissionToRole")
+
+  @@index([deletedAt])
+  @@map("Permission")
+}
+
+model TrainerProfile {
+  userId              String    @id @db.Uuid
+  specialization      String
+  certificationNumber String?
+  yearsOfExp          Int       @default(0)
+  bio                 String?
+  createdById         String?   @db.Uuid
+  updatedById         String?   @db.Uuid
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @default(now()) @updatedAt
+  deletedAt           DateTime?
+  deletedById         String?   @db.Uuid
+  createdBy           User?     @relation("TrainerCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy           User?     @relation("TrainerDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  updatedBy           User?     @relation("TrainerUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  user                User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([deletedAt])
+  @@map("Trainer_Profile")
+}
+
+model TraineeProfile {
+  userId         String    @id @db.Uuid
+  dob            DateTime
+  enrollmentDate DateTime
+  trainingBatch  String
+  passportNo     String?
+  nation         String
+  createdById    String?   @db.Uuid
+  updatedById    String?   @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  deletedAt      DateTime?
+  deletedById    String?   @db.Uuid
+  createdBy      User?     @relation("TraineeCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy      User?     @relation("TraineeDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  updatedBy      User?     @relation("TraineeUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  user           User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([deletedAt])
+  @@map("Trainee_Profile")
+}
+
+model Department {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  headUserId  String?   @db.Uuid
+  isActive    Boolean   @default(true)
+  createdById String?   @db.Uuid
+  updatedById String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  deletedAt   DateTime?
+  deletedById String?   @db.Uuid
+  createdBy   User?     @relation("DeptCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy   User?     @relation("DeptDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  headUser    User?     @relation("DepartmentHead", fields: [headUserId], references: [id], onUpdate: NoAction)
+  updatedBy   User?     @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  users       User[]    @relation("DepartmentMembers")
+
+  @@index([deletedAt])
+  @@map("Department")
 }
 
 enum UserStatus {
@@ -27,197 +187,4 @@ enum HttpMethod {
   DELETE
   OPTIONS
   HEAD
-}
-
-model User {
-  id                String       @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
-  eid               String       @db.VarChar(8)
-  firstName         String
-  middleName        String?
-  lastName          String
-  address           String?      @db.Text
-  email             String       @db.Citext
-  passwordHash      String
-  status            UserStatus   @default(ACTIVE)
-  signatureImageUrl String?      @db.Text
-  roleId            String       @db.Uuid
-  gender            GenderStatus
-  avatarUrl         String?      @db.Text
-  phoneNumber       String?      @db.VarChar(20)
-  departmentId      String?      @db.Uuid
-
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @default(now()) @updatedAt
-  deletedAt         DateTime?
-
-  createdById       String?      @db.Uuid
-  updatedById       String?      @db.Uuid
-  deletedById       String?      @db.Uuid
-
-  // Relations
-  role        Role        @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  department  Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  createdBy   User?       @relation("UserCreatedBy", fields: [createdById], references: [id],  onDelete: SetNull, onUpdate: NoAction)
-  updatedBy   User?       @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  deletedBy   User?       @relation("UserDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  // Self-relations backrefs
-  createdUsers User[]     @relation("UserCreatedBy")
-  updatedUsers User[]     @relation("UserUpdatedBy")
-  deletedUsers User[]     @relation("UserDeletedBy")
-
-  // Department relations
-  headOfDepartments Department[] @relation("DepartmentHead")
-
-  // Role relations
-  createdRoles Role[] @relation("RoleCreatedBy")
-  updatedRoles Role[] @relation("RoleUpdatedBy")
-  deletedRoles Role[] @relation("RoleDeletedBy")
-
-  // Permission relations
-  createdPermissions Permission[] @relation("PermissionCreatedBy")
-  updatedPermissions Permission[] @relation("PermissionUpdatedBy")
-  deletedPermissions Permission[] @relation("PermissionDeletedBy")
-
-  // TrainerProfile relations
-  createdTrainerProfiles TrainerProfile[] @relation("TrainerCreatedBy")
-  updatedTrainerProfiles TrainerProfile[] @relation("TrainerUpdatedBy")
-  deletedTrainerProfiles TrainerProfile[] @relation("TrainerDeletedBy")
-
-  // TraineeProfile relations
-  createdTraineeProfiles TraineeProfile[] @relation("TraineeCreatedBy")
-  updatedTraineeProfiles TraineeProfile[] @relation("TraineeUpdatedBy")
-  deletedTraineeProfiles TraineeProfile[] @relation("TraineeDeletedBy")
-
-  // Department creation/update relations
-  createdDepartments Department[] @relation("DeptCreatedBy")
-  updatedDepartments Department[] @relation("DeptUpdatedBy")
-  deletedDepartments Department[] @relation("DeptDeletedBy")
-
-  // Profiles
-  trainerProfile  TrainerProfile?
-  traineeProfile  TraineeProfile?
-
-  @@map("User")
-  @@index([deletedAt])
-}
-
-model Role {
-  id          String   @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
-  name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
-  permissions Permission[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-  deletedAt   DateTime?
-
-  createdById String?  @db.Uuid
-  updatedById String?  @db.Uuid
-  deletedById String?  @db.Uuid
-
-  createdBy   User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  updatedBy   User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  deletedBy   User?    @relation("RoleDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  users       User[]
-
-  @@map("Role")
-  @@index([deletedAt])
-}
-
-model Permission {
-  id          String     @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
-  method      HttpMethod
-  path        String
-  name        String
-  module      String
-  description String?
-  roles       Role[]
-  createdById String?    @db.Uuid
-  updatedById String?    @db.Uuid
-  deletedById String?    @db.Uuid
-
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @default(now()) @updatedAt
-  deletedAt   DateTime?
-
-  createdBy   User?      @relation("PermissionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  updatedBy   User?      @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  deletedBy   User?      @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  @@map("Permission")
-  @@index([deletedAt])
-}
-
-model TrainerProfile {
-  userId             String  @id @db.Uuid
-  specialization     String
-  certificationNumber String?
-  yearsOfExp         Int     @default(0)
-  bio                String? @db.Text
-
-  createdById String? @db.Uuid
-  updatedById String? @db.Uuid
-  deletedById String? @db.Uuid
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-  deletedAt   DateTime?
-
-  // Relations
-  user      User   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdBy User?  @relation("TrainerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  updatedBy User?  @relation("TrainerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  deletedBy User?  @relation("TrainerDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-
-  @@map("Trainer_Profile")
-  @@index([deletedAt])
-}
-
-model TraineeProfile {
-  userId         String   @id @db.Uuid
-  dob            DateTime
-  enrollmentDate DateTime
-  trainingBatch  String
-  passportNo     String?
-  nation         String
-
-  createdById String? @db.Uuid
-  updatedById String? @db.Uuid
-  deletedById String? @db.Uuid
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-  deletedAt   DateTime?
-
-  user      User   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdBy User?  @relation("TraineeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  updatedBy User?  @relation("TraineeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  deletedBy User?  @relation("TraineeDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-
-  @@map("Trainee_Profile")
-  @@index([deletedAt])
-}
-
-model Department {
-  id          String   @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
-  name        String
-  description String?  @db.Text
-  headUserId  String?  @db.Uuid
-  isActive    Boolean  @default(true)
-
-  createdById String?  @db.Uuid
-  updatedById String?  @db.Uuid
-  deletedById String?  @db.Uuid
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-  deletedAt   DateTime?
-
-  headUser  User?  @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  createdBy User?  @relation("DeptCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  updatedBy User?  @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  deletedBy User?  @relation("DeptDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  users     User[] @relation("DepartmentMembers")
-
-  @@map("Department")
-  @@index([deletedAt])
 }

@@ -1,6 +1,6 @@
-import { Controller, Post, Body } from '@nestjs/common';
-import { EmailService } from './email.service';
-import { SendEmailDto, BulkEmailDto } from '~/dto/email.dto';
+import { Controller, Post, Body } from '@nestjs/common'
+import { EmailService } from './email.service'
+import { SendEmailDto, BulkEmailDto } from '~/dto/email.dto'
 
 @Controller('email')
 export class EmailController {
@@ -8,16 +8,16 @@ export class EmailController {
 
   @Post('send')
   async sendEmail(@Body() sendEmailDto: SendEmailDto) {
-    return this.emailService.sendEmail(sendEmailDto);
+    return this.emailService.sendEmail(sendEmailDto)
   }
 
   @Post('bulk-send')
   async sendBulkEmail(@Body() bulkEmailDto: BulkEmailDto) {
-    return this.emailService.sendBulkEmail(bulkEmailDto);
+    return this.emailService.sendBulkEmail(bulkEmailDto)
   }
 
   @Post('bulk-simple')
   async bulkEmailSending(@Body() body: { recipients: string[] }) {
-    return this.emailService.bulkEmailSending(body.recipients);
+    return this.emailService.bulkEmailSending(body.recipients)
   }
 }

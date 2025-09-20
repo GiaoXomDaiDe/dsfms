@@ -1,4 +1,52 @@
+import { IsString, IsNotEmpty, IsEmail } from 'class-validator'
+
 export class AuthPayloadDto {
-    email: string;
-    password: string;
+  @IsEmail()
+  @IsNotEmpty()
+  email: string
+
+  @IsString()
+  @IsNotEmpty()
+  password: string
+}
+
+export class LoginDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string
+
+  @IsString()
+  @IsNotEmpty()
+  password: string
+}
+
+export class RegisterDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string
+
+  @IsString()
+  @IsNotEmpty()
+  password: string
+
+  @IsString()
+  @IsNotEmpty()
+  fullName: string
+}
+
+export class RefreshTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  refresh_token: string
+}
+
+// Response DTOs
+export interface AuthResponse {
+  access_token: string
+  refresh_token: string
+}
+
+export interface RefreshResponse {
+  access_token: string
+  refresh_token: string
 }

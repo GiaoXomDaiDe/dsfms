@@ -1,3 +1,0 @@
-export const ERROR_MESSAGES = {
-  INVALID_EMAIL: 'Invalid email address format',
-}
