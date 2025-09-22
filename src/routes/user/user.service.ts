@@ -5,7 +5,7 @@ import {
   UserAlreadyExistsException,
   UserNotFoundException
 } from '~/routes/user/user.error'
-import { CreateUserBodyType, GetUsersQueryType, UpdateUserBodyType } from '~/routes/user/user.model'
+import { CreateUserBodyWithProfileType, GetUsersQueryType, UpdateUserBodyType } from '~/routes/user/user.model'
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import { RoleName } from '~/shared/constants/auth.constant'
@@ -34,13 +34,21 @@ export class UserService {
   }
 
   async findById(id: string) {
-    const user = await this.sharedUserRepository.findUniqueIncludeRolePermissions({
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile({
       id
     })
     if (!user) {
       throw UserNotFoundException
     }
-    return user
+    const { trainerProfile, traineeProfile, ...baseUser } = user
+
+    if (user.role.name === RoleName.TRAINER && trainerProfile) {
+      return { ...baseUser, trainerProfile }
+    } else if (user.role.name === RoleName.TRAINEE && traineeProfile) {
+      return { ...baseUser, traineeProfile }
+    } else {
+      return baseUser
+    }
   }
 
   async create({
@@ -48,7 +56,7 @@ export class UserService {
     createdById,
     createdByRoleName
   }: {
-    data: CreateUserBodyType
+    data: CreateUserBodyWithProfileType
     createdById: string
     createdByRoleName: string
   }) {
@@ -56,18 +64,35 @@ export class UserService {
       // Chỉ có admin agent mới có quyền tạo user với role là admin
       await this.verifyRole({
         roleNameAgent: createdByRoleName,
-        roleIdTarget: data.roleId
+        roleIdTarget: data.role.id
       })
-      const eid = (await this.eidService.generateEid({ roleName: createdByRoleName })) as string
+
+      // Lấy ra role detail
+      const targetRole = await this.sharedRoleRepository.findRolebyId(data.role.id)
+      if (!targetRole) {
+        throw RoleNotFoundException
+      }
+      // Kiểm tra dữ liệu profile có hợp lệ không
+      // this.validateProfileData(targetRole.name, data)
+      // Tạo eid dựa theo role
+      const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
       // Hash the password
       const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
-      const user = await this.userRepo.create({
+
+      //extract profile data if exists
+      const { trainerProfile, traineeProfile, role, ...userData } = data
+
+      const user = await this.userRepo.createWithProfile({
         createdById,
-        data: {
-          ...data,
+        userData: {
+          ...userData,
+          roleId: role.id,
           passwordHash: hashedPassword,
           eid
-        }
+        },
+        roleName: targetRole.name,
+        trainerProfile,
+        traineeProfile
       })
       return user
     } catch (error) {
@@ -81,6 +106,23 @@ export class UserService {
       throw error
     }
   }
+  // private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
+  //   // Validate that correct profile is provided for role
+  //   if (roleName === RoleName.TRAINER && data.traineeProfile) {
+  //     throw new ConflictException('Cannot provide trainee profile for trainer role')
+  //   }
+  //   if (roleName === RoleName.TRAINEE && data.trainerProfile) {
+  //     throw new ConflictException('Cannot provide trainer profile for trainee role')
+  //   }
+
+  //   // Optional: Warn if profile data is missing
+  //   if (roleName === RoleName.TRAINER && !data.trainerProfile) {
+  //     console.warn('Creating trainer without profile data')
+  //   }
+  //   if (roleName === RoleName.TRAINEE && !data.traineeProfile) {
+  //     console.warn('Creating trainee without profile data')
+  //   }
+  // }
 
   /**
    * Function này kiểm tra xem người thực hiện có quyền tác động đến người khác không.

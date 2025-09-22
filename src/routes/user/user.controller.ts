@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
-  CreateUserBodyDTO,
+  CreateUserBodyWithProfileDTO,
   CreateUserResDTO,
   GetUserParamsDTO,
   GetUserProfileResDTO,
@@ -37,7 +37,7 @@ export class UserController {
   @Post()
   @ZodSerializerDto(CreateUserResDTO)
   create(
-    @Body() body: CreateUserBodyDTO,
+    @Body() body: CreateUserBodyWithProfileDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
   ) {

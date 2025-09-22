@@ -1,6 +1,7 @@
 import { createZodDto } from 'nestjs-zod'
 import {
   CreateUserBodySchema,
+  CreateUserBodyWithProfileSchema,
   GetUserParamsSchema,
   GetUserProfileResSchema,
   GetUsersQuerySchema,
@@ -28,3 +29,5 @@ export class GetUserProfileResDTO extends createZodDto(GetUserProfileResSchema) 
 export class UpdateProfileResDTO extends createZodDto(UpdateProfileResSchema) {}
 
 export class CreateUserResDTO extends UpdateProfileResDTO {}
+
+export class CreateUserBodyWithProfileDTO extends createZodDto(CreateUserBodyWithProfileSchema) {}

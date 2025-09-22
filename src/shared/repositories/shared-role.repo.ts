@@ -10,6 +10,15 @@ export class SharedRoleRepository {
 
   constructor(private readonly prismaService: PrismaService) {}
 
+  async findRolebyId(roleId: string): Promise<RoleType | null> {
+    return this.prismaService.role.findUnique({
+      where: {
+        id: roleId,
+        deletedAt: null
+      }
+    })
+  }
+
   private async getRole(roleName: string) {
     const role: RoleType = await this.prismaService.$queryRaw`
     SELECT * FROM "Role" WHERE name = ${roleName} AND "deletedAt" IS NULL LIMIT 1;

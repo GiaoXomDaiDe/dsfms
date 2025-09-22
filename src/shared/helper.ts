@@ -1,6 +1,8 @@
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { createZodDto } from 'nestjs-zod'
 import z from 'zod'
+import { CreateUserBodyWithProfileType } from '~/routes/user/user.model'
+import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 
 export function isUniqueConstraintPrismaError(error: any): error is PrismaClientKnownRequestError {
   return error instanceof PrismaClientKnownRequestError && error.code === 'P2002'
@@ -21,4 +23,45 @@ export function createResponseDto<T extends z.ZodTypeAny>(dataSchema: T, default
     data: dataSchema
   })
   return createZodDto(schema)
+}
+
+export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithProfileType, ctx: z.RefinementCtx) => {
+  const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
+
+  if (rules) {
+    const requiredProfile = data[rules.requiredProfile as keyof typeof data]
+    const forbiddenProfile = data[rules.forbiddenProfile as keyof typeof data]
+
+    // Check required profile
+    if (!requiredProfile) {
+      ctx.addIssue({
+        code: 'custom',
+        message: rules.requiredMessage,
+        path: [rules.requiredProfile]
+      })
+    }
+
+    // Check forbidden profile
+    if (forbiddenProfile) {
+      ctx.addIssue({
+        code: 'custom',
+        message: rules.forbiddenMessage,
+        path: [rules.forbiddenProfile]
+      })
+    }
+  } else {
+    // For other roles, no profiles allowed
+    const profiles: Array<'trainerProfile' | 'traineeProfile'> = ['trainerProfile', 'traineeProfile']
+    profiles.forEach((profile) => {
+      if (data[profile]) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${profile} is not allowed for ${roleName} role`,
+          path: [profile]
+        })
+      }
+    })
+
+    return { isValid: true }
+  }
 }
