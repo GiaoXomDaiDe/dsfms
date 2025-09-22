@@ -33,12 +33,12 @@ export class RoleRepo {
       })
     ])
 
-    const data = rolesWithCount.map(({ _count, ...role }) => ({
+    const roles = rolesWithCount.map(({ _count, ...role }) => ({
       ...role,
       userCount: _count.users
     }))
     return {
-      data,
+      roles,
       totalItems
     }
   }

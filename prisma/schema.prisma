@@ -118,7 +118,7 @@ model Role {
   updatedBy   User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   deletedBy   User?    @relation("RoleDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   users       User[]
-  @@unique([name, deletedAt])
+  
   @@map("Role")
   @@index([deletedAt])
 }

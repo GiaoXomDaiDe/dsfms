@@ -1,15 +1,17 @@
-import { Body, Controller, Post, UseGuards, Get, Req } from '@nestjs/common'
-import { AuthPayloadDto, RefreshTokenDto, AuthResponse, RefreshResponse } from '~/dto/auth.dto'
-import { AuthService } from './auth.service'
-import { LocalGuard } from './guards/local.guard'
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common'
 import express from 'express'
+import { AuthPayloadDto, AuthResponse, RefreshResponse, RefreshTokenDto } from '~/dto/auth.dto'
+import { IsPublic } from '~/shared/decorators/auth.decorator'
+import { AuthService } from './auth.service'
 import { JwtGuard } from './guards/jwt.guard'
+import { LocalGuard } from './guards/local.guard'
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('login')
+  @IsPublic()
   @UseGuards(LocalGuard)
   async login(@Body() authPayloadDto: AuthPayloadDto, @Req() req: express.Request): Promise<AuthResponse> {
     return this.authService.login(req.user)

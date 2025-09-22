@@ -22,7 +22,7 @@ export const RoleWithUserCountSchema = RoleSchema.extend({
   userCount: z.number()
 })
 export const GetRolesResSchema = z.object({
-  data: z.array(RoleWithUserCountSchema),
+  roles: z.array(RoleWithUserCountSchema),
   totalItems: z.number()
 })
 

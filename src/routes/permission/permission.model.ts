@@ -1,6 +1,6 @@
 import z from 'zod'
 import { HTTPMethod } from '~/shared/constants/auth.constant'
-import { PaginationQuerySchema, PaginationResSchema } from '~/shared/models/pagination.model'
+import { PaginationQuerySchema } from '~/shared/models/pagination.model'
 
 export const PermissionSchema = z.object({
   id: z.uuid(),
@@ -25,11 +25,10 @@ export const PermissionSchema = z.object({
   updatedAt: z.date()
 })
 
-export const GetPermissionsResSchema = z
-  .object({
-    data: z.array(PermissionSchema)
-  })
-  .extend(PaginationResSchema.shape)
+export const GetPermissionsResSchema = z.object({
+  data: z.array(PermissionSchema),
+  totalItems: z.number()
+})
 
 export const GetPermissionsQuerySchema = PaginationQuerySchema
 
