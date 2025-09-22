@@ -13,3 +13,5 @@ export const DepartmentSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date()
 })
+
+export type DepartmentType = z.infer<typeof DepartmentSchema>

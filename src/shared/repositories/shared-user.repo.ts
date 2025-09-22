@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common'
-import { PermissionType } from '~/routes/permission/permission.model'
-import { RoleType } from '~/routes/role/role.model'
 import { UserType } from '~/routes/user/user.model'
 
 import { PrismaService } from '~/shared/services/prisma.service'
 
-type UserIncludeRolePermissionsType = UserType & { role: (RoleType & { permissions: PermissionType[] }) | null } & {
-  department: { id: string; name: string } | null
-}
+type UserIncludeProfileType = UserType & {
+  role: {
+    id: string
+    name: string
+  }
+  department: {
+    id: string
+    name: string
+  } | null
+} & Partial<{
+    trainerProfile: object | null
+    traineeProfile: object | null
+  }>
 
 export type WhereUniqueUserType = { id: string } | { email: string }
 @Injectable()
@@ -23,7 +31,7 @@ export class SharedUserRepository {
     })
   }
 
-  async findUniqueIncludeRolePermissions(where: WhereUniqueUserType): Promise<UserIncludeRolePermissionsType | null> {
+  async findUniqueIncludeProfile(where: WhereUniqueUserType): Promise<UserIncludeProfileType | null> {
     const user = await this.prismaService.user.findFirst({
       where: {
         ...where,
@@ -31,22 +39,21 @@ export class SharedUserRepository {
       },
       include: {
         role: {
-          include: {
-            permissions: {
-              where: {
-                deletedAt: null
-              }
-            }
+          select: {
+            id: true,
+            name: true
           }
         },
         department: {
-          select: { id: true, name: true }
-        }
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        trainerProfile: true,
+        traineeProfile: true
       }
     })
-    if (user && user.role.deletedAt !== null) {
-      ;(user as UserIncludeRolePermissionsType).role = null
-    }
     return user
   }
 

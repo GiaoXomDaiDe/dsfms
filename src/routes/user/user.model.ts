@@ -1,8 +1,17 @@
 import { z } from 'zod'
 import { DepartmentSchema } from '~/routes/department/department.model'
-import { PermissionSchema } from '~/routes/permission/permission.model'
+import {
+  CreateTraineeProfileSchema,
+  CreateTrainerProfileSchema,
+  TraineeProfileSchema,
+  TrainerProfileSchema,
+  UpdateTraineeProfileSchema,
+  UpdateTrainerProfileSchema
+} from '~/routes/profile/profile.model'
 import { RoleSchema } from '~/routes/role/role.model'
 import { GenderStatus, UserStatus } from '~/shared/constants/auth.constant'
+import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
+import { validateRoleProfile } from '~/shared/helper'
 
 export const UserSchema = z.object({
   id: z.uuid(),
@@ -26,6 +35,33 @@ export const UserSchema = z.object({
   deletedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date()
+})
+
+//Áp dụng cho Response của api GET('profile') và GET('users/:userId)
+export const GetUserProfileResSchema = UserSchema.omit({
+  passwordHash: true,
+  signatureImageUrl: true,
+  roleId: true,
+  departmentId: true
+}).extend({
+  role: RoleSchema.pick({
+    id: true,
+    name: true
+  }),
+  department: DepartmentSchema.pick({
+    id: true,
+    name: true
+  }).nullable(),
+  trainerProfile: TrainerProfileSchema.nullable().optional(),
+  traineeProfile: TraineeProfileSchema.nullable().optional()
+})
+
+/**
+ * Áp dụng cho Response của api PUT('profile') và PUT('users/:userId')
+ */
+export const UpdateProfileResSchema = UserSchema.omit({
+  passwordHash: true,
+  signatureImageUrl: true
 })
 
 export const GetUsersResSchema = z.object({
@@ -81,45 +117,94 @@ export const CreateUserBodySchema = UserSchema.pick({
   })
   .strict()
 
-//Áp dụng cho Response của api GET('profile') và GET('users/:userId)
-export const GetUserProfileResSchema = UserSchema.omit({
-  passwordHash: true,
-  signatureImageUrl: true,
-  roleId: true,
-  departmentId: true
-}).extend({
+export const UpdateUserBodySchema = CreateUserBodySchema
+
+export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
+  trainerProfile: CreateTrainerProfileSchema.optional(),
+  traineeProfile: CreateTraineeProfileSchema.optional(),
   role: RoleSchema.pick({
     id: true,
     name: true
-  }).extend({
-    permissions: z.array(
-      PermissionSchema.pick({
-        id: true,
-        name: true,
-        module: true,
-        path: true,
-        method: true
+  })
+})
+  .omit({
+    roleId: true
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (!data.role.id) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Invalid Role Name',
+        path: ['roleId']
       })
-    )
-  }),
-  department: DepartmentSchema.pick({
+      return
+    }
+
+    if (!data.role.id) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Invalid role ID',
+        path: ['roleId']
+      })
+      return
+    }
+
+    validateRoleProfile(data.role.name, data, ctx)
+  })
+export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.extend({
+  trainerProfile: UpdateTrainerProfileSchema.partial().optional(),
+  traineeProfile: UpdateTraineeProfileSchema.partial().optional(),
+  role: RoleSchema.pick({
     id: true,
     name: true
-  }).nullable()
+  })
 })
+  .omit({
+    roleId: true
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    // Only validate if roleId is being updated
+    if (!data.role) return
 
-/**
- * Áp dụng cho Response của api PUT('profile') và PUT('users/:userId')
- */
-export const UpdateProfileResSchema = UserSchema.omit({
-  passwordHash: true,
-  signatureImageUrl: true
-})
+    if (!data.role.name) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Invalid role Name',
+        path: ['roleId']
+      })
+      return
+    }
 
-export const UpdateUserBodySchema = CreateUserBodySchema
+    // For updates, only check forbidden profiles (not required)
+    const rules = ROLE_PROFILE_RULES[data.role.name as keyof typeof ROLE_PROFILE_RULES]
 
-export type UserType = z.infer<typeof UserSchema>
-export type GetUsersResType = z.infer<typeof GetUsersResSchema>
+    if (rules) {
+      // Fix: Type-safe access with proper key checking
+      const forbiddenKey = rules.forbiddenProfile as keyof typeof data
+      if (forbiddenKey in data && data[forbiddenKey]) {
+        ctx.addIssue({
+          code: 'custom',
+          message: rules.forbiddenMessage,
+          path: [rules.forbiddenProfile]
+        })
+      }
+    } else {
+      // Other roles shouldn't have any profile
+      const profileKeys: Array<'trainerProfile' | 'traineeProfile'> = ['trainerProfile', 'traineeProfile']
+      profileKeys.forEach((profile) => {
+        if (profile in data && data[profile]) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `${profile} is not allowed for ${data.role.name} role`,
+            path: [profile]
+          })
+        }
+      })
+    }
+  })
+
 export type GetUsersQueryType = z.infer<typeof GetUsersQuerySchema>
 export type GetUserParamsType = z.infer<typeof GetUserParamsSchema>
 export type CreateUserBodyType = z.infer<typeof CreateUserBodySchema>
@@ -128,3 +213,8 @@ export type CreateUserInternalType = CreateUserBodyType & {
   passwordHash: string
   eid: string
 }
+export type CreateUserBodyWithProfileType = z.infer<typeof CreateUserBodyWithProfileSchema>
+export type UserType = z.infer<typeof UserSchema>
+export type GetUserProfileResType = z.infer<typeof GetUserProfileResSchema>
+export type UpdateProfileResType = z.infer<typeof UpdateProfileResSchema>
+export type GetUsersResType = z.infer<typeof GetUsersResSchema>
