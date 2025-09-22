@@ -1,6 +1,6 @@
 export interface AccessTokenPayloadCreate {
-  userId: number
-  roleId: number
+  userId: string
+  roleId: string
   roleName: string
 }
 
