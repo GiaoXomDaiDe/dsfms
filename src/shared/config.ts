@@ -5,7 +5,7 @@ import z from 'zod'
 
 config()
 
-if (!fs.existsSync(path.resolve('.env'))) {
+if (process.env.NODE_ENV !== 'test' && !fs.existsSync(path.resolve('.env'))) {
   console.log('Không tìm thấy file .env')
   process.exit(1)
 }
@@ -31,13 +31,41 @@ const configSchema = z.object({
   ADMIN_MIDDLE_NAME: z.string()
 })
 
-const configServer = configSchema.safeParse(process.env)
+const getEnvVars = () => {
+  if (process.env.NODE_ENV === 'test') {
+    return {
+      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+      PORT: '3001',
+      PASSWORD_SECRET: 'test-password-secret',
+      SECRET_API_KEY: 'test-api-key',
+      ACCESS_TOKEN_SECRET: 'test-access-secret',
+      ACCESS_TOKEN_EXPIRES_IN: '15m',
+      REFRESH_TOKEN_SECRET: 'test-refresh-secret',
+      REFRESH_TOKEN_EXPIRES_IN: '7d',
+      AWS_REGION: 'us-east-1',
+      AWS_ACCESS_KEY_ID: 'test-aws-key',
+      AWS_SECRET_ACCESS_KEY: 'test-aws-secret',
+      SES_FROM_EMAIL: 'test@example.com',
+      ADMIN_EMAIL: 'admin@test.com',
+      ADMIN_PASSWORD: 'test-password',
+      ADMIN_FIRST_NAME: 'Test',
+      ADMIN_LAST_NAME: 'Admin',
+      ADMIN_MIDDLE_NAME: 'Middle',
+      ...process.env // Allow overrides from actual env vars
+    }
+  }
+  return process.env
+}
+
+const configServer = configSchema.safeParse(getEnvVars())
 
 if (!configServer.success) {
   console.error('Config env validation failed', configServer.error)
-  process.exit(1)
+  if (process.env.NODE_ENV !== 'test') {
+    process.exit(1)
+  }
 }
 
-const envConfig = configServer.data
+const envConfig = configServer.data!
 
 export default envConfig
