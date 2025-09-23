@@ -60,13 +60,6 @@ export class UserRepo {
     trainerProfile?: CreateTrainerProfileType
     traineeProfile?: CreateTraineeProfileType
   }) {
-    console.log({
-      createdById,
-      userData,
-      roleName,
-      trainerProfile,
-      traineeProfile
-    })
     return await this.prismaService.$transaction(async (tx) => {
       // Step 1: Create base user
       const newUser = await tx.user.create({
@@ -127,21 +120,27 @@ export class UserRepo {
     })
   }
 
-  async updateWithProfile({
-    id,
-    updatedById,
-    userData,
-    roleName,
-    trainerProfile,
-    traineeProfile
-  }: {
-    id: string
-    updatedById: string
-    userData: Partial<CreateUserInternalType>
-    roleName: string
-    trainerProfile?: any
-    traineeProfile?: any
-  }) {
+  async updateWithProfile(
+    {
+      id
+    }: {
+      id: string
+    },
+    {
+      updatedById,
+      userData,
+      roleName,
+      trainerProfile,
+      traineeProfile
+    }: {
+      id: string
+      updatedById: string
+      userData: Partial<CreateUserInternalType>
+      roleName: string
+      trainerProfile?: any
+      traineeProfile?: any
+    }
+  ) {
     return await this.prismaService.$transaction(async (tx) => {
       // Update base user if userData provided
       if (Object.keys(userData).length > 0) {

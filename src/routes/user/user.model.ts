@@ -59,9 +59,22 @@ export const GetUserProfileResSchema = UserSchema.omit({
 /**
  * Áp dụng cho Response của api PUT('profile') và PUT('users/:userId')
  */
-export const UpdateProfileResSchema = UserSchema.omit({
+export const UpdateUserResSchema = UserSchema.omit({
   passwordHash: true,
-  signatureImageUrl: true
+  signatureImageUrl: true,
+  roleId: true,
+  departmentId: true
+}).extend({
+  role: RoleSchema.pick({
+    id: true,
+    name: true
+  }),
+  department: DepartmentSchema.pick({
+    id: true,
+    name: true
+  }).nullable(),
+  trainerProfile: TrainerProfileSchema.nullable().optional(),
+  traineeProfile: TraineeProfileSchema.nullable().optional()
 })
 
 export const GetUsersResSchema = z.object({
@@ -117,7 +130,7 @@ export const CreateUserBodySchema = UserSchema.pick({
   })
   .strict()
 
-export const UpdateUserBodySchema = CreateUserBodySchema
+export const UpdateUserBodySchema = CreateUserBodySchema.partial()
 
 export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
   trainerProfile: CreateTrainerProfileSchema.optional(),
@@ -153,8 +166,8 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
     validateRoleProfile(data.role.name, data, ctx)
   })
 export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.extend({
-  trainerProfile: UpdateTrainerProfileSchema.partial().optional(),
-  traineeProfile: UpdateTraineeProfileSchema.partial().optional(),
+  trainerProfile: UpdateTrainerProfileSchema.optional(),
+  traineeProfile: UpdateTraineeProfileSchema.optional(),
   role: RoleSchema.pick({
     id: true,
     name: true
@@ -165,10 +178,7 @@ export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.extend({
   })
   .strict()
   .superRefine((data, ctx) => {
-    // Only validate if roleId is being updated
-    if (!data.role) return
-
-    if (!data.role.name) {
+    if (!data.role.id) {
       ctx.addIssue({
         code: 'custom',
         message: 'Invalid role Name',
@@ -213,8 +223,13 @@ export type CreateUserInternalType = CreateUserBodyType & {
   passwordHash: string
   eid: string
 }
+export type UpdateUserInternalType = UpdateUserBodyType & {
+  passwordHash?: string
+  eid?: string
+}
 export type CreateUserBodyWithProfileType = z.infer<typeof CreateUserBodyWithProfileSchema>
+export type UpdateUserBodyWithProfileType = z.infer<typeof UpdateUserBodyWithProfileSchema>
 export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserProfileResSchema>
-export type UpdateProfileResType = z.infer<typeof UpdateProfileResSchema>
+export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
 export type GetUsersResType = z.infer<typeof GetUsersResSchema>

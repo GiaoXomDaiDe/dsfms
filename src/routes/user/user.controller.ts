@@ -7,8 +7,8 @@ import {
   GetUserProfileResDTO,
   GetUsersQueryDTO,
   GetUsersResDTO,
-  UpdateProfileResDTO,
-  UpdateUserBodyDTO
+  UpdateUserBodyWithProfileDTO,
+  UpdateUserResDTO
 } from '~/routes/user/user.dto'
 import { UserService } from '~/routes/user/user.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -49,9 +49,9 @@ export class UserController {
   }
 
   @Put(':userId')
-  @ZodSerializerDto(UpdateProfileResDTO)
+  @ZodSerializerDto(UpdateUserResDTO)
   update(
-    @Body() body: UpdateUserBodyDTO,
+    @Body() body: UpdateUserBodyWithProfileDTO,
     @Param() params: GetUserParamsDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
