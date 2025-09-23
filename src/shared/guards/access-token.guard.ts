@@ -44,7 +44,6 @@ export class AccessTokenGuard implements CanActivate {
     const roleId: string = decodedAccessToken.roleId
     const path: string = request.route.path
     const method = request.method as keyof typeof HTTPMethod
-    console.log('roleId', roleId)
     const role = await this.prismaService.role
       .findUniqueOrThrow({
         where: {

@@ -5,7 +5,11 @@ import {
   UserAlreadyExistsException,
   UserNotFoundException
 } from '~/routes/user/user.error'
-import { CreateUserBodyWithProfileType, GetUsersQueryType, UpdateUserBodyType } from '~/routes/user/user.model'
+import {
+  CreateUserBodyWithProfileType,
+  GetUsersQueryType,
+  UpdateUserBodyWithProfileType
+} from '~/routes/user/user.model'
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import { RoleName } from '~/shared/constants/auth.constant'
@@ -150,7 +154,7 @@ export class UserService {
     updatedByRoleName
   }: {
     id: string
-    data: UpdateUserBodyType
+    data: UpdateUserBodyWithProfileType
     updatedById: string
     updatedByRoleName: string
   }) {
@@ -164,18 +168,34 @@ export class UserService {
       // Lấy roleId ban đầu của người được update để kiểm tra xem liệu người update có quyền update không
       // Không dùng data.roleId vì dữ liệu này có thể bị cố tình truyền sai
       const roleIdTarget = await this.getRoleIdByUserId(id)
+      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id })
+      if (!currentUser) {
+        throw UserNotFoundException
+      }
       await this.verifyRole({
         roleNameAgent: updatedByRoleName,
         roleIdTarget
       })
+      const { role, trainerProfile, traineeProfile, ...userData } = data
 
-      const updatedUser = await this.sharedUserRepository.update(
+      const targetRoleName = role
+        ? (await this.sharedRoleRepository.findRolebyId(role.id))?.name || currentUser.role.name
+        : currentUser.role.name
+      // Update user with profile
+      const updatedUser = await this.sharedUserRepository.updateWithProfile(
         { id },
         {
-          ...data,
-          updatedById
+          updatedById,
+          userData: {
+            ...userData,
+            roleId: role?.id || currentUser.role.id
+          },
+          newRoleName: targetRoleName,
+          trainerProfile,
+          traineeProfile
         }
       )
+
       return updatedUser
     } catch (error) {
       if (isNotFoundPrismaError(error)) {

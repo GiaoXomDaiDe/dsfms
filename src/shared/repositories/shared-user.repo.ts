@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common'
-import { UserType } from '~/routes/user/user.model'
+import {
+  CreateTraineeProfileType,
+  CreateTrainerProfileType,
+  UpdateTraineeProfileType,
+  UpdateTrainerProfileType
+} from '~/routes/profile/profile.model'
+import { UserNotFoundException } from '~/routes/user/user.error'
+import { UpdateUserInternalType, UserType } from '~/routes/user/user.model'
+import { RoleName } from '~/shared/constants/auth.constant'
+import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -20,7 +29,10 @@ type UserIncludeProfileType = UserType & {
 export type WhereUniqueUserType = { id: string } | { email: string }
 @Injectable()
 export class SharedUserRepository {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly sharedRoleRepo: SharedRoleRepository
+  ) {}
 
   findUnique(where: WhereUniqueUserType): Promise<UserType | null> {
     return this.prismaService.user.findFirst({
@@ -57,13 +69,169 @@ export class SharedUserRepository {
     return user
   }
 
-  update(where: { id: string }, data: Partial<UserType>): Promise<UserType | null> {
-    return this.prismaService.user.update({
-      where: {
-        ...where,
-        deletedAt: null
-      },
-      data
+  async updateWithProfile(
+    where: { id: string },
+    {
+      updatedById,
+      userData,
+      newRoleName,
+      trainerProfile,
+      traineeProfile
+    }: {
+      updatedById: string
+      userData: UpdateUserInternalType
+      newRoleName: string
+      trainerProfile?: UpdateTrainerProfileType
+      traineeProfile?: UpdateTraineeProfileType
+    }
+  ): Promise<UserIncludeProfileType | null> {
+    return this.prismaService.$transaction(async (tx) => {
+      const currentUser = await this.prismaService.user.findUnique({
+        where: { id: where.id, deletedAt: null },
+        include: {
+          role: {
+            select: { id: true, name: true }
+          },
+          department: {
+            select: { id: true, name: true }
+          }
+        }
+      })
+      if (!currentUser) throw UserNotFoundException
+
+      const isRoleChanging = newRoleName !== currentUser?.role.name
+      //Bước 1: Cập nhật user base
+      const updatedUser = await tx.user.update({
+        where: {
+          ...where,
+          deletedAt: null
+        },
+        data: {
+          ...userData,
+          updatedById
+        },
+        include: {
+          role: {
+            select: { id: true, name: true }
+          },
+          department: {
+            select: { id: true, name: true }
+          }
+        }
+      })
+      if (!updatedUser) {
+        throw UserNotFoundException
+      }
+
+      if (isRoleChanging) {
+        if (newRoleName === RoleName.TRAINEE) {
+          //disable trainer profile if exists
+          await tx.trainerProfile.update({
+            where: { userId: where.id, deletedAt: null },
+            data: { deletedAt: new Date(), updatedById }
+          })
+          //create trainee profile
+          await tx.traineeProfile.upsert({
+            where: { userId: where.id },
+            create: {
+              userId: where.id,
+              ...(traineeProfile as CreateTraineeProfileType),
+              createdById: updatedById,
+              updatedById,
+              deletedAt: null
+            },
+            update: {
+              ...traineeProfile,
+              updatedById,
+              deletedAt: null
+            }
+          })
+        } else if (newRoleName === RoleName.TRAINER) {
+          //disable trainee profile if exists
+          await tx.traineeProfile.update({
+            where: { userId: where.id, deletedAt: null },
+            data: { deletedAt: new Date(), updatedById }
+          })
+          //create trainer profile
+          await tx.trainerProfile.upsert({
+            where: { userId: where.id },
+            create: {
+              userId: where.id,
+              ...(trainerProfile as CreateTrainerProfileType), // có thể undefined -> tùy DTO default
+              createdById: updatedById,
+              updatedById,
+              deletedAt: null // bật active
+            },
+            update: {
+              ...trainerProfile,
+              updatedById,
+              deletedAt: null // bật active trở lại
+            }
+          })
+        } else {
+          // với trường hợp role khác mà ko có profile thì disable cả 2 profile nếu có
+          await tx.trainerProfile.updateMany({
+            where: { userId: where.id, deletedAt: null },
+            data: { deletedAt: new Date(), updatedById }
+          })
+          await tx.traineeProfile.updateMany({
+            where: { userId: where.id, deletedAt: null },
+            data: { deletedAt: new Date(), updatedById }
+          })
+        }
+      }
+
+      // Nếu không đổi role thì chỉ update profile nếu có data truyền vào
+      else {
+        if (newRoleName === RoleName.TRAINER && trainerProfile) {
+          await tx.trainerProfile.upsert({
+            where: { userId: where.id },
+            create: {
+              userId: where.id,
+              ...(trainerProfile as CreateTrainerProfileType), // có thể undefined -> tùy DTO default
+              createdById: updatedById,
+              updatedById,
+              deletedAt: null // bật active
+            },
+            update: {
+              ...trainerProfile,
+              updatedById,
+              deletedAt: null // bật active trở lại
+            }
+          })
+        } else if (newRoleName === RoleName.TRAINEE && traineeProfile) {
+          await tx.traineeProfile.upsert({
+            where: { userId: where.id },
+            create: {
+              userId: where.id,
+              ...(traineeProfile as CreateTraineeProfileType),
+              createdById: updatedById,
+              updatedById,
+              deletedAt: null
+            },
+            update: {
+              ...traineeProfile,
+              updatedById,
+              deletedAt: null
+            }
+          })
+        }
+      }
+
+      // Step 3: Return complete user with profile
+      return await tx.user.findUnique({
+        where: { id: where.id },
+        include: {
+          role: {
+            select: { id: true, name: true }
+          },
+          department: {
+            select: { id: true, name: true }
+          },
+          trainerProfile: newRoleName === RoleName.TRAINER,
+          traineeProfile: newRoleName === RoleName.TRAINEE
+        }
+      })
     })
   }
 }
