@@ -247,7 +247,7 @@ export class UserService {
         deletedById
       })
       return {
-        message: 'Delete successfully'
+        message: 'Disable successfully'
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
