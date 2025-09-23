@@ -9,6 +9,7 @@ import { UserNotFoundException } from '~/routes/user/user.error'
 import { UpdateUserInternalType, UserType } from '~/routes/user/user.model'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
+import { EidService } from '~/shared/services/eid.service'
 
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -31,7 +32,8 @@ export type WhereUniqueUserType = { id: string } | { email: string }
 export class SharedUserRepository {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly sharedRoleRepo: SharedRoleRepository
+    private readonly sharedRoleRepo: SharedRoleRepository,
+    private readonly eidService: EidService
   ) {}
 
   findUnique(where: WhereUniqueUserType): Promise<UserType | null> {
@@ -48,6 +50,30 @@ export class SharedUserRepository {
       where: {
         ...where,
         deletedAt: null
+      },
+      include: {
+        role: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        trainerProfile: true,
+        traineeProfile: true
+      }
+    })
+    return user
+  }
+  async findDisableUniqueIncludeProfile(where: WhereUniqueUserType): Promise<UserIncludeProfileType | null> {
+    const user = await this.prismaService.user.findFirst({
+      where: {
+        ...where
       },
       include: {
         role: {
@@ -86,7 +112,7 @@ export class SharedUserRepository {
     }
   ): Promise<UserIncludeProfileType | null> {
     return this.prismaService.$transaction(async (tx) => {
-      const currentUser = await this.prismaService.user.findUnique({
+      const currentUser = await tx.user.findUnique({
         where: { id: where.id, deletedAt: null },
         include: {
           role: {
@@ -100,6 +126,55 @@ export class SharedUserRepository {
       if (!currentUser) throw UserNotFoundException
 
       const isRoleChanging = newRoleName !== currentUser?.role.name
+      console.log('isRoleChanging', isRoleChanging, newRoleName, currentUser?.role.name)
+      let needsNewEid = false
+      let newEid = currentUser.eid
+
+      if (isRoleChanging) {
+        // Always check if current EID matches new role
+        if (!this.eidService.isEidMatchingRole(currentUser.eid, newRoleName)) {
+          needsNewEid = true
+          newEid = (await this.eidService.generateEid({ roleName: newRoleName })) as string
+          console.log(
+            `EID mismatch: current ${currentUser.eid} doesn't match role ${newRoleName}, generating new: ${newEid}`
+          )
+        }
+      }
+
+      if (isRoleChanging) {
+        if (newRoleName === RoleName.TRAINER) {
+          // Check if user already has trainer profile
+          const existingTrainerProfile = await tx.trainerProfile.findUnique({
+            where: { userId: where.id, deletedAt: null }
+          })
+          console.log('existingTrainerProfile', existingTrainerProfile)
+
+          if (!existingTrainerProfile) {
+            // First time becoming trainer - need new EID
+            needsNewEid = true
+            newEid = (await this.eidService.generateEid({ roleName: newRoleName })) as string
+          }
+          // If has existing trainer profile, keep the old trainer EID
+        } else if (newRoleName === RoleName.TRAINEE) {
+          // Check if user already has trainee profile
+          const existingTraineeProfile = await tx.traineeProfile.findUnique({
+            where: { userId: where.id, deletedAt: null }
+          })
+
+          if (!existingTraineeProfile) {
+            // First time becoming trainee - need new EID
+            needsNewEid = true
+            newEid = (await this.eidService.generateEid({ roleName: newRoleName })) as string
+          }
+          // If has existing trainee profile, keep the old trainee EID
+        } else {
+          // Other roles (not trainer/trainee) - always generate new EID
+          needsNewEid = true
+          newEid = (await this.eidService.generateEid({ roleName: newRoleName })) as string
+          console.log('newEid for other role', newEid)
+        }
+      }
+      console.log('needsNewEid, newEid', 'id', needsNewEid, newEid, where.id)
       //Bước 1: Cập nhật user base
       const updatedUser = await tx.user.update({
         where: {
@@ -108,6 +183,7 @@ export class SharedUserRepository {
         },
         data: {
           ...userData,
+          eid: needsNewEid ? newEid : currentUser.eid,
           updatedById
         },
         include: {

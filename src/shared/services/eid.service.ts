@@ -45,4 +45,8 @@ export class EidService {
       return eids
     })
   }
+  isEidMatchingRole(eid: string, roleName: string): boolean {
+    const expectedPrefix = this.rolePrefixMap[roleName]
+    return expectedPrefix ? eid.startsWith(expectedPrefix) : false
+  }
 }

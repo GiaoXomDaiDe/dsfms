@@ -1,4 +1,9 @@
-import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException
+} from '@nestjs/common'
 
 export const UserAlreadyExistsException = new UnprocessableEntityException([
   {
@@ -28,3 +33,5 @@ export const RoleNotFoundException = new UnprocessableEntityException([
 
 // Không thể xóa hoặc cập nhật chính bản thân mình
 export const CannotUpdateOrDeleteYourselfException = new ForbiddenException('Cannot update or delete yourself')
+
+export const UserIsNotDisabledException = new BadRequestException('User is not disabled')
