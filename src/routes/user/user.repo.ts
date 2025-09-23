@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
+import { UserNotFoundException } from '~/routes/user/user.error'
 import { CreateUserInternalType, GetUsersQueryType, GetUsersResType, UserType } from '~/routes/user/user.model'
-import { RoleName } from '~/shared/constants/auth.constant'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -202,20 +203,88 @@ export class UserRepo {
     isHard?: boolean
   ): Promise<UserType> {
     return isHard
-      ? this.prismaService.user.delete({
-          where: {
-            id
-          }
+      ? this.prismaService.$transaction(async (tx) => {
+          await tx.trainerProfile.deleteMany({
+            where: { userId: id }
+          })
+
+          await tx.traineeProfile.deleteMany({
+            where: { userId: id }
+          })
+
+          return tx.user.delete({
+            where: { id }
+          })
         })
-      : this.prismaService.user.update({
-          where: {
-            id,
-            deletedAt: null
-          },
-          data: {
-            deletedAt: new Date(),
-            deletedById
-          }
+      : this.prismaService.$transaction(async (tx) => {
+          await tx.trainerProfile.updateMany({
+            where: { userId: id, deletedAt: null },
+            data: { deletedAt: new Date(), deletedById: deletedById }
+          })
+
+          await tx.traineeProfile.updateMany({
+            where: { userId: id, deletedAt: null },
+            data: { deletedAt: new Date(), deletedById: deletedById }
+          })
+
+          return tx.user.update({
+            where: { id, deletedAt: null },
+            data: {
+              status: UserStatus.DISABLED,
+              deletedAt: new Date(),
+              deletedById
+            }
+          })
         })
+  }
+  enable({ id, enabledById }: { id: string; enabledById: string }) {
+    return this.prismaService.$transaction(async (tx) => {
+      //Lấy ra user với role
+      const user = await tx.user.findUnique({
+        where: { id },
+        include: {
+          role: { select: { name: true } }
+        }
+      })
+      if (!user) throw UserNotFoundException
+
+      //Enable user
+      await tx.user.update({
+        where: { id },
+        data: {
+          status: UserStatus.ACTIVE,
+          deletedAt: null,
+          deletedById: null,
+          updatedById: enabledById
+        }
+      })
+      //Enable các profile tương ứng
+      await tx.trainerProfile.updateMany({
+        where: { userId: id, deletedAt: { not: null } },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          updatedById: enabledById
+        }
+      })
+      await tx.traineeProfile.updateMany({
+        where: { userId: id, deletedAt: { not: null } },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          updatedById: enabledById
+        }
+      })
+
+      return await tx.user.findUnique({
+        where: { id, deletedAt: null },
+        include: {
+          role: { select: { id: true, name: true } },
+          department: { select: { id: true, name: true } },
+          trainerProfile: user.role.name === RoleName.TRAINER,
+          traineeProfile: user.role.name === RoleName.TRAINEE
+        }
+      })
+    })
   }
 }

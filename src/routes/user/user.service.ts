@@ -3,6 +3,7 @@ import {
   CannotUpdateOrDeleteYourselfException,
   RoleNotFoundException,
   UserAlreadyExistsException,
+  UserIsNotDisabledException,
   UserNotFoundException
 } from '~/routes/user/user.error'
 import {
@@ -241,13 +242,88 @@ export class UserService {
         roleIdTarget
       })
 
+      await this.userRepo.delete(
+        {
+          id,
+          deletedById
+        },
+        true
+      )
+      return {
+        message: 'Delete successfully'
+      }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) {
+        throw UserNotFoundException
+      }
+      throw error
+    }
+  }
+  async disable({
+    id,
+    deletedById,
+    deletedByRoleName
+  }: {
+    id: string
+    deletedById: string
+    deletedByRoleName: string
+  }) {
+    try {
+      // Không thể xóa chính mình
+      this.verifyYourself({
+        userAgentId: deletedById,
+        userTargetId: id
+      })
+
+      const roleIdTarget = await this.getRoleIdByUserId(id)
+      await this.verifyRole({
+        roleNameAgent: deletedByRoleName,
+        roleIdTarget
+      })
+
       await this.userRepo.delete({
         id,
         deletedById
       })
       return {
-        message: 'Delete successfully'
+        message: 'Disable successfully'
       }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) {
+        throw UserNotFoundException
+      }
+      throw error
+    }
+  }
+  async enable({ id, enabledById, enabledByRoleName }: { id: string; enabledById: string; enabledByRoleName: string }) {
+    try {
+      //Không thể enable bản thân
+      this.verifyYourself({
+        userAgentId: enabledById,
+        userTargetId: id
+      })
+
+      //Lấy ra user để kiểm tra quyền
+      const user = await this.sharedUserRepository.findDisableUniqueIncludeProfile({ id })
+      if (!user) throw UserNotFoundException
+
+      //Kiểm tra quyền
+      await this.verifyRole({
+        roleNameAgent: enabledByRoleName,
+        roleIdTarget: user.roleId
+      })
+
+      //Kiểm tra xem trường hợp đã enabled r
+      if (user.status !== 'DISABLED' && user.deletedAt === null) {
+        throw UserIsNotDisabledException
+      }
+      // Thực hiện enable và active lại profile nếu có
+      const enableUser = await this.userRepo.enable({
+        id,
+        enabledById
+      })
+      console.log('user', user)
+      return enableUser
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw UserNotFoundException

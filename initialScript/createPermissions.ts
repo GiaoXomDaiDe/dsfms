@@ -52,23 +52,23 @@ async function bootstrap() {
     {} as Record<string, (typeof availableRoutes)[0]>
   )
 
-  // Tìm permissions trong database mà không tồn tại trong availableRoutes
-  const permissionsToDelete = permissionsInDb.filter((item: PermissionType) => {
-    return !availableRoutesMap[`${item.method}-${item.path}`]
-  })
-  // Xóa permissions trong database không tồn tại trong availableRoutes
-  if (permissionsToDelete.length > 0) {
-    const deleteResult = await prisma.permission.deleteMany({
-      where: {
-        id: {
-          in: permissionsToDelete.map((item: PermissionType) => item.id)
-        }
-      }
-    })
-    console.log('Deleted permissions:', deleteResult.count)
-  } else {
-    console.log('No permissions to delete')
-  }
+  // // Tìm permissions trong database mà không tồn tại trong availableRoutes
+  // const permissionsToDelete = permissionsInDb.filter((item: PermissionType) => {
+  //   return !availableRoutesMap[`${item.method}-${item.path}`]
+  // })
+  // // Xóa permissions trong database không tồn tại trong availableRoutes
+  // if (permissionsToDelete.length > 0) {
+  //   const deleteResult = await prisma.permission.deleteMany({
+  //     where: {
+  //       id: {
+  //         in: permissionsToDelete.map((item: PermissionType) => item.id)
+  //       }
+  //     }
+  //   })
+  //   console.log('Deleted permissions:', deleteResult.count)
+  // } else {
+  //   console.log('No permissions to delete')
+  // }
   // Tìm permissions trong availableRoutes mà không tồn tại trong permissionsInDb
   const permissionsToAdd = availableRoutes.filter((item) => {
     return !permissionInDbMap[`${item.method}-${item.path}`]

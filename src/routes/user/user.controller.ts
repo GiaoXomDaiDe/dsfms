@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CreateUserBodyWithProfileDTO,
@@ -75,6 +75,33 @@ export class UserController {
       id: params.userId,
       deletedById: userId,
       deletedByRoleName: roleName
+    })
+  }
+  @Patch(':userId/disable')
+  @ZodSerializerDto(MessageResDTO)
+  disable(
+    @Param() params: GetUserParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.userService.disable({
+      id: params.userId,
+      deletedById: userId,
+      deletedByRoleName: roleName
+    })
+  }
+
+  @Patch(':userId/enable')
+  @ZodSerializerDto(UpdateUserResDTO)
+  enable(
+    @Param() param: GetUserParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.userService.enable({
+      id: param.userId,
+      enabledById: userId,
+      enabledByRoleName: roleName
     })
   }
 }
