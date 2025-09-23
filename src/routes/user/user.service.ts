@@ -242,51 +242,12 @@ export class UserService {
         roleIdTarget
       })
 
-      await this.userRepo.delete(
-        {
-          id,
-          deletedById
-        },
-        true
-      )
-      return {
-        message: 'Delete successfully'
-      }
-    } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw UserNotFoundException
-      }
-      throw error
-    }
-  }
-  async disable({
-    id,
-    deletedById,
-    deletedByRoleName
-  }: {
-    id: string
-    deletedById: string
-    deletedByRoleName: string
-  }) {
-    try {
-      // Không thể xóa chính mình
-      this.verifyYourself({
-        userAgentId: deletedById,
-        userTargetId: id
-      })
-
-      const roleIdTarget = await this.getRoleIdByUserId(id)
-      await this.verifyRole({
-        roleNameAgent: deletedByRoleName,
-        roleIdTarget
-      })
-
       await this.userRepo.delete({
         id,
         deletedById
       })
       return {
-        message: 'Disable successfully'
+        message: 'Delete successfully'
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
