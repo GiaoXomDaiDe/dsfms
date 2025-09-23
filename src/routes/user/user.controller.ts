@@ -77,20 +77,6 @@ export class UserController {
       deletedByRoleName: roleName
     })
   }
-  @Patch(':userId/disable')
-  @ZodSerializerDto(MessageResDTO)
-  disable(
-    @Param() params: GetUserParamsDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    return this.userService.disable({
-      id: params.userId,
-      deletedById: userId,
-      deletedByRoleName: roleName
-    })
-  }
-
   @Patch(':userId/enable')
   @ZodSerializerDto(UpdateUserResDTO)
   enable(
