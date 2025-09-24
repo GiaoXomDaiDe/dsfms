@@ -230,18 +230,43 @@ export class UserService {
 
       const processedUsersData = await Promise.all(userDataPromises)
 
-      // Step 3: Bulk create in repository
-      const bulkResult = await this.userRepo.createBulk({
-        usersData: processedUsersData,
-        createdById
-      })
+      // Step 3: Bulk create in repository with better error handling
+      try {
+        const bulkResult = await this.userRepo.createBulk({
+          usersData: processedUsersData,
+          createdById
+        })
 
-      // Merge validation failures with creation failures
-      bulkResult.failed.push(...failedValidations)
-      bulkResult.summary.failed += failedValidations.length
-      bulkResult.summary.total = users.length
+        // Merge validation failures with creation failures
+        bulkResult.failed.push(...failedValidations)
+        bulkResult.summary.failed += failedValidations.length
+        bulkResult.summary.total = users.length
 
-      return bulkResult
+        return bulkResult
+      } catch (dbError) {
+        // Handle database-level errors that weren't caught in repository
+        console.error('Database error in bulk creation:', dbError)
+
+        // Convert all processed users to failed status with appropriate error
+        const allFailed = validUsers.map((validUser, index) => ({
+          index: validUser.index,
+          error:
+            dbError instanceof Error && dbError.message.includes('Unique constraint')
+              ? `Email already exists: ${validUser.userData.email}`
+              : 'Database error during user creation',
+          userData: validUser.userData
+        }))
+
+        return {
+          success: [],
+          failed: [...failedValidations, ...allFailed],
+          summary: {
+            total: users.length,
+            successful: 0,
+            failed: users.length
+          }
+        }
+      }
     } catch (error) {
       console.error('Bulk user creation failed:', error)
 
