@@ -12,6 +12,7 @@ import { AppService } from './app.service'
 import { AuthModule } from './routes/auth/auth.module'
 import { EmailModule } from './routes/email/email.module'
 import { PermissionModule } from './routes/permission/permission.module'
+import { ProfileModule } from './routes/profile/profile.module'
 
 @Module({
   imports: [
@@ -24,7 +25,8 @@ import { PermissionModule } from './routes/permission/permission.module'
     EmailModule,
     PermissionModule,
     RoleModule,
-    UserModule
+    UserModule,
+    ProfileModule
   ],
   controllers: [AppController],
   providers: [
