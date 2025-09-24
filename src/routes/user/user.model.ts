@@ -9,33 +9,9 @@ import {
   UpdateTrainerProfileSchema
 } from '~/routes/profile/profile.model'
 import { RoleSchema } from '~/routes/role/role.model'
-import { GenderStatus, UserStatus } from '~/shared/constants/auth.constant'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { validateRoleProfile } from '~/shared/helper'
-
-export const UserSchema = z.object({
-  id: z.uuid(),
-  eid: z.string().max(8),
-  firstName: z.string().min(2).max(100),
-  lastName: z.string().min(2).max(100),
-  middleName: z.string().max(100).nullable(),
-  address: z.string().max(255).nullable(),
-  email: z.email(),
-  passwordHash: z.string().min(6).max(100),
-  status: z.enum([UserStatus.ACTIVE, UserStatus.DISABLED, UserStatus.SUSPENDED]),
-  signatureImageUrl: z.string().nullable(),
-  roleId: z.uuid(),
-  gender: z.enum([GenderStatus.MALE, GenderStatus.FEMALE]),
-  phoneNumber: z.string().min(9).max(15).nullable(),
-  avatarUrl: z.string().nullable(),
-  departmentId: z.uuid().nullable(),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
-})
+import { UserSchema } from '~/shared/models/shared-user.model'
 
 //Áp dụng cho Response của api GET('profile') và GET('users/:userId)
 export const GetUserProfileResSchema = UserSchema.omit({
@@ -215,6 +191,66 @@ export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.extend({
     }
   })
 
+export const CreateBulkUsersBodySchema = z
+  .object({
+    users: z
+      .array(CreateUserBodyWithProfileSchema)
+      .min(1, 'At least one user is required')
+      .max(100, 'Maximum 100 users allowed per batch')
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    // Additional validation for bulk operations
+    data.users.forEach((user, index) => {
+      // Check for duplicate emails within the batch
+      const duplicateEmailIndex = data.users.findIndex(
+        (otherUser, otherIndex) => otherIndex !== index && otherUser.email === user.email
+      )
+
+      if (duplicateEmailIndex !== -1) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Duplicate email found: ${user.email} (users at index ${index} and ${duplicateEmailIndex})`,
+          path: ['users', index, 'email']
+        })
+      }
+    })
+  })
+
+export const BulkCreateResultSchema = z.object({
+  success: z.array(
+    UserSchema.omit({
+      passwordHash: true,
+      signatureImageUrl: true,
+      roleId: true,
+      departmentId: true
+    }).extend({
+      role: RoleSchema.pick({
+        id: true,
+        name: true
+      }),
+      department: DepartmentSchema.pick({
+        id: true,
+        name: true
+      }).nullable(),
+      trainerProfile: TrainerProfileSchema.nullable().optional(),
+      traineeProfile: TraineeProfileSchema.nullable().optional()
+    })
+  ),
+  failed: z.array(
+    z.object({
+      index: z.number(),
+      error: z.string(),
+      userData: CreateUserBodyWithProfileSchema
+    })
+  ),
+  summary: z.object({
+    total: z.number(),
+    successful: z.number(),
+    failed: z.number()
+  })
+})
+
 export type GetUsersQueryType = z.infer<typeof GetUsersQuerySchema>
 export type GetUserParamsType = z.infer<typeof GetUserParamsSchema>
 export type CreateUserBodyType = z.infer<typeof CreateUserBodySchema>
@@ -229,6 +265,8 @@ export type UpdateUserInternalType = UpdateUserBodyType & {
 }
 export type CreateUserBodyWithProfileType = z.infer<typeof CreateUserBodyWithProfileSchema>
 export type UpdateUserBodyWithProfileType = z.infer<typeof UpdateUserBodyWithProfileSchema>
+export type CreateBulkUsersBodyType = z.infer<typeof CreateBulkUsersBodySchema>
+export type BulkCreateResultType = z.infer<typeof BulkCreateResultSchema>
 export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserProfileResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>

@@ -1,9 +1,21 @@
 import { Injectable } from '@nestjs/common'
 import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
-import { CreateUserInternalType, GetUsersQueryType, GetUsersResType, UserType } from '~/routes/user/user.model'
+import {
+  BulkCreateResultType,
+  CreateUserInternalType,
+  GetUsersQueryType,
+  GetUsersResType,
+  UserType
+} from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
+
+type BulkUserData = CreateUserInternalType & {
+  roleName: string
+  trainerProfile?: CreateTrainerProfileType
+  traineeProfile?: CreateTraineeProfileType
+}
 
 @Injectable()
 export class UserRepo {
@@ -286,5 +298,151 @@ export class UserRepo {
         }
       })
     })
+  }
+
+  /**
+   * Bulk create users with optimized performance
+   * Features:
+   * - Chunked processing to avoid memory issues
+   * - Batch inserts for users
+   * - Separate profile creation for better performance
+   * - Transaction support with rollback on errors
+   */
+  async createBulk({
+    usersData,
+    createdById,
+    chunkSize = 50
+  }: {
+    usersData: BulkUserData[]
+    createdById: string
+    chunkSize?: number
+  }): Promise<BulkCreateResultType> {
+    const results: BulkCreateResultType = {
+      success: [],
+      failed: [],
+      summary: {
+        total: usersData.length,
+        successful: 0,
+        failed: 0
+      }
+    }
+
+    // Process in chunks to avoid memory issues and database timeout
+    for (let i = 0; i < usersData.length; i += chunkSize) {
+      const chunk = usersData.slice(i, i + chunkSize)
+
+      try {
+        const chunkResults = await this.prismaService.$transaction(
+          async (tx) => {
+            // Step 1: Bulk create users (fastest operation)
+            const usersToCreate = chunk.map((userData, index) => ({
+              ...userData,
+              createdById,
+              // Remove profile data from user creation
+              trainerProfile: undefined,
+              traineeProfile: undefined,
+              roleName: undefined
+            }))
+
+            const createdUsers = await tx.user.createManyAndReturn({
+              data: usersToCreate,
+              include: {
+                role: { select: { id: true, name: true } },
+                department: { select: { id: true, name: true } }
+              }
+            })
+
+            // Step 2: Batch create profiles (separate for performance)
+            const trainerProfiles: any[] = []
+            const traineeProfiles: any[] = []
+
+            chunk.forEach((userData, index) => {
+              const userId = createdUsers[index].id
+
+              if (userData.roleName === RoleName.TRAINER && userData.trainerProfile) {
+                trainerProfiles.push({
+                  userId,
+                  specialization: userData.trainerProfile.specialization,
+                  certificationNumber: userData.trainerProfile.certificationNumber,
+                  yearsOfExp: Number(userData.trainerProfile.yearsOfExp),
+                  bio: userData.trainerProfile.bio,
+                  createdById
+                })
+              }
+
+              if (userData.roleName === RoleName.TRAINEE && userData.traineeProfile) {
+                traineeProfiles.push({
+                  userId,
+                  dob: userData.traineeProfile.dob,
+                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate),
+                  trainingBatch: userData.traineeProfile.trainingBatch,
+                  passportNo: userData.traineeProfile.passportNo || null,
+                  nation: userData.traineeProfile.nation,
+                  createdById
+                })
+              }
+            })
+
+            // Batch create profiles
+            if (trainerProfiles.length > 0) {
+              await tx.trainerProfile.createMany({
+                data: trainerProfiles
+              })
+            }
+
+            if (traineeProfiles.length > 0) {
+              await tx.traineeProfile.createMany({
+                data: traineeProfiles
+              })
+            }
+
+            // Step 3: Get complete users with profiles
+            const completeUsers = await tx.user.findMany({
+              where: {
+                id: { in: createdUsers.map((u) => u.id) }
+              },
+              include: {
+                role: { select: { id: true, name: true } },
+                department: { select: { id: true, name: true } },
+                trainerProfile: true,
+                traineeProfile: true
+              }
+            })
+
+            return completeUsers.map((user) => {
+              const { trainerProfile, traineeProfile, ...baseUser } = user
+
+              if (user.role.name === RoleName.TRAINER && trainerProfile) {
+                return { ...baseUser, trainerProfile }
+              } else if (user.role.name === RoleName.TRAINEE && traineeProfile) {
+                return { ...baseUser, traineeProfile }
+              } else {
+                return baseUser
+              }
+            })
+          },
+          {
+            timeout: 30000 // 30 seconds timeout for large batches
+          }
+        )
+
+        results.success.push(...chunkResults)
+        results.summary.successful += chunkResults.length
+      } catch (error) {
+        // Handle chunk failure - add all users in this chunk to failed array
+        chunk.forEach((userData, index) => {
+          results.failed.push({
+            index: i + index,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userData: userData as any // Type assertion for compatibility
+          })
+        })
+        results.summary.failed += chunk.length
+
+        console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
+      }
+    }
+
+    return results
   }
 }

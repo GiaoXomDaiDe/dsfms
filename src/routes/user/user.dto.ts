@@ -1,5 +1,7 @@
 import { createZodDto } from 'nestjs-zod'
 import {
+  BulkCreateResultSchema,
+  CreateBulkUsersBodySchema,
   CreateUserBodySchema,
   CreateUserBodyWithProfileSchema,
   GetUserParamsSchema,
@@ -19,6 +21,11 @@ export class GetUserParamsDTO extends createZodDto(GetUserParamsSchema) {}
 export class CreateUserBodyDTO extends createZodDto(CreateUserBodySchema) {}
 
 export class UpdateUserBodyWithProfileDTO extends createZodDto(UpdateUserBodyWithProfileSchema) {}
+
+export class CreateBulkUsersBodyDTO extends createZodDto(CreateBulkUsersBodySchema) {}
+
+export class BulkCreateResultDTO extends createZodDto(BulkCreateResultSchema) {}
+
 /**
  * Áp dụng cho Response của api GET('profile') và GET('users/:userId')
  */

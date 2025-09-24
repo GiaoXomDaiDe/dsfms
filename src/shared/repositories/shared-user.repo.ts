@@ -310,4 +310,13 @@ export class SharedUserRepository {
       })
     })
   }
+  async update(where: { id: string }, data: Partial<UserType>): Promise<UserType | null> {
+    return this.prismaService.user.update({
+      where: {
+        ...where,
+        deletedAt: null
+      },
+      data
+    })
+  }
 }

@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
+  BulkCreateResultDTO,
+  CreateBulkUsersBodyDTO,
   CreateUserBodyWithProfileDTO,
   CreateUserResDTO,
   GetUserParamsDTO,
@@ -42,6 +44,20 @@ export class UserController {
     @ActiveRolePermissions('name') roleName: string
   ) {
     return this.userService.create({
+      data: body,
+      createdById: userId,
+      createdByRoleName: roleName
+    })
+  }
+
+  @Post('bulk')
+  @ZodSerializerDto(BulkCreateResultDTO)
+  createBulk(
+    @Body() body: CreateBulkUsersBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.userService.createBulk({
       data: body,
       createdById: userId,
       createdByRoleName: roleName

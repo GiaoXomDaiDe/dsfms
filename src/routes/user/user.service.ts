@@ -7,6 +7,7 @@ import {
   UserNotFoundException
 } from '~/routes/user/user.error'
 import {
+  CreateBulkUsersBodyType,
   CreateUserBodyWithProfileType,
   GetUsersQueryType,
   UpdateUserBodyWithProfileType
@@ -14,6 +15,7 @@ import {
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import {
   isForeignKeyConstraintPrismaError,
   isNotFoundPrismaError,
@@ -111,6 +113,156 @@ export class UserService {
       throw error
     }
   }
+
+  /**
+   * Bulk create users with optimized performance
+   * Features:
+   * - Parallel role validation and EID generation
+   * - Parallel password hashing
+   * - Validation of role permissions
+   * - Memory-efficient processing
+   */
+  async createBulk({
+    data,
+    createdById,
+    createdByRoleName
+  }: {
+    data: CreateBulkUsersBodyType
+    createdById: string
+    createdByRoleName: string
+  }) {
+    try {
+      const users = data.users
+
+      // Step 1: Validate all roles and profile compatibility in parallel
+      const roleValidationPromises = users.map(async (userData, index) => {
+        try {
+          // Validate role permissions first
+          await this.verifyRole({
+            roleNameAgent: createdByRoleName,
+            roleIdTarget: userData.role.id
+          })
+
+          const targetRole = await this.sharedRoleRepository.findRolebyId(userData.role.id)
+          if (!targetRole) {
+            throw new Error(`Role not found for user at index ${index}`)
+          }
+
+          // Validate profile data matches role
+          this.validateProfileDataForRole(targetRole.name, userData, index)
+
+          return { index, targetRole, success: true }
+        } catch (error) {
+          return {
+            index,
+            error: error instanceof Error ? error.message : 'Role validation failed',
+            success: false
+          }
+        }
+      })
+
+      const roleValidationResults = await Promise.all(roleValidationPromises)
+
+      // Filter out failed validations
+      const validUsers: Array<{
+        userData: CreateUserBodyWithProfileType
+        roleName: string
+        index: number
+      }> = []
+
+      const failedValidations: Array<{
+        index: number
+        error: string
+        userData: CreateUserBodyWithProfileType
+      }> = []
+
+      roleValidationResults.forEach((result) => {
+        if (result.success && 'targetRole' in result && result.targetRole) {
+          validUsers.push({
+            userData: users[result.index],
+            roleName: result.targetRole.name,
+            index: result.index
+          })
+        } else if (!result.success && 'error' in result && result.error) {
+          failedValidations.push({
+            index: result.index,
+            error: result.error,
+            userData: users[result.index]
+          })
+        }
+      })
+
+      if (validUsers.length === 0) {
+        return {
+          success: [],
+          failed: failedValidations,
+          summary: {
+            total: users.length,
+            successful: 0,
+            failed: users.length
+          }
+        }
+      }
+
+      // Step 2: Generate EIDs and hash passwords in parallel
+      const userDataPromises = validUsers.map(async ({ userData, roleName }) => {
+        try {
+          // Generate EID first
+          const eid = (await this.eidService.generateEid({ roleName })) as string
+
+          // Then hash password with the generated EID
+          const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
+
+          const { trainerProfile, traineeProfile, role, ...userBasicData } = userData
+
+          return {
+            ...userBasicData,
+            roleId: role.id,
+            passwordHash: hashedPassword,
+            eid,
+            roleName,
+            trainerProfile,
+            traineeProfile
+          }
+        } catch (error) {
+          throw new Error(`Failed to process user data: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+      })
+
+      const processedUsersData = await Promise.all(userDataPromises)
+
+      // Step 3: Bulk create in repository
+      const bulkResult = await this.userRepo.createBulk({
+        usersData: processedUsersData,
+        createdById
+      })
+
+      // Merge validation failures with creation failures
+      bulkResult.failed.push(...failedValidations)
+      bulkResult.summary.failed += failedValidations.length
+      bulkResult.summary.total = users.length
+
+      return bulkResult
+    } catch (error) {
+      console.error('Bulk user creation failed:', error)
+
+      // Return all as failed if there's a critical error
+      return {
+        success: [],
+        failed: data.users.map((userData, index) => ({
+          index,
+          error: error instanceof Error ? error.message : 'Critical error during bulk creation',
+          userData
+        })),
+        summary: {
+          total: data.users.length,
+          successful: 0,
+          failed: data.users.length
+        }
+      }
+    }
+  }
+
   // private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
   //   // Validate that correct profile is provided for role
   //   if (roleName === RoleName.TRAINER && data.traineeProfile) {
@@ -290,6 +442,34 @@ export class UserService {
         throw UserNotFoundException
       }
       throw error
+    }
+  }
+
+  /**
+   * Validate that profile data matches the user's role
+   * Prevents cases like SQA_AUDITOR having trainer/trainee profile
+   */
+  private validateProfileDataForRole(
+    roleName: string,
+    userData: CreateUserBodyWithProfileType,
+    userIndex: number
+  ): void {
+    const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
+
+    if (rules) {
+      // For roles that have specific profile requirements (TRAINER/TRAINEE)
+      const forbiddenKey = rules.forbiddenProfile as keyof typeof userData
+      if (forbiddenKey in userData && userData[forbiddenKey]) {
+        throw new Error(`User at index ${userIndex}: ${rules.forbiddenMessage}`)
+      }
+    } else {
+      // For other roles (SQA_AUDITOR, ADMINISTRATOR, etc.) - should NOT have any profile
+      if (userData.trainerProfile) {
+        throw new Error(`User at index ${userIndex}: Trainer profile is not allowed for ${roleName} role`)
+      }
+      if (userData.traineeProfile) {
+        throw new Error(`User at index ${userIndex}: Trainee profile is not allowed for ${roleName} role`)
+      }
     }
   }
 }
