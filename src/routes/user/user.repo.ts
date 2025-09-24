@@ -314,8 +314,43 @@ export class UserRepo {
       try {
         const chunkResults = await this.prismaService.$transaction(
           async (tx) => {
-            // Step 1: Bulk create users (fastest operation)
-            const usersToCreate = chunk.map((userData, index) => ({
+            // Step 0: Check for existing emails in this chunk
+            const emails = chunk.map((userData) => userData.email)
+            const existingUsers = await tx.user.findMany({
+              where: {
+                email: { in: emails },
+                deletedAt: null
+              },
+              select: { email: true }
+            })
+
+            const existingEmails = new Set(existingUsers.map((u) => u.email))
+
+            // Separate valid users from duplicates
+            const validUsersInChunk: typeof chunk = []
+            const duplicateUsersInChunk: Array<{ userData: (typeof chunk)[0]; originalIndex: number }> = []
+
+            chunk.forEach((userData, chunkIndex) => {
+              if (existingEmails.has(userData.email)) {
+                duplicateUsersInChunk.push({
+                  userData,
+                  originalIndex: i + chunkIndex
+                })
+              } else {
+                validUsersInChunk.push(userData)
+              }
+            })
+
+            // If no valid users in this chunk, return empty results
+            if (validUsersInChunk.length === 0) {
+              return {
+                created: [],
+                duplicates: duplicateUsersInChunk
+              }
+            }
+
+            // Step 1: Bulk create only valid users
+            const usersToCreate = validUsersInChunk.map((userData) => ({
               ...userData,
               createdById,
               // Remove profile data from user creation
@@ -336,7 +371,7 @@ export class UserRepo {
             const trainerProfiles: any[] = []
             const traineeProfiles: any[] = []
 
-            chunk.forEach((userData, index) => {
+            validUsersInChunk.forEach((userData, index) => {
               const userId = createdUsers[index].id
 
               if (userData.roleName === RoleName.TRAINER && userData.trainerProfile) {
@@ -389,7 +424,7 @@ export class UserRepo {
               }
             })
 
-            return completeUsers.map((user) => {
+            const finalUsers = completeUsers.map((user) => {
               const { trainerProfile, traineeProfile, ...baseUser } = user
 
               if (user.role.name === RoleName.TRAINER && trainerProfile) {
@@ -400,21 +435,66 @@ export class UserRepo {
                 return baseUser
               }
             })
+
+            return {
+              created: finalUsers,
+              duplicates: duplicateUsersInChunk
+            }
           },
           {
             timeout: 30000 // 30 seconds timeout for large batches
           }
         )
 
-        results.success.push(...chunkResults)
-        results.summary.successful += chunkResults.length
+        // Process successful creations
+        results.success.push(...chunkResults.created)
+        results.summary.successful += chunkResults.created.length
+
+        // Process duplicate emails found before creation
+        chunkResults.duplicates.forEach(({ userData, originalIndex }) => {
+          // Extract original user data without internal fields
+          const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
+
+          // Reconstruct role object for failed response
+          const failedUserData = {
+            ...originalUserData,
+            role: { id: roleId, name: roleName }
+          }
+
+          results.failed.push({
+            index: originalIndex,
+            error: `Email already exists: ${originalUserData.email}`,
+            userData: failedUserData
+          })
+        })
+        results.summary.failed += chunkResults.duplicates.length
       } catch (error) {
         // Handle chunk failure - add all users in this chunk to failed array
         chunk.forEach((userData, index) => {
+          // Extract original user data without internal fields
+          const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
+
+          // Reconstruct role object for failed response
+          const failedUserData = {
+            ...originalUserData,
+            role: { id: roleId, name: roleName }
+          }
+
+          let errorMessage = 'Unknown error'
+          if (error instanceof Error) {
+            if (error.message.includes('Unique constraint failed on the fields: (`email`)')) {
+              errorMessage = `Email already exists: ${originalUserData.email}`
+            } else if (error.message.includes('Unique constraint failed')) {
+              errorMessage = 'Duplicate data found'
+            } else {
+              errorMessage = error.message
+            }
+          }
+
           results.failed.push({
             index: i + index,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            userData: userData as any // Type assertion for compatibility
+            error: errorMessage,
+            userData: failedUserData
           })
         })
         results.summary.failed += chunk.length

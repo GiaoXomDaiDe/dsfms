@@ -35,3 +35,13 @@ export const RoleNotFoundException = new UnprocessableEntityException([
 export const CannotUpdateOrDeleteYourselfException = new ForbiddenException('Cannot update or delete yourself')
 
 export const UserIsNotDisabledException = new BadRequestException('User is not disabled')
+
+export class BulkUserCreationException extends BadRequestException {
+  constructor(message: string, details?: any) {
+    super({
+      message: message,
+      error: 'BULK_CREATION_ERROR',
+      details: details
+    })
+  }
+}

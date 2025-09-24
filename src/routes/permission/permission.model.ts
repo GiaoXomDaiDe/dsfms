@@ -17,6 +17,8 @@ export const PermissionSchema = z.object({
     HTTPMethod.OPTIONS,
     HTTPMethod.HEAD
   ]),
+  viewName: z.string().max(500).nullable().default(''),
+  viewModule: z.string().max(500).nullable().default(''),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
@@ -45,7 +47,9 @@ export const CreatePermissionBodySchema = PermissionSchema.pick({
   path: true,
   method: true,
   module: true,
-  description: true
+  description: true,
+  viewName: true,
+  viewModule: true
 }).strict()
 
 export const UpdatePermissionBodySchema = CreatePermissionBodySchema.partial()
