@@ -131,6 +131,8 @@ model Permission {
   module      String
   description String?
   roles       Role[]
+  viewName   String?     @default("")
+  viewModule String?     @default("")
   createdById String?    @db.Uuid
   updatedById String?    @db.Uuid
   deletedById String?    @db.Uuid
