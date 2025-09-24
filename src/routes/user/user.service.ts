@@ -9,7 +9,6 @@ import {
 import {
   CreateBulkUsersBodyType,
   CreateUserBodyWithProfileType,
-  GetUsersQueryType,
   UpdateUserBodyWithProfileType
 } from '~/routes/user/user.model'
 import { UserRepo } from '~/routes/user/user.repo'
@@ -36,8 +35,8 @@ export class UserService {
     private readonly eidService: EidService
   ) {}
 
-  list(pagination: GetUsersQueryType) {
-    return this.userRepo.list(pagination)
+  list() {
+    return this.userRepo.list()
   }
 
   async findById(id: string) {

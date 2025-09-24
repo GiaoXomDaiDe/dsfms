@@ -1,13 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
-import {
-  BulkCreateResultType,
-  CreateUserInternalType,
-  GetUsersQueryType,
-  GetUsersResType,
-  UserType
-} from '~/routes/user/user.model'
+import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -21,21 +15,10 @@ type BulkUserData = CreateUserInternalType & {
 export class UserRepo {
   constructor(private prismaService: PrismaService) {}
 
-  async list(pagination: GetUsersQueryType): Promise<GetUsersResType> {
-    const skip = (pagination.page - 1) * pagination.limit
-    const take = pagination.limit
+  async list(): Promise<GetUsersResType> {
     const [totalItems, data] = await Promise.all([
-      this.prismaService.user.count({
-        where: {
-          deletedAt: null
-        }
-      }),
+      this.prismaService.user.count({}),
       this.prismaService.user.findMany({
-        where: {
-          deletedAt: null
-        },
-        skip,
-        take,
         include: {
           role: true,
           department: true
@@ -44,10 +27,7 @@ export class UserRepo {
     ])
     return {
       data,
-      totalItems,
-      page: pagination.page,
-      limit: pagination.limit,
-      totalPages: Math.ceil(totalItems / pagination.limit)
+      totalItems
     }
   }
 

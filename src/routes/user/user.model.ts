@@ -71,10 +71,7 @@ export const GetUsersResSchema = z.object({
       }).nullable()
     })
   ),
-  totalItems: z.number(),
-  page: z.number(),
-  limit: z.number(),
-  totalPages: z.number()
+  totalItems: z.number()
 })
 
 export const GetUsersQuerySchema = z
