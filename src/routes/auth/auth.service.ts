@@ -83,8 +83,10 @@ export class AuthService {
 
   async refreshTokens(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
     try {
-      // Verify refresh token
-      const payload = this.jwtService.verify(refreshToken)
+      // Verify refresh token với correct secret
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: envConfig.REFRESH_TOKEN_SECRET
+      })
 
       // Tìm user từ database để đảm bảo user vẫn active
       const user = await this.prismaService.user.findFirst({
