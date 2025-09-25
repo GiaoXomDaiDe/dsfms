@@ -9,17 +9,15 @@ import { PrismaService } from '~/shared/services/prisma.service'
 @Injectable()
 export class PermissionRepo {
   constructor(private readonly prisma: PrismaService) {}
-  async list() {
+  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}) {
+    const whereClause = includeDeleted ? {} : { deletedAt: null }
+
     const [totalItems, data] = await Promise.all([
       this.prisma.permission.count({
-        where: {
-          deletedAt: null
-        }
+        where: whereClause
       }),
       this.prisma.permission.findMany({
-        where: {
-          deletedAt: null
-        }
+        where: whereClause
       })
     ])
     return {
@@ -28,12 +26,14 @@ export class PermissionRepo {
     }
   }
 
-  async findById(id: string): Promise<PermissionType | null> {
+  async findById(
+    id: string,
+    { includeDeleted = false }: { includeDeleted?: boolean } = {}
+  ): Promise<PermissionType | null> {
+    const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
+
     return this.prisma.permission.findUnique({
-      where: {
-        id,
-        deletedAt: null
-      }
+      where: whereClause
     })
   }
   async create({
@@ -90,5 +90,20 @@ export class PermissionRepo {
             deletedById
           }
         })
+  }
+
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<PermissionType> {
+    return this.prisma.permission.update({
+      where: {
+        id,
+        deletedAt: { not: null }
+      },
+      data: {
+        deletedAt: null,
+        deletedById: null,
+        isActive: true,
+        updatedById: enabledById
+      }
+    })
   }
 }

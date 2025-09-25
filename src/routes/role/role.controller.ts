@@ -1,14 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CreateRoleBodyDTO,
   CreateRoleResDTO,
   GetRoleDetailResDTO,
   GetRoleParamsDTO,
+  GetRolesQueryDTO,
   GetRolesResDTO,
   UpdateRoleBodyDTO
 } from '~/routes/role/role.dto'
 import { RoleService } from '~/routes/role/role.service'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
@@ -18,14 +20,24 @@ export class RoleController {
 
   @Get()
   @ZodSerializerDto(GetRolesResDTO)
-  list() {
-    return this.roleService.list()
+  list(@Query() query: GetRolesQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+    return this.roleService.list({
+      includeDeleted: query.includeDeleted,
+      userRole: roleName
+    })
   }
 
   @Get(':roleId')
   @ZodSerializerDto(GetRoleDetailResDTO)
-  findById(@Param() params: GetRoleParamsDTO) {
-    return this.roleService.findById(params.roleId)
+  findById(
+    @Param() params: GetRoleParamsDTO,
+    @Query() query: GetRolesQueryDTO,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.roleService.findById(params.roleId, {
+      includeDeleted: query.includeDeleted,
+      userRole: roleName
+    })
   }
 
   @Post()
@@ -53,6 +65,20 @@ export class RoleController {
     return this.roleService.delete({
       id: params.roleId,
       deletedById: userId
+    })
+  }
+
+  @Patch(':roleId/enable')
+  @ZodSerializerDto(GetRoleDetailResDTO)
+  enable(
+    @Param() params: GetRoleParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.roleService.enable({
+      id: params.roleId,
+      enabledById: userId,
+      enablerRole: roleName
     })
   }
 }

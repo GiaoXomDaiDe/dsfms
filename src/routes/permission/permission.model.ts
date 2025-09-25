@@ -32,7 +32,9 @@ export const GetPermissionsResSchema = z.object({
   totalItems: z.number()
 })
 
-export const GetPermissionsQuerySchema = PaginationQuerySchema
+export const GetPermissionsQuerySchema = PaginationQuerySchema.extend({
+  includeDeleted: z.coerce.boolean().default(false).optional()
+})
 
 export const GetPermissionParamsSchema = z
   .object({

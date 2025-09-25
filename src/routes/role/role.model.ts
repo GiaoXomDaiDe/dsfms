@@ -32,6 +32,12 @@ export const GetRoleParamsSchema = z
   })
   .strict()
 
+export const GetRolesQuerySchema = z
+  .object({
+    includeDeleted: z.coerce.boolean().default(false).optional()
+  })
+  .strict()
+
 export const GetRoleDetailResSchema = RoleWithPermissionsSchema
 
 export const CreateRoleBodySchema = RoleSchema.pick({
@@ -59,5 +65,6 @@ export type GetRoleDetailResType = z.infer<typeof GetRoleDetailResSchema>
 export type CreateRoleResType = z.infer<typeof CreateRoleResSchema>
 export type CreateRoleBodyType = z.infer<typeof CreateRoleBodySchema>
 export type GetRoleParamsType = z.infer<typeof GetRoleParamsSchema>
+export type GetRolesQueryType = z.infer<typeof GetRolesQuerySchema>
 export type UpdateRoleBodyType = z.infer<typeof UpdateRoleBodySchema>
 export type RoleWithUserCountType = z.infer<typeof RoleWithUserCountSchema>

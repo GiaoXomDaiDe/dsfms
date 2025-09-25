@@ -13,13 +13,24 @@ import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/h
 export class RoleService {
   constructor(private roleRepo: RoleRepo) {}
 
-  async list() {
-    const data = await this.roleRepo.list()
+  async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
+    // Chỉ admin mới có thể xem các role đã bị xóa mềm
+    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+    const data = await this.roleRepo.list({
+      includeDeleted: canViewDeleted ? includeDeleted : false
+    })
     return data
   }
 
-  async findById(id: string) {
-    const role = await this.roleRepo.findById(id)
+  async findById(
+    id: string,
+    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
+  ) {
+    // Chỉ admin mới có thể xem detail của role đã bị xóa mềm
+    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+    const role = await this.roleRepo.findById(id, {
+      includeDeleted: canViewDeleted ? includeDeleted : false
+    })
     if (!role) {
       throw NotFoundRoleException
     }
@@ -89,14 +100,13 @@ export class RoleService {
       if (!role) {
         throw NotFoundRoleException
       }
-      // Không cho phép bất kỳ ai có thể xóa 3 role cơ bản này
-      const baseRoles: string[] = [
-        RoleName.ADMINISTRATOR,
-        RoleName.DEPARTMENT_HEAD,
-        RoleName.SQA_AUDITOR,
-        RoleName.TRAINEE,
-        RoleName.TRAINER
-      ]
+      // Không cho phép xóa role ADMINISTRATOR
+      if (role.name === RoleName.ADMINISTRATOR) {
+        throw ProhibitedActionOnBaseRoleException
+      }
+
+      // Không cho phép bất kỳ ai có thể xóa các role cơ bản khác
+      const baseRoles: string[] = [RoleName.DEPARTMENT_HEAD, RoleName.SQA_AUDITOR, RoleName.TRAINEE, RoleName.TRAINER]
       if (baseRoles.includes(role.name)) {
         throw ProhibitedActionOnBaseRoleException
       }
@@ -107,6 +117,31 @@ export class RoleService {
       return {
         message: 'Delete successfully'
       }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) {
+        throw NotFoundRoleException
+      }
+      throw error
+    }
+  }
+
+  async enable({ id, enabledById, enablerRole }: { id: string; enabledById: string; enablerRole: string }) {
+    // Chỉ admin mới có thể enable role
+    if (enablerRole !== RoleName.ADMINISTRATOR) {
+      throw ProhibitedActionOnBaseRoleException
+    }
+
+    try {
+      const role = await this.roleRepo.findById(id, { includeDeleted: true })
+      if (!role) {
+        throw NotFoundRoleException
+      }
+
+      if (!role.deletedAt) {
+        throw new Error('Role is not disabled')
+      }
+
+      return this.roleRepo.enable({ id, enabledById })
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundRoleException

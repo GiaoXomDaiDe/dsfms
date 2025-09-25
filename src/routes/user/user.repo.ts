@@ -15,10 +15,15 @@ type BulkUserData = CreateUserInternalType & {
 export class UserRepo {
   constructor(private prismaService: PrismaService) {}
 
-  async list(): Promise<GetUsersResType> {
+  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetUsersResType> {
+    const whereClause = includeDeleted ? {} : { deletedAt: null }
+
     const [totalItems, data] = await Promise.all([
-      this.prismaService.user.count({}),
+      this.prismaService.user.count({
+        where: whereClause
+      }),
       this.prismaService.user.findMany({
+        where: whereClause,
         include: {
           role: true,
           department: true
