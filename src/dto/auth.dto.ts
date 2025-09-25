@@ -50,3 +50,27 @@ export interface RefreshResponse {
   access_token: string
   refresh_token: string
 }
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string
+
+  @IsString()
+  @IsNotEmpty()
+  magicLink: string
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  @IsNotEmpty()
+  token: string
+
+  @IsString()
+  @IsNotEmpty()
+  newPassword: string
+
+  @IsString()
+  @IsNotEmpty()
+  confirmPassword: string
+}
