@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
 import { ZodSerializerInterceptor } from 'nestjs-zod'
+import { DepartmentModule } from '~/routes/department/department.module'
 import { RoleModule } from '~/routes/role/role.module'
 import { UserModule } from '~/routes/user/user.module'
 import { HttpExceptionFilter } from '~/shared/filters/http-exception.filter'
@@ -26,7 +27,8 @@ import { ProfileModule } from './routes/profile/profile.module'
     PermissionModule,
     RoleModule,
     UserModule,
-    ProfileModule
+    ProfileModule,
+    DepartmentModule
   ],
   controllers: [AppController],
   providers: [
