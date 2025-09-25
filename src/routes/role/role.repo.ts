@@ -12,17 +12,15 @@ import { PrismaService } from '~/shared/services/prisma.service'
 export class RoleRepo {
   constructor(private prismaService: PrismaService) {}
 
-  async list(): Promise<GetRolesResType> {
+  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetRolesResType> {
+    const whereClause = includeDeleted ? {} : { deletedAt: null }
+
     const [totalItems, rolesWithCount] = await Promise.all([
       this.prismaService.role.count({
-        where: {
-          deletedAt: null
-        }
+        where: whereClause
       }),
       this.prismaService.role.findMany({
-        where: {
-          deletedAt: null
-        },
+        where: whereClause,
         include: {
           _count: {
             select: {
@@ -43,12 +41,14 @@ export class RoleRepo {
     }
   }
 
-  async findById(id: string): Promise<RoleWithPermissionsType | null> {
+  async findById(
+    id: string,
+    { includeDeleted = false }: { includeDeleted?: boolean } = {}
+  ): Promise<RoleWithPermissionsType | null> {
+    const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
+
     const role = await this.prismaService.role.findUnique({
-      where: {
-        id,
-        deletedAt: null
-      },
+      where: whereClause,
       include: {
         permissions: {
           where: {
@@ -160,8 +160,24 @@ export class RoleRepo {
           },
           data: {
             deletedAt: new Date(),
-            deletedById
+            deletedById,
+            isActive: false
           }
         })
+  }
+
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<RoleType> {
+    return this.prismaService.role.update({
+      where: {
+        id,
+        deletedAt: { not: null }
+      },
+      data: {
+        deletedAt: null,
+        deletedById: null,
+        isActive: true,
+        updatedById: enabledById
+      }
+    })
   }
 }

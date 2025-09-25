@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   BulkCreateResultDTO,
@@ -7,6 +7,7 @@ import {
   CreateUserResDTO,
   GetUserParamsDTO,
   GetUserProfileResDTO,
+  GetUsersQueryDTO,
   GetUsersResDTO,
   UpdateUserBodyWithProfileDTO,
   UpdateUserResDTO
@@ -22,14 +23,24 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  list() {
-    return this.userService.list()
+  list(@Query() query: GetUsersQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+    return this.userService.list({
+      includeDeleted: query.includeDeleted,
+      userRole: roleName
+    })
   }
 
   @Get(':userId')
   @ZodSerializerDto(GetUserProfileResDTO)
-  findById(@Param() params: GetUserParamsDTO) {
-    return this.userService.findById(params.userId)
+  findById(
+    @Param() params: GetUserParamsDTO,
+    @Query() query: GetUsersQueryDTO,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.userService.findById(params.userId, {
+      includeDeleted: query.includeDeleted,
+      userRole: roleName
+    })
   }
 
   @Post()

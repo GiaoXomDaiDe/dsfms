@@ -1,13 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CreatePermissionBodyDTO,
   GetPermissionDetailResDTO,
   GetPermissionParamsDTO,
+  GetPermissionsQueryDTO,
   GetPermissionsResDTO,
   UpdatePermissionBodyDTO
 } from '~/routes/permission/permission.dto'
 import { PermissionService } from '~/routes/permission/permission.service'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
@@ -16,14 +18,24 @@ export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
   @Get()
   @ZodSerializerDto(GetPermissionsResDTO)
-  list() {
-    return this.permissionService.list()
+  list(@Query() query: GetPermissionsQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+    return this.permissionService.list({
+      includeDeleted: query.includeDeleted,
+      userRole: roleName
+    })
   }
 
   @Get(':permissionId')
   @ZodSerializerDto(GetPermissionDetailResDTO)
-  findById(@Param() params: GetPermissionParamsDTO) {
-    return this.permissionService.findById(params.permissionId)
+  findById(
+    @Param() params: GetPermissionParamsDTO,
+    @Query() query: GetPermissionsQueryDTO,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.permissionService.findById(params.permissionId, {
+      includeDeleted: query.includeDeleted,
+      userRole: roleName
+    })
   }
 
   @Post()
@@ -54,6 +66,20 @@ export class PermissionController {
     return this.permissionService.delete({
       id: params.permissionId,
       deletedById: userId
+    })
+  }
+
+  @Patch(':permissionId/enable')
+  @ZodSerializerDto(GetPermissionDetailResDTO)
+  enable(
+    @Param() params: GetPermissionParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return this.permissionService.enable({
+      id: params.permissionId,
+      enabledById: userId,
+      enablerRole: roleName
     })
   }
 }

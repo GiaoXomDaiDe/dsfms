@@ -77,7 +77,8 @@ export const GetUsersResSchema = z.object({
 export const GetUsersQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
-    limit: z.coerce.number().int().positive().default(10)
+    limit: z.coerce.number().int().positive().default(10),
+    includeDeleted: z.coerce.boolean().default(false).optional()
   })
   .strict()
 

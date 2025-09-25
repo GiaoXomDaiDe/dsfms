@@ -35,17 +35,35 @@ export class UserService {
     private readonly eidService: EidService
   ) {}
 
-  list() {
-    return this.userRepo.list()
+  list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
+    // Chỉ admin mới có thể xem các user đã bị xóa mềm
+    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+    return this.userRepo.list({
+      includeDeleted: canViewDeleted ? includeDeleted : false
+    })
   }
 
-  async findById(id: string) {
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile({
-      id
-    })
+  async findById(
+    id: string,
+    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
+  ) {
+    // Admin có thể xem detail của user đã bị disable
+    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+
+    // Tạm thời sử dụng repo method hiện có
+    // TODO: Cần cập nhật shared repository để support includeDeleted
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id })
+
+    // Nếu user null và admin muốn xem deleted items, cần implement logic riêng
+    if (!user && includeDeleted && canViewDeleted) {
+      // Tạm thời throw error, cần implement sau
+      throw UserNotFoundException
+    }
+
     if (!user) {
       throw UserNotFoundException
     }
+
     const { trainerProfile, traineeProfile, ...baseUser } = user
 
     if (user.role.name === RoleName.TRAINER && trainerProfile) {
