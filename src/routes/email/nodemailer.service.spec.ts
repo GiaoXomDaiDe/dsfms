@@ -7,6 +7,13 @@ jest.mock('nodemailer', () => ({
   createTransport: jest.fn()
 }));
 
+// Mock envConfig
+jest.mock('~/shared/config', () => ({
+  GMAIL_USER: 'test@gmail.com',
+  GMAIL_APP_PASSWORD: 'test-password',
+  FRONTEND_URL: 'http://localhost:3000'
+}));
+
 describe('NodemailerService', () => {
   let service: NodemailerService;
   let mockTransporter: any;
