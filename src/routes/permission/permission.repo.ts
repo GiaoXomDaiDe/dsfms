@@ -87,7 +87,8 @@ export class PermissionRepo {
           },
           data: {
             deletedAt: new Date(),
-            deletedById
+            deletedById,
+            isActive: false
           }
         })
   }

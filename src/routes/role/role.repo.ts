@@ -160,7 +160,8 @@ export class RoleRepo {
           },
           data: {
             deletedAt: new Date(),
-            deletedById
+            deletedById,
+            isActive: false
           }
         })
   }
