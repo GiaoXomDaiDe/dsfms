@@ -5,7 +5,7 @@ export const RoleSchema = z.object({
   id: z.uuid(),
   name: z.string().max(500),
   description: z.string().nullable(),
-  isActive: z.boolean().default(true),
+  isActive: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),

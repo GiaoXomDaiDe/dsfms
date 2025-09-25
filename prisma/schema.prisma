@@ -18,6 +18,49 @@ enum GenderStatus {
   FEMALE
 }
 
+enum ActiveStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SubjectInstructorRole {
+  PRIMARY_INSTRUCTOR
+  EXAMINER
+  ASSESSMENT_REVIEWER
+  ASSISTANT_INSTRUCTOR
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CourseStatus {
+  PLANNED
+  ON_GOING
+  COMPLETED
+  ARCHIVED
+}
+
+enum SubjectMethod {
+  E_LEARNING
+  CLASSROOM
+  ERO
+}
+
+enum SubjectType {
+  UNLIMIT
+  RECURRENT
+}
+
+enum SubjectEnrollmentStatus {
+  ENROLLED
+  ON_GOING
+  CANCELLED
+  FINISHED
+}
+
 enum HttpMethod {
   GET
   POST
@@ -96,15 +139,31 @@ model User {
   trainerProfile  TrainerProfile?
   traineeProfile  TraineeProfile?
 
+  // Course relations
+  createdCourses Course[] @relation("CourseCreatedBy")
+  updatedCourses Course[] @relation("CourseUpdatedBy")
+  deletedCourses Course[] @relation("CourseDeletedBy")
+
+  // Subject relations  
+  createdSubjects Subject[] @relation("SubjectCreatedBy")
+  updatedSubjects Subject[] @relation("SubjectUpdatedBy")
+  deletedSubjects Subject[] @relation("SubjectDeletedBy")
+
+  // Subject Instructor relations
+  subjectInstructions SubjectInstructor[]
+
+  // Subject Enrollment relations
+  subjectEnrollments SubjectEnrollment[]
+
   @@map("User")
   @@index([deletedAt])
 }
 
 model Role {
-  id          String   @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  id          String      @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
   name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
+  description String?     @db.Text
+  isActive    ActiveStatus @default(ACTIVE)
   permissions Permission[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
@@ -131,7 +190,7 @@ model Permission {
   module      String
   description String?
   roles       Role[]
-  isActive    Boolean    @default(true)
+  isActive    ActiveStatus @default(ACTIVE)
   viewName   String?     @default("")
   viewModule String?     @default("")
   createdById String?    @db.Uuid
@@ -203,10 +262,10 @@ model Department {
   id          String   @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
   name        String
   description String?  @db.Text
-  headUserId  String?  @db.Uuid
-  isActive    Boolean  @default(true)
+  headUserId  String?     @db.Uuid
+  isActive    ActiveStatus @default(ACTIVE)
 
-  createdById String?  @db.Uuid
+  createdById String?     @db.Uuid
   updatedById String?  @db.Uuid
   deletedById String?  @db.Uuid
 
@@ -219,7 +278,114 @@ model Department {
   updatedBy User?  @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   deletedBy User?  @relation("DeptDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   users     User[] @relation("DepartmentMembers")
+  courses   Course[]
 
   @@map("Department")
   @@index([deletedAt])
+}
+
+
+model Course {
+  id             String        @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  departmentId   String        @db.Uuid
+  name           String
+  description    String?
+  code           String        @unique
+  maxNumTrainee  Int?
+  venue          String?
+  note           String?
+  passScore      Float?
+  startDate      DateTime?
+  endDate        DateTime?
+  level          CourseLevel
+  status         CourseStatus  @default(PLANNED)
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now()) @updatedAt
+  deletedAt      DateTime?
+
+  createdById    String?       @db.Uuid
+  updatedById    String?       @db.Uuid
+  deletedById    String?       @db.Uuid
+
+  department     Department    @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subjects       Subject[]
+  createdBy      User?         @relation("CourseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy      User?         @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy      User?         @relation("CourseDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@map("Course")
+  @@index([departmentId])
+  @@index([deletedAt])
+}
+
+model Subject {
+  id            String        @id @db.Uuid @default(dbgenerated("gen_random_uuid()"))
+  courseId      String        @db.Uuid
+  name          String
+  code          String        @unique
+  description   String?       @db.Text
+  method        SubjectMethod
+  duration      Int?          // months
+  type          SubjectType
+  roomName      String?
+  remarkNote    String?
+  timeSlot      String?
+  isSIM         Boolean       @default(false)
+  passScore     Float?
+  startDate     DateTime?
+  endDate       DateTime?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+  deletedAt     DateTime?
+
+  createdById   String?       @db.Uuid
+  updatedById   String?       @db.Uuid
+  deletedById   String?       @db.Uuid
+
+  course        Course        @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  instructors   SubjectInstructor[]
+  enrollments   SubjectEnrollment[]
+  createdBy     User?         @relation("SubjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  updatedBy     User?         @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  deletedBy     User?         @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@map("Subject")
+  @@index([courseId])
+  @@index([deletedAt])
+}
+
+model SubjectInstructor {
+  trainerUserId   String                 @db.Uuid
+  subjectId       String                 @db.Uuid
+  roleInSubject   SubjectInstructorRole
+
+  trainer         User                   @relation(fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subject         Subject                @relation(fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  createdAt       DateTime               @default(now())
+
+  @@id([trainerUserId, subjectId])
+  @@map("Subject_Instructor")
+  @@index([subjectId])
+  // If you want to prevent duplicate (trainer, subject, role), uncomment:
+  // @@unique([trainerUserId, subjectId, roleInSubject])
+}
+model SubjectEnrollment {
+  traineeUserId   String                    @db.Uuid
+  subjectId       String                    @db.Uuid
+  enrollmentDate  DateTime
+  batchCode       String
+  status          SubjectEnrollmentStatus    @default(ENROLLED)
+
+  trainee         User                      @relation(fields: [traineeUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subject         Subject                   @relation(fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @default(now()) @updatedAt
+
+  @@id([traineeUserId, subjectId])
+  @@map("Subject_Enrollment")
+  @@index([subjectId])
 }

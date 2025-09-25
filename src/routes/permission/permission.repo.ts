@@ -4,6 +4,7 @@ import {
   PermissionType,
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
+import { STATUS_CONST } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -88,7 +89,7 @@ export class PermissionRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: false
+            isActive: STATUS_CONST.INACTIVE
           }
         })
   }
@@ -102,7 +103,7 @@ export class PermissionRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: true,
+        isActive: STATUS_CONST.ACTIVE,
         updatedById: enabledById
       }
     })

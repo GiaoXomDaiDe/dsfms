@@ -49,7 +49,7 @@ export class AccessTokenGuard implements CanActivate {
         where: {
           id: roleId,
           deletedAt: null,
-          isActive: true
+          isActive: 'ACTIVE'
         },
         include: {
           permissions: {
