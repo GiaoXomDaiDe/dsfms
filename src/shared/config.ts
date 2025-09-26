@@ -28,7 +28,7 @@ const configSchema = z.object({
   GMAIL_USER: z.email(),
   GMAIL_APP_PASSWORD: z.string(),
   GMAIL_FROM_NAME: z.string(),
-  FRONTEND_URL: z.string().url().optional(),
+  FRONTEND_URL: z.url().optional(),
   ADMIN_EMAIL: z.email(),
   ADMIN_PASSWORD: z.string(),
   ADMIN_FIRST_NAME: z.string(),
@@ -60,8 +60,8 @@ const getEnvVars = () => {
       ADMIN_PASSWORD: 'test-password',
       ADMIN_FIRST_NAME: 'Test',
       ADMIN_LAST_NAME: 'Admin',
-      ADMIN_MIDDLE_NAME: 'Middle',
-      ...process.env // Allow overrides from actual env vars
+      ADMIN_MIDDLE_NAME: 'Test',
+      ...process.env
     }
   }
   return process.env
