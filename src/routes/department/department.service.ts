@@ -4,10 +4,14 @@ import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/dep
 import { DepartmentRepo } from '~/routes/department/department.repo'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
+import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 export class DepartmentService {
-  constructor(private readonly departmentRepo: DepartmentRepo) {}
+  constructor(
+    private readonly departmentRepo: DepartmentRepo,
+    private readonly prisma: PrismaService
+  ) {}
 
   async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
     // Chỉ admin mới có thể xem các department đã bị xóa mềm
@@ -105,6 +109,108 @@ export class DepartmentService {
       }
 
       return this.departmentRepo.enable({ id, enabledById })
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) {
+        throw NotFoundDepartmentException
+      }
+      throw error
+    }
+  }
+
+  // Get all users with Department Head role
+  async getDepartmentHeads() {
+    const [totalItems, users] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          role: {
+            name: RoleName.DEPARTMENT_HEAD
+          },
+          deletedAt: null
+        }
+      }),
+      this.prisma.user.findMany({
+        where: {
+          role: {
+            name: RoleName.DEPARTMENT_HEAD
+          },
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        },
+        orderBy: {
+          firstName: 'asc'
+        }
+      })
+    ])
+
+    return {
+      users,
+      totalItems
+    }
+  }
+
+  // Add trainers to department by EID
+  async addTrainersToDepartment({
+    departmentId,
+    trainerEids,
+    updatedById
+  }: {
+    departmentId: string
+    trainerEids: string[]
+    updatedById: string
+  }) {
+    try {
+      // Check if department exists
+      const department = await this.departmentRepo.findById(departmentId)
+      if (!department) {
+        throw NotFoundDepartmentException
+      }
+
+      // Find trainers by EID and check if they have TRAINER role
+      const trainers = await this.prisma.user.findMany({
+        where: {
+          eid: {
+            in: trainerEids
+          },
+          role: {
+            name: RoleName.TRAINER
+          },
+          deletedAt: null
+        }
+      })
+
+      if (trainers.length !== trainerEids.length) {
+        const foundEids = trainers.map((t) => t.eid)
+        const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
+        throw new Error(`Trainers not found or not have TRAINER role: ${notFoundEids.join(', ')}`)
+      }
+
+      // Update trainers' departmentId
+      await this.prisma.user.updateMany({
+        where: {
+          id: {
+            in: trainers.map((t) => t.id)
+          }
+        },
+        data: {
+          departmentId,
+          updatedById
+        }
+      })
+
+      return {
+        message: `Successfully added ${trainers.length} trainers to department`,
+        addedTrainers: trainers.map((t) => ({
+          eid: t.eid,
+          name: `${t.firstName} ${t.lastName}`,
+          email: t.email
+        }))
+      }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException

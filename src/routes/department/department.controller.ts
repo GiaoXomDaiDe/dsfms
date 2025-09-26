@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
+  AddTrainersToDepartmentBodyDTO,
   CreateDepartmentBodyDTO,
   CreateDepartmentResDTO,
   GetDepartmentDetailResDTO,
+  GetDepartmentHeadsResDTO,
   GetDepartmentParamsDTO,
   GetDepartmentsQueryDTO,
   GetDepartmentsResDTO,
@@ -83,6 +85,26 @@ export class DepartmentController {
       id: params.departmentId,
       enabledById: userId,
       enablerRole: roleName
+    })
+  }
+
+  @Get('helpers/department-heads')
+  @ZodSerializerDto(GetDepartmentHeadsResDTO)
+  getDepartmentHeads() {
+    return this.departmentService.getDepartmentHeads()
+  }
+
+  @Patch(':departmentId/add-trainers')
+  @ZodSerializerDto(MessageResDTO)
+  addTrainersToDepartment(
+    @Param() params: GetDepartmentParamsDTO,
+    @Body() body: AddTrainersToDepartmentBodyDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    return this.departmentService.addTrainersToDepartment({
+      departmentId: params.departmentId,
+      trainerEids: body.trainerEids,
+      updatedById: userId
     })
   }
 }
