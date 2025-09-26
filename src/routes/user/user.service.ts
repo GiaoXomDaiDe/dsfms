@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common'
 import {
   CannotUpdateOrDeleteYourselfException,
   RoleNotFoundException,
@@ -96,8 +96,17 @@ export class UserService {
       if (!targetRole) {
         throw RoleNotFoundException
       }
+
+      //Kiểm tra departmentId dựa trên role
+      if (data.departmentId) {
+        if (targetRole.name !== RoleName.DEPARTMENT_HEAD && targetRole.name !== RoleName.TRAINER) {
+          throw new ForbiddenException(
+            `Users with role ${targetRole.name} cannot be assigned to a department. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
+          )
+        }
+      }
       // Kiểm tra dữ liệu profile có hợp lệ không
-      // this.validateProfileData(targetRole.name, data)
+      this.validateProfileData(targetRole.name, data)
       // Tạo eid dựa theo role
       const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
       // Hash the password
@@ -139,6 +148,7 @@ export class UserService {
    * - Validation of role permissions
    * - Memory-efficient processing
    */
+
   async createBulk({
     data,
     createdById,
@@ -165,6 +175,14 @@ export class UserService {
             throw new Error(`Role not found for user at index ${index}`)
           }
 
+          //Kiểm tra departmentId dựa trên role
+          if (userData.departmentId) {
+            if (targetRole.name !== RoleName.DEPARTMENT_HEAD && targetRole.name !== RoleName.TRAINER) {
+              throw new Error(
+                `User at index ${index}: Department assignment not allowed for ${targetRole.name} role. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
+              )
+            }
+          }
           // Validate profile data matches role
           this.validateProfileDataForRole(targetRole.name, userData, index)
 
@@ -221,58 +239,118 @@ export class UserService {
         }
       }
 
-      // Step 2: Generate EIDs and hash passwords in parallel
-      const userDataPromises = validUsers.map(async ({ userData, roleName }) => {
-        try {
-          // Generate EID first
-          const eid = (await this.eidService.generateEid({ roleName })) as string
+      // Step 2: Group users by role to generate EIDs efficiently
+      const usersByRole = new Map<string, Array<{ userData: CreateUserBodyWithProfileType; index: number }>>()
 
-          // Then hash password with the generated EID
-          const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
-
-          const { trainerProfile, traineeProfile, role, ...userBasicData } = userData
-
-          return {
-            ...userBasicData,
-            roleId: role.id,
-            passwordHash: hashedPassword,
-            eid,
-            roleName,
-            trainerProfile,
-            traineeProfile
-          }
-        } catch (error) {
-          throw new Error(`Failed to process user data: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      validUsers.forEach(({ userData, roleName, index }) => {
+        if (!usersByRole.has(roleName)) {
+          usersByRole.set(roleName, [])
         }
+        usersByRole.get(roleName)!.push({ userData, index })
       })
 
-      const processedUsersData = await Promise.all(userDataPromises)
+      // Step 3: Generate EIDs in bulk for each role and process users
+      const processedUsersData = []
+      const eidGenerationErrors = []
 
-      // Step 3: Bulk create in repository with better error handling
+      for (const [roleName, usersForRole] of usersByRole) {
+        try {
+          // Generate bulk EIDs for this role
+          const count = usersForRole.length
+          const generatedEids = await this.eidService.generateEid({ roleName, count })
+
+          // generateEid returns string[] when count is provided
+          const eids = Array.isArray(generatedEids) ? generatedEids : [generatedEids]
+
+          if (eids.length !== count) {
+            throw new Error(`Expected ${count} EIDs but got ${eids.length}`)
+          }
+
+          // Process each user with their assigned EID
+          for (let i = 0; i < usersForRole.length; i++) {
+            const { userData, index } = usersForRole[i]
+            const eid = eids[i]
+
+            try {
+              // Hash password with the assigned EID
+              const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
+
+              const { trainerProfile, traineeProfile, role, ...userBasicData } = userData
+
+              processedUsersData.push({
+                ...userBasicData,
+                roleId: role.id,
+                passwordHash: hashedPassword,
+                eid,
+                roleName,
+                trainerProfile,
+                traineeProfile,
+                originalIndex: index
+              })
+            } catch (error) {
+              eidGenerationErrors.push({
+                index,
+                error: `Failed to process user with EID ${eid}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                userData
+              })
+            }
+          }
+        } catch (error) {
+          // If bulk generation fails for this role, add all users to failed
+          usersForRole.forEach(({ userData, index }) => {
+            eidGenerationErrors.push({
+              index,
+              error: `Failed to generate EIDs for role ${roleName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              userData
+            })
+          })
+        }
+      }
+
+      // Merge EID generation errors with validation failures
+      failedValidations.push(...eidGenerationErrors)
+
+      if (processedUsersData.length === 0) {
+        return {
+          success: [],
+          failed: failedValidations,
+          summary: {
+            total: users.length,
+            successful: 0,
+            failed: users.length
+          }
+        }
+      }
+
+      // Step 4: Sort processed users back to original order
+      processedUsersData.sort((a, b) => a.originalIndex - b.originalIndex)
+
+      // Remove originalIndex before sending to repository
+      const finalUsersData = processedUsersData.map(({ originalIndex, ...userData }) => userData)
+
       try {
         const bulkResult = await this.userRepo.createBulk({
-          usersData: processedUsersData,
+          usersData: finalUsersData,
           createdById
         })
 
-        // Merge validation failures with creation failures
+        // Merge all failures
         bulkResult.failed.push(...failedValidations)
         bulkResult.summary.failed += failedValidations.length
         bulkResult.summary.total = users.length
 
         return bulkResult
       } catch (dbError) {
-        // Handle database-level errors that weren't caught in repository
         console.error('Database error in bulk creation:', dbError)
 
-        // Convert all processed users to failed status with appropriate error
-        const allFailed = validUsers.map((validUser, index) => ({
-          index: validUser.index,
+        // Convert all processed users to failed status
+        const allFailed = processedUsersData.map(({ originalIndex, eid }) => ({
+          index: originalIndex,
           error:
             dbError instanceof Error && dbError.message.includes('Unique constraint')
-              ? `Email already exists: ${validUser.userData.email}`
+              ? `Duplicate EID (${eid}) or email detected`
               : 'Database error during user creation',
-          userData: validUser.userData
+          userData: users[originalIndex]
         }))
 
         return {
@@ -305,23 +383,23 @@ export class UserService {
     }
   }
 
-  // private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
-  //   // Validate that correct profile is provided for role
-  //   if (roleName === RoleName.TRAINER && data.traineeProfile) {
-  //     throw new ConflictException('Cannot provide trainee profile for trainer role')
-  //   }
-  //   if (roleName === RoleName.TRAINEE && data.trainerProfile) {
-  //     throw new ConflictException('Cannot provide trainer profile for trainee role')
-  //   }
+  private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
+    // Validate that correct profile is provided for role
+    if (roleName === RoleName.TRAINER && data.traineeProfile) {
+      throw new ConflictException('Cannot provide trainee profile for trainer role')
+    }
+    if (roleName === RoleName.TRAINEE && data.trainerProfile) {
+      throw new ConflictException('Cannot provide trainer profile for trainee role')
+    }
 
-  //   // Optional: Warn if profile data is missing
-  //   if (roleName === RoleName.TRAINER && !data.trainerProfile) {
-  //     console.warn('Creating trainer without profile data')
-  //   }
-  //   if (roleName === RoleName.TRAINEE && !data.traineeProfile) {
-  //     console.warn('Creating trainee without profile data')
-  //   }
-  // }
+    // Optional: Warn if profile data is missing
+    if (roleName === RoleName.TRAINER && !data.trainerProfile) {
+      console.warn('Creating trainer without profile data')
+    }
+    if (roleName === RoleName.TRAINEE && !data.traineeProfile) {
+      console.warn('Creating trainee without profile data')
+    }
+  }
 
   /**
    * Function này kiểm tra xem người thực hiện có quyền tác động đến người khác không.

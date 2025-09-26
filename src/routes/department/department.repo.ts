@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import {
   CreateDepartmentBodyType,
+  DepartmentDetailResType,
   DepartmentType,
-  DepartmentWithInfoType,
   GetDepartmentsResType,
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
-import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { RoleName, STATUS_CONST } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -16,7 +16,7 @@ export class DepartmentRepo {
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetDepartmentsResType> {
     const whereClause = includeDeleted ? {} : { deletedAt: null }
 
-    const [totalItems, departmentsWithCount] = await Promise.all([
+    const [totalItems, departments] = await Promise.all([
       this.prisma.department.count({
         where: whereClause
       }),
@@ -30,15 +30,6 @@ export class DepartmentRepo {
               lastName: true,
               email: true
             }
-          },
-          _count: {
-            select: {
-              courses: {
-                where: {
-                  deletedAt: null
-                }
-              }
-            }
           }
         },
         orderBy: {
@@ -46,11 +37,6 @@ export class DepartmentRepo {
         }
       })
     ])
-
-    const departments = departmentsWithCount.map(({ _count, ...department }) => ({
-      ...department,
-      courseCount: _count.courses
-    }))
 
     return {
       departments,
@@ -61,9 +47,10 @@ export class DepartmentRepo {
   async findById(
     id: string,
     { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<DepartmentWithInfoType | null> {
+  ): Promise<DepartmentDetailResType | null> {
     const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
 
+    // Get department basic info
     const department = await this.prisma.department.findUnique({
       where: whereClause,
       include: {
@@ -89,10 +76,32 @@ export class DepartmentRepo {
 
     if (!department) return null
 
+    const traineeCount = await this.prisma.user.count({
+      where: {
+        role: {
+          name: RoleName.TRAINEE
+        },
+        deletedAt: null,
+        departmentId: id
+      }
+    })
+
+    const trainerCount = await this.prisma.user.count({
+      where: {
+        role: {
+          name: RoleName.TRAINER
+        },
+        deletedAt: null,
+        departmentId: id
+      }
+    })
+
     const { _count, ...departmentData } = department
     return {
       ...departmentData,
-      courseCount: _count.courses
+      courseCount: _count.courses,
+      traineeCount: traineeCount || 0,
+      trainerCount: trainerCount || 0
     }
   }
 
@@ -128,6 +137,16 @@ export class DepartmentRepo {
       data: {
         ...data,
         updatedById
+      },
+      include: {
+        headUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
       }
     })
   }
