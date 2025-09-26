@@ -6,13 +6,15 @@ import envConfig from '~/shared/config'
 import * as statusConst from '~/shared/constants/auth.constant'
 import { HashingService } from '~/shared/services/hashing.service'
 import { PrismaService } from '~/shared/services/prisma.service'
+import { NodemailerService } from '../email/nodemailer.service'
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
     private prismaService: PrismaService,
-    private hashingService: HashingService
+    private hashingService: HashingService,
+    private nodemailerService: NodemailerService
   ) {}
 
   async validateUser({ email, password }: AuthPayloadDto) {
@@ -143,6 +145,98 @@ export class AuthService {
       }
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token')
+    }
+  }
+
+  async forgotPassword(email: string, magicLink: string): Promise<{ message: string }> {
+    // Tìm user theo email
+    const user = await this.prismaService.user.findFirst({
+      where: {
+        email: email,
+        deletedAt: null,
+        status: statusConst.STATUS_CONST.ACTIVE
+      }
+    })
+
+    if (!user) {
+      // Không tiết lộ user có tồn tại hay không vì security
+      return { message: 'If the email exists, a reset link has been sent.' }
+    }
+
+    // Tạo JWT reset token thay vì lưu database
+    const resetToken = this.jwtService.sign(
+      { 
+        userId: user.id, 
+        email: user.email,
+        type: 'password-reset',
+        iat: Math.floor(Date.now() / 1000) // issued at time
+      },
+      {
+        secret: envConfig.RESET_PASSWORD_SECRET,
+        expiresIn: '24h' // Token hết hạn sau 24 giờ
+      }
+    )
+    
+    // Gửi email reset password
+    await this.nodemailerService.sendResetPasswordEmail(
+      user.email,
+      resetToken,
+      magicLink,
+      `${user.firstName} ${user.lastName}`
+    )
+
+    return { 
+      message: 'If the email exists, a reset link has been sent.'
+    }
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    try {
+      // Verify JWT reset token
+      const payload = this.jwtService.verify(token, {
+        secret: envConfig.RESET_PASSWORD_SECRET
+      })
+
+      // Validate token type và thông tin
+      if (payload.type !== 'password-reset' || !payload.userId || !payload.email) {
+        throw new UnauthorizedException('Invalid reset token')
+      }
+
+      // Tìm user để đảm bảo vẫn tồn tại và active
+      const user = await this.prismaService.user.findFirst({
+        where: {
+          id: payload.userId,
+          email: payload.email,
+          deletedAt: null,
+          status: statusConst.STATUS_CONST.ACTIVE
+        }
+      })
+
+      if (!user) {
+        throw new UnauthorizedException('User not found or inactive')
+      }
+
+      // Hash password mới
+      const hashedPassword = await this.hashingService.hashPassword(newPassword)
+
+      // Update user password
+      await this.prismaService.user.update({
+        where: { id: user.id },
+        data: { 
+          passwordHash: hashedPassword,
+          updatedAt: new Date()
+        }
+      })
+
+      return { message: 'Password has been reset successfully.' }
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Reset token has expired')
+      }
+      if (error.name === 'JsonWebTokenError') {
+        throw new UnauthorizedException('Invalid reset token')
+      }
+      throw error // Re-throw other errors
     }
   }
 }

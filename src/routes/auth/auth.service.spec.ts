@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../../shared/services/prisma.service';
 import { HashingService } from '../../shared/services/hashing.service';
 import { JwtService } from '@nestjs/jwt';
+import { NodemailerService } from '../email/nodemailer.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -30,6 +31,12 @@ describe('AuthService', () => {
           useValue: {
             sign: jest.fn(),
             verify: jest.fn(),
+          },
+        },
+        {
+          provide: NodemailerService,
+          useValue: {
+            sendResetPasswordEmail: jest.fn(),
           },
         },
       ],
