@@ -105,10 +105,14 @@ export class DepartmentService {
       }
 
       if (!department.deletedAt) {
-        throw new Error('Department is not disabled')
+        throw new Error('Department is already active')
       }
 
-      return this.departmentRepo.enable({ id, enabledById })
+      await this.departmentRepo.enable({ id, enabledById })
+
+      return {
+        message: 'Enable department successfully'
+      }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException

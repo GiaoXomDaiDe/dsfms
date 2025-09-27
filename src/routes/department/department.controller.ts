@@ -75,7 +75,7 @@ export class DepartmentController {
   }
 
   @Patch(':departmentId/enable')
-  @ZodSerializerDto(GetDepartmentDetailResDTO)
+  @ZodSerializerDto(MessageResDTO)
   enable(
     @Param() params: GetDepartmentParamsDTO,
     @ActiveUser('userId') userId: string,
