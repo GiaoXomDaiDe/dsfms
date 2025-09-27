@@ -42,19 +42,31 @@ export const GetRoleDetailResSchema = RoleWithPermissionsSchema
 
 export const CreateRoleBodySchema = RoleSchema.pick({
   name: true,
-  description: true,
-  isActive: true
-}).strict()
+  description: true
+})
+  .extend({
+    permissionIds: z
+      .array(z.uuid())
+      .min(1, 'At least one permission is required')
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: 'Duplicate permission IDs are not allowed'
+      })
+  })
+  .strict()
 
 export const CreateRoleResSchema = RoleSchema
 
 export const UpdateRoleBodySchema = RoleSchema.pick({
   name: true,
-  description: true,
-  isActive: true
+  description: true
 })
   .extend({
-    permissionIds: z.array(z.uuid())
+    permissionIds: z
+      .array(z.uuid())
+      .min(1, 'At least one permission is required')
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: 'Duplicate permission IDs are not allowed'
+      })
   })
   .strict()
 

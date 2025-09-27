@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
 import { ZodSerializerInterceptor } from 'nestjs-zod'
+import { CourseModule } from '~/routes/course/course.module'
 import { DepartmentModule } from '~/routes/department/department.module'
 import { RoleModule } from '~/routes/role/role.module'
+import { SubjectModule } from '~/routes/subject/subject.module'
 import { UserModule } from '~/routes/user/user.module'
 import { HttpExceptionFilter } from '~/shared/filters/http-exception.filter'
 import CustomZodValidationPipe from '~/shared/pipes/custom-zod-vaidation.pipe'
@@ -28,7 +30,9 @@ import { ProfileModule } from './routes/profile/profile.module'
     RoleModule,
     UserModule,
     ProfileModule,
-    DepartmentModule
+    DepartmentModule,
+    CourseModule,
+    SubjectModule
   ],
   controllers: [AppController],
   providers: [
