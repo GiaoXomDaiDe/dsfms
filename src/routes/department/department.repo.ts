@@ -76,23 +76,33 @@ export class DepartmentRepo {
 
     if (!department) return null
 
-    const traineeCount = await this.prisma.user.count({
-      where: {
-        role: {
-          name: RoleName.TRAINEE
-        },
-        deletedAt: null,
-        departmentId: id
-      }
-    })
+    // Trainee count logic chưa có - tạm thời set = 0
+    const traineeCount = 0
 
-    const trainerCount = await this.prisma.user.count({
+    // Get ALL trainers of this department and count them
+    const trainers = await this.prisma.user.findMany({
       where: {
+        departmentId: id,
         role: {
           name: RoleName.TRAINER
         },
-        deletedAt: null,
-        departmentId: id
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        address: true,
+        avatarUrl: true,
+        gender: true,
+        status: true,
+        email: true,
+        phoneNumber: true
+      },
+      orderBy: {
+        firstName: 'asc'
       }
     })
 
@@ -100,8 +110,9 @@ export class DepartmentRepo {
     return {
       ...departmentData,
       courseCount: _count.courses,
-      traineeCount: traineeCount || 0,
-      trainerCount: trainerCount || 0
+      traineeCount,
+      trainerCount: trainers.length,
+      trainers
     }
   }
 
