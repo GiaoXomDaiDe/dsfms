@@ -63,7 +63,7 @@ export class EmailController {
     return this.nodemailerService.sendBulkEmails(nodemailerEmails)
   }
 
-  // AWS SES specific endpoints (kept for backward compatibility)
+  // AWS SES specific endpoints
   @Post('send-ses')
   async sendEmailSES(@Body() sendEmailDto: SendEmailDto) {
     return this.emailService.sendEmail(sendEmailDto)
@@ -74,7 +74,7 @@ export class EmailController {
     return this.emailService.sendBulkEmail(bulkEmailDto)
   }
 
-  // Nodemailer specific endpoints
+  // Nodemailer
   @Post('send-gmail')
   async sendEmailGmail(@Body() body: { to: string | string[]; subject: string; html?: string; text?: string }) {
     return this.nodemailerService.sendEmail(body)
@@ -85,7 +85,6 @@ export class EmailController {
     return this.nodemailerService.sendBulkEmails(body.emails)
   }
 
-  // Connection test endpoints
   @Post('test-gmail-connection')
   async testGmailConnection() {
     const isConnected = await this.nodemailerService.verifyConnection()
