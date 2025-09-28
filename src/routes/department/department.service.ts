@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { DepartmentAlreadyExistsException, NotFoundDepartmentException } from '~/routes/department/department.error'
 import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/department/department.model'
 import { DepartmentRepo } from '~/routes/department/department.repo'
@@ -192,6 +192,22 @@ export class DepartmentService {
         const foundEids = trainers.map((t) => t.eid)
         const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
         throw new Error(`Trainers not found or not have TRAINER role: ${notFoundEids.join(', ')}`)
+      }
+
+      // Check if any trainer already belongs to this department
+      const trainersAlreadyInDepartment = trainers.filter((t) => t.departmentId === departmentId)
+      if (trainersAlreadyInDepartment.length > 0) {
+        const alreadyAssignedEids = trainersAlreadyInDepartment.map((t) => t.eid)
+        throw new BadRequestException(`Trainers already belong to this department: ${alreadyAssignedEids.join(', ')}`)
+      }
+
+      // Check if any trainer already belongs to another department
+      const trainersInOtherDepartments = trainers.filter((t) => t.departmentId && t.departmentId !== departmentId)
+      if (trainersInOtherDepartments.length > 0) {
+        const assignedToOtherDeptEids = trainersInOtherDepartments.map((t) => t.eid)
+        throw new BadRequestException(
+          `Trainers already belong to other departments: ${assignedToOtherDeptEids.join(', ')}`
+        )
       }
 
       // Update trainers' departmentId

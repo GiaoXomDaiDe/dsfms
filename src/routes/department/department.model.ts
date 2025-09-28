@@ -44,13 +44,30 @@ export const DepartmentResSchema = DepartmentSchema.extend({
     .nullable()
 })
 
+// Trainer Detail Schema
+export const DepartmentTrainerSchema = z.object({
+  id: z.string(),
+  eid: z.string(),
+  firstName: z.string(),
+  middleName: z.string().nullable(),
+  lastName: z.string(),
+  email: z.string(),
+  status: z.string().nullable(),
+  address: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  gender: z.string().nullable(),
+  phoneNumber: z.string().nullable()
+})
+
 export const DepartmentDetailResSchema = DepartmentResSchema.extend({
   courseCount: z.number().default(0),
   traineeCount: z.number().default(0),
-  trainerCount: z.number().default(0)
+  trainerCount: z.number().default(0),
+  trainers: z.array(DepartmentTrainerSchema)
 })
 
 export type DepartmentDetailResType = z.infer<typeof DepartmentDetailResSchema>
+export type DepartmentTrainerType = z.infer<typeof DepartmentTrainerSchema>
 
 // Response Schemas
 export const GetDepartmentsResSchema = z.object({
