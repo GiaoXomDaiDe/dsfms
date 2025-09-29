@@ -9,6 +9,8 @@ import {
   GetDepartmentParamsSchema,
   GetDepartmentsQuerySchema,
   GetDepartmentsResSchema,
+  RemoveTrainersFromDepartmentBodySchema,
+  RemoveTrainersFromDepartmentParamsSchema,
   UpdateDepartmentBodySchema,
   UpdateDepartmentEnhancedBodySchema,
   UpdateDepartmentEnhancedResSchema
@@ -31,6 +33,10 @@ export class UpdateDepartmentBodyDTO extends createZodDto(UpdateDepartmentBodySc
 export class AddTrainersToDepartmentBodyDTO extends createZodDto(AddTrainersToDepartmentBodySchema) {}
 
 export class AddTrainersToDepartmentParamsDTO extends createZodDto(AddTrainersToDepartmentParamsSchema) {}
+
+export class RemoveTrainersFromDepartmentBodyDTO extends createZodDto(RemoveTrainersFromDepartmentBodySchema) {}
+
+export class RemoveTrainersFromDepartmentParamsDTO extends createZodDto(RemoveTrainersFromDepartmentParamsSchema) {}
 
 export class GetDepartmentHeadsResDTO extends createZodDto(GetDepartmentHeadsResSchema) {}
 
