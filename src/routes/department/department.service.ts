@@ -238,4 +238,74 @@ export class DepartmentService {
       throw error
     }
   }
+
+  // Remove trainers from department by EID
+  async removeTrainersFromDepartment({
+    departmentId,
+    trainerEids,
+    updatedById
+  }: {
+    departmentId: string
+    trainerEids: string[]
+    updatedById: string
+  }) {
+    try {
+      // Check if department exists
+      const department = await this.departmentRepo.findById(departmentId)
+      if (!department) {
+        throw NotFoundDepartmentException
+      }
+
+      // Find trainers by EID who belong to this department
+      const trainers = await this.prisma.user.findMany({
+        where: {
+          eid: {
+            in: trainerEids
+          },
+          role: {
+            name: RoleName.TRAINER
+          },
+          departmentId: departmentId,
+          deletedAt: null
+        }
+      })
+
+      if (trainers.length === 0) {
+        throw new BadRequestException('No trainers found in this department with the provided EIDs')
+      }
+
+      if (trainers.length !== trainerEids.length) {
+        const foundEids = trainers.map((t) => t.eid)
+        const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
+        throw new BadRequestException(`Trainers not found in this department: ${notFoundEids.join(', ')}`)
+      }
+
+      // Remove trainers from department (set departmentId to null)
+      await this.prisma.user.updateMany({
+        where: {
+          id: {
+            in: trainers.map((t) => t.id)
+          }
+        },
+        data: {
+          departmentId: null,
+          updatedById
+        }
+      })
+
+      return {
+        message: `Successfully removed ${trainers.length} trainers from department`,
+        removedTrainers: trainers.map((t) => ({
+          eid: t.eid,
+          name: `${t.firstName} ${t.lastName}`,
+          email: t.email
+        }))
+      }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) {
+        throw NotFoundDepartmentException
+      }
+      throw error
+    }
+  }
 }

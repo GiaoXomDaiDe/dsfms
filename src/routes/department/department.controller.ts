@@ -9,6 +9,7 @@ import {
   GetDepartmentParamsDTO,
   GetDepartmentsQueryDTO,
   GetDepartmentsResDTO,
+  RemoveTrainersFromDepartmentBodyDTO,
   UpdateDepartmentBodyDTO
 } from '~/routes/department/department.dto'
 import { DepartmentService } from '~/routes/department/department.service'
@@ -52,7 +53,7 @@ export class DepartmentController {
   }
 
   @Put(':departmentId')
-  @ZodSerializerDto(GetDepartmentDetailResDTO)
+  @ZodSerializerDto(CreateDepartmentResDTO)
   update(
     @Body() body: UpdateDepartmentBodyDTO,
     @Param() params: GetDepartmentParamsDTO,
@@ -102,6 +103,20 @@ export class DepartmentController {
     @ActiveUser('userId') userId: string
   ) {
     return this.departmentService.addTrainersToDepartment({
+      departmentId: params.departmentId,
+      trainerEids: body.trainerEids,
+      updatedById: userId
+    })
+  }
+
+  @Patch(':departmentId/remove-trainers')
+  @ZodSerializerDto(MessageResDTO)
+  removeTrainersFromDepartment(
+    @Param() params: GetDepartmentParamsDTO,
+    @Body() body: RemoveTrainersFromDepartmentBodyDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    return this.departmentService.removeTrainersFromDepartment({
       departmentId: params.departmentId,
       trainerEids: body.trainerEids,
       updatedById: userId
