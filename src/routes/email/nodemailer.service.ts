@@ -146,4 +146,117 @@ export class NodemailerService {
       }
     }
   }
+
+  async sendNewUserAccountEmail(
+    userEmail: string,
+    userEid: string,
+    userPassword: string,
+    fullName: string,
+    userRole: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Read email template
+      const { readFileSync } = await import('fs')
+      const { join } = await import('path')
+      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'new-user-account.txt')
+      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+
+      // Get current date
+      const creationDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+
+      // Replace placeholders in template
+      htmlTemplate = htmlTemplate.replace('[LOGO_URL]', 'https://via.placeholder.com/150x50?text=DSFMS')
+      htmlTemplate = htmlTemplate.replace('[FULL_NAME]', fullName)
+      htmlTemplate = htmlTemplate.replace('[USER_EMAIL]', userEmail)
+      htmlTemplate = htmlTemplate.replace('[USER_EID]', userEid)
+      htmlTemplate = htmlTemplate.replace('[USER_ROLE]', userRole)
+      htmlTemplate = htmlTemplate.replace('[USER_PASSWORD]', userPassword)
+      htmlTemplate = htmlTemplate.replace('[CREATION_DATE]', creationDate)
+
+      const emailData = {
+        to: userEmail,
+        subject: 'Welcome to DSFMS System - Your Account is Ready!',
+        html: htmlTemplate,
+        text: `Welcome to DSFMS System! Your account has been created successfully.
+        
+Login Credentials:
+- Email: ${userEmail}
+- Employee ID: ${userEid}
+- Role: ${userRole}
+- Temporary Password: ${userPassword}
+
+IMPORTANT: Please change your password after your first login and keep your credentials secure.
+
+This account was created on ${creationDate}.`
+      }
+
+      const result = await this.sendEmail(emailData)
+      
+      if (result.success) {
+        return {
+          success: true,
+          message: 'New user account email sent successfully'
+        }
+      } else {
+        return {
+          success: false,
+          message: 'Failed to send new user account email'
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to send new user account email to ${userEmail}:`, error)
+      return {
+        success: false,
+        message: 'Failed to send new user account email'
+      }
+    }
+  }
+
+  async sendBulkNewUserAccountEmails(
+    users: Array<{
+      email: string
+      eid: string
+      password: string
+      fullName: string
+      role: string
+    }>
+  ): Promise<{
+    success: boolean
+    results: Array<{
+      email: string
+      success: boolean
+      message: string
+    }>
+  }> {
+    const results = []
+    
+    for (const user of users) {
+      const result = await this.sendNewUserAccountEmail(
+        user.email,
+        user.eid,
+        user.password,
+        user.fullName,
+        user.role
+      )
+      
+      results.push({
+        email: user.email,
+        success: result.success,
+        message: result.message
+      })
+    }
+
+    const successCount = results.filter(r => r.success).length
+    
+    return {
+      success: successCount === users.length,
+      results
+    }
+  }
 }

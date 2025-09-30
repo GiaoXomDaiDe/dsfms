@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to DSFMS System</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header img {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-message {
+            font-size: 18px;
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        .credentials-box {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 10px;
+            padding: 25px;
+            margin: 25px 0;
+            border-left: 4px solid #667eea;
+        }
+        .credentials-box h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        .credential-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .credential-label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            min-width: 100px;
+        }
+        .credential-value {
+            color: #2c3e50;
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .warning-box {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 25px 0;
+            border-left: 4px solid #f39c12;
+        }
+        .warning-box .warning-icon {
+            color: #f39c12;
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        .warning-box h3 {
+            color: #856404;
+            margin-top: 0;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .warning-box p {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .next-steps {
+            background: linear-gradient(135deg, #d4edda 0%, #a3d5a3 100%);
+            border-radius: 10px;
+            padding: 25px;
+            margin: 25px 0;
+            border-left: 4px solid #28a745;
+        }
+        .next-steps h3 {
+            color: #155724;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .next-steps ul {
+            color: #155724;
+            padding-left: 20px;
+        }
+        .next-steps li {
+            margin-bottom: 8px;
+        }
+        .footer {
+            background: #f8f9fa;
+            color: #6c757d;
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+            border-top: 1px solid #dee2e6;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .system-info {
+            background: #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="[LOGO_URL]" alt="DSFMS Logo">
+            <h1>Welcome to DSFMS System</h1>
+        </div>
+        
+        <div class="content">
+            <div class="welcome-message">
+                <p>Dear <strong>[FULL_NAME]</strong>,</p>
+                <p>Welcome to the <strong>DSFMS</strong>! Your account has been successfully created and is ready for use.</p>
+            </div>
+
+            <div class="credentials-box">
+                <h2>🔐 Your Login Credentials</h2>
+                <div class="credential-item">
+                    <span class="credential-label">Email:</span>
+                    <span class="credential-value">[USER_EMAIL]</span>
+                </div>
+                <div class="credential-item">
+                    <span class="credential-label">Employee ID:</span>
+                    <span class="credential-value">[USER_EID]</span>
+                </div>
+                <div class="credential-item">
+                    <span class="credential-label">Role:</span>
+                    <span class="credential-value">[USER_ROLE]</span>
+                </div>
+                <div class="credential-item">
+                    <span class="credential-label">Temporary Password:</span>
+                    <span class="credential-value">[USER_PASSWORD]</span>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h3>
+                    <span class="warning-icon">⚠️</span>
+                    Important Security Notice
+                </h3>
+                <p><strong>Please keep your login credentials secure and confidential.</strong></p>
+                <p>• Do not share your password with anyone</p>
+                <p>• Change your password immediately after your first login</p>
+                <p>• Use a strong, unique password that you haven't used elsewhere</p>
+                <p>• Log out completely when finished using the system</p>
+            </div>
+
+            <div class="system-info">
+                <p><strong>System Information:</strong></p>
+                <p>This account was created on [CREATION_DATE] and is configured for your role in the organization.</p>
+                <p>If you experience any issues accessing your account, please contact the system administrator immediately.</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>DSFMS</strong></p>
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>© 2025 DSFMS System. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

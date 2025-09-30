@@ -24,6 +24,7 @@ import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
+import { NodemailerService } from '~/routes/email/nodemailer.service'
 
 @Injectable()
 export class UserService {
@@ -32,7 +33,8 @@ export class UserService {
     private hashingService: HashingService,
     private sharedUserRepository: SharedUserRepository,
     private sharedRoleRepository: SharedRoleRepository,
-    private readonly eidService: EidService
+    private readonly eidService: EidService,
+    private readonly nodemailerService: NodemailerService
   ) {}
 
   list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
@@ -127,6 +129,26 @@ export class UserService {
         trainerProfile,
         traineeProfile
       })
+
+      // Send welcome email to the new user
+      try {
+        const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ')
+        const plainPassword = eid + envConfig.PASSWORD_SECRET
+        
+        await this.nodemailerService.sendNewUserAccountEmail(
+          data.email,
+          eid,
+          plainPassword,
+          fullName,
+          targetRole.name
+        )
+        
+        console.log(`Welcome email sent successfully to ${data.email}`)
+      } catch (emailError) {
+        // Log email error but don't fail the user creation
+        console.error(`Failed to send welcome email to ${data.email}:`, emailError)
+      }
+
       return user
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
@@ -338,6 +360,38 @@ export class UserService {
         bulkResult.failed.push(...failedValidations)
         bulkResult.summary.failed += failedValidations.length
         bulkResult.summary.total = users.length
+
+        // Send welcome emails to successfully created users
+        if (bulkResult.success.length > 0) {
+          try {
+            const emailUsers = bulkResult.success.map(user => {
+              const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
+              const plainPassword = user.eid + envConfig.PASSWORD_SECRET
+              
+              return {
+                email: user.email,
+                eid: user.eid,
+                password: plainPassword,
+                fullName,
+                role: user.role.name
+              }
+            })
+            
+            const emailResults = await this.nodemailerService.sendBulkNewUserAccountEmails(emailUsers)
+            
+            console.log(`Bulk email sending completed: ${emailResults.results.filter(r => r.success).length}/${emailResults.results.length} emails sent successfully`)
+            
+            // Log individual email failures for debugging
+            emailResults.results.forEach(result => {
+              if (!result.success) {
+                console.error(`Failed to send welcome email to ${result.email}: ${result.message}`)
+              }
+            })
+          } catch (emailError) {
+            // Log email error but don't fail the user creation
+            console.error('Failed to send bulk welcome emails:', emailError)
+          }
+        }
 
         return bulkResult
       } catch (dbError) {
