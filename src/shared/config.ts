@@ -33,7 +33,12 @@ const configSchema = z.object({
   ADMIN_PASSWORD: z.string(),
   ADMIN_FIRST_NAME: z.string(),
   ADMIN_LAST_NAME: z.string(),
-  ADMIN_MIDDLE_NAME: z.string()
+  ADMIN_MIDDLE_NAME: z.string(),
+  DEPARTMENT_HEAD_EMAIL: z.string(),
+  DEPARTMENT_HEAD_PASSWORD: z.string(),
+  DEPARTMENT_HEAD_FIRST_NAME: z.string(),
+  DEPARTMENT_HEAD_LAST_NAME: z.string(),
+  DEPARTMENT_HEAD_MIDDLE_NAME: z.string()
 })
 
 const getEnvVars = () => {
