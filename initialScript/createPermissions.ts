@@ -1,8 +1,10 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from '~/app.module'
 import { PermissionType } from '~/routes/permission/permission.model'
-import { HTTPMethod } from '~/shared/constants/auth.constant'
+import { HTTPMethod, RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
+
+const DepartmentModules = ['AUTH', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
 
 const prisma = new PrismaService()
 
@@ -94,6 +96,13 @@ async function bootstrap() {
 
   const adminPermissionIds = updatedPermissionsInDb.map((item: PermissionType) => ({ id: item.id }))
   await updateRole(adminPermissionIds, 'ADMINISTRATOR')
+  const sellerPermissionIds = updatedPermissionsInDb
+    .filter((item) => DepartmentModules.includes(item.module))
+    .map((item) => ({ id: item.id }))
+  await Promise.all([
+    updateRole(adminPermissionIds, RoleName.ADMINISTRATOR),
+    updateRole(sellerPermissionIds, RoleName.DEPARTMENT_HEAD)
+  ])
   process.exit(0)
 }
 
