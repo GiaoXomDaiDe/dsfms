@@ -14,7 +14,8 @@ const SYSTEM_ROLES = [
   { name: RoleName.TRAINEE, description: 'Trainee role' },
   { name: RoleName.TRAINER, description: 'Trainer role' },
   { name: RoleName.DEPARTMENT_HEAD, description: 'Department Head role' },
-  { name: RoleName.SQA_AUDITOR, description: 'SQA Auditor role' }
+  { name: RoleName.SQA_AUDITOR, description: 'SQA Auditor role' },
+  { name: RoleName.ACADEMIC_DEPARTMENT, description: 'Academic Department role' }
 ]
 const DEFAULT_USERS = [
   {
