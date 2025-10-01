@@ -10,15 +10,17 @@ export class EidService {
     [RoleName.DEPARTMENT_HEAD]: 'DH',
     [RoleName.SQA_AUDITOR]: 'QA',
     [RoleName.TRAINER]: 'TR',
-    [RoleName.TRAINEE]: 'TE'
+    [RoleName.TRAINEE]: 'TE',
+    [RoleName.ACADEMIC_DEPARTMENT]: 'AC'
   }
+
+  private readonly FALLBACK_PREFIX = 'AV' // Fallback for non-system roles
+
   constructor(private readonly prisma: PrismaService) {}
 
   async generateEid({ roleName, count }: { roleName: string; count?: number }): Promise<string | string[]> {
-    const prefix = this.rolePrefixMap[roleName]
-    if (!prefix) {
-      throw new Error('Không có EID cho vai trò này')
-    }
+    // Use system role prefix if available, otherwise use fallback
+    const prefix = this.rolePrefixMap[roleName] || this.FALLBACK_PREFIX
 
     return await this.prisma.$transaction(async ({ user }: Prisma.TransactionClient) => {
       const lastUser = await user.findFirst({
@@ -29,7 +31,7 @@ export class EidService {
 
       let nextNumber = 1
       if (lastUser && lastUser.eid) {
-        const currentNumber = parseInt(lastUser.eid.substring(2))
+        const currentNumber = parseInt(lastUser.eid.substring(prefix.length))
         nextNumber = currentNumber + 1
       }
       if (!count) {
@@ -46,7 +48,7 @@ export class EidService {
     })
   }
   isEidMatchingRole(eid: string, roleName: string): boolean {
-    const expectedPrefix = this.rolePrefixMap[roleName]
-    return expectedPrefix ? eid.startsWith(expectedPrefix) : false
+    const expectedPrefix = this.rolePrefixMap[roleName] || this.FALLBACK_PREFIX
+    return eid.startsWith(expectedPrefix)
   }
 }
