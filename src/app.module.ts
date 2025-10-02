@@ -16,6 +16,7 @@ import { AuthModule } from './routes/auth/auth.module'
 import { EmailModule } from './routes/email/email.module'
 import { PermissionModule } from './routes/permission/permission.module'
 import { ProfileModule } from './routes/profile/profile.module'
+import { TemplateModule } from './routes/template/template.module'
 
 @Module({
   imports: [
@@ -32,7 +33,8 @@ import { ProfileModule } from './routes/profile/profile.module'
     ProfileModule,
     DepartmentModule,
     CourseModule,
-    SubjectModule
+    SubjectModule,
+    TemplateModule
   ],
   controllers: [AppController],
   providers: [
