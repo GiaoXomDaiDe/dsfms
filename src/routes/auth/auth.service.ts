@@ -120,9 +120,9 @@ export class AuthService {
 
       // Tạo access token mới
       const newPayload = {
-        user_id: user.id,
-        role_id: user.role.id,
-        role_name: user.role.name
+        userId: user.id,
+        roleId: user.role.id,
+        roleName: user.role.name
       }
 
       const newAccessToken = this.jwtService.sign(newPayload, {

@@ -19,7 +19,7 @@ export class AuthController {
 
   @Post('refresh')
   @IsPublic()
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshResponse> {
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<AuthResponse> {
     return this.authService.refreshTokens(refreshTokenDto.refresh_token)
   }
 
