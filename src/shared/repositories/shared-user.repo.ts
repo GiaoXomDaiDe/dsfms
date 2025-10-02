@@ -53,9 +53,20 @@ export class SharedUserRepository {
       },
       include: {
         role: {
-          select: {
-            id: true,
-            name: true
+          include: {
+            permissions: {
+              select: {
+                method: true,
+                id: true,
+                description: true,
+                isActive: true,
+                module: true,
+                name: true,
+                path: true,
+                viewModule: true,
+                viewName: true
+              }
+            }
           }
         },
         department: {
@@ -68,6 +79,7 @@ export class SharedUserRepository {
         traineeProfile: true
       }
     })
+    console.log(user, 'user')
     return user
   }
   async findDisableUniqueIncludeProfile(where: WhereUniqueUserType): Promise<UserIncludeProfileType | null> {
@@ -80,6 +92,21 @@ export class SharedUserRepository {
           select: {
             id: true,
             name: true
+          },
+          include: {
+            permissions: {
+              select: {
+                method: true,
+                id: true,
+                description: true,
+                isActive: true,
+                module: true,
+                name: true,
+                path: true,
+                viewModule: true,
+                viewName: true
+              }
+            }
           }
         },
         department: {
@@ -92,6 +119,7 @@ export class SharedUserRepository {
         traineeProfile: true
       }
     })
+
     return user
   }
 
