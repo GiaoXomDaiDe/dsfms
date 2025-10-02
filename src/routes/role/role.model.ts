@@ -15,8 +15,8 @@ export const RoleSchema = z.object({
 })
 export const RoleWithPermissionsSchema = RoleSchema.extend({
   permissions: z.array(PermissionSchema),
-  userCount: z.number(),
-  permissionCount: z.number()
+  userCount: z.number().default(0),
+  permissionCount: z.number().default(0)
 })
 export const RoleWithUserCountSchema = RoleSchema.extend({
   userCount: z.number()
