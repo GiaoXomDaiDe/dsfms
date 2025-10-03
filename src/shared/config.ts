@@ -66,6 +66,11 @@ const getEnvVars = () => {
       ADMIN_FIRST_NAME: 'Test',
       ADMIN_LAST_NAME: 'Admin',
       ADMIN_MIDDLE_NAME: 'Test',
+      DEPARTMENT_HEAD_EMAIL: 'head@test.com',
+      DEPARTMENT_HEAD_PASSWORD: 'test-password',
+      DEPARTMENT_HEAD_FIRST_NAME: 'Department',
+      DEPARTMENT_HEAD_LAST_NAME: 'Head',
+      DEPARTMENT_HEAD_MIDDLE_NAME: 'Test',
       ...process.env
     }
   }

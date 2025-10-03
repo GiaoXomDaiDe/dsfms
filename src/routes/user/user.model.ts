@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DepartmentSchema } from '~/routes/department/department.model'
+import { PermissionSchema } from '~/routes/permission/permission.model'
 import {
   CreateTraineeProfileSchema,
   CreateTrainerProfileSchema,
@@ -23,6 +24,23 @@ export const GetUserProfileResSchema = UserSchema.omit({
   role: RoleSchema.pick({
     id: true,
     name: true
+  }).extend({
+    permissions: z
+      .array(
+        PermissionSchema.pick({
+          id: true,
+          name: true,
+          description: true,
+          isActive: true,
+          method: true,
+          module: true,
+          path: true,
+          viewModule: true,
+          viewName: true
+        })
+      )
+      .optional()
+      .default([])
   }),
   department: DepartmentSchema.pick({
     id: true,
