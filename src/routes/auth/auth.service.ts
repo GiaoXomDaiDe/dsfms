@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { v4 as uuidv4 } from 'uuid'
-import { AuthPayloadDto } from '~/dto/auth.dto'
+import { AuthPayloadDto } from '~/routes/auth/auth.dto'
 import envConfig from '~/shared/config'
 import * as statusConst from '~/shared/constants/auth.constant'
 import { HashingService } from '~/shared/services/hashing.service'

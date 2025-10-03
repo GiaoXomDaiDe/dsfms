@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common'
 import express from 'express'
-import { AuthPayloadDto, AuthResponse, RefreshTokenDto, ForgotPasswordDto, ResetPasswordDto } from '~/dto/auth.dto'
+import { AuthPayloadDto, AuthResponse, RefreshTokenDto, ForgotPasswordDto, ResetPasswordDto } from '~/routes/auth/auth.dto'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { AuthService } from './auth.service'
 import { JwtGuard } from './guards/jwt.guard'
