@@ -1,59 +1,63 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { v4 as uuidv4 } from 'uuid'
-import { AuthPayloadDto } from '~/dto/auth.dto'
+import { AuthPayloadDto } from '~/routes/auth/auth.dto'
 import envConfig from '~/shared/config'
 import * as statusConst from '~/shared/constants/auth.constant'
 import { HashingService } from '~/shared/services/hashing.service'
-import { PrismaService } from '~/shared/services/prisma.service'
 import { NodemailerService } from '../email/nodemailer.service'
+import { AuthRepo, UserWithRelations } from './auth.repo'
+import * as AuthErrors from './auth.error'
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
-    private prismaService: PrismaService,
+    private authRepo: AuthRepo,
     private hashingService: HashingService,
     private nodemailerService: NodemailerService
   ) {}
 
   async validateUser({ email, password }: AuthPayloadDto) {
-    const user = await this.prismaService.user.findFirst({
-      where: {
-        email: email,
-        deletedAt: null,
-        status: statusConst.STATUS_CONST.ACTIVE
-      },
-      include: {
-        role: {
-          select: {
-            id: true,
-            name: true,
-            description: true
-          }
-        },
-        department: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+    try {
+      // Check if email and password are provided
+      if (!email || !password) {
+        throw AuthErrors.MissingCredentialsException
       }
-    })
 
-    if (!user) {
-      return null
+      // Find user by email (including disabled users to check status)
+      const user = await this.authRepo.findUserByEmail(email)
+
+      if (!user) {
+        throw AuthErrors.UserNotFoundException
+      }
+
+      // Check if account is disabled
+      if (user.status === statusConst.UserStatus.DISABLED) {
+        throw AuthErrors.AccountDisabledException
+      }
+
+      // Validate password
+      const isPasswordValid = await this.hashingService.comparePassword(password, user.passwordHash)
+
+      if (!isPasswordValid) {
+        throw AuthErrors.InvalidCredentialsException
+      }
+
+      // Return user without password
+      const { passwordHash, ...userWithoutPassword } = user
+      return userWithoutPassword
+    } catch (error) {
+      // If it's one of our custom errors, re-throw it
+      if (error instanceof AuthErrors.MissingCredentialsException.constructor ||
+          error instanceof AuthErrors.UserNotFoundException.constructor ||
+          error instanceof AuthErrors.AccountDisabledException.constructor ||
+          error instanceof AuthErrors.InvalidCredentialsException.constructor) {
+        throw error
+      }
+      // For unexpected errors, throw internal server error
+      throw AuthErrors.AuthenticationServiceException
     }
-
-    const isPasswordValid = await this.hashingService.comparePassword(password, user.passwordHash)
-
-    if (!isPasswordValid) {
-      return null
-    }
-
-    // ko return password
-    const { passwordHash, ...userWithoutPassword } = user
-    return userWithoutPassword
   }
 
   login(user: any): { access_token: string; refresh_token: string } {
@@ -85,40 +89,19 @@ export class AuthService {
 
   async refreshTokens(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
     try {
-      // Verify refresh token với correct secret
+      // Verify refresh token
       const payload = this.jwtService.verify(refreshToken, {
         secret: envConfig.REFRESH_TOKEN_SECRET
       })
 
-      // Tìm user từ database để đảm bảo user vẫn active
-      const user = await this.prismaService.user.findFirst({
-        where: {
-          id: payload.sub,
-          deletedAt: null,
-          status: statusConst.STATUS_CONST.ACTIVE
-        },
-        include: {
-          role: {
-            select: {
-              id: true,
-              name: true,
-              description: true
-            }
-          },
-          department: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      })
+      // Find user to ensure they are still active
+      const user = await this.authRepo.findUserById(payload.sub)
 
       if (!user) {
-        throw new UnauthorizedException('User not found or inactive')
+        throw AuthErrors.UserNotFoundException
       }
 
-      // Tạo access token mới
+      // Create new access token
       const newPayload = {
         userId: user.id,
         roleId: user.role.id,
@@ -144,99 +127,113 @@ export class AuthService {
         refresh_token: newRefreshToken
       }
     } catch (error) {
-      throw new UnauthorizedException('Invalid refresh token')
+      if (error.name === 'TokenExpiredError') {
+        throw AuthErrors.TokenExpiredException
+      }
+      if (error.name === 'JsonWebTokenError') {
+        throw AuthErrors.InvalidRefreshTokenException
+      }
+      // If it's one of our custom errors, re-throw it
+      if (error instanceof AuthErrors.UserNotFoundException.constructor) {
+        throw error
+      }
+      throw AuthErrors.AuthenticationServiceException
     }
   }
 
   async forgotPassword(email: string, magicLink: string): Promise<{ message: string }> {
-    // Tìm user theo email
-    const user = await this.prismaService.user.findFirst({
-      where: {
-        email: email,
-        deletedAt: null,
-        status: statusConst.STATUS_CONST.ACTIVE
+    try {
+      if (!email) {
+        throw AuthErrors.MissingCredentialsException
       }
-    })
 
-    if (!user) {
-      // Không tiết lộ user có tồn tại hay không vì security
+      // Find user by email (only active users)
+      const user = await this.authRepo.findActiveUserByEmail(email)
+
+      if (!user) {
+        // Don't reveal whether user exists for security
+        return { message: 'If the email exists, a reset link has been sent.' }
+      }
+
+      // Create JWT reset token
+      const resetToken = this.jwtService.sign(
+        { 
+          userId: user.id, 
+          email: user.email,
+          type: 'password-reset',
+          iat: Math.floor(Date.now() / 1000)
+        },
+        {
+          secret: envConfig.RESET_PASSWORD_SECRET,
+          expiresIn: '24h'
+        }
+      )
+      
+      // Send reset password email
+      await this.nodemailerService.sendResetPasswordEmail(
+        user.email,
+        resetToken,
+        magicLink,
+        `${user.firstName} ${user.lastName}`
+      )
+
+      return { 
+        message: 'If the email exists, a reset link has been sent.'
+      }
+    } catch (error) {
+      // If it's our custom error, re-throw it
+      if (error instanceof AuthErrors.MissingCredentialsException.constructor) {
+        throw error
+      }
+      // For other errors, still return success message for security
       return { message: 'If the email exists, a reset link has been sent.' }
-    }
-
-    // Tạo JWT reset token thay vì lưu database
-    const resetToken = this.jwtService.sign(
-      { 
-        userId: user.id, 
-        email: user.email,
-        type: 'password-reset',
-        iat: Math.floor(Date.now() / 1000) // issued at time
-      },
-      {
-        secret: envConfig.RESET_PASSWORD_SECRET,
-        expiresIn: '24h' // Token hết hạn sau 24 giờ
-      }
-    )
-    
-    // Gửi email reset password
-    await this.nodemailerService.sendResetPasswordEmail(
-      user.email,
-      resetToken,
-      magicLink,
-      `${user.firstName} ${user.lastName}`
-    )
-
-    return { 
-      message: 'If the email exists, a reset link has been sent.'
     }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
     try {
+      if (!token || !newPassword) {
+        throw AuthErrors.MissingCredentialsException
+      }
+
       // Verify JWT reset token
       const payload = this.jwtService.verify(token, {
         secret: envConfig.RESET_PASSWORD_SECRET
       })
 
-      // Validate token type và thông tin
+      // Validate token type and information
       if (payload.type !== 'password-reset' || !payload.userId || !payload.email) {
-        throw new UnauthorizedException('Invalid reset token')
+        throw AuthErrors.InvalidTokenException
       }
 
-      // Tìm user để đảm bảo vẫn tồn tại và active
-      const user = await this.prismaService.user.findFirst({
-        where: {
-          id: payload.userId,
-          email: payload.email,
-          deletedAt: null,
-          status: statusConst.STATUS_CONST.ACTIVE
-        }
-      })
+      // Find user by email to ensure they still exist and are active
+      const user = await this.authRepo.findActiveUserByEmail(payload.email)
 
-      if (!user) {
-        throw new UnauthorizedException('User not found or inactive')
+      if (!user || user.id !== payload.userId) {
+        throw AuthErrors.UserNotFoundException
       }
 
-      // Hash password mới
+      // Hash new password
       const hashedPassword = await this.hashingService.hashPassword(newPassword)
 
       // Update user password
-      await this.prismaService.user.update({
-        where: { id: user.id },
-        data: { 
-          passwordHash: hashedPassword,
-          updatedAt: new Date()
-        }
-      })
+      await this.authRepo.updateUserPassword(user.id, hashedPassword)
 
       return { message: 'Password has been reset successfully.' }
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
-        throw new UnauthorizedException('Reset token has expired')
+        throw AuthErrors.TokenExpiredException
       }
       if (error.name === 'JsonWebTokenError') {
-        throw new UnauthorizedException('Invalid reset token')
+        throw AuthErrors.InvalidTokenException
       }
-      throw error // Re-throw other errors
+      // If it's one of our custom errors, re-throw it
+      if (error instanceof AuthErrors.MissingCredentialsException.constructor ||
+          error instanceof AuthErrors.InvalidTokenException.constructor ||
+          error instanceof AuthErrors.UserNotFoundException.constructor) {
+        throw error
+      }
+      throw AuthErrors.AuthenticationServiceException
     }
   }
 }
