@@ -33,6 +33,7 @@
     "@types/nodemailer": "^7.0.1",
     "aws-sdk": "^2.1692.0",
     "bcrypt": "^6.0.0",
+    "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "docxtemplater": "^3.66.4",
     "dotenv": "^17.2.2",
