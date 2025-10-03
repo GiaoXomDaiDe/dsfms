@@ -1,0 +1,425 @@
+2025-10-03T07:31:07.0794498Z ##[group]Run npm test
+2025-10-03T07:31:07.0794795Z [36;1mnpm test[0m
+2025-10-03T07:31:07.0828090Z shell: /usr/bin/bash -e {0}
+2025-10-03T07:31:07.0828356Z ##[endgroup]
+2025-10-03T07:31:07.2185243Z 
+2025-10-03T07:31:07.2185815Z > dsfms@0.0.1 test
+2025-10-03T07:31:07.2186231Z > jest
+2025-10-03T07:31:07.2186391Z 
+2025-10-03T07:31:09.2357584Z PASS src/routes/auth/auth.repo.spec.ts
+2025-10-03T07:31:09.7554347Z PASS src/routes/email/nodemailer.service.spec.ts
+2025-10-03T07:31:09.7775602Z   ● Console
+2025-10-03T07:31:09.7779699Z 
+2025-10-03T07:31:09.7783745Z     console.error
+2025-10-03T07:31:09.7788052Z       Nodemailer send error: Error: Send failed
+2025-10-03T07:31:09.7793144Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/email/nodemailer.service.spec.ts:73:23)
+2025-10-03T07:31:09.7798491Z           at Promise.finally.completed (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1556:28)
+2025-10-03T07:31:09.7803452Z           at new Promise (<anonymous>)
+2025-10-03T07:31:09.7808482Z           at callAsyncCircusFn (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1496:10)
+2025-10-03T07:31:09.7813996Z           at _callCircusTest (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1006:40)
+2025-10-03T07:31:09.7823425Z           at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-10-03T07:31:09.7828436Z           at _runTest (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:946:3)
+2025-10-03T07:31:09.7833958Z           at _runTestsForDescribeBlock (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:839:13)
+2025-10-03T07:31:09.7839295Z           at _runTestsForDescribeBlock (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:829:11)
+2025-10-03T07:31:09.7843941Z           at run (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:757:3)
+2025-10-03T07:31:09.7846698Z           at runAndTransformResultsToJestFormat (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1917:21)
+2025-10-03T07:31:09.7848408Z           at jestAdapter (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/runner.js:101:19)
+2025-10-03T07:31:09.7849865Z           at runTestInternal (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:275:16)
+2025-10-03T07:31:09.7851524Z           at runTest (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:343:7)
+2025-10-03T07:31:09.7853157Z           at Object.worker (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:497:12)
+2025-10-03T07:31:09.7854058Z 
+2025-10-03T07:31:09.7854602Z     [0m [90m 52 |[39m       }
+2025-10-03T07:31:09.7855470Z      [90m 53 |[39m     } [36mcatch[39m (error) {
+2025-10-03T07:31:09.7856751Z     [31m[1m>[22m[39m[90m 54 |[39m       console[33m.[39merror([32m'Nodemailer send error:'[39m[33m,[39m error)
+2025-10-03T07:31:09.7857953Z      [90m    |[39m               [31m[1m^[22m[39m
+2025-10-03T07:31:09.7858777Z      [90m 55 |[39m       [36mreturn[39m {
+2025-10-03T07:31:09.7859597Z      [90m 56 |[39m         success[33m:[39m [36mfalse[39m[33m,[39m
+2025-10-03T07:31:09.7860653Z      [90m 57 |[39m         error[33m:[39m error[33m.[39mmessage[0m
+2025-10-03T07:31:09.7891380Z 
+2025-10-03T07:31:09.7892351Z       at NodemailerService.sendEmail (routes/email/nodemailer.service.ts:54:15)
+2025-10-03T07:31:09.7893656Z       at Object.<anonymous> (routes/email/nodemailer.service.spec.ts:82:20)
+2025-10-03T07:31:09.7894311Z 
+2025-10-03T07:31:09.7894603Z     console.error
+2025-10-03T07:31:09.7895410Z       Nodemailer connection verification failed: Error: Connection failed
+2025-10-03T07:31:09.7897465Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/email/nodemailer.service.spec.ts:114:23)
+2025-10-03T07:31:09.7899371Z           at Promise.finally.completed (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1556:28)
+2025-10-03T07:31:09.7902769Z           at new Promise (<anonymous>)
+2025-10-03T07:31:09.7903824Z           at callAsyncCircusFn (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1496:10)
+2025-10-03T07:31:09.7905197Z           at _callCircusTest (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1006:40)
+2025-10-03T07:31:09.7906286Z           at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-10-03T07:31:09.7907357Z           at _runTest (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:946:3)
+2025-10-03T07:31:09.7908730Z           at _runTestsForDescribeBlock (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:839:13)
+2025-10-03T07:31:09.7910265Z           at _runTestsForDescribeBlock (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:829:11)
+2025-10-03T07:31:09.7911641Z           at run (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:757:3)
+2025-10-03T07:31:09.7913352Z           at runAndTransformResultsToJestFormat (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/jestAdapterInit.js:1917:21)
+2025-10-03T07:31:09.7915077Z           at jestAdapter (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/runner.js:101:19)
+2025-10-03T07:31:09.7916311Z           at runTestInternal (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:275:16)
+2025-10-03T07:31:09.7917503Z           at runTest (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:343:7)
+2025-10-03T07:31:09.7918692Z           at Object.worker (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:497:12)
+2025-10-03T07:31:09.7919339Z 
+2025-10-03T07:31:09.7919790Z     [0m [90m 89 |[39m       [36mreturn[39m [36mtrue[39m
+2025-10-03T07:31:09.7920485Z      [90m 90 |[39m     } [36mcatch[39m (error) {
+2025-10-03T07:31:09.7921685Z     [31m[1m>[22m[39m[90m 91 |[39m       console[33m.[39merror([32m'Nodemailer connection verification failed:'[39m[33m,[39m error)
+2025-10-03T07:31:09.7922974Z      [90m    |[39m               [31m[1m^[22m[39m
+2025-10-03T07:31:09.7923661Z      [90m 92 |[39m       [36mreturn[39m [36mfalse[39m
+2025-10-03T07:31:09.7924225Z      [90m 93 |[39m     }
+2025-10-03T07:31:09.7924661Z      [90m 94 |[39m   }[0m
+2025-10-03T07:31:09.7924898Z 
+2025-10-03T07:31:09.7925420Z       at NodemailerService.verifyConnection (routes/email/nodemailer.service.ts:91:15)
+2025-10-03T07:31:09.7926386Z       at Object.<anonymous> (routes/email/nodemailer.service.spec.ts:117:20)
+2025-10-03T07:31:09.7926851Z 
+2025-10-03T07:31:09.9684658Z FAIL src/routes/auth/auth.service.spec.ts
+2025-10-03T07:31:09.9733761Z   ● Console
+2025-10-03T07:31:09.9734331Z 
+2025-10-03T07:31:09.9734653Z     console.log
+2025-10-03T07:31:09.9735894Z       [dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+2025-10-03T07:31:09.9736650Z 
+2025-10-03T07:31:09.9737104Z       at _log (../node_modules/dotenv/lib/main.js:139:11)
+2025-10-03T07:31:09.9737708Z 
+2025-10-03T07:31:09.9738009Z     console.error
+2025-10-03T07:31:09.9738604Z       Config env validation failed ZodError: [
+2025-10-03T07:31:09.9739273Z         {
+2025-10-03T07:31:09.9739823Z           "expected": "string",
+2025-10-03T07:31:09.9740465Z           "code": "invalid_type",
+2025-10-03T07:31:09.9741068Z           "path": [
+2025-10-03T07:31:09.9741661Z             "DEPARTMENT_HEAD_EMAIL"
+2025-10-03T07:31:09.9747160Z           ],
+2025-10-03T07:31:09.9747957Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9748721Z         },
+2025-10-03T07:31:09.9749190Z         {
+2025-10-03T07:31:09.9749718Z           "expected": "string",
+2025-10-03T07:31:09.9750375Z           "code": "invalid_type",
+2025-10-03T07:31:09.9750921Z           "path": [
+2025-10-03T07:31:09.9751440Z             "DEPARTMENT_HEAD_PASSWORD"
+2025-10-03T07:31:09.9752390Z           ],
+2025-10-03T07:31:09.9753236Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9753876Z         },
+2025-10-03T07:31:09.9754289Z         {
+2025-10-03T07:31:09.9754741Z           "expected": "string",
+2025-10-03T07:31:09.9755277Z           "code": "invalid_type",
+2025-10-03T07:31:09.9755779Z           "path": [
+2025-10-03T07:31:09.9756275Z             "DEPARTMENT_HEAD_FIRST_NAME"
+2025-10-03T07:31:09.9756796Z           ],
+2025-10-03T07:31:09.9757395Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9758004Z         },
+2025-10-03T07:31:09.9758404Z         {
+2025-10-03T07:31:09.9758869Z           "expected": "string",
+2025-10-03T07:31:09.9759408Z           "code": "invalid_type",
+2025-10-03T07:31:09.9759895Z           "path": [
+2025-10-03T07:31:09.9760325Z             "DEPARTMENT_HEAD_LAST_NAME"
+2025-10-03T07:31:09.9760844Z           ],
+2025-10-03T07:31:09.9761427Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9761985Z         },
+2025-10-03T07:31:09.9762393Z         {
+2025-10-03T07:31:09.9762998Z           "expected": "string",
+2025-10-03T07:31:09.9763459Z           "code": "invalid_type",
+2025-10-03T07:31:09.9764109Z           "path": [
+2025-10-03T07:31:09.9764620Z             "DEPARTMENT_HEAD_MIDDLE_NAME"
+2025-10-03T07:31:09.9765124Z           ],
+2025-10-03T07:31:09.9765655Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9766201Z         }
+2025-10-03T07:31:09.9766584Z       ]
+2025-10-03T07:31:09.9767330Z           at new ZodError (/home/runner/work/dsfms/dsfms/node_modules/zod/v4/core/core.cjs:35:39)
+2025-10-03T07:31:09.9768439Z           at Object.safeParse (/home/runner/work/dsfms/dsfms/node_modules/zod/v4/core/parse.cjs:68:20)
+2025-10-03T07:31:09.9769550Z           at _.inst.safeParse (/home/runner/work/dsfms/dsfms/node_modules/zod/v4/classic/schemas.cjs:148:46)
+2025-10-03T07:31:09.9770588Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/shared/config.ts:75:35)
+2025-10-03T07:31:09.9771903Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9773551Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9787940Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9789280Z           at Runtime.requireModuleOrMock (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:964:21)
+2025-10-03T07:31:09.9790445Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/auth/auth.service.ts:5:1)
+2025-10-03T07:31:09.9791583Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9792893Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9793672Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9794448Z           at Runtime.requireModuleOrMock (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:964:21)
+2025-10-03T07:31:09.9795168Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9795847Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9796531Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9797223Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9797990Z           at jestAdapter (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/runner.js:95:13)
+2025-10-03T07:31:09.9798810Z           at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-10-03T07:31:09.9799413Z           at runTestInternal (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:275:16)
+2025-10-03T07:31:09.9800070Z           at runTest (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:343:7)
+2025-10-03T07:31:09.9800722Z           at Object.worker (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:497:12)
+2025-10-03T07:31:09.9801085Z 
+2025-10-03T07:31:09.9801266Z     [0m [90m 76 |[39m
+2025-10-03T07:31:09.9801679Z      [90m 77 |[39m [36mif[39m ([33m![39mconfigServer[33m.[39msuccess) {
+2025-10-03T07:31:09.9802385Z     [31m[1m>[22m[39m[90m 78 |[39m   console[33m.[39merror([32m'Config env validation failed'[39m[33m,[39m configServer[33m.[39merror)
+2025-10-03T07:31:09.9803141Z      [90m    |[39m           [31m[1m^[22m[39m
+2025-10-03T07:31:09.9803726Z      [90m 79 |[39m   [36mif[39m (process[33m.[39menv[33m.[39m[33mNODE_ENV[39m [33m!==[39m [32m'test'[39m) {
+2025-10-03T07:31:09.9804242Z      [90m 80 |[39m     process[33m.[39mexit([35m1[39m)
+2025-10-03T07:31:09.9804557Z      [90m 81 |[39m   }[0m
+2025-10-03T07:31:09.9804840Z 
+2025-10-03T07:31:09.9804997Z       at Object.<anonymous> (shared/config.ts:78:11)
+2025-10-03T07:31:09.9805352Z       at Object.<anonymous> (routes/auth/auth.service.ts:5:1)
+2025-10-03T07:31:09.9805754Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9806086Z 
+2025-10-03T07:31:09.9806351Z   ● AuthService › login › should return access and refresh tokens
+2025-10-03T07:31:09.9806603Z 
+2025-10-03T07:31:09.9806874Z     TypeError: Cannot read properties of undefined (reading 'ACCESS_TOKEN_SECRET')
+2025-10-03T07:31:09.9807159Z 
+2025-10-03T07:31:09.9807279Z     [0m [90m 69 |[39m
+2025-10-03T07:31:09.9807855Z      [90m 70 |[39m     [36mconst[39m accessToken [33m=[39m [36mthis[39m[33m.[39mjwtService[33m.[39msign(payload[33m,[39m {
+2025-10-03T07:31:09.9808604Z     [31m[1m>[22m[39m[90m 71 |[39m       secret[33m:[39m envConfig[33m.[39m[33mACCESS_TOKEN_SECRET[39m[33m,[39m
+2025-10-03T07:31:09.9809107Z      [90m    |[39m                         [31m[1m^[22m[39m
+2025-10-03T07:31:09.9809654Z      [90m 72 |[39m       expiresIn[33m:[39m envConfig[33m.[39m[33mACCESS_TOKEN_EXPIRES_IN[39m[33m,[39m
+2025-10-03T07:31:09.9810164Z      [90m 73 |[39m       algorithm[33m:[39m [32m'HS256'[39m
+2025-10-03T07:31:09.9810502Z      [90m 74 |[39m     })[0m
+2025-10-03T07:31:09.9810644Z 
+2025-10-03T07:31:09.9810825Z       at AuthService.login (routes/auth/auth.service.ts:71:25)
+2025-10-03T07:31:09.9811244Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:158:30)
+2025-10-03T07:31:09.9811482Z 
+2025-10-03T07:31:09.9811811Z   ● AuthService › refreshTokens › should return new tokens when refresh token is valid
+2025-10-03T07:31:09.9812118Z 
+2025-10-03T07:31:09.9812314Z     InternalServerErrorException: Authentication service error
+2025-10-03T07:31:09.9812802Z 
+2025-10-03T07:31:09.9812929Z     [0m [90m 52 |[39m
+2025-10-03T07:31:09.9813272Z      [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9814101Z     [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9814829Z      [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9815329Z      [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9815807Z      [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9816129Z      [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9816269Z 
+2025-10-03T07:31:09.9816437Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9816981Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9817377Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9817600Z 
+2025-10-03T07:31:09.9817931Z   ● AuthService › refreshTokens › should throw UserNotFoundException when user not found
+2025-10-03T07:31:09.9818252Z 
+2025-10-03T07:31:09.9818388Z     expect(received).rejects.toThrow(expected)
+2025-10-03T07:31:09.9818581Z 
+2025-10-03T07:31:09.9818700Z     Expected message: "User not found"
+2025-10-03T07:31:09.9819018Z     Received message: "Authentication service error"
+2025-10-03T07:31:09.9819229Z 
+2025-10-03T07:31:09.9819349Z         [0m [90m 52 |[39m
+2025-10-03T07:31:09.9819678Z          [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9820490Z         [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9821214Z          [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9821719Z          [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9822207Z          [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9822885Z          [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9823043Z 
+2025-10-03T07:31:09.9823228Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9823630Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9824040Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9824471Z       at Object.toThrow (../node_modules/expect/build/index.js:2155:20)
+2025-10-03T07:31:09.9824901Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:187:18)
+2025-10-03T07:31:09.9825134Z 
+2025-10-03T07:31:09.9825477Z   ● AuthService › refreshTokens › should throw TokenExpiredException when token is expired
+2025-10-03T07:31:09.9825806Z 
+2025-10-03T07:31:09.9825942Z     expect(received).rejects.toThrow(expected)
+2025-10-03T07:31:09.9826136Z 
+2025-10-03T07:31:09.9826256Z     Expected message: "Token has expired"
+2025-10-03T07:31:09.9826591Z     Received message: "Authentication service error"
+2025-10-03T07:31:09.9826799Z 
+2025-10-03T07:31:09.9826923Z         [0m [90m 52 |[39m
+2025-10-03T07:31:09.9827261Z          [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9828077Z         [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9828790Z          [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9829298Z          [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9829788Z          [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9830176Z          [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9830314Z 
+2025-10-03T07:31:09.9830481Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9830853Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9831256Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9831680Z       at Object.toThrow (../node_modules/expect/build/index.js:2155:20)
+2025-10-03T07:31:09.9832108Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:196:18)
+2025-10-03T07:31:09.9832341Z 
+2025-10-03T07:31:09.9832875Z   ● AuthService › refreshTokens › should throw InvalidRefreshTokenException for invalid token
+2025-10-03T07:31:09.9833213Z 
+2025-10-03T07:31:09.9833348Z     expect(received).rejects.toThrow(expected)
+2025-10-03T07:31:09.9833540Z 
+2025-10-03T07:31:09.9833666Z     Expected message: "Invalid refresh token"
+2025-10-03T07:31:09.9833997Z     Received message: "Authentication service error"
+2025-10-03T07:31:09.9834348Z 
+2025-10-03T07:31:09.9834484Z         [0m [90m 52 |[39m
+2025-10-03T07:31:09.9834820Z          [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9835627Z         [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9836351Z          [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9836846Z          [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9837327Z          [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9837667Z          [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9837800Z 
+2025-10-03T07:31:09.9837966Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9838331Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9838734Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9839148Z       at Object.toThrow (../node_modules/expect/build/index.js:2155:20)
+2025-10-03T07:31:09.9839567Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:205:18)
+2025-10-03T07:31:09.9839912Z 
+2025-10-03T07:31:09.9840225Z   ● AuthService › forgotPassword › should return success message when user exists
+2025-10-03T07:31:09.9840510Z 
+2025-10-03T07:31:09.9840636Z     expect(jest.fn()).toHaveBeenCalled()
+2025-10-03T07:31:09.9840810Z 
+2025-10-03T07:31:09.9840918Z     Expected number of calls: >= 1
+2025-10-03T07:31:09.9841183Z     Received number of calls:    0
+2025-10-03T07:31:09.9841338Z 
+2025-10-03T07:31:09.9841449Z     [0m [90m 224 |[39m
+2025-10-03T07:31:09.9842064Z      [90m 225 |[39m       expect(result[33m.[39mmessage)[33m.[39mtoBe([32m'If the email exists, a reset link has been sent.'[39m)[33m;[39m
+2025-10-03T07:31:09.9843217Z     [31m[1m>[22m[39m[90m 226 |[39m       expect(nodemailerService[33m.[39msendResetPasswordEmail)[33m.[39mtoHaveBeenCalled()[33m;[39m
+2025-10-03T07:31:09.9843885Z      [90m     |[39m                                                        [31m[1m^[22m[39m
+2025-10-03T07:31:09.9844234Z      [90m 227 |[39m     })[33m;[39m
+2025-10-03T07:31:09.9844501Z      [90m 228 |[39m
+2025-10-03T07:31:09.9845148Z      [90m 229 |[39m     it([32m'should return success message even when user does not exist (security)'[39m[33m,[39m [36masync[39m () [33m=>[39m {[0m
+2025-10-03T07:31:09.9845574Z 
+2025-10-03T07:31:09.9845776Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:226:56)
+2025-10-03T07:31:09.9846016Z 
+2025-10-03T07:31:09.9846352Z   ● AuthService › resetPassword › should successfully reset password with valid token
+2025-10-03T07:31:09.9846657Z 
+2025-10-03T07:31:09.9846852Z     InternalServerErrorException: Authentication service error
+2025-10-03T07:31:09.9847098Z 
+2025-10-03T07:31:09.9847207Z     [0m [90m 52 |[39m
+2025-10-03T07:31:09.9847536Z      [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9848343Z     [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9849068Z      [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9849561Z      [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9850041Z      [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9850365Z      [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9850505Z 
+2025-10-03T07:31:09.9850669Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9851045Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9851442Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9851804Z 
+2025-10-03T07:31:09.9852156Z   ● AuthService › resetPassword › should throw InvalidTokenException for invalid token type
+2025-10-03T07:31:09.9852487Z 
+2025-10-03T07:31:09.9852811Z     expect(received).rejects.toThrow(expected)
+2025-10-03T07:31:09.9853027Z 
+2025-10-03T07:31:09.9853146Z     Expected message: "Invalid token"
+2025-10-03T07:31:09.9853465Z     Received message: "Authentication service error"
+2025-10-03T07:31:09.9853667Z 
+2025-10-03T07:31:09.9853793Z         [0m [90m 52 |[39m
+2025-10-03T07:31:09.9854131Z          [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9854950Z         [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9856321Z          [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9856839Z          [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9857353Z          [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9857703Z          [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9857841Z 
+2025-10-03T07:31:09.9858009Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9858541Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9858941Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9859370Z       at Object.toThrow (../node_modules/expect/build/index.js:2155:20)
+2025-10-03T07:31:09.9859796Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:275:18)
+2025-10-03T07:31:09.9860029Z 
+2025-10-03T07:31:09.9860375Z   ● AuthService › resetPassword › should throw TokenExpiredException when token is expired
+2025-10-03T07:31:09.9860690Z 
+2025-10-03T07:31:09.9860824Z     expect(received).rejects.toThrow(expected)
+2025-10-03T07:31:09.9861031Z 
+2025-10-03T07:31:09.9861162Z     Expected message: "Token has expired"
+2025-10-03T07:31:09.9861486Z     Received message: "Authentication service error"
+2025-10-03T07:31:09.9861685Z 
+2025-10-03T07:31:09.9861800Z         [0m [90m 52 |[39m
+2025-10-03T07:31:09.9862128Z          [90m 53 |[39m [90m// 500 Internal Server Error[39m
+2025-10-03T07:31:09.9863140Z         [31m[1m>[22m[39m[90m 54 |[39m [36mexport[39m [36mconst[39m [33mAuthenticationServiceException[39m [33m=[39m [36mnew[39m [33mInternalServerErrorException[39m({
+2025-10-03T07:31:09.9863879Z          [90m    |[39m                                               [31m[1m^[22m[39m
+2025-10-03T07:31:09.9864393Z          [90m 55 |[39m   message[33m:[39m [32m'Authentication service error'[39m[33m,[39m
+2025-10-03T07:31:09.9864880Z          [90m 56 |[39m   error[33m:[39m [32m'AUTH_SERVICE_ERROR'[39m
+2025-10-03T07:31:09.9865230Z          [90m 57 |[39m })[0m
+2025-10-03T07:31:09.9865378Z 
+2025-10-03T07:31:09.9865549Z       at Object.<anonymous> (routes/auth/auth.error.ts:54:47)
+2025-10-03T07:31:09.9865937Z       at Object.<anonymous> (routes/auth/auth.service.ts:10:1)
+2025-10-03T07:31:09.9866338Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:2:1)
+2025-10-03T07:31:09.9866760Z       at Object.toThrow (../node_modules/expect/build/index.js:2155:20)
+2025-10-03T07:31:09.9867198Z       at Object.<anonymous> (routes/auth/auth.service.spec.ts:284:18)
+2025-10-03T07:31:09.9867440Z 
+2025-10-03T07:31:09.9867603Z PASS src/routes/auth/auth.controller.spec.ts
+2025-10-03T07:31:09.9867896Z   ● Console
+2025-10-03T07:31:09.9867996Z 
+2025-10-03T07:31:09.9868079Z     console.log
+2025-10-03T07:31:09.9868553Z       [dotenv@17.2.2] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+2025-10-03T07:31:09.9868878Z 
+2025-10-03T07:31:09.9869027Z       at _log (../node_modules/dotenv/lib/main.js:139:11)
+2025-10-03T07:31:09.9869233Z 
+2025-10-03T07:31:09.9869312Z     console.error
+2025-10-03T07:31:09.9869554Z       Config env validation failed ZodError: [
+2025-10-03T07:31:09.9870030Z         {
+2025-10-03T07:31:09.9870226Z           "expected": "string",
+2025-10-03T07:31:09.9870483Z           "code": "invalid_type",
+2025-10-03T07:31:09.9870717Z           "path": [
+2025-10-03T07:31:09.9870943Z             "DEPARTMENT_HEAD_EMAIL"
+2025-10-03T07:31:09.9871179Z           ],
+2025-10-03T07:31:09.9871476Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9871789Z         },
+2025-10-03T07:31:09.9871956Z         {
+2025-10-03T07:31:09.9872143Z           "expected": "string",
+2025-10-03T07:31:09.9872389Z           "code": "invalid_type",
+2025-10-03T07:31:09.9872885Z           "path": [
+2025-10-03T07:31:09.9873122Z             "DEPARTMENT_HEAD_PASSWORD"
+2025-10-03T07:31:09.9873362Z           ],
+2025-10-03T07:31:09.9873655Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9873967Z         },
+2025-10-03T07:31:09.9874133Z         {
+2025-10-03T07:31:09.9874335Z           "expected": "string",
+2025-10-03T07:31:09.9874578Z           "code": "invalid_type",
+2025-10-03T07:31:09.9874805Z           "path": [
+2025-10-03T07:31:09.9875031Z             "DEPARTMENT_HEAD_FIRST_NAME"
+2025-10-03T07:31:09.9875273Z           ],
+2025-10-03T07:31:09.9875846Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9876153Z         },
+2025-10-03T07:31:09.9876315Z         {
+2025-10-03T07:31:09.9876508Z           "expected": "string",
+2025-10-03T07:31:09.9876745Z           "code": "invalid_type",
+2025-10-03T07:31:09.9876967Z           "path": [
+2025-10-03T07:31:09.9877189Z             "DEPARTMENT_HEAD_LAST_NAME"
+2025-10-03T07:31:09.9877425Z           ],
+2025-10-03T07:31:09.9877703Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9878007Z         },
+2025-10-03T07:31:09.9878170Z         {
+2025-10-03T07:31:09.9878360Z           "expected": "string",
+2025-10-03T07:31:09.9878594Z           "code": "invalid_type",
+2025-10-03T07:31:09.9878819Z           "path": [
+2025-10-03T07:31:09.9879042Z             "DEPARTMENT_HEAD_MIDDLE_NAME"
+2025-10-03T07:31:09.9879281Z           ],
+2025-10-03T07:31:09.9879559Z           "message": "Invalid input: expected string, received undefined"
+2025-10-03T07:31:09.9879865Z         }
+2025-10-03T07:31:09.9880031Z       ]
+2025-10-03T07:31:09.9880415Z           at new ZodError (/home/runner/work/dsfms/dsfms/node_modules/zod/v4/core/core.cjs:35:39)
+2025-10-03T07:31:09.9881037Z           at Object.safeParse (/home/runner/work/dsfms/dsfms/node_modules/zod/v4/core/parse.cjs:68:20)
+2025-10-03T07:31:09.9881685Z           at _.inst.safeParse (/home/runner/work/dsfms/dsfms/node_modules/zod/v4/classic/schemas.cjs:148:46)
+2025-10-03T07:31:09.9882285Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/shared/config.ts:75:35)
+2025-10-03T07:31:09.9883132Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9883839Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9884540Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9885292Z           at Runtime.requireModuleOrMock (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:964:21)
+2025-10-03T07:31:09.9885978Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/auth/auth.service.ts:5:1)
+2025-10-03T07:31:09.9886637Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9887327Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9888022Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9888761Z           at Runtime.requireModuleOrMock (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:964:21)
+2025-10-03T07:31:09.9889641Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/auth/auth.controller.ts:5:1)
+2025-10-03T07:31:09.9890313Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9890996Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9891699Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9892439Z           at Runtime.requireModuleOrMock (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:964:21)
+2025-10-03T07:31:09.9893375Z           at Object.<anonymous> (/home/runner/work/dsfms/dsfms/src/routes/auth/auth.controller.spec.ts:2:1)
+2025-10-03T07:31:09.9894064Z           at Runtime._execModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:1268:24)
+2025-10-03T07:31:09.9894753Z           at Runtime._loadModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:944:12)
+2025-10-03T07:31:09.9895444Z           at Runtime.requireModule (/home/runner/work/dsfms/dsfms/node_modules/jest-runtime/build/index.js:832:12)
+2025-10-03T07:31:09.9896260Z           at jestAdapter (/home/runner/work/dsfms/dsfms/node_modules/jest-circus/build/runner.js:95:13)
+2025-10-03T07:31:09.9896835Z           at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-10-03T07:31:09.9897464Z           at runTestInternal (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:275:16)
+2025-10-03T07:31:09.9898130Z           at runTest (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:343:7)
+2025-10-03T07:31:09.9898783Z           at Object.worker (/home/runner/work/dsfms/dsfms/node_modules/jest-runner/build/testWorker.js:497:12)
+2025-10-03T07:31:09.9899142Z 
+2025-10-03T07:31:09.9899285Z     [0m [90m 76 |[39m
+2025-10-03T07:31:09.9899665Z      [90m 77 |[39m [36mif[39m ([33m![39mconfigServer[33m.[39msuccess) {
+2025-10-03T07:31:09.9900363Z     [31m[1m>[22m[39m[90m 78 |[39m   console[33m.[39merror([32m'Config env validation failed'[39m[33m,[39m configServer[33m.[39merror)
+2025-10-03T07:31:09.9900921Z      [90m    |[39m           [31m[1m^[22m[39m
+2025-10-03T07:31:09.9901468Z      [90m 79 |[39m   [36mif[39m (process[33m.[39menv[33m.[39m[33mNODE_ENV[39m [33m!==[39m [32m'test'[39m) {
+2025-10-03T07:31:09.9901972Z      [90m 80 |[39m     process[33m.[39mexit([35m1[39m)
+2025-10-03T07:31:09.9902272Z      [90m 81 |[39m   }[0m
+2025-10-03T07:31:09.9902412Z 
+2025-10-03T07:31:09.9902686Z       at Object.<anonymous> (shared/config.ts:78:11)
+2025-10-03T07:31:09.9903051Z       at Object.<anonymous> (routes/auth/auth.service.ts:5:1)
+2025-10-03T07:31:09.9903443Z       at Object.<anonymous> (routes/auth/auth.controller.ts:5:1)
+2025-10-03T07:31:09.9903860Z       at Object.<anonymous> (routes/auth/auth.controller.spec.ts:2:1)
+2025-10-03T07:31:09.9904105Z 
+2025-10-03T07:31:10.0818247Z PASS src/app.controller.spec.ts
+2025-10-03T07:31:10.1096713Z 
+2025-10-03T07:31:10.1100368Z Test Suites: 1 failed, 4 passed, 5 total
+2025-10-03T07:31:10.1100920Z Tests:       9 failed, 34 passed, 43 total
+2025-10-03T07:31:10.1101233Z Snapshots:   0 total
+2025-10-03T07:31:10.1101465Z Time:        2.472 s
+2025-10-03T07:31:10.1101671Z Ran all test suites.
+2025-10-03T07:31:10.1997037Z ##[error]Process completed with exit code 1.
