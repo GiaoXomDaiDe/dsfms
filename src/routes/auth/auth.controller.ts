@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common'
 import express from 'express'
-import { AuthPayloadDto, AuthResponse, RefreshResponse, RefreshTokenDto, ForgotPasswordDto, ResetPasswordDto } from '~/dto/auth.dto'
+import { AuthPayloadDto, AuthResponse, RefreshTokenDto, ForgotPasswordDto, ResetPasswordDto } from '~/dto/auth.dto'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { AuthService } from './auth.service'
 import { JwtGuard } from './guards/jwt.guard'
 import { LocalGuard } from './guards/local.guard'
+import * as AuthErrors from './auth.error'
 
 @Controller('auth')
 export class AuthController {
@@ -19,7 +20,7 @@ export class AuthController {
 
   @Post('refresh')
   @IsPublic()
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshResponse> {
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<AuthResponse> {
     return this.authService.refreshTokens(refreshTokenDto.refresh_token)
   }
 
@@ -40,7 +41,7 @@ export class AuthController {
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     // Validate passwords match
     if (resetPasswordDto.newPassword !== resetPasswordDto.confirmPassword) {
-      return { error: 'Passwords do not match' }
+      throw AuthErrors.PasswordsDoNotMatchException
     }
 
     return this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword)
