@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Query } from '@nestjs/common'
 import { EmailService } from './email.service'
 import { NodemailerService } from './nodemailer.service'
-import { SendEmailDto, BulkEmailDto } from '~/dto/email.dto'
+import { SendEmailDto, BulkEmailDto } from '~/routes/email/email.dto'
 
 @Controller('email')
 export class EmailController {
