@@ -65,7 +65,8 @@ export class RoleService {
       RoleName.DEPARTMENT_HEAD,
       RoleName.SQA_AUDITOR,
       RoleName.TRAINEE,
-      RoleName.TRAINER
+      RoleName.TRAINER,
+      RoleName.ACADEMIC_DEPARTMENT
     ]
 
     if (baseRoles.includes(role.name)) {
@@ -141,10 +142,17 @@ export class RoleService {
         throw new Error('Role is not disabled')
       }
 
-      return this.roleRepo.enable({ id, enabledById })
+      await this.roleRepo.enable({ id, enabledById })
+
+      return {
+        message: 'Enable role successfully'
+      }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundRoleException
+      }
+      if (isUniqueConstraintPrismaError(error)) {
+        throw new Error('Unexpected unique constraint violation during enable')
       }
       throw error
     }

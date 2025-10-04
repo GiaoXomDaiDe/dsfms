@@ -69,7 +69,7 @@ export class RoleController {
   }
 
   @Patch(':roleId/enable')
-  @ZodSerializerDto(GetRoleDetailResDTO)
+  @ZodSerializerDto(MessageResDTO)
   enable(
     @Param() params: GetRoleParamsDTO,
     @ActiveUser('userId') userId: string,

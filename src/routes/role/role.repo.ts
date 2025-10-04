@@ -162,8 +162,8 @@ export class RoleRepo {
         })
   }
 
-  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<RoleType> {
-    return this.prismaService.role.update({
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<void> {
+    await this.prismaService.role.update({
       where: {
         id,
         deletedAt: { not: null }
