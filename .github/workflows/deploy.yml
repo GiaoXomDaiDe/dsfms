@@ -64,7 +64,7 @@ jobs:
 
             # Start new container
             echo "Starting new container..."
-            docker run -dp 4000:4000 --name dsfms thisishuy/dsfms:v0 --restart unless-stopped
+            docker run -dp 4000:4000 --name dsfms --restart unless-stopped thisishuy/dsfms:v0
 
             #Delete old images to free up space
             echo "Cleaning up old Docker images..."
