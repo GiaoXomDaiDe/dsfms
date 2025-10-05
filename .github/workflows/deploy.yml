@@ -1,0 +1,99 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.16.0
+          cache: "npm"
+
+      - name: Create .env file
+        run: echo "${{secrets.ENV}}" > .env
+
+      - name: Install dependencies
+        run: npm i --force
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build NestJS application
+        run: npm run build
+
+      - name: Run tests (optional)
+        run: npm run test
+        continue-on-error: true
+
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   # Only deploy on push to main (not on PR)
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+  #   steps:
+  #     - name: Executing remote ssh commands using password
+  #       uses: appleboy/ssh-action@v1.2.2
+  #       with:
+  #         host: ${{ secrets.HOST_PRODUCTION }}
+  #         username: ${{ secrets.USERNAME_PRODUCTION }}
+  #         password: ${{ secrets.PASSWORD_PRODUCTION }}
+  #         port: ${{ secrets.PORT_PRODUCTION }}
+  #         timeout: 300s
+  #         script: |
+  #           echo "Starting deployment..."
+
+  #           # Setup Node.js environment
+  #           export NVM_DIR=~/.nvm
+  #           source ~/.nvm/nvm.sh
+  #           nvm use 22.16.0
+
+  #           # Navigate to project directory
+  #           cd ~/dsfms
+
+  #           # Pull latest code
+  #           echo "Pulling latest code..."
+  #           git fetch --all
+  #           git reset --hard origin/main
+
+  #           # Setup environment
+  #           echo "${{secrets.ENV}}" > .env
+
+  #           # Install dependencies
+  #           echo "Installing dependencies..."
+  #           npm i --force
+
+  #           # Database operations
+  #           echo "Running database operations..."
+  #           npx prisma generate
+  #           npx prisma migrate deploy --schema=./prisma/schema.prisma
+
+  #           # Build application
+  #           echo "Building application..."
+  #           npm run build
+
+  #           # Restart PM2 application
+  #           echo "Restarting application..."
+  #           pm2 restart DSFMS || pm2 start ecosystem.config.js
+
+  #           # Health check
+  #           echo "Health check..."
+  #           sleep 5
+  #           pm2 status DSFMS
+
+  #           echo "Deployment completed successfully!"
