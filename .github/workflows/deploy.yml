@@ -61,7 +61,12 @@ jobs:
             # Setup Node.js environment
             export NVM_DIR=~/.nvm
             source ~/.nvm/nvm.sh
+
+            # Install Node.js if not exists, then use it
+            nvm install 22.16.0
             nvm use 22.16.0
+
+            echo "✅ Using Node $(node -v) and npm $(npm -v)"
 
             # Navigate to project directory
             cd ~/dsfms
@@ -81,7 +86,7 @@ jobs:
             # Database operations
             echo "Running database operations..."
             npx prisma generate
-            npx prisma migrate deploy --schema=~/prisma/schema.prisma
+            npx prisma migrate deploy
 
             # Build application
             echo "Building application..."
