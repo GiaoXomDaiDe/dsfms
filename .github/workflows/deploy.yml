@@ -18,27 +18,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22.16.0
-          cache: "npm"
-
       - name: Create .env file
         run: echo "${{secrets.ENV_NESTJS}}" > .env
 
-      - name: Install dependencies
-        run: npm i --force
+      - name: Build docker image
+        run: docker build -t thisishuy/dsfms:v0 .
 
-      - name: Generate Prisma client
-        run: npx prisma generate
+      - name: Login to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Build NestJS application
-        run: npm run build
-
-      - name: Run tests (optional)
-        run: npm run test
-        continue-on-error: true
+      - name: Push docker image to Docker Hub
+        run: docker push thisishuy/dsfms:v0
 
   deploy:
     runs-on: ubuntu-latest
@@ -56,62 +47,30 @@ jobs:
           port: ${{ secrets.PORT }}
           timeout: 300s
           script: |
-            echo "Starting deployment..."
+            echo "Starting Docker deployment..."
 
-            # Setup Node.js environment
-            export NVM_DIR=~/.nvm
-            source ~/.nvm/nvm.sh
+            # Login to Docker Hub on server
+            echo "Logging into Docker Hub..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-            # Install Node.js if not exists, then use it
-            nvm install 22.16.0
-            nvm use 22.16.0
+            # Pull latest Docker image
+            echo "Pulling latest Docker image..."
+            docker pull thisishuy/dsfms:v0
 
-            echo "Using Node $(node -v) and npm $(npm -v)"
+            # Stop and remove existing container
+            echo "Stopping and removing existing container..."
+            docker stop dsfms
+            docker rm dsfms
 
-            # Install PM2 globally if not exists
-            if ! command -v pm2 &> /dev/null; then
-              echo "Installing PM2..."
-              npm install -g pm2
-              echo "PM2 installed successfully"
-            else
-              echo "PM2 already installed"
-            fi
+            # Start new container
+            echo "Starting new container..."
+            docker run -dp 4000:4000 --name dsfms thisishuy/dsfms:v0
 
-            # Navigate to project directory
-            cd ~/dsfms
-
-            # Pull latest code
-            echo "Pulling latest code..."
-            git fetch --all
-            git reset --hard origin/main
-
-            # Setup environment
-            echo "Setting up environment..."
-            echo "${{ secrets.ENV_NESTJS }}" > .env
-
-            # Install dependencies
-            echo "Installing dependencies..."
-            npm i --force
-
-            # Database operations
-            echo "Running database operations..."
-            npx prisma generate
-            npx prisma migrate deploy
-
-            # Build application
-            echo "Building application..."
-            npm run build
-
-            # Restart PM2 application
-            echo "Restarting application..."
-            pm2 restart DSFMS || pm2 start ecosystem.config.js
-
-            # Health check
-            echo "Health check..."
+            # Wait for a few seconds to ensure the container is up
             sleep 5
-            pm2 status DSFMS
+            docker logs dsfms --tail 50
 
-            echo "Deployment completed successfully!"
+            echo "Docker deployment completed successfully!"
 
   notify-success:
     runs-on: ubuntu-latest
