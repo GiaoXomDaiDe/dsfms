@@ -77,7 +77,7 @@ jobs:
             git reset --hard origin/main
 
             # Setup environment
-            echo "${{secrets.ENV}}" > .env
+            # echo "${{secrets.ENV}}" > .env
 
             # Install dependencies
             echo "Installing dependencies..."
