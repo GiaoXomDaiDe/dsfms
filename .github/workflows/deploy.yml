@@ -87,32 +87,7 @@ jobs:
 
             # Setup environment
             echo "Setting up environment..."
-
-            # Check old .env file (secure debug)
-            if [ -f .env ]; then
-              echo "✅ Old .env exists: $(wc -l < .env) lines, $(wc -c < .env) bytes"
-            else
-              echo "⚠️ No existing .env file"
-            fi
-
-            # Create new .env from secret
             echo "${{ secrets.ENV_NESTJS }}" > .env
-
-            # Verify new .env was created (secure debug)
-            if [ -s .env ]; then
-              echo "✅ New .env created: $(wc -l < .env) lines, $(wc -c < .env) bytes"
-            else
-              echo "❌ Failed to create .env file"
-              exit 1
-            fi
-
-            # Check for required variables (without showing values)
-            if grep -q "DATABASE_URL" .env; then
-              echo "✅ DATABASE_URL found"
-            else
-              echo "❌ DATABASE_URL missing"
-              exit 1
-            fi
 
             # Install dependencies
             echo "Installing dependencies..."
@@ -149,7 +124,7 @@ jobs:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "#28a745"
           username: "DSFMS Bot"
-          message: "✅ **DEPLOYMENT SUCCESSFUL** | Repository: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Triggered by: ${{ github.actor }} | Status: Production deployment completed | 🚀 Application is now live!"
+          message: "**DEPLOYMENT SUCCESSFUL** - Repository: ${{ github.repository }} - Branch: ${{ github.ref_name }} - Triggered by: ${{ github.actor }} - Status: Production deployment completed successfully - Application is now live and ready for use"
 
   notify-failure:
     runs-on: ubuntu-latest
@@ -162,7 +137,7 @@ jobs:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "#dc3545"
           username: "DSFMS Bot"
-          message: "❌ **DEPLOYMENT FAILED** | Repository: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Triggered by: ${{ github.actor }} | Status: Deployment failed | 🔧 Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          message: "**DEPLOYMENT FAILED** - Repository: ${{ github.repository }} - Branch: ${{ github.ref_name }} - Triggered by: ${{ github.actor }} - Status: Deployment failed - Please review logs for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   notify-cancelled:
     runs-on: ubuntu-latest
@@ -175,4 +150,4 @@ jobs:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "#ffc107"
           username: "DSFMS Bot"
-          message: "⚠️ **DEPLOYMENT CANCELLED** | Repository: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Triggered by: ${{ github.actor }} | Status: Deployment was cancelled | View: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          message: "**DEPLOYMENT CANCELLED** - Repository: ${{ github.repository }} - Branch: ${{ github.ref_name }} - Triggered by: ${{ github.actor }} - Status: Deployment was cancelled - View details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
