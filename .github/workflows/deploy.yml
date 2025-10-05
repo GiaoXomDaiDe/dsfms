@@ -85,6 +85,12 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
+            # Setup environment
+            echo "Setting up environment..."
+            cat .env
+            echo "${{ secrets.ENV_NESTJS }}" > .env
+            cat .env
+
             # Install dependencies
             echo "Installing dependencies..."
             npm i --force
@@ -108,3 +114,70 @@ jobs:
             pm2 status DSFMS
 
             echo "Deployment completed successfully!"
+
+  notify-success:
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: success()
+    steps:
+      - name: Notify Deployment Success
+        uses: appleboy/discord-action@v1.2.0
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "#28a745"
+          username: "DSFMS Bot"
+          message: |
+            ✅ **DEPLOYMENT SUCCESSFUL**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Triggered by: ${{ github.actor }}
+            Status: Production deployment completed
+
+            🚀 Application is now live and ready for use!
+
+            View Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: failure()
+    steps:
+      - name: Notify Deployment Failure
+        uses: appleboy/discord-action@v1.2.0
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "#dc3545"
+          username: "DSFMS Bot"
+          message: |
+            ❌ **DEPLOYMENT FAILED**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Triggered by: ${{ github.actor }}
+            Status: Deployment failed
+
+            🔧 Please check the logs and resolve the issues.
+
+            View Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  notify-cancelled:
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: cancelled()
+    steps:
+      - name: Notify Deployment Cancelled
+        uses: appleboy/discord-action@v1.2.0
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "#ffc107"
+          username: "DSFMS Bot"
+          message: |
+            ⚠️ **DEPLOYMENT CANCELLED**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Triggered by: ${{ github.actor }}
+            Status: Deployment was cancelled
+
+            View Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
