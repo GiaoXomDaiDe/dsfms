@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common'
+import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { AppService } from './app.service'
 
 @Controller()
@@ -6,6 +7,7 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get('health')
+  @IsPublic()
   healthCheck() {
     return {
       status: 'ok',
@@ -18,6 +20,7 @@ export class AppController {
   }
 
   @Get()
+  @IsPublic()
   getRoot() {
     return {
       message: 'Welcome to DSFMS API',

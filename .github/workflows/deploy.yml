@@ -66,7 +66,16 @@ jobs:
             nvm install 22.16.0
             nvm use 22.16.0
 
-            echo "✅ Using Node $(node -v) and npm $(npm -v)"
+            echo "Using Node $(node -v) and npm $(npm -v)"
+
+            # Install PM2 globally if not exists
+            if ! command -v pm2 &> /dev/null; then
+              echo "Installing PM2..."
+              npm install -g pm2
+              echo "PM2 installed successfully"
+            else
+              echo "PM2 already installed"
+            fi
 
             # Navigate to project directory
             cd ~/dsfms
