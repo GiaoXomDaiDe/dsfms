@@ -1,0 +1,71 @@
+name: Deploy Notifications
+
+on:
+  workflow_run:
+    workflows: ["Deploy"]
+    types:
+      - completed
+
+jobs:
+  notify-deployment:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Deployment Success
+        if: github.event.workflow_run.conclusion == 'success'
+        uses: appleboy/discord-action@v1.2.0
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "#28a745"
+          username: "DSFMS Deployment"
+          message: |
+            **DEPLOYMENT SUCCESSFUL**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Commit: ${{ github.event.workflow_run.head_commit.message }}
+            Author: ${{ github.event.workflow_run.head_commit.author.name }}
+            Duration: Completed
+            Status: Production deployment successful
+
+            Application is now live and ready for use.
+
+            View Details: ${{ github.event.workflow_run.html_url }}
+
+      - name: Notify Deployment Failure
+        if: github.event.workflow_run.conclusion == 'failure'
+        uses: appleboy/discord-action@v1.2.0
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "#dc3545"
+          username: "DSFMS Deployment"
+          message: |
+            **DEPLOYMENT FAILED**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Commit: ${{ github.event.workflow_run.head_commit.message }}
+            Author: ${{ github.event.workflow_run.head_commit.author.name }}
+            Status: Deployment failed
+
+            Please check the logs and resolve the issues.
+
+            View Logs: ${{ github.event.workflow_run.html_url }}
+
+      - name: Notify Deployment Cancelled
+        if: github.event.workflow_run.conclusion == 'cancelled'
+        uses: appleboy/discord-action@v1.2.0
+        with:
+          webhook_url: ${{ secrets.WEBHOOK_URL }}
+          color: "#ffc107"
+          username: "DSFMS Deployment"
+          message: |
+            **DEPLOYMENT CANCELLED**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Commit: ${{ github.event.workflow_run.head_commit.message }}
+            Author: ${{ github.event.workflow_run.head_commit.author.name }}
+            Status: Deployment was cancelled
+
+            View Details: ${{ github.event.workflow_run.html_url }}
