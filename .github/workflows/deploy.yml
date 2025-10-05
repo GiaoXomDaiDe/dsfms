@@ -57,22 +57,49 @@ jobs:
             echo "Pulling latest Docker image..."
             docker pull thisishuy/dsfms:v0
 
-            # Stop and remove existing container
+            # Stop and remove existing container (ignore errors if not exists)
             echo "Stopping and removing existing container..."
-            docker stop dsfms
-            docker rm dsfms
+            docker stop dsfms 2>/dev/null || true
+            docker rm dsfms 2>/dev/null || true
+
+            # Kill any process using port 4000 (just in case)
+            echo "Ensuring port 4000 is free..."
+            sudo fuser -k 4000/tcp 2>/dev/null || true
+
+            # Wait a moment for cleanup
+            sleep 3
 
             # Start new container
             echo "Starting new container..."
-            docker run -dp 4000:4000 --name dsfms --restart unless-stopped thisishuy/dsfms:v0
+            docker run -d -p 4000:4000 --name dsfms --restart unless-stopped thisishuy/dsfms:v0
 
             #Delete old images to free up space
             echo "Cleaning up old Docker images..."
             docker image prune -f
 
-            # Wait for a few seconds to ensure the container is up
-            sleep 5
-            docker logs dsfms --tail 50
+            # Wait for container to start and health check
+            echo "Performing health check..."
+            sleep 10
+
+            # Check if container is running
+            if docker ps | grep -q dsfms; then
+              echo "✅ Container is running successfully"
+              echo "Container status:"
+              docker ps | grep dsfms
+              echo "Recent logs:"
+              docker logs dsfms --tail 20
+              
+              # Test application endpoint if possible
+              echo "Testing application..."
+              curl -f http://localhost:4000/health 2>/dev/null || echo "⚠️ Health check endpoint not responding yet (this is normal during startup)"
+            else
+              echo "❌ Container failed to start"
+              echo "All running containers:"
+              docker ps -a
+              echo "Container logs:"
+              docker logs dsfms --tail 50 2>/dev/null || echo "No logs available"
+              exit 1
+            fi
 
             echo "Docker deployment completed successfully!"
 
