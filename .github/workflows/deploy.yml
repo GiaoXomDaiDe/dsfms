@@ -52,7 +52,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
+          password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           timeout: 300s
           script: |
@@ -75,9 +75,6 @@ jobs:
             echo "Pulling latest code..."
             git fetch --all
             git reset --hard origin/main
-
-            # Setup environment
-
 
             # Install dependencies
             echo "Installing dependencies..."
