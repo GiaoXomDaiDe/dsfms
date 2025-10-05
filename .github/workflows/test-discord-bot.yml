@@ -10,7 +10,6 @@ jobs:
   notify-deployment:
     name: Notify Deployment Status
     runs-on: ubuntu-latest
-    # Only notify for main branch deployments to avoid duplicates
     if: github.event.workflow_run.head_branch == 'main'
     steps:
       - name: Notify Deployment Success
@@ -19,19 +18,17 @@ jobs:
         with:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "#28a745"
-          username: "DSFMS Deployment Bot"
+          username: "DSFMS Bot"
           message: |
             ✅ **DEPLOYMENT SUCCESSFUL**
 
-            **📦 Repository:** ${{ github.repository }}
-            **🌿 Branch:** ${{ github.event.workflow_run.head_branch }}
-            **📝 Commit:** `${{ github.event.workflow_run.head_sha }}`
-            **👤 Author:** ${{ github.actor }}
-            **⏱️ Status:** Production deployment completed
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Status: Production deployment completed
 
-            🚀 Application is now live and ready for use.
+            🚀 Application is now live!
 
-            🔗 **[View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})**
+            View Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
 
       - name: Notify Deployment Failure
         if: github.event.workflow_run.conclusion == 'failure'
@@ -39,19 +36,17 @@ jobs:
         with:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "#dc3545"
-          username: "DSFMS Deployment Bot"
+          username: "DSFMS Bot"
           message: |
             ❌ **DEPLOYMENT FAILED**
 
-            **📦 Repository:** ${{ github.repository }}
-            **🌿 Branch:** ${{ github.event.workflow_run.head_branch }}
-            **📝 Commit:** `${{ github.event.workflow_run.head_sha }}`
-            **👤 Author:** ${{ github.actor }}
-            **⚠️ Status:** Deployment failed
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Status: Deployment failed
 
-            🔧 Please check the logs and resolve the issues.
+            🔧 Please check the logs.
 
-            🔗 **[View Error Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})**
+            View Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
 
       - name: Notify Deployment Cancelled
         if: github.event.workflow_run.conclusion == 'cancelled'
@@ -59,14 +54,12 @@ jobs:
         with:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "#ffc107"
-          username: "DSFMS Deployment Bot"
+          username: "DSFMS Bot"
           message: |
             ⚠️ **DEPLOYMENT CANCELLED**
 
-            **📦 Repository:** ${{ github.repository }}
-            **🌿 Branch:** ${{ github.event.workflow_run.head_branch }}
-            **📝 Commit:** `${{ github.event.workflow_run.head_sha }}`
-            **👤 Author:** ${{ github.actor }}
-            **🛑 Status:** Deployment was cancelled
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            Status: Deployment was cancelled
 
-            🔗 **[View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})**
+            View Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
