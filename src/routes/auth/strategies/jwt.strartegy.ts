@@ -17,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Kiểm tra user vẫn còn active trong database
     const user = await this.prismaService.user.findFirst({
       where: {
-        id: payload.sub,
+        id: payload.userId || payload.sub,
         deletedAt: null,
         status: 'ACTIVE'
       },
@@ -51,6 +51,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       middleName: user.middleName,
       lastName: user.lastName,
       role: user.role,
+      roleName: user.role?.name, // Add roleName for easier access
       department: user.department,
       avatarUrl: user.avatarUrl
     }
