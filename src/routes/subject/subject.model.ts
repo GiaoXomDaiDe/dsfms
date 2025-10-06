@@ -111,6 +111,31 @@ export const CreateSubjectBodySchema = z
 // Update Subject Body Schema
 export const UpdateSubjectBodySchema = CreateSubjectBodySchema.partial()
 
+// Bulk Create Subjects Body Schema
+export const BulkCreateSubjectsBodySchema = z.object({
+  courseId: z.string().uuid(),
+  subjects: z
+    .array(CreateSubjectBodySchema.omit({ courseId: true }))
+    .min(1)
+    .max(50)
+})
+
+// Bulk Create Subjects Response Schema
+export const BulkCreateSubjectsResSchema = z.object({
+  createdSubjects: z.array(SubjectSchema),
+  failedSubjects: z.array(
+    z.object({
+      subject: CreateSubjectBodySchema.omit({ courseId: true }),
+      error: z.string()
+    })
+  ),
+  summary: z.object({
+    totalRequested: z.number().int(),
+    totalCreated: z.number().int(),
+    totalFailed: z.number().int()
+  })
+})
+
 // Subject Query Schema
 export const GetSubjectsQuerySchema = z.object({
   page: z.string().regex(/^\d+$/).transform(Number).optional().default(1),
@@ -207,6 +232,8 @@ export type EnrollTraineesBodyType = z.infer<typeof EnrollTraineesBodySchema>
 export type RemoveEnrollmentsBodyType = z.infer<typeof RemoveEnrollmentsBodySchema>
 export type UpdateEnrollmentStatusBodyType = z.infer<typeof UpdateEnrollmentStatusBodySchema>
 export type SubjectStatsType = z.infer<typeof SubjectStatsSchema>
+export type BulkCreateSubjectsBodyType = z.infer<typeof BulkCreateSubjectsBodySchema>
+export type BulkCreateSubjectsResType = z.infer<typeof BulkCreateSubjectsResSchema>
 
 // DTO exports
 export class CreateSubjectBodyDto extends createZodDto(CreateSubjectBodySchema) {}
@@ -218,5 +245,7 @@ export class AddInstructorsBodyDto extends createZodDto(AddInstructorsBodySchema
 export class RemoveInstructorsBodyDto extends createZodDto(RemoveInstructorsBodySchema) {}
 export class EnrollTraineesBodyDto extends createZodDto(EnrollTraineesBodySchema) {}
 export class RemoveEnrollmentsBodyDto extends createZodDto(RemoveEnrollmentsBodySchema) {}
+export class BulkCreateSubjectsBodyDto extends createZodDto(BulkCreateSubjectsBodySchema) {}
+export class BulkCreateSubjectsResDto extends createZodDto(BulkCreateSubjectsResSchema) {}
 export class UpdateEnrollmentStatusBodyDto extends createZodDto(UpdateEnrollmentStatusBodySchema) {}
 export class SubjectStatsDto extends createZodDto(SubjectStatsSchema) {}

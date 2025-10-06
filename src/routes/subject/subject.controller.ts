@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import {
   AddInstructorsBodyDto,
+  BulkCreateSubjectsBodyDto,
   CreateSubjectBodyDto,
   EnrollTraineesBodyDto,
   GetSubjectsQueryDto,
@@ -56,6 +57,17 @@ export class SubjectController {
     const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
     return await this.subjectService.create({
       data: createSubjectDto,
+      createdById: mockUser.id,
+      createdByRoleName: mockUser.roleName
+    })
+  }
+
+  @Post('bulk')
+  async bulkCreateSubjects(@Body() bulkCreateDto: BulkCreateSubjectsBodyDto) {
+    // Note: In a real implementation, user would come from authentication
+    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
+    return await this.subjectService.bulkCreate({
+      data: bulkCreateDto,
       createdById: mockUser.id,
       createdByRoleName: mockUser.roleName
     })

@@ -3,6 +3,8 @@ import { RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
   AddInstructorsBodyType,
+  BulkCreateSubjectsBodyType,
+  BulkCreateSubjectsResType,
   CreateSubjectBodyType,
   EnrollTraineesBodyType,
   GetSubjectsQueryType,
@@ -100,6 +102,89 @@ export class SubjectService {
     }
 
     return await this.subjectRepo.create({ data, createdById })
+  }
+
+  async bulkCreate({
+    data,
+    createdById,
+    createdByRoleName
+  }: {
+    data: BulkCreateSubjectsBodyType
+    createdById: string
+    createdByRoleName: string
+  }): Promise<BulkCreateSubjectsResType> {
+    const { courseId, subjects } = data
+
+    // Validate permissions - only ADMIN and DEPARTMENT_HEAD can create subjects
+    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(createdByRoleName as any)) {
+      throw new ForbiddenException('Only administrators and department heads can create subjects')
+    }
+
+    // Validate course exists
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId, deletedAt: null },
+      include: { department: true }
+    })
+
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    // If user is DEPARTMENT_HEAD, validate they can only create subjects in courses of their department
+    if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
+      const creator = await this.prisma.user.findUnique({
+        where: { id: createdById },
+        select: { departmentId: true }
+      })
+
+      if (!creator?.departmentId || creator.departmentId !== course.departmentId) {
+        throw new ForbiddenException('Department heads can only create subjects in courses of their own department')
+      }
+    }
+
+    const createdSubjects: SubjectEntityType[] = []
+    const failedSubjects: { subject: any; error: string }[] = []
+
+    // Process each subject
+    for (const subject of subjects) {
+      try {
+        // Check if subject code already exists
+        const codeExists = await this.subjectRepo.checkCodeExists(subject.code)
+        if (codeExists) {
+          throw new BadRequestException(`Subject code '${subject.code}' already exists`)
+        }
+
+        // Validate date range if both dates are provided
+        if (subject.startDate && subject.endDate) {
+          if (new Date(subject.startDate) >= new Date(subject.endDate)) {
+            throw new BadRequestException(`Invalid date range for subject '${subject.code}'`)
+          }
+        }
+
+        const createData: CreateSubjectBodyType = {
+          ...subject,
+          courseId
+        }
+
+        const createdSubject = await this.subjectRepo.create({ data: createData, createdById })
+        createdSubjects.push(createdSubject)
+      } catch (error) {
+        failedSubjects.push({
+          subject,
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        })
+      }
+    }
+
+    return {
+      createdSubjects,
+      failedSubjects,
+      summary: {
+        totalRequested: subjects.length,
+        totalCreated: createdSubjects.length,
+        totalFailed: failedSubjects.length
+      }
+    }
   }
 
   async update({

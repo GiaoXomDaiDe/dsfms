@@ -7,6 +7,7 @@ import {
   CourseType,
   CourseWithInfoType,
   CreateCourseBodyType,
+  DepartmentWithCoursesType,
   GetCoursesQueryType,
   GetCoursesResType,
   UpdateCourseBodyType
@@ -26,8 +27,57 @@ export class CourseService {
     private readonly prisma: PrismaService
   ) {}
 
-  async list(query: GetCoursesQueryType): Promise<GetCoursesResType> {
-    return await this.courseRepo.list(query)
+  async list(
+    query: GetCoursesQueryType,
+    userContext?: { userId: string; userRole: string; departmentId?: string }
+  ): Promise<GetCoursesResType> {
+    // Apply role-based filtering
+    const enhancedQuery = { ...query }
+
+    if (userContext) {
+      // Department heads can only see courses in their department (unless explicitly overridden)
+      if (userContext.userRole === RoleName.DEPARTMENT_HEAD && !query.departmentId && userContext.departmentId) {
+        enhancedQuery.departmentId = userContext.departmentId
+      }
+
+      // Trainers can see courses where they are instructors (if no department filter)
+      if (userContext.userRole === RoleName.TRAINER && !query.departmentId) {
+        const instructedCourses = await this.prisma.subjectInstructor.findMany({
+          where: {
+            trainerUserId: userContext.userId,
+            subject: { deletedAt: null }
+          },
+          select: {
+            subject: {
+              select: { courseId: true }
+            }
+          }
+        })
+
+        const courseIds = [...new Set(instructedCourses.map((i) => i.subject.courseId))]
+        enhancedQuery.courseIds = courseIds
+      }
+
+      // Trainees can see courses where they are enrolled (if no department filter)
+      if (userContext.userRole === RoleName.TRAINEE && !query.departmentId) {
+        const enrolledCourses = await this.prisma.subjectEnrollment.findMany({
+          where: {
+            traineeUserId: userContext.userId,
+            subject: { deletedAt: null }
+          },
+          select: {
+            subject: {
+              select: { courseId: true }
+            }
+          }
+        })
+
+        const courseIds = [...new Set(enrolledCourses.map((e) => e.subject.courseId))]
+        enhancedQuery.courseIds = courseIds
+      }
+    }
+
+    return await this.courseRepo.list(enhancedQuery)
   }
 
   async findById(
@@ -44,11 +94,13 @@ export class CourseService {
   async create({
     data,
     createdById,
-    createdByRoleName
+    createdByRoleName,
+    userDepartmentId
   }: {
     data: CreateCourseBodyType
     createdById: string
     createdByRoleName: string
+    userDepartmentId?: string
   }): Promise<CourseType> {
     // Validate permissions - only ADMIN and DEPARTMENT_HEAD can create courses
     if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(createdByRoleName as any)) {
@@ -57,12 +109,7 @@ export class CourseService {
 
     // If user is DEPARTMENT_HEAD, validate they can only create courses in their department
     if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const creator = await this.prisma.user.findUnique({
-        where: { id: createdById },
-        select: { departmentId: true }
-      })
-
-      if (!creator?.departmentId || creator.departmentId !== data.departmentId) {
+      if (!userDepartmentId || userDepartmentId !== data.departmentId) {
         throw new ForbiddenException('Department heads can only create courses in their own department')
       }
     }
@@ -96,12 +143,14 @@ export class CourseService {
     id,
     data,
     updatedById,
-    updatedByRoleName
+    updatedByRoleName,
+    userDepartmentId
   }: {
     id: string
     data: UpdateCourseBodyType
     updatedById: string
     updatedByRoleName: string
+    userDepartmentId?: string
   }): Promise<CourseType> {
     // Check if course exists
     const existingCourse = await this.courseRepo.findById(id)
@@ -116,14 +165,9 @@ export class CourseService {
 
     // If user is DEPARTMENT_HEAD, validate they can only update courses in their department
     if (updatedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const updater = await this.prisma.user.findUnique({
-        where: { id: updatedById },
-        select: { departmentId: true }
-      })
-
       const targetDepartmentId = data.departmentId || existingCourse.departmentId
 
-      if (!updater?.departmentId || updater.departmentId !== targetDepartmentId) {
+      if (!userDepartmentId || userDepartmentId !== targetDepartmentId) {
         throw new ForbiddenException('Department heads can only update courses in their own department')
       }
     }
@@ -164,11 +208,13 @@ export class CourseService {
     id,
     deletedById,
     deletedByRoleName,
+    userDepartmentId,
     isHard = false
   }: {
     id: string
     deletedById: string
     deletedByRoleName: string
+    userDepartmentId?: string
     isHard?: boolean
   }): Promise<CourseType> {
     // Check if course exists
@@ -184,12 +230,7 @@ export class CourseService {
 
     // If user is DEPARTMENT_HEAD, validate they can only delete courses in their department
     if (deletedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const deleter = await this.prisma.user.findUnique({
-        where: { id: deletedById },
-        select: { departmentId: true }
-      })
-
-      if (!deleter?.departmentId || deleter.departmentId !== existingCourse.departmentId) {
+      if (!userDepartmentId || userDepartmentId !== existingCourse.departmentId) {
         throw new ForbiddenException('Department heads can only delete courses in their own department')
       }
     }
@@ -206,6 +247,43 @@ export class CourseService {
     }
 
     return await this.courseRepo.delete({ id, deletedById, isHard })
+  }
+
+  async archive({
+    id,
+    archivedById,
+    archivedByRoleName,
+    userDepartmentId
+  }: {
+    id: string
+    archivedById: string
+    archivedByRoleName: string
+    userDepartmentId?: string
+  }): Promise<CourseType> {
+    // Check if course exists
+    const existingCourse = await this.courseRepo.findById(id)
+    if (!existingCourse) {
+      throw CourseNotFoundException
+    }
+
+    // Validate permissions
+    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(archivedByRoleName as any)) {
+      throw new ForbiddenException('Only administrators and department heads can archive courses')
+    }
+
+    // If user is DEPARTMENT_HEAD, validate they can only archive courses in their department
+    if (archivedByRoleName === RoleName.DEPARTMENT_HEAD) {
+      if (!userDepartmentId || userDepartmentId !== existingCourse.departmentId) {
+        throw new ForbiddenException('Department heads can only archive courses in their own department')
+      }
+    }
+
+    // Archive by changing status to ARCHIVED instead of soft delete
+    return await this.courseRepo.update({
+      id,
+      data: { status: 'ARCHIVED' as any },
+      updatedById: archivedById
+    })
   }
 
   async restore({
@@ -273,6 +351,77 @@ export class CourseService {
     })
 
     return result.courses
+  }
+
+  async getDepartmentWithCourses({
+    departmentId,
+    includeDeleted = false,
+    query,
+    userId,
+    userRole
+  }: {
+    departmentId: string
+    includeDeleted?: boolean
+    query: GetCoursesQueryType
+    userId: string
+    userRole: string
+  }): Promise<DepartmentWithCoursesType> {
+    // Validate access to department
+    if (userRole === RoleName.DEPARTMENT_HEAD) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { departmentId: true }
+      })
+
+      if (!user?.departmentId || user.departmentId !== departmentId) {
+        throw new ForbiddenException('You can only access courses in your own department')
+      }
+    }
+
+    // Get department details
+    const department = await this.prisma.department.findUnique({
+      where: {
+        id: departmentId,
+        ...(includeDeleted ? {} : { deletedAt: null })
+      },
+      include: {
+        headUser: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    })
+
+    if (!department) {
+      throw DepartmentNotFoundException
+    }
+
+    // Get courses for this department
+    const coursesQuery = {
+      ...query,
+      departmentId,
+      includeDeleted
+    }
+
+    const courses = await this.courseRepo.list(coursesQuery)
+
+    return {
+      department: {
+        id: department.id,
+        name: department.name,
+        code: department.code,
+        description: department.description,
+        headUser: department.headUser,
+        isActive: department.isActive === 'ACTIVE',
+        createdAt: department.createdAt.toISOString(),
+        updatedAt: department.updatedAt.toISOString()
+      },
+      courses
+    }
   }
 
   async validateCourseAccess({
