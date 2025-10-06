@@ -1,14 +1,19 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, Request } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request } from '@nestjs/common'
+import { CreateCourseBodyDto, GetCoursesQueryDto, UpdateCourseBodyDto } from './course.model'
 import { CourseService } from './course.service'
-import { CreateCourseBodyDto, UpdateCourseBodyDto, GetCoursesQueryDto } from './course.model'
 
 @Controller('courses')
 export class CourseController {
   constructor(private readonly courseService: CourseService) {}
 
   @Get()
-  async getCourses(@Query() query: GetCoursesQueryDto) {
-    return await this.courseService.list(query)
+  async getCourses(@Query() query: GetCoursesQueryDto, @Request() req: any) {
+    const { user } = req
+    return await this.courseService.list(query, {
+      userId: user.id,
+      userRole: user.roleName,
+      departmentId: user.departmentId
+    })
   }
 
   @Get('stats')
@@ -21,11 +26,16 @@ export class CourseController {
   @Get('department/:departmentId')
   async getCoursesByDepartment(
     @Param('departmentId') departmentId: string,
-    @Query('includeDeleted') includeDeleted?: string
+    @Query() query: GetCoursesQueryDto,
+    @Request() req: any
   ) {
-    return await this.courseService.getCoursesByDepartment({
+    const { user } = req
+    return await this.courseService.getDepartmentWithCourses({
       departmentId,
-      includeDeleted: includeDeleted === 'true'
+      includeDeleted: query.includeDeleted,
+      query,
+      userId: user.id,
+      userRole: user.roleName
     })
   }
 
@@ -42,7 +52,8 @@ export class CourseController {
     return await this.courseService.create({
       data: createCourseDto,
       createdById: user.id,
-      createdByRoleName: user.roleName
+      createdByRoleName: user.roleName,
+      userDepartmentId: user.departmentId
     })
   }
 
@@ -53,7 +64,8 @@ export class CourseController {
       id,
       data: updateCourseDto,
       updatedById: user.id,
-      updatedByRoleName: user.roleName
+      updatedByRoleName: user.roleName,
+      userDepartmentId: user.departmentId
     })
   }
 
@@ -64,7 +76,19 @@ export class CourseController {
       id,
       deletedById: user.id,
       deletedByRoleName: user.roleName,
+      userDepartmentId: user.departmentId,
       isHard: hard === 'true'
+    })
+  }
+
+  @Post(':id/archive')
+  async archiveCourse(@Param('id') id: string, @Request() req: any) {
+    const { user } = req
+    return await this.courseService.archive({
+      id,
+      archivedById: user.id,
+      archivedByRoleName: user.roleName,
+      userDepartmentId: user.departmentId
     })
   }
 

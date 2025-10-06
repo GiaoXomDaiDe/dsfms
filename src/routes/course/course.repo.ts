@@ -22,6 +22,7 @@ export class CourseRepo {
     departmentId,
     level,
     status,
+    courseIds,
     includeDeleted = false
   }: GetCoursesQueryType): Promise<GetCoursesResType> {
     const skip = (page - 1) * limit
@@ -52,6 +53,10 @@ export class CourseRepo {
 
     if (status) {
       whereClause.status = status
+    }
+
+    if (courseIds && courseIds.length > 0) {
+      whereClause.id = { in: courseIds }
     }
 
     const [totalItems, coursesWithCount] = await Promise.all([
@@ -99,7 +104,7 @@ export class CourseRepo {
     ])
 
     // Get course IDs for statistics
-    const courseIds = coursesWithCount.map((c) => c.id)
+    const resultCourseIds = coursesWithCount.map((c) => c.id)
 
     // Calculate trainee and trainer counts for all courses
     const [traineeStats, trainerStats] = await Promise.all([
@@ -108,7 +113,7 @@ export class CourseRepo {
         by: ['subjectId'],
         where: {
           subject: {
-            courseId: { in: courseIds },
+            courseId: { in: resultCourseIds },
             deletedAt: null
           }
         },
@@ -121,7 +126,7 @@ export class CourseRepo {
         by: ['subjectId'],
         where: {
           subject: {
-            courseId: { in: courseIds },
+            courseId: { in: resultCourseIds },
             deletedAt: null
           }
         },
@@ -134,7 +139,7 @@ export class CourseRepo {
     // Get subject to course mapping for statistics
     const subjectToCourse = await this.prisma.subject.findMany({
       where: {
-        courseId: { in: courseIds },
+        courseId: { in: resultCourseIds },
         deletedAt: null
       },
       select: {
@@ -260,13 +265,48 @@ export class CourseRepo {
         .then((instructors) => instructors.length)
     ])
 
+    // Get detailed subject information
+    const subjects = await this.prisma.subject.findMany({
+      where: {
+        courseId: id,
+        deletedAt: null
+      },
+      include: {
+        _count: {
+          select: {
+            instructors: true,
+            enrollments: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    const subjectSummaries = subjects.map((subject) => ({
+      id: subject.id,
+      name: subject.name,
+      code: subject.code,
+      method: subject.method,
+      duration: subject.duration,
+      type: subject.type,
+      roomName: subject.roomName,
+      timeSlot: subject.timeSlot,
+      isSIM: subject.isSIM,
+      passScore: subject.passScore,
+      startDate: subject.startDate?.toISOString() || null,
+      endDate: subject.endDate?.toISOString() || null,
+      instructorCount: subject._count.instructors,
+      enrollmentCount: subject._count.enrollments
+    }))
+
     const { _count, ...courseData } = course
 
     return {
       ...courseData,
       subjectCount: _count.subjects,
       traineeCount,
-      trainerCount
+      trainerCount,
+      subjects: subjectSummaries
     } as unknown as CourseDetailResType
   }
 

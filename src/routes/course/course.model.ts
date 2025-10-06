@@ -87,6 +87,7 @@ export const GetCoursesQuerySchema = z.object({
   departmentId: z.string().uuid().optional(),
   level: z.nativeEnum(CourseLevel).optional(),
   status: z.nativeEnum(CourseStatus).optional(),
+  courseIds: z.array(z.string().uuid()).optional(),
   includeDeleted: z
     .string()
     .regex(/^(true|false)$/)
@@ -103,8 +104,28 @@ export const GetCoursesResSchema = z.object({
   currentPage: z.number().int()
 })
 
+// Subject summary schema for course details
+export const CourseSubjectSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  code: z.string(),
+  method: z.string(), // Will be SubjectMethod enum
+  duration: z.number().int().optional().nullable(),
+  type: z.string(), // Will be SubjectType enum
+  roomName: z.string().optional().nullable(),
+  timeSlot: z.string().optional().nullable(),
+  isSIM: z.boolean(),
+  passScore: z.number().optional().nullable(),
+  startDate: z.string().datetime().optional().nullable(),
+  endDate: z.string().datetime().optional().nullable(),
+  instructorCount: z.number().int().default(0),
+  enrollmentCount: z.number().int().default(0)
+})
+
 // Course Detail Response Schema
-export const CourseDetailResSchema = CourseWithInfoSchema
+export const CourseDetailResSchema = CourseWithInfoSchema.extend({
+  subjects: z.array(CourseSubjectSummarySchema).default([])
+})
 
 // Course Statistics Schema
 export const CourseStatsSchema = z.object({
@@ -120,6 +141,18 @@ export const CourseStatsSchema = z.object({
   )
 })
 
+// Department with Courses Response Schema
+export const DepartmentWithCoursesSchema = z.object({
+  department: CourseDepartmentSchema.extend({
+    description: z.string().optional().nullable(),
+    headUser: CourseUserSchema.optional().nullable(),
+    isActive: z.boolean(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime()
+  }),
+  courses: GetCoursesResSchema
+})
+
 // Type exports
 export type CourseType = z.infer<typeof CourseSchema>
 export type CourseWithInfoType = z.infer<typeof CourseWithInfoSchema>
@@ -129,6 +162,7 @@ export type GetCoursesQueryType = z.infer<typeof GetCoursesQuerySchema>
 export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
 export type CourseDetailResType = z.infer<typeof CourseDetailResSchema>
 export type CourseStatsType = z.infer<typeof CourseStatsSchema>
+export type DepartmentWithCoursesType = z.infer<typeof DepartmentWithCoursesSchema>
 
 // DTO exports
 export class CreateCourseBodyDto extends createZodDto(CreateCourseBodySchema) {}
@@ -137,3 +171,4 @@ export class GetCoursesQueryDto extends createZodDto(GetCoursesQuerySchema) {}
 export class GetCoursesResDto extends createZodDto(GetCoursesResSchema) {}
 export class CourseDetailResDto extends createZodDto(CourseDetailResSchema) {}
 export class CourseStatsDto extends createZodDto(CourseStatsSchema) {}
+export class DepartmentWithCoursesDto extends createZodDto(DepartmentWithCoursesSchema) {}
