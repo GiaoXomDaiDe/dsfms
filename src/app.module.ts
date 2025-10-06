@@ -4,6 +4,7 @@ import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
 import { ZodSerializerInterceptor } from 'nestjs-zod'
 import { CourseModule } from '~/routes/course/course.module'
 import { DepartmentModule } from '~/routes/department/department.module'
+import { PublicModule } from '~/routes/public/public.module'
 import { RoleModule } from '~/routes/role/role.module'
 import { SubjectModule } from '~/routes/subject/subject.module'
 import { UserModule } from '~/routes/user/user.module'
@@ -34,7 +35,8 @@ import { TemplateModule } from './routes/template/template.module'
     DepartmentModule,
     CourseModule,
     SubjectModule,
-    TemplateModule
+    TemplateModule,
+    PublicModule
   ],
   controllers: [AppController],
   providers: [
