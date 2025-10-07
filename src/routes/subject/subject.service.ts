@@ -1,57 +1,89 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
-import { PrismaService } from '~/shared/services/prisma.service'
 import {
-  AddInstructorsBodyType,
+  isForeignKeyConstraintPrismaError,
+  isNotFoundPrismaError,
+  isUniqueConstraintPrismaError
+} from '~/shared/helper'
+import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
+import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
+import {
+  BulkInvalidDateRangeAtIndexException,
+  BulkSubjectCodeAlreadyExistsAtIndexException,
+  BulkSubjectCreationFailedException,
+  CannotHardDeleteSubjectWithEnrollmentsException,
+  CannotHardDeleteSubjectWithInstructorsException,
+  CannotRestoreSubjectCodeConflictException,
+  CourseNotFoundException,
+  DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException,
+  InvalidDateRangeException,
+  OnlyAdminAndDepartmentHeadCanCreateSubjectsException,
+  OnlyAdminAndDepartmentHeadCanDeleteSubjectsException,
+  OnlyAdminAndDepartmentHeadCanRestoreSubjectsException,
+  OnlyAdminAndDepartmentHeadCanUpdateSubjectsException,
+  SubjectCodeAlreadyExistsException,
+  SubjectIsNotDeletedException,
+  SubjectNotFoundException
+} from './subject.error'
+import {
   BulkCreateSubjectsBodyType,
   BulkCreateSubjectsResType,
   CreateSubjectBodyType,
-  EnrollTraineesBodyType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   SubjectDetailResType,
   SubjectEntityType,
-  SubjectStatsType,
   SubjectWithInfoType,
-  UpdateEnrollmentStatusBodyType,
   UpdateSubjectBodyType
 } from './subject.model'
 import { SubjectRepo } from './subject.repo'
-
-// Custom exceptions
-export const SubjectNotFoundException = new NotFoundException('Subject not found')
-export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists')
-export const CourseNotFoundException = new NotFoundException('Course not found')
-export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
-export const TrainerNotFoundException = new BadRequestException(
-  'One or more trainers not found or do not have TRAINER role'
-)
-export const TraineeNotFoundException = new BadRequestException(
-  'One or more trainees not found or do not have TRAINEE role'
-)
 
 @Injectable()
 export class SubjectService {
   constructor(
     private readonly subjectRepo: SubjectRepo,
-    private readonly prisma: PrismaService
+    private readonly sharedDepartmentRepository: SharedDepartmentRepository,
+    private readonly sharedCourseRepository: SharedCourseRepository,
+    private readonly sharedUserRepository: SharedUserRepository
   ) {}
 
+  /**
+   * Lấy danh sách subjects với phân trang và filter.
+   * Chỉ ADMINISTRATOR mới được phép xem subject đã bị xóa mềm.
+   * @param query - Query parameters bao gồm page, limit, search, filters
+   */
   async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
     return await this.subjectRepo.list(query)
   }
 
+  /**
+   * Lấy thông tin chi tiết một subject kèm theo instructors và enrollments.
+   * Chỉ ADMINISTRATOR mới được phép xem subject đã bị xóa mềm.
+   * @param id - ID của subject
+   * @param options - Tùy chọn includeDeleted
+   */
   async findById(
     id: string,
     { includeDeleted = false }: { includeDeleted?: boolean } = {}
   ): Promise<SubjectDetailResType> {
     const subject = await this.subjectRepo.findById(id, { includeDeleted })
+
     if (!subject) {
       throw SubjectNotFoundException
     }
+
     return subject
   }
 
+  /**
+   * Tạo mới một subject cho course.
+   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền tạo
+   * - DEPARTMENT_HEAD chỉ có thể tạo subject cho course thuộc department của họ
+   * - Kiểm tra course tồn tại và không bị xóa
+   * - Kiểm tra subject code duy nhất
+   * - Validate date range
+   */
   async create({
     data,
     createdById,
@@ -61,49 +93,48 @@ export class SubjectService {
     createdById: string
     createdByRoleName: string
   }): Promise<SubjectEntityType> {
-    // Validate permissions - only ADMIN and DEPARTMENT_HEAD can create subjects
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(createdByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can create subjects')
-    }
+    try {
+      // Kiểm tra quyền tạo subject
+      this.validateCreatePermissions(createdByRoleName)
 
-    // Validate course exists
-    const course = await this.prisma.course.findUnique({
-      where: { id: data.courseId, deletedAt: null },
-      include: { department: true }
-    })
-
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only create subjects in courses of their department
-    if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const creator = await this.prisma.user.findUnique({
-        where: { id: createdById },
-        select: { departmentId: true }
-      })
-
-      if (!creator?.departmentId || creator.departmentId !== course.departmentId) {
-        throw new ForbiddenException('Department heads can only create subjects in courses of their own department')
+      // Kiểm tra course tồn tại
+      const course = await this.sharedCourseRepository.findById(data.courseId)
+      if (!course) {
+        throw CourseNotFoundException
       }
-    }
 
-    // Validate subject code is unique
-    const codeExists = await this.subjectRepo.checkCodeExists(data.code)
-    if (codeExists) {
-      throw SubjectCodeAlreadyExistsException
-    }
-
-    // Validate date range if both dates are provided
-    if (data.startDate && data.endDate) {
-      if (new Date(data.startDate) >= new Date(data.endDate)) {
-        throw InvalidDateRangeException
+      // Kiểm tra DEPARTMENT_HEAD chỉ tạo subject cho course trong department của họ
+      if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
+        await this.validateDepartmentHeadAccess(createdById, course.departmentId)
       }
-    }
 
-    return await this.subjectRepo.create({ data, createdById })
+      // Kiểm tra subject code unique
+      const codeExists = await this.subjectRepo.checkCodeExists(data.code)
+      if (codeExists) {
+        throw SubjectCodeAlreadyExistsException
+      }
+
+      // Validate date range
+      this.validateDateRange(data.startDate, data.endDate)
+
+      return await this.subjectRepo.create({ data, createdById })
+    } catch (error) {
+      if (isForeignKeyConstraintPrismaError(error)) {
+        throw CourseNotFoundException
+      }
+      if (isUniqueConstraintPrismaError(error)) {
+        throw SubjectCodeAlreadyExistsException
+      }
+      throw error
+    }
   }
 
+  /**
+   * Tạo nhiều subjects cùng lúc cho một course.
+   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền tạo
+   * - DEPARTMENT_HEAD chỉ có thể tạo subject cho course thuộc department của họ
+   * - Validate từng subject riêng biệt và trả về kết quả chi tiết
+   */
   async bulkCreate({
     data,
     createdById,
@@ -115,63 +146,61 @@ export class SubjectService {
   }): Promise<BulkCreateSubjectsResType> {
     const { courseId, subjects } = data
 
-    // Validate permissions - only ADMIN and DEPARTMENT_HEAD can create subjects
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(createdByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can create subjects')
-    }
+    // Kiểm tra quyền tạo subject
+    this.validateCreatePermissions(createdByRoleName)
 
-    // Validate course exists
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId, deletedAt: null },
-      include: { department: true }
-    })
-
+    // Kiểm tra course tồn tại
+    const course = await this.sharedCourseRepository.findById(courseId)
     if (!course) {
       throw CourseNotFoundException
     }
 
-    // If user is DEPARTMENT_HEAD, validate they can only create subjects in courses of their department
+    // Kiểm tra DEPARTMENT_HEAD chỉ tạo subject cho course trong department của họ
     if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const creator = await this.prisma.user.findUnique({
-        where: { id: createdById },
-        select: { departmentId: true }
-      })
-
-      if (!creator?.departmentId || creator.departmentId !== course.departmentId) {
-        throw new ForbiddenException('Department heads can only create subjects in courses of their own department')
-      }
+      await this.validateDepartmentHeadAccess(createdById, course.departmentId)
     }
 
     const createdSubjects: SubjectEntityType[] = []
     const failedSubjects: { subject: any; error: string }[] = []
 
-    // Process each subject
-    for (const subject of subjects) {
+    // Xử lý từng subject
+    for (let i = 0; i < subjects.length; i++) {
+      const subject = subjects[i]
+
       try {
-        // Check if subject code already exists
+        // Kiểm tra subject code unique
         const codeExists = await this.subjectRepo.checkCodeExists(subject.code)
         if (codeExists) {
-          throw new BadRequestException(`Subject code '${subject.code}' already exists`)
+          throw new Error(BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code))
         }
 
-        // Validate date range if both dates are provided
+        // Validate date range
         if (subject.startDate && subject.endDate) {
-          if (new Date(subject.startDate) >= new Date(subject.endDate)) {
-            throw new BadRequestException(`Invalid date range for subject '${subject.code}'`)
+          const isValidRange = new Date(subject.startDate) < new Date(subject.endDate)
+          if (!isValidRange) {
+            throw new Error(BulkInvalidDateRangeAtIndexException(i))
           }
         }
 
+        // Tạo subject data với courseId
         const createData: CreateSubjectBodyType = {
           ...subject,
           courseId
         }
 
-        const createdSubject = await this.subjectRepo.create({ data: createData, createdById })
+        const createdSubject = await this.subjectRepo.create({
+          data: createData,
+          createdById
+        })
+
         createdSubjects.push(createdSubject)
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : BulkSubjectCreationFailedException(i, 'Unknown error')
+
         failedSubjects.push({
           subject,
-          error: error instanceof Error ? error.message : 'Unknown error occurred'
+          error: errorMessage
         })
       }
     }
@@ -187,6 +216,13 @@ export class SubjectService {
     }
   }
 
+  /**
+   * Cập nhật thông tin subject.
+   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền update
+   * - DEPARTMENT_HEAD chỉ có thể update subject của course trong department của họ
+   * - Kiểm tra subject code unique (nếu thay đổi)
+   * - Validate date range
+   */
   async update({
     id,
     data,
@@ -198,67 +234,68 @@ export class SubjectService {
     updatedById: string
     updatedByRoleName: string
   }): Promise<SubjectEntityType> {
-    // Check if subject exists
-    const existingSubject = await this.subjectRepo.findById(id)
-    if (!existingSubject) {
-      throw SubjectNotFoundException
-    }
+    try {
+      // Kiểm tra quyền update
+      this.validateUpdatePermissions(updatedByRoleName)
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(updatedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can update subjects')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only update subjects in courses of their department
-    if (updatedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const updater = await this.prisma.user.findUnique({
-        where: { id: updatedById },
-        select: { departmentId: true }
-      })
-
-      const targetCourseId = data.courseId || existingSubject.courseId
-      const targetCourse = await this.prisma.course.findUnique({
-        where: { id: targetCourseId },
-        select: { departmentId: true }
-      })
-
-      if (!updater?.departmentId || !targetCourse || updater.departmentId !== targetCourse.departmentId) {
-        throw new ForbiddenException('Department heads can only update subjects in courses of their own department')
+      // Lấy subject hiện tại
+      const existingSubject = await this.subjectRepo.findById(id)
+      if (!existingSubject) {
+        throw SubjectNotFoundException
       }
-    }
 
-    // Validate new course exists if changing course
-    if (data.courseId && data.courseId !== existingSubject.courseId) {
-      const course = await this.prisma.course.findUnique({
-        where: { id: data.courseId, deletedAt: null }
-      })
+      // Kiểm tra DEPARTMENT_HEAD chỉ update subject trong department của họ
+      if (updatedByRoleName === RoleName.DEPARTMENT_HEAD) {
+        const targetCourseId = data.courseId || existingSubject.courseId
+        const targetCourse = await this.sharedCourseRepository.findById(targetCourseId)
 
-      if (!course) {
-        throw CourseNotFoundException
+        if (targetCourse) {
+          await this.validateDepartmentHeadAccess(updatedById, targetCourse.departmentId)
+        }
       }
-    }
 
-    // Validate subject code is unique if changing code
-    if (data.code && data.code !== existingSubject.code) {
-      const codeExists = await this.subjectRepo.checkCodeExists(data.code, id)
-      if (codeExists) {
+      // Validate course mới nếu thay đổi
+      if (data.courseId && data.courseId !== existingSubject.courseId) {
+        const course = await this.sharedCourseRepository.findById(data.courseId)
+        if (!course) {
+          throw CourseNotFoundException
+        }
+      }
+
+      // Validate subject code unique nếu thay đổi
+      if (data.code && data.code !== existingSubject.code) {
+        const codeExists = await this.subjectRepo.checkCodeExists(data.code, id)
+        if (codeExists) {
+          throw SubjectCodeAlreadyExistsException
+        }
+      }
+
+      // Validate date range
+      const startDate = data.startDate || existingSubject.startDate
+      const endDate = data.endDate || existingSubject.endDate
+      this.validateDateRange(startDate, endDate)
+
+      return await this.subjectRepo.update({ id, data, updatedById })
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) {
+        throw SubjectNotFoundException
+      }
+      if (isUniqueConstraintPrismaError(error)) {
         throw SubjectCodeAlreadyExistsException
       }
-    }
-
-    // Validate date range if updating dates
-    const startDate = data.startDate || existingSubject.startDate
-    const endDate = data.endDate || existingSubject.endDate
-
-    if (startDate && endDate) {
-      if (new Date(startDate) >= new Date(endDate)) {
-        throw InvalidDateRangeException
+      if (isForeignKeyConstraintPrismaError(error)) {
+        throw CourseNotFoundException
       }
+      throw error
     }
-
-    return await this.subjectRepo.update({ id, data, updatedById })
   }
 
+  /**
+   * Xóa subject (soft delete hoặc hard delete).
+   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền xóa
+   * - DEPARTMENT_HEAD chỉ có thể xóa subject của course trong department của họ
+   * - Hard delete chỉ được phép nếu không có instructors và enrollments
+   */
   async delete({
     id,
     deletedById,
@@ -270,55 +307,36 @@ export class SubjectService {
     deletedByRoleName: string
     isHard?: boolean
   }): Promise<SubjectEntityType> {
-    // Check if subject exists
+    // Kiểm tra quyền xóa
+    this.validateDeletePermissions(deletedByRoleName)
+
+    // Lấy subject hiện tại
     const existingSubject = await this.subjectRepo.findById(id)
     if (!existingSubject) {
       throw SubjectNotFoundException
     }
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(deletedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can delete subjects')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only delete subjects in courses of their department
+    // Kiểm tra DEPARTMENT_HEAD chỉ xóa subject trong department của họ
     if (deletedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const deleter = await this.prisma.user.findUnique({
-        where: { id: deletedById },
-        select: { departmentId: true }
-      })
-
-      if (
-        !deleter?.departmentId ||
-        !existingSubject.course?.departmentId ||
-        deleter.departmentId !== existingSubject.course.departmentId
-      ) {
-        throw new ForbiddenException('Department heads can only delete subjects in courses of their own department')
+      if (existingSubject.course?.departmentId) {
+        await this.validateDepartmentHeadAccess(deletedById, existingSubject.course.departmentId)
       }
     }
 
-    // Check if subject has enrollments before deletion
+    // Kiểm tra hard delete
     if (isHard) {
-      const enrollmentCount = await this.prisma.subjectEnrollment.count({
-        where: { subjectId: id }
-      })
-
-      if (enrollmentCount > 0) {
-        throw new BadRequestException('Cannot permanently delete subject with existing enrollments')
-      }
-
-      const instructorCount = await this.prisma.subjectInstructor.count({
-        where: { subjectId: id }
-      })
-
-      if (instructorCount > 0) {
-        throw new BadRequestException('Cannot permanently delete subject with existing instructors')
-      }
+      await this.validateHardDeleteSafety(id)
     }
 
     return await this.subjectRepo.delete({ id, deletedById, isHard })
   }
 
+  /**
+   * Khôi phục subject đã bị xóa mềm.
+   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền restore
+   * - DEPARTMENT_HEAD chỉ có thể restore subject của course trong department của họ
+   * - Kiểm tra subject code không conflict
+   */
   async restore({
     id,
     restoredById,
@@ -328,178 +346,41 @@ export class SubjectService {
     restoredById: string
     restoredByRoleName: string
   }): Promise<SubjectEntityType> {
-    // Check if subject exists (including deleted)
+    // Kiểm tra quyền restore
+    this.validateRestorePermissions(restoredByRoleName)
+
+    // Lấy subject (bao gồm deleted)
     const existingSubject = await this.subjectRepo.findById(id, { includeDeleted: true })
     if (!existingSubject) {
       throw SubjectNotFoundException
     }
 
-    // Check if subject is actually deleted
+    // Kiểm tra subject có thực sự bị xóa không
     if (!existingSubject.deletedAt) {
-      throw new BadRequestException('Subject is not deleted')
+      throw SubjectIsNotDeletedException
     }
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(restoredByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can restore subjects')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only restore subjects in courses of their department
+    // Kiểm tra DEPARTMENT_HEAD chỉ restore subject trong department của họ
     if (restoredByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const restorer = await this.prisma.user.findUnique({
-        where: { id: restoredById },
-        select: { departmentId: true }
-      })
-
-      if (
-        !restorer?.departmentId ||
-        !existingSubject.course?.departmentId ||
-        restorer.departmentId !== existingSubject.course.departmentId
-      ) {
-        throw new ForbiddenException('Department heads can only restore subjects in courses of their own department')
+      if (existingSubject.course?.departmentId) {
+        await this.validateDepartmentHeadAccess(restoredById, existingSubject.course.departmentId)
       }
     }
 
-    // Check if subject code conflicts with existing active subjects
+    // Kiểm tra subject code conflict
     const codeExists = await this.subjectRepo.checkCodeExists(existingSubject.code, id)
     if (codeExists) {
-      throw new BadRequestException('Cannot restore subject: code conflicts with existing active subject')
+      throw CannotRestoreSubjectCodeConflictException
     }
 
     return await this.subjectRepo.restore({ id, restoredById })
   }
 
-  async addInstructors({
-    subjectId,
-    instructors,
-    addedByRoleName
-  }: {
-    subjectId: string
-    instructors: AddInstructorsBodyType['instructors']
-    addedByRoleName: string
-  }): Promise<{ addedInstructors: string[]; duplicateInstructors: string[] }> {
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(addedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can manage instructors')
-    }
-
-    // Check if subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    return await this.subjectRepo.addInstructors({ subjectId, instructors })
-  }
-
-  async removeInstructors({
-    subjectId,
-    trainerEids,
-    removedByRoleName
-  }: {
-    subjectId: string
-    trainerEids: string[]
-    removedByRoleName: string
-  }): Promise<{ removedInstructors: string[]; notFoundInstructors: string[] }> {
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(removedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can manage instructors')
-    }
-
-    // Check if subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    return await this.subjectRepo.removeInstructors({ subjectId, trainerEids })
-  }
-
-  async enrollTrainees({
-    subjectId,
-    trainees,
-    enrolledByRoleName
-  }: {
-    subjectId: string
-    trainees: EnrollTraineesBodyType['trainees']
-    enrolledByRoleName: string
-  }): Promise<{ enrolledTrainees: string[]; duplicateTrainees: string[] }> {
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(enrolledByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can manage enrollments')
-    }
-
-    // Check if subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    return await this.subjectRepo.enrollTrainees({ subjectId, trainees })
-  }
-
-  async removeEnrollments({
-    subjectId,
-    traineeEids,
-    removedByRoleName
-  }: {
-    subjectId: string
-    traineeEids: string[]
-    removedByRoleName: string
-  }): Promise<{ removedTrainees: string[]; notFoundTrainees: string[] }> {
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(removedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can manage enrollments')
-    }
-
-    // Check if subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    return await this.subjectRepo.removeEnrollments({ subjectId, traineeEids })
-  }
-
-  async updateEnrollmentStatus({
-    subjectId,
-    traineeEid,
-    status,
-    updatedByRoleName
-  }: {
-    subjectId: string
-    traineeEid: string
-    status: UpdateEnrollmentStatusBodyType['status']
-    updatedByRoleName: string
-  }): Promise<{ success: boolean }> {
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD, RoleName.TRAINER].includes(updatedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators, department heads, and trainers can update enrollment status')
-    }
-
-    // Check if subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    const success = await this.subjectRepo.updateEnrollmentStatus({
-      subjectId,
-      traineeEid,
-      status
-    })
-
-    if (!success) {
-      throw new BadRequestException('Trainee enrollment not found')
-    }
-
-    return { success }
-  }
-
-  async getStats({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<SubjectStatsType> {
-    return await this.subjectRepo.getStats({ includeDeleted })
-  }
-
+  /**
+   * Lấy danh sách subjects theo course.
+   * @param courseId - ID của course
+   * @param includeDeleted - Có lấy subjects đã bị xóa không (chỉ ADMIN)
+   */
   async getSubjectsByCourse({
     courseId,
     includeDeleted = false
@@ -509,7 +390,7 @@ export class SubjectService {
   }): Promise<SubjectWithInfoType[]> {
     const result = await this.subjectRepo.list({
       page: 1,
-      limit: 1000, // Large limit to get all subjects
+      limit: 1000,
       courseId,
       includeDeleted
     })
@@ -517,106 +398,80 @@ export class SubjectService {
     return result.subjects
   }
 
-  async validateSubjectAccess({
-    subjectId,
-    userId,
-    userRole
-  }: {
-    subjectId: string
-    userId: string
-    userRole: string
-  }): Promise<boolean> {
-    // Admins have access to all subjects
-    if (userRole === RoleName.ADMINISTRATOR) {
-      return true
+  // =============== PRIVATE HELPER METHODS ===============
+
+  /**
+   * Kiểm tra quyền tạo subject
+   */
+  private validateCreatePermissions(roleName: string): void {
+    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+      throw OnlyAdminAndDepartmentHeadCanCreateSubjectsException
     }
-
-    // Get subject details
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      return false
-    }
-
-    // Department heads have access to subjects in courses of their department
-    if (userRole === RoleName.DEPARTMENT_HEAD) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { departmentId: true }
-      })
-
-      return user?.departmentId === subject.course?.departmentId
-    }
-
-    // Trainers have access to subjects where they are assigned as instructors
-    if (userRole === RoleName.TRAINER) {
-      const instructorCount = await this.prisma.subjectInstructor.count({
-        where: {
-          trainerUserId: userId,
-          subjectId
-        }
-      })
-
-      return instructorCount > 0
-    }
-
-    // Trainees have access to subjects where they are enrolled
-    if (userRole === RoleName.TRAINEE) {
-      const enrollmentCount = await this.prisma.subjectEnrollment.count({
-        where: {
-          traineeUserId: userId,
-          subjectId
-        }
-      })
-
-      return enrollmentCount > 0
-    }
-
-    return false
   }
 
-  async getSubjectInstructors(subjectId: string): Promise<any[]> {
-    const subject = await this.prisma.subject.findUnique({
-      where: { id: subjectId },
-      include: {
-        instructors: {
-          include: {
-            trainer: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            }
-          }
-        }
-      }
-    })
-
-    return subject?.instructors || []
+  /**
+   * Kiểm tra quyền update subject
+   */
+  private validateUpdatePermissions(roleName: string): void {
+    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+      throw OnlyAdminAndDepartmentHeadCanUpdateSubjectsException
+    }
   }
 
-  async getSubjectEnrollments(subjectId: string): Promise<any[]> {
-    const subject = await this.prisma.subject.findUnique({
-      where: { id: subjectId },
-      include: {
-        enrollments: {
-          include: {
-            trainee: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
-            }
-          }
-        }
-      }
-    })
+  /**
+   * Kiểm tra quyền xóa subject
+   */
+  private validateDeletePermissions(roleName: string): void {
+    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+      throw OnlyAdminAndDepartmentHeadCanDeleteSubjectsException
+    }
+  }
 
-    return subject?.enrollments || []
+  /**
+   * Kiểm tra quyền restore subject
+   */
+  private validateRestorePermissions(roleName: string): void {
+    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+      throw OnlyAdminAndDepartmentHeadCanRestoreSubjectsException
+    }
+  }
+
+  /**
+   * Kiểm tra DEPARTMENT_HEAD chỉ có thể thao tác với course trong department của họ
+   */
+  private async validateDepartmentHeadAccess(userId: string, courseDepartmentId: string): Promise<void> {
+    const user = await this.sharedUserRepository.findUnique({ id: userId })
+
+    if (!user?.departmentId || user.departmentId !== courseDepartmentId) {
+      throw DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException
+    }
+  }
+
+  /**
+   * Validate date range (end date phải sau start date)
+   */
+  private validateDateRange(startDate?: string | null, endDate?: string | null): void {
+    if (startDate && endDate) {
+      if (new Date(startDate) >= new Date(endDate)) {
+        throw InvalidDateRangeException
+      }
+    }
+  }
+
+  /**
+   * Kiểm tra an toàn khi hard delete (không có instructors và enrollments)
+   */
+  private async validateHardDeleteSafety(subjectId: string): Promise<void> {
+    // Kiểm tra enrollments
+    const enrollmentCount = await this.subjectRepo.countEnrollments(subjectId)
+    if (enrollmentCount > 0) {
+      throw CannotHardDeleteSubjectWithEnrollmentsException
+    }
+
+    // Kiểm tra instructors
+    const instructorCount = await this.subjectRepo.countInstructors(subjectId)
+    if (instructorCount > 0) {
+      throw CannotHardDeleteSubjectWithInstructorsException
+    }
   }
 }

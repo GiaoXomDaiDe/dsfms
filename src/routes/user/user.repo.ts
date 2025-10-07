@@ -134,7 +134,7 @@ export class UserRepo {
     }
   ) {
     return await this.prismaService.$transaction(async (tx) => {
-      // Update base user if userData provided
+      // Cập nhật thông tin user cơ bản nếu có dữ liệu
       if (Object.keys(userData).length > 0) {
         await tx.user.update({
           where: { id },
@@ -145,7 +145,7 @@ export class UserRepo {
         })
       }
 
-      // Update or create role-specific profile
+      // Cập nhật hoặc tạo mới profile theo role
       if (roleName === RoleName.TRAINER && trainerProfile) {
         await tx.trainerProfile.upsert({
           where: { userId: id },
@@ -166,7 +166,7 @@ export class UserRepo {
         })
       }
 
-      // Return updated user with profile
+      // Trả về user đã được cập nhật kèm profile
       return await tx.user.findUnique({
         where: { id },
         include: {
@@ -230,7 +230,7 @@ export class UserRepo {
   }
   enable({ id, enabledById }: { id: string; enabledById: string }) {
     return this.prismaService.$transaction(async (tx) => {
-      //Lấy ra user với role
+      // Lấy thông tin user với role
       const user = await tx.user.findUnique({
         where: { id },
         include: {
@@ -239,7 +239,7 @@ export class UserRepo {
       })
       if (!user) throw UserNotFoundException
 
-      //Enable user
+      // Kích hoạt lại user
       await tx.user.update({
         where: { id },
         data: {
@@ -249,7 +249,7 @@ export class UserRepo {
           updatedById: enabledById
         }
       })
-      //Enable các profile tương ứng
+      // Kích hoạt lại các profile tương ứng
       await tx.trainerProfile.updateMany({
         where: { userId: id, deletedAt: { not: null } },
         data: {
@@ -280,12 +280,12 @@ export class UserRepo {
   }
 
   /**
-   * Bulk create users with optimized performance
-   * Features:
-   * - Chunked processing to avoid memory issues
-   * - Batch inserts for users
-   * - Separate profile creation for better performance
-   * - Transaction support with rollback on errors
+   * Tạo hàng loạt người dùng với hiệu suất tối ưu
+   * Tính năng:
+   * - Xử lý theo chunks để tránh vấn đề memory
+   * - Insert hàng loạt cho users
+   * - Tạo profile riêng biệt để tối ưu hiệu suất
+   * - Hỗ trợ transaction với rollback khi có lỗi
    */
   async createBulk({
     usersData,
@@ -306,14 +306,14 @@ export class UserRepo {
       }
     }
 
-    // Process in chunks to avoid memory issues and database timeout
+    // Xử lý theo chunks để tránh vấn đề memory và timeout database
     for (let i = 0; i < usersData.length; i += chunkSize) {
       const chunk = usersData.slice(i, i + chunkSize)
 
       try {
         const chunkResults = await this.prismaService.$transaction(
           async (tx) => {
-            // Step 0: Check for existing emails in this chunk
+            // Bước 0: Kiểm tra email đã tồn tại trong chunk này
             const emails = chunk.map((userData) => userData.email)
             const existingUsers = await tx.user.findMany({
               where: {
@@ -325,7 +325,7 @@ export class UserRepo {
 
             const existingEmails = new Set(existingUsers.map((u) => u.email))
 
-            // Separate valid users from duplicates
+            // Tách users hợp lệ khỏi những users trùng lặp
             const validUsersInChunk: typeof chunk = []
             const duplicateUsersInChunk: Array<{ userData: (typeof chunk)[0]; originalIndex: number }> = []
 
@@ -340,7 +340,7 @@ export class UserRepo {
               }
             })
 
-            // If no valid users in this chunk, return empty results
+            // Nếu không có users hợp lệ trong chunk này, trả về kết quả rỗng
             if (validUsersInChunk.length === 0) {
               return {
                 created: [],
@@ -348,11 +348,11 @@ export class UserRepo {
               }
             }
 
-            // Step 1: Bulk create only valid users
+            // Bước 1: Tạo hàng loạt chỉ những users hợp lệ
             const usersToCreate = validUsersInChunk.map((userData) => ({
               ...userData,
               createdById,
-              // Remove profile data from user creation
+              // Loại bỏ dữ liệu profile khỏi quá trình tạo user
               trainerProfile: undefined,
               traineeProfile: undefined,
               roleName: undefined
@@ -366,7 +366,7 @@ export class UserRepo {
               }
             })
 
-            // Step 2: Batch create profiles (separate for performance)
+            // Bước 2: Tạo hàng loạt profiles (tách riêng để tối ưu hiệu suất)
             const trainerProfiles: any[] = []
             const traineeProfiles: any[] = []
 
@@ -397,7 +397,7 @@ export class UserRepo {
               }
             })
 
-            // Batch create profiles
+            // Tạo hàng loạt profiles
             if (trainerProfiles.length > 0) {
               await tx.trainerProfile.createMany({
                 data: trainerProfiles
@@ -410,7 +410,7 @@ export class UserRepo {
               })
             }
 
-            // Step 3: Get complete users with profiles
+            // Bước 3: Lấy thông tin users hoàn chỉnh kèm profiles
             const completeUsers = await tx.user.findMany({
               where: {
                 id: { in: createdUsers.map((u) => u.id) }
@@ -445,11 +445,11 @@ export class UserRepo {
           }
         )
 
-        // Process successful creations
+        // Xử lý các tạo thành công
         results.success.push(...chunkResults.created)
         results.summary.successful += chunkResults.created.length
 
-        // Process duplicate emails found before creation
+        // Xử lý các email trùng lặp được tìm thấy trước khi tạo
         chunkResults.duplicates.forEach(({ userData, originalIndex }) => {
           // Extract original user data without internal fields
           const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
@@ -468,12 +468,12 @@ export class UserRepo {
         })
         results.summary.failed += chunkResults.duplicates.length
       } catch (error) {
-        // Handle chunk failure - add all users in this chunk to failed array
+        // Xử lý lỗi chunk - thêm tất cả users trong chunk này vào mảng thất bại
         chunk.forEach((userData, index) => {
-          // Extract original user data without internal fields
+          // Tách dữ liệu user gốc không bao gồm các field nội bộ
           const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
 
-          // Reconstruct role object for failed response
+          // Tái tạo role object cho response thất bại
           const failedUserData = {
             ...originalUserData,
             role: { id: roleId, name: roleName }

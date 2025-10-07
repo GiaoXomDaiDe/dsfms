@@ -103,3 +103,8 @@ export class BulkUserCreationException extends BadRequestException {
     })
   }
 }
+
+export const DefaultRoleValidationException = new BadRequestException({
+  message: 'Role validation failed',
+  error: 'ROLE_VALIDATION_FAILED'
+})

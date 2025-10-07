@@ -217,6 +217,25 @@ export class CourseRepo {
             lastName: true
           }
         },
+        subjects: {
+          where: {
+            deletedAt: null
+          },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            method: true,
+            duration: true,
+            type: true,
+            roomName: true,
+            createdAt: true,
+            updatedAt: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        },
         _count: {
           select: {
             subjects: {
@@ -265,24 +284,8 @@ export class CourseRepo {
         .then((instructors) => instructors.length)
     ])
 
-    // Get detailed subject information
-    const subjects = await this.prisma.subject.findMany({
-      where: {
-        courseId: id,
-        deletedAt: null
-      },
-      include: {
-        _count: {
-          select: {
-            instructors: true,
-            enrollments: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'asc' }
-    })
-
-    const subjectSummaries = subjects.map((subject) => ({
+    // Transform subjects from course include
+    const subjectSummaries = course.subjects.map((subject) => ({
       id: subject.id,
       name: subject.name,
       code: subject.code,
@@ -290,16 +293,11 @@ export class CourseRepo {
       duration: subject.duration,
       type: subject.type,
       roomName: subject.roomName,
-      timeSlot: subject.timeSlot,
-      isSIM: subject.isSIM,
-      passScore: subject.passScore,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      instructorCount: subject._count.instructors,
-      enrollmentCount: subject._count.enrollments
+      createdAt: subject.createdAt.toISOString(),
+      updatedAt: subject.updatedAt.toISOString()
     }))
 
-    const { _count, ...courseData } = course
+    const { subjects, _count, ...courseData } = course
 
     return {
       ...courseData,

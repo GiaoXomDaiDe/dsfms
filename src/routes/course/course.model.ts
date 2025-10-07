@@ -141,16 +141,17 @@ export const CourseStatsSchema = z.object({
   )
 })
 
-// Department with Courses Response Schema
+// Department with Courses Response Schema (without pagination)
 export const DepartmentWithCoursesSchema = z.object({
-  department: CourseDepartmentSchema.extend({
-    description: z.string().optional().nullable(),
-    headUser: CourseUserSchema.optional().nullable(),
-    isActive: z.boolean(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime()
-  }),
-  courses: GetCoursesResSchema
+  id: z.string().uuid(),
+  name: z.string(),
+  code: z.string(),
+  description: z.string().optional().nullable(),
+  headUser: CourseUserSchema.optional().nullable(),
+  isActive: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  courses: z.array(CourseWithInfoSchema)
 })
 
 // Type exports

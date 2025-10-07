@@ -4,7 +4,9 @@ import { PermissionType } from '~/routes/permission/permission.model'
 import { HTTPMethod, RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
-const DepartmentModules = ['AUTH', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
+const DepartmentHeadModules = ['AUTH', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
+
+const AcademicDepartmentModules = ['AUTH', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
 
 const prisma = new PrismaService()
 
@@ -96,12 +98,16 @@ async function bootstrap() {
 
   const adminPermissionIds = updatedPermissionsInDb.map((item: PermissionType) => ({ id: item.id }))
   await updateRole(adminPermissionIds, 'ADMINISTRATOR')
-  const sellerPermissionIds = updatedPermissionsInDb
-    .filter((item) => DepartmentModules.includes(item.module))
+  const departmentHeadIds = updatedPermissionsInDb
+    .filter((item) => DepartmentHeadModules.includes(item.module))
+    .map((item) => ({ id: item.id }))
+  const academicDepartmentIds = updatedPermissionsInDb
+    .filter((item) => AcademicDepartmentModules.includes(item.module))
     .map((item) => ({ id: item.id }))
   await Promise.all([
     updateRole(adminPermissionIds, RoleName.ADMINISTRATOR),
-    updateRole(sellerPermissionIds, RoleName.DEPARTMENT_HEAD)
+    updateRole(departmentHeadIds, RoleName.DEPARTMENT_HEAD),
+    updateRole(academicDepartmentIds, RoleName.ACADEMIC_DEPARTMENT)
   ])
   process.exit(0)
 }
