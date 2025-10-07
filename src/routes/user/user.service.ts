@@ -8,6 +8,7 @@ import {
   BulkTraineeProfileNotAllowedException,
   BulkTrainerProfileNotAllowedException,
   CannotUpdateOrDeleteYourselfException,
+  DefaultRoleValidationException,
   DepartmentNotFoundException,
   ForbiddenProfileException,
   OnlyAdminCanManageAdminRoleException,
