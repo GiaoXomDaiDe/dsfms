@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { AccessTokenGuard } from '~/shared/guards/access-token.guard'
 import { APIKeyGuard } from '~/shared/guards/api-key.guard'
 import { AuthenticationGuard } from '~/shared/guards/authentication.guard'
+import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
@@ -16,6 +17,7 @@ const sharedServices = [
   HashingService,
   SharedUserRepository,
   SharedRoleRepository,
+  SharedDepartmentRepository,
   TokenService,
   AccessTokenGuard,
   APIKeyGuard,

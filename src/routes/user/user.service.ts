@@ -1,7 +1,20 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { NodemailerService } from '~/routes/email/nodemailer.service'
 import {
+  BulkDepartmentNotFoundAtIndexException,
+  BulkForbiddenProfileException,
+  BulkRequiredProfileMissingException,
+  BulkRoleNotFoundAtIndexException,
+  BulkTraineeProfileNotAllowedException,
+  BulkTrainerProfileNotAllowedException,
   CannotUpdateOrDeleteYourselfException,
+  DepartmentNotFoundException,
+  ForbiddenProfileException,
+  OnlyAdminCanManageAdminRoleException,
+  RequiredProfileMissingException,
   RoleNotFoundException,
+  TraineeProfileNotAllowedException,
+  TrainerProfileNotAllowedException,
   UserAlreadyExistsException,
   UserIsNotDisabledException,
   UserNotFoundException
@@ -20,47 +33,51 @@ import {
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
+import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
-import { NodemailerService } from '~/routes/email/nodemailer.service'
 
 @Injectable()
 export class UserService {
   constructor(
-    private userRepo: UserRepo,
-    private hashingService: HashingService,
-    private sharedUserRepository: SharedUserRepository,
-    private sharedRoleRepository: SharedRoleRepository,
+    private readonly userRepo: UserRepo,
+    private readonly hashingService: HashingService,
+    private readonly sharedUserRepository: SharedUserRepository,
+    private readonly sharedRoleRepository: SharedRoleRepository,
+    private readonly sharedDepartmentRepository: SharedDepartmentRepository,
     private readonly eidService: EidService,
     private readonly nodemailerService: NodemailerService
   ) {}
 
+  /**
+   * Lấy danh sách người dùng. Chỉ ADMINISTRATOR mới được phép xem user đã bị xóa mềm.
+   * @param includeDeleted - Có lấy cả user đã bị xóa mềm không
+   * @param userRole - Vai trò của người thực hiện
+   */
   list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
-    // Chỉ admin mới có thể xem các user đã bị xóa mềm
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+    // Nếu không phải admin thì luôn luôn không cho xem user đã bị xóa mềm
     return this.userRepo.list({
-      includeDeleted: canViewDeleted ? includeDeleted : false
+      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
     })
   }
 
+  /**
+   * Lấy thông tin chi tiết một người dùng.
+   * Chỉ ADMINISTRATOR mới được phép xem user đã bị xóa mềm.
+   * @param id - ID người dùng
+   * @param includeDeleted - Có lấy cả user đã bị xóa mềm không
+   * @param userRole - Vai trò của người thực hiện
+   */
   async findById(
     id: string,
     { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
   ) {
-    // Admin có thể xem detail của user đã bị disable
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
-
-    // Tạm thời sử dụng repo method hiện có
-    // TODO: Cần cập nhật shared repository để support includeDeleted
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id })
-
-    // Nếu user null và admin muốn xem deleted items, cần implement logic riêng
-    if (!user && includeDeleted && canViewDeleted) {
-      // Tạm thời throw error, cần implement sau
-      throw UserNotFoundException
-    }
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile(
+      { id },
+      { includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false }
+    )
 
     if (!user) {
       throw UserNotFoundException
@@ -68,6 +85,7 @@ export class UserService {
 
     const { trainerProfile, traineeProfile, ...baseUser } = user
 
+    // Nếu là trainer thì trả về kèm trainerProfile, trainee thì trả về kèm traineeProfile
     if (user.role.name === RoleName.TRAINER && trainerProfile) {
       return { ...baseUser, trainerProfile }
     } else if (user.role.name === RoleName.TRAINEE && traineeProfile) {
@@ -77,6 +95,11 @@ export class UserService {
     }
   }
 
+  /**
+   * Tạo mới một người dùng.
+   * Chỉ admin mới được phép tạo user có role là admin.
+   * Kiểm tra hợp lệ profile, department, sinh eid, hash password, gửi email chào mừng.
+   */
   async create({
     data,
     createdById,
@@ -87,34 +110,34 @@ export class UserService {
     createdByRoleName: string
   }) {
     try {
-      // Chỉ có admin agent mới có quyền tạo user với role là admin
+      // Chỉ admin mới được phép tạo user có role là admin
       await this.verifyRole({
         roleNameAgent: createdByRoleName,
         roleIdTarget: data.role.id
       })
 
-      // Lấy ra role detail
+      // Lấy thông tin role mục tiêu
       const targetRole = await this.sharedRoleRepository.findRolebyId(data.role.id)
       if (!targetRole) {
         throw RoleNotFoundException
       }
 
-      //Kiểm tra departmentId dựa trên role
+      // Kiểm tra departmentId có tồn tại không (nếu được cung cấp)
       if (data.departmentId) {
-        if (targetRole.name !== RoleName.DEPARTMENT_HEAD && targetRole.name !== RoleName.TRAINER) {
-          throw new ForbiddenException(
-            `Users with role ${targetRole.name} cannot be assigned to a department. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
-          )
+        const departmentExists = await this.sharedDepartmentRepository.exists(data.departmentId)
+        if (!departmentExists) {
+          throw DepartmentNotFoundException
         }
       }
+
       // Kiểm tra dữ liệu profile có hợp lệ không
       this.validateProfileData(targetRole.name, data)
-      // Tạo eid dựa theo role
+      // Sinh eid theo role
       const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
-      // Hash the password
+      // Hash mật khẩu mặc định
       const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
 
-      //extract profile data if exists
+      // Tách profile và role ra khỏi data
       const { trainerProfile, traineeProfile, role, ...userData } = data
 
       const user = await this.userRepo.createWithProfile({
@@ -130,23 +153,17 @@ export class UserService {
         traineeProfile
       })
 
-      // Send welcome email to the new user
+      // Gửi email chào mừng cho user mới
       try {
         const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ')
         const plainPassword = eid + envConfig.PASSWORD_SECRET
-        
-        await this.nodemailerService.sendNewUserAccountEmail(
-          data.email,
-          eid,
-          plainPassword,
-          fullName,
-          targetRole.name
-        )
-        
-        console.log(`Welcome email sent successfully to ${data.email}`)
+
+        await this.nodemailerService.sendNewUserAccountEmail(data.email, eid, plainPassword, fullName, targetRole.name)
+
+        console.log(`Gửi email chào mừng thành công tới ${data.email}`)
       } catch (emailError) {
-        // Log email error but don't fail the user creation
-        console.error(`Failed to send welcome email to ${data.email}:`, emailError)
+        // Nếu gửi email lỗi thì chỉ log, không throw
+        console.error(`Gửi email chào mừng thất bại tới ${data.email}:`, emailError)
       }
 
       return user
@@ -194,17 +211,17 @@ export class UserService {
 
           const targetRole = await this.sharedRoleRepository.findRolebyId(userData.role.id)
           if (!targetRole) {
-            throw new Error(`Role not found for user at index ${index}`)
+            throw new Error(BulkRoleNotFoundAtIndexException(index))
           }
 
-          //Kiểm tra departmentId dựa trên role
+          // Validate department exists (if provided)
           if (userData.departmentId) {
-            if (targetRole.name !== RoleName.DEPARTMENT_HEAD && targetRole.name !== RoleName.TRAINER) {
-              throw new Error(
-                `User at index ${index}: Department assignment not allowed for ${targetRole.name} role. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
-              )
+            const departmentExists = await this.sharedDepartmentRepository.exists(userData.departmentId)
+            if (!departmentExists) {
+              throw new Error(BulkDepartmentNotFoundAtIndexException(index, userData.departmentId))
             }
           }
+
           // Validate profile data matches role
           this.validateProfileDataForRole(targetRole.name, userData, index)
 
@@ -364,10 +381,10 @@ export class UserService {
         // Send welcome emails to successfully created users
         if (bulkResult.success.length > 0) {
           try {
-            const emailUsers = bulkResult.success.map(user => {
+            const emailUsers = bulkResult.success.map((user) => {
               const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
               const plainPassword = user.eid + envConfig.PASSWORD_SECRET
-              
+
               return {
                 email: user.email,
                 eid: user.eid,
@@ -376,13 +393,15 @@ export class UserService {
                 role: user.role.name
               }
             })
-            
+
             const emailResults = await this.nodemailerService.sendBulkNewUserAccountEmails(emailUsers)
-            
-            console.log(`Bulk email sending completed: ${emailResults.results.filter(r => r.success).length}/${emailResults.results.length} emails sent successfully`)
-            
+
+            console.log(
+              `Bulk email sending completed: ${emailResults.results.filter((r) => r.success).length}/${emailResults.results.length} emails sent successfully`
+            )
+
             // Log individual email failures for debugging
-            emailResults.results.forEach(result => {
+            emailResults.results.forEach((result) => {
               if (!result.success) {
                 console.error(`Failed to send welcome email to ${result.email}: ${result.message}`)
               }
@@ -437,41 +456,67 @@ export class UserService {
     }
   }
 
+  /**
+   * Kiểm tra tính hợp lệ của dữ liệu profile theo role
+   * - TRAINER: bắt buộc có trainerProfile, không được có traineeProfile
+   * - TRAINEE: bắt buộc có traineeProfile, không được có trainerProfile
+   * - Các role khác: không được có bất kỳ profile nào
+   * @param roleName - Tên role cần kiểm tra
+   * @param data - Dữ liệu user với profile
+   */
   private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
-    // Validate that correct profile is provided for role
-    if (roleName === RoleName.TRAINER && data.traineeProfile) {
-      throw new ConflictException('Cannot provide trainee profile for trainer role')
-    }
-    if (roleName === RoleName.TRAINEE && data.trainerProfile) {
-      throw new ConflictException('Cannot provide trainer profile for trainee role')
-    }
+    const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
 
-    // Optional: Warn if profile data is missing
-    if (roleName === RoleName.TRAINER && !data.trainerProfile) {
-      console.warn('Creating trainer without profile data')
-    }
-    if (roleName === RoleName.TRAINEE && !data.traineeProfile) {
-      console.warn('Creating trainee without profile data')
+    if (rules) {
+      // Đối với role có yêu cầu profile cụ thể (TRAINER/TRAINEE)
+      const requiredProfile = data[rules.requiredProfile as keyof typeof data]
+      const forbiddenProfile = data[rules.forbiddenProfile as keyof typeof data]
+
+      // Kiểm tra thiếu profile bắt buộc
+      if (!requiredProfile) {
+        throw RequiredProfileMissingException(roleName, rules.requiredProfile)
+      }
+
+      // Kiểm tra có profile không được phép
+      if (forbiddenProfile) {
+        throw ForbiddenProfileException(roleName, rules.forbiddenProfile, rules.forbiddenMessage)
+      }
+    } else {
+      // Đối với các role khác (ADMINISTRATOR, DEPARTMENT_HEAD, SQA_AUDITOR, etc.)
+      // không được có bất kỳ profile nào
+      if (data.trainerProfile) {
+        throw TrainerProfileNotAllowedException(roleName)
+      }
+      if (data.traineeProfile) {
+        throw TraineeProfileNotAllowedException(roleName)
+      }
     }
   }
 
   /**
-   * Function này kiểm tra xem người thực hiện có quyền tác động đến người khác không.
-   * Vì chỉ có người thực hiện là admin role mới có quyền sau: Tạo admin user, update roleId thành admin, xóa admin user.
-   * Còn nếu không phải admin thì không được phép tác động đến admin
+   * Kiểm tra quyền hạn của người thực hiện đối với role mục tiêu.
+   * Chỉ có ADMINISTRATOR mới có quyền:
+   * - Tạo user có role ADMINISTRATOR
+   * - Cập nhật role thành ADMINISTRATOR
+   * - Xóa user có role ADMINISTRATOR
+   *
+   * Các role khác không được phép tác động đến ADMINISTRATOR.
+   *
+   * @param roleNameAgent - Role của người thực hiện hành động
+   * @param roleIdTarget - ID role của đối tượng bị tác động
    */
   private async verifyRole({ roleNameAgent, roleIdTarget }: { roleNameAgent: string; roleIdTarget: string }) {
-    // Agent là admin thì cho phép
+    // Nếu người thực hiện là admin thì có toàn quyền
     if (roleNameAgent === RoleName.ADMINISTRATOR) {
       return true
-    } else {
-      // Agent không phải admin thì roleIdTarget phải khác admin
-      const adminRoleId = await this.sharedRoleRepository.getAdminRoleId()
-      if (roleIdTarget === adminRoleId) {
-        throw new ForbiddenException()
-      }
-      return true
     }
+
+    // Nếu không phải admin thì không được tác động đến admin
+    const adminRoleId = await this.sharedRoleRepository.getAdminRoleId()
+    if (roleIdTarget === adminRoleId) {
+      throw OnlyAdminCanManageAdminRoleException
+    }
+    return true
   }
 
   async update({
@@ -504,6 +549,14 @@ export class UserService {
         roleIdTarget
       })
       const { role, trainerProfile, traineeProfile, ...userData } = data
+
+      // Validate department exists (if being updated)
+      if (userData.departmentId !== undefined && userData.departmentId !== null) {
+        const departmentExists = await this.sharedDepartmentRepository.exists(userData.departmentId)
+        if (!departmentExists) {
+          throw DepartmentNotFoundException
+        }
+      }
 
       const targetRoleName = role
         ? (await this.sharedRoleRepository.findRolebyId(role.id))?.name || currentUser.role.name
@@ -620,8 +673,12 @@ export class UserService {
   }
 
   /**
-   * Validate that profile data matches the user's role
-   * Prevents cases like SQA_AUDITOR having trainer/trainee profile
+   * Kiểm tra tính hợp lệ của dữ liệu profile theo role cho bulk create.
+   * Ngăn chặn các trường hợp như SQA_AUDITOR có trainer/trainee profile.
+   *
+   * @param roleName - Tên role cần kiểm tra
+   * @param userData - Dữ liệu user với profile
+   * @param userIndex - Vị trí user trong mảng bulk (để báo lỗi)
    */
   private validateProfileDataForRole(
     roleName: string,
@@ -631,18 +688,31 @@ export class UserService {
     const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
 
     if (rules) {
-      // For roles that have specific profile requirements (TRAINER/TRAINEE)
-      const forbiddenKey = rules.forbiddenProfile as keyof typeof userData
-      if (forbiddenKey in userData && userData[forbiddenKey]) {
-        throw new Error(`User at index ${userIndex}: ${rules.forbiddenMessage}`)
+      // Đối với role có yêu cầu profile cụ thể (TRAINER/TRAINEE)
+      const requiredProfile = userData[rules.requiredProfile as keyof typeof userData]
+      const forbiddenProfile = userData[rules.forbiddenProfile as keyof typeof userData]
+
+      // Kiểm tra thiếu profile bắt buộc
+      if (!requiredProfile) {
+        throw new Error(
+          BulkRequiredProfileMissingException(userIndex, roleName, rules.requiredProfile, rules.requiredMessage)
+        )
+      }
+
+      // Kiểm tra có profile không được phép
+      if (forbiddenProfile) {
+        throw new Error(
+          BulkForbiddenProfileException(userIndex, roleName, rules.forbiddenProfile, rules.forbiddenMessage)
+        )
       }
     } else {
-      // For other roles (SQA_AUDITOR, ADMINISTRATOR, etc.) - should NOT have any profile
+      // Đối với các role khác (SQA_AUDITOR, ADMINISTRATOR, DEPARTMENT_HEAD, etc.)
+      // không được có bất kỳ profile nào
       if (userData.trainerProfile) {
-        throw new Error(`User at index ${userIndex}: Trainer profile is not allowed for ${roleName} role`)
+        throw new Error(BulkTrainerProfileNotAllowedException(userIndex, roleName))
       }
       if (userData.traineeProfile) {
-        throw new Error(`User at index ${userIndex}: Trainee profile is not allowed for ${roleName} role`)
+        throw new Error(BulkTraineeProfileNotAllowedException(userIndex, roleName))
       }
     }
   }

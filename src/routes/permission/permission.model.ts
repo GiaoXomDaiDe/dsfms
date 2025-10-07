@@ -1,6 +1,6 @@
 import z from 'zod'
 import { HTTPMethod } from '~/shared/constants/auth.constant'
-import { PaginationQuerySchema } from '~/shared/models/pagination.model'
+import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 
 export const PermissionSchema = z.object({
   id: z.uuid(),
@@ -33,10 +33,7 @@ export const GetPermissionsResSchema = z.object({
   totalItems: z.number()
 })
 
-export const GetPermissionsQuerySchema = PaginationQuerySchema.extend({
-  includeDeleted: z.coerce.boolean().default(false).optional()
-})
-
+export const GetPermissionsQuerySchema = IncludeDeletedQuerySchema.strict()
 export const GetPermissionParamsSchema = z
   .object({
     permissionId: z.uuid()

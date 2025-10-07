@@ -3,6 +3,7 @@ import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/pro
 import { UserNotFoundException } from '~/routes/user/user.error'
 import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 type BulkUserData = CreateUserInternalType & {
@@ -15,7 +16,7 @@ type BulkUserData = CreateUserInternalType & {
 export class UserRepo {
   constructor(private prismaService: PrismaService) {}
 
-  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetUsersResType> {
+  async list({ includeDeleted = false }: IncludeDeletedQueryType = {}): Promise<GetUsersResType> {
     const whereClause = includeDeleted ? {} : { deletedAt: null }
 
     const [totalItems, data] = await Promise.all([
@@ -36,15 +37,6 @@ export class UserRepo {
     }
   }
 
-  async create({ createdById, data }: { createdById: string | null; data: CreateUserInternalType }): Promise<UserType> {
-    return this.prismaService.user.create({
-      data: {
-        ...data,
-        createdById
-      }
-    })
-  }
-
   async createWithProfile({
     createdById,
     userData,
@@ -59,7 +51,7 @@ export class UserRepo {
     traineeProfile?: CreateTraineeProfileType
   }) {
     return await this.prismaService.$transaction(async (tx) => {
-      // Step 1: Create base user
+      // Bước 1: Tạo user cơ bản
       const newUser = await tx.user.create({
         data: {
           ...userData,
@@ -77,7 +69,7 @@ export class UserRepo {
         }
       })
 
-      // Step 2: Create role-specific profile if data provided
+      // Bước 2: Tạo profile tương ứng dựa trên role
       if (roleName === RoleName.TRAINER && trainerProfile) {
         await tx.trainerProfile.create({
           data: {
@@ -85,7 +77,8 @@ export class UserRepo {
             specialization: trainerProfile.specialization,
             certificationNumber: trainerProfile.certificationNumber,
             yearsOfExp: Number(trainerProfile.yearsOfExp),
-            bio: trainerProfile.bio
+            bio: trainerProfile.bio,
+            createdById
           }
         })
       } else if (roleName === RoleName.TRAINEE && traineeProfile) {
@@ -96,12 +89,13 @@ export class UserRepo {
             enrollmentDate: new Date(traineeProfile.enrollmentDate),
             trainingBatch: traineeProfile.trainingBatch,
             passportNo: traineeProfile.passportNo || null,
-            nation: traineeProfile.nation
+            nation: traineeProfile.nation,
+            createdById
           }
         })
       }
 
-      // Step 3: Return complete user with profile
+      // Bước 3: Trả về user hoàn chỉnh với profile
       return await tx.user.findUnique({
         where: { id: newUser.id },
         include: {

@@ -32,7 +32,7 @@ export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithPr
     const requiredProfile = data[rules.requiredProfile as keyof typeof data]
     const forbiddenProfile = data[rules.forbiddenProfile as keyof typeof data]
 
-    // Check required profile
+    // Kiểm tra required profile
     if (!requiredProfile) {
       ctx.addIssue({
         code: 'custom',
@@ -41,7 +41,7 @@ export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithPr
       })
     }
 
-    // Check forbidden profile
+    // Kiểm tra forbidden profile
     if (forbiddenProfile) {
       ctx.addIssue({
         code: 'custom',
@@ -50,7 +50,7 @@ export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithPr
       })
     }
   } else {
-    // For other roles, no profiles allowed
+    // Với các role khác, không được có bất kỳ profile nào
     const profiles: Array<'trainerProfile' | 'traineeProfile'> = ['trainerProfile', 'traineeProfile']
     profiles.forEach((profile) => {
       if (data[profile]) {
