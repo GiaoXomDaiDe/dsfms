@@ -1,6 +1,8 @@
 import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common'
+import { NodemailerService } from '~/routes/email/nodemailer.service'
 import {
   CannotUpdateOrDeleteYourselfException,
+  DefaultRoleValidationException,
   RoleNotFoundException,
   UserAlreadyExistsException,
   UserIsNotDisabledException,
@@ -24,7 +26,6 @@ import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
-import { NodemailerService } from '~/routes/email/nodemailer.service'
 
 @Injectable()
 export class UserService {
@@ -134,15 +135,9 @@ export class UserService {
       try {
         const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ')
         const plainPassword = eid + envConfig.PASSWORD_SECRET
-        
-        await this.nodemailerService.sendNewUserAccountEmail(
-          data.email,
-          eid,
-          plainPassword,
-          fullName,
-          targetRole.name
-        )
-        
+
+        await this.nodemailerService.sendNewUserAccountEmail(data.email, eid, plainPassword, fullName, targetRole.name)
+
         console.log(`Welcome email sent successfully to ${data.email}`)
       } catch (emailError) {
         // Log email error but don't fail the user creation
@@ -163,12 +158,12 @@ export class UserService {
   }
 
   /**
-   * Bulk create users with optimized performance
-   * Features:
-   * - Parallel role validation and EID generation
-   * - Parallel password hashing
-   * - Validation of role permissions
-   * - Memory-efficient processing
+   * Tạo mới nhiều người dùng cùng lúc (bulk create).
+   * Chỉ admin mới được phép tạo user có role là admin.
+   * - Kiểm tra hợp lệ profile, department cho từng user
+   * - Sinh eid theo role (tối ưu sinh nhiều eid cùng lúc)
+   * - Hash password
+   * - Gửi email chào mừng
    */
 
   async createBulk({
@@ -183,10 +178,10 @@ export class UserService {
     try {
       const users = data.users
 
-      // Step 1: Validate all roles and profile compatibility in parallel
+      // Bước 1: Validate tất cả các role và tính hợp lệ của profile
       const roleValidationPromises = users.map(async (userData, index) => {
         try {
-          // Validate role permissions first
+          // Kiểm tra role đang chỉnh có quyền ko
           await this.verifyRole({
             roleNameAgent: createdByRoleName,
             roleIdTarget: userData.role.id
@@ -197,7 +192,7 @@ export class UserService {
             throw new Error(`Role not found for user at index ${index}`)
           }
 
-          //Kiểm tra departmentId dựa trên role
+          // Kiểm tra departmentId có tồn tại không
           if (userData.departmentId) {
             if (targetRole.name !== RoleName.DEPARTMENT_HEAD && targetRole.name !== RoleName.TRAINER) {
               throw new Error(
@@ -205,14 +200,15 @@ export class UserService {
               )
             }
           }
-          // Validate profile data matches role
+
+          // Kiểm tra profile có đúng không
           this.validateProfileDataForRole(targetRole.name, userData, index)
 
           return { index, targetRole, success: true }
         } catch (error) {
           return {
             index,
-            error: error instanceof Error ? error.message : 'Role validation failed',
+            error: error instanceof Error ? error.message : DefaultRoleValidationException.message,
             success: false
           }
         }
@@ -220,14 +216,14 @@ export class UserService {
 
       const roleValidationResults = await Promise.all(roleValidationPromises)
 
-      // Filter out failed validations
+      // Lọc ra những thằng ko hợp lệ và hợp lệ
       const validUsers: Array<{
         userData: CreateUserBodyWithProfileType
         roleName: string
         index: number
       }> = []
 
-      const failedValidations: Array<{
+      const invalidUsers: Array<{
         index: number
         error: string
         userData: CreateUserBodyWithProfileType
@@ -241,7 +237,7 @@ export class UserService {
             index: result.index
           })
         } else if (!result.success && 'error' in result && result.error) {
-          failedValidations.push({
+          invalidUsers.push({
             index: result.index,
             error: result.error,
             userData: users[result.index]
@@ -252,7 +248,7 @@ export class UserService {
       if (validUsers.length === 0) {
         return {
           success: [],
-          failed: failedValidations,
+          failed: invalidUsers,
           summary: {
             total: users.length,
             successful: 0,
@@ -261,7 +257,7 @@ export class UserService {
         }
       }
 
-      // Step 2: Group users by role to generate EIDs efficiently
+      // Bước 2: Gom nhóm người dùng theo role để sinh EID tối ưu
       const usersByRole = new Map<string, Array<{ userData: CreateUserBodyWithProfileType; index: number }>>()
 
       validUsers.forEach(({ userData, roleName, index }) => {
@@ -271,30 +267,28 @@ export class UserService {
         usersByRole.get(roleName)!.push({ userData, index })
       })
 
-      // Step 3: Generate EIDs in bulk for each role and process users
+      // Bước 3: Sinh EIDs hàng loạt cho từng role và xử lý người dùng
       const processedUsersData = []
       const eidGenerationErrors = []
 
       for (const [roleName, usersForRole] of usersByRole) {
         try {
-          // Generate bulk EIDs for this role
+          // Tạo số lượng EID cần thiết cho role này
           const count = usersForRole.length
           const generatedEids = await this.eidService.generateEid({ roleName, count })
-
-          // generateEid returns string[] when count is provided
           const eids = Array.isArray(generatedEids) ? generatedEids : [generatedEids]
 
           if (eids.length !== count) {
             throw new Error(`Expected ${count} EIDs but got ${eids.length}`)
           }
 
-          // Process each user with their assigned EID
+          // Gán EID cho từng người dùng
           for (let i = 0; i < usersForRole.length; i++) {
             const { userData, index } = usersForRole[i]
             const eid = eids[i]
 
             try {
-              // Hash password with the assigned EID
+              // Hash mật khẩu
               const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
 
               const { trainerProfile, traineeProfile, role, ...userBasicData } = userData
@@ -318,7 +312,6 @@ export class UserService {
             }
           }
         } catch (error) {
-          // If bulk generation fails for this role, add all users to failed
           usersForRole.forEach(({ userData, index }) => {
             eidGenerationErrors.push({
               index,
@@ -329,13 +322,13 @@ export class UserService {
         }
       }
 
-      // Merge EID generation errors with validation failures
-      failedValidations.push(...eidGenerationErrors)
+      // Gộp tất cả lỗi phát sinh trong quá trình sinh EID
+      invalidUsers.push(...eidGenerationErrors)
 
       if (processedUsersData.length === 0) {
         return {
           success: [],
-          failed: failedValidations,
+          failed: invalidUsers,
           summary: {
             total: users.length,
             successful: 0,
@@ -344,10 +337,9 @@ export class UserService {
         }
       }
 
-      // Step 4: Sort processed users back to original order
+      // Bước 4: Sắp xếp lại theo thứ tự ban đầu của input
       processedUsersData.sort((a, b) => a.originalIndex - b.originalIndex)
 
-      // Remove originalIndex before sending to repository
       const finalUsersData = processedUsersData.map(({ originalIndex, ...userData }) => userData)
 
       try {
@@ -357,17 +349,17 @@ export class UserService {
         })
 
         // Merge all failures
-        bulkResult.failed.push(...failedValidations)
-        bulkResult.summary.failed += failedValidations.length
+        bulkResult.failed.push(...invalidUsers)
+        bulkResult.summary.failed += invalidUsers.length
         bulkResult.summary.total = users.length
 
         // Send welcome emails to successfully created users
         if (bulkResult.success.length > 0) {
           try {
-            const emailUsers = bulkResult.success.map(user => {
+            const emailUsers = bulkResult.success.map((user) => {
               const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
               const plainPassword = user.eid + envConfig.PASSWORD_SECRET
-              
+
               return {
                 email: user.email,
                 eid: user.eid,
@@ -376,13 +368,15 @@ export class UserService {
                 role: user.role.name
               }
             })
-            
+
             const emailResults = await this.nodemailerService.sendBulkNewUserAccountEmails(emailUsers)
-            
-            console.log(`Bulk email sending completed: ${emailResults.results.filter(r => r.success).length}/${emailResults.results.length} emails sent successfully`)
-            
+
+            console.log(
+              `Bulk email sending completed: ${emailResults.results.filter((r) => r.success).length}/${emailResults.results.length} emails sent successfully`
+            )
+
             // Log individual email failures for debugging
-            emailResults.results.forEach(result => {
+            emailResults.results.forEach((result) => {
               if (!result.success) {
                 console.error(`Failed to send welcome email to ${result.email}: ${result.message}`)
               }
@@ -409,7 +403,7 @@ export class UserService {
 
         return {
           success: [],
-          failed: [...failedValidations, ...allFailed],
+          failed: [...invalidUsers, ...allFailed],
           summary: {
             total: users.length,
             successful: 0,

@@ -657,4 +657,22 @@ export class SubjectRepo {
       }))
     }
   }
+
+  /**
+   * Đếm số lượng enrollments của subject
+   */
+  async countEnrollments(subjectId: string): Promise<number> {
+    return await this.prisma.subjectEnrollment.count({
+      where: { subjectId }
+    })
+  }
+
+  /**
+   * Đếm số lượng instructors của subject
+   */
+  async countInstructors(subjectId: string): Promise<number> {
+    return await this.prisma.subjectInstructor.count({
+      where: { subjectId }
+    })
+  }
 }

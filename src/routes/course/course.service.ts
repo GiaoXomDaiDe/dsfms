@@ -35,10 +35,7 @@ export class CourseService {
     const enhancedQuery = { ...query }
 
     if (userContext) {
-      // Department heads can only see courses in their department (unless explicitly overridden)
-      if (userContext.userRole === RoleName.DEPARTMENT_HEAD && !query.departmentId && userContext.departmentId) {
-        enhancedQuery.departmentId = userContext.departmentId
-      }
+      // No special filtering for department heads - they have general access
 
       // Trainers can see courses where they are instructors (if no department filter)
       if (userContext.userRole === RoleName.TRAINER && !query.departmentId) {
@@ -102,16 +99,9 @@ export class CourseService {
     createdByRoleName: string
     userDepartmentId?: string
   }): Promise<CourseType> {
-    // Validate permissions - only ADMIN and DEPARTMENT_HEAD can create courses
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(createdByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can create courses')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only create courses in their department
-    if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
-      if (!userDepartmentId || userDepartmentId !== data.departmentId) {
-        throw new ForbiddenException('Department heads can only create courses in their own department')
-      }
+    // Validate permissions - only ACADEMIC_DEPARTMENT can create courses
+    if (createdByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only academic department can create courses')
     }
 
     // Validate department exists
@@ -158,18 +148,9 @@ export class CourseService {
       throw CourseNotFoundException
     }
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(updatedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can update courses')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only update courses in their department
-    if (updatedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const targetDepartmentId = data.departmentId || existingCourse.departmentId
-
-      if (!userDepartmentId || userDepartmentId !== targetDepartmentId) {
-        throw new ForbiddenException('Department heads can only update courses in their own department')
-      }
+    // Validate permissions - only ACADEMIC_DEPARTMENT can update courses
+    if (updatedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only academic department can update courses')
     }
 
     // Validate new department exists if changing department
@@ -223,16 +204,9 @@ export class CourseService {
       throw CourseNotFoundException
     }
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(deletedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can delete courses')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only delete courses in their department
-    if (deletedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      if (!userDepartmentId || userDepartmentId !== existingCourse.departmentId) {
-        throw new ForbiddenException('Department heads can only delete courses in their own department')
-      }
+    // Validate permissions - only ACADEMIC_DEPARTMENT can delete courses
+    if (deletedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only academic department can delete courses')
     }
 
     // Check if course has subjects before deletion
@@ -266,16 +240,9 @@ export class CourseService {
       throw CourseNotFoundException
     }
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(archivedByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can archive courses')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only archive courses in their department
-    if (archivedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      if (!userDepartmentId || userDepartmentId !== existingCourse.departmentId) {
-        throw new ForbiddenException('Department heads can only archive courses in their own department')
-      }
+    // Validate permissions - only ACADEMIC_DEPARTMENT can archive courses
+    if (archivedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only academic department can archive courses')
     }
 
     // Archive by changing status to ARCHIVED instead of soft delete
@@ -306,21 +273,9 @@ export class CourseService {
       throw new BadRequestException('Course is not deleted')
     }
 
-    // Validate permissions
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(restoredByRoleName as any)) {
-      throw new ForbiddenException('Only administrators and department heads can restore courses')
-    }
-
-    // If user is DEPARTMENT_HEAD, validate they can only restore courses in their department
-    if (restoredByRoleName === RoleName.DEPARTMENT_HEAD) {
-      const restorer = await this.prisma.user.findUnique({
-        where: { id: restoredById },
-        select: { departmentId: true }
-      })
-
-      if (!restorer?.departmentId || restorer.departmentId !== existingCourse.departmentId) {
-        throw new ForbiddenException('Department heads can only restore courses in their own department')
-      }
+    // Validate permissions - only ACADEMIC_DEPARTMENT can restore courses
+    if (restoredByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only academic department can restore courses')
     }
 
     // Check if course code conflicts with existing active courses
@@ -366,17 +321,7 @@ export class CourseService {
     userId: string
     userRole: string
   }): Promise<DepartmentWithCoursesType> {
-    // Validate access to department
-    if (userRole === RoleName.DEPARTMENT_HEAD) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { departmentId: true }
-      })
-
-      if (!user?.departmentId || user.departmentId !== departmentId) {
-        throw new ForbiddenException('You can only access courses in your own department')
-      }
-    }
+    // No special access validation needed - all roles can view department courses
 
     // Get department details
     const department = await this.prisma.department.findUnique({
@@ -400,27 +345,28 @@ export class CourseService {
       throw DepartmentNotFoundException
     }
 
-    // Get courses for this department
+    // Get courses for this department (without pagination)
     const coursesQuery = {
       ...query,
       departmentId,
-      includeDeleted
+      includeDeleted,
+      // Use large page size to get all courses
+      page: 1,
+      limit: 1000
     }
 
-    const courses = await this.courseRepo.list(coursesQuery)
+    const coursesResult = await this.courseRepo.list(coursesQuery)
 
     return {
-      department: {
-        id: department.id,
-        name: department.name,
-        code: department.code,
-        description: department.description,
-        headUser: department.headUser,
-        isActive: department.isActive === 'ACTIVE',
-        createdAt: department.createdAt.toISOString(),
-        updatedAt: department.updatedAt.toISOString()
-      },
-      courses
+      id: department.id,
+      name: department.name,
+      code: department.code,
+      description: department.description,
+      headUser: department.headUser,
+      isActive: department.isActive === 'ACTIVE',
+      createdAt: department.createdAt.toISOString(),
+      updatedAt: department.updatedAt.toISOString(),
+      courses: coursesResult.courses
     }
   }
 
@@ -433,8 +379,13 @@ export class CourseService {
     userId: string
     userRole: string
   }): Promise<boolean> {
-    // Admins have access to all courses
+    // Admins have read access to all courses (but not management rights)
     if (userRole === RoleName.ADMINISTRATOR) {
+      return true
+    }
+
+    // Academic department has full access to all courses
+    if (userRole === RoleName.ACADEMIC_DEPARTMENT) {
       return true
     }
 
@@ -444,14 +395,9 @@ export class CourseService {
       return false
     }
 
-    // Department heads have access to courses in their department
+    // Department heads have general read access to all courses
     if (userRole === RoleName.DEPARTMENT_HEAD) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { departmentId: true }
-      })
-
-      return user?.departmentId === course.departmentId
+      return true
     }
 
     // Trainers have access to courses where they are assigned as instructors

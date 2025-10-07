@@ -216,9 +216,8 @@ export const CreateBulkUsersBodySchema = z
   })
   .strict()
   .superRefine((data, ctx) => {
-    // Additional validation for bulk operations
     data.users.forEach((user, index) => {
-      // Check for duplicate emails within the batch
+      // Kiểm tra các email trùng lặp trong cùng một batch
       const duplicateEmailIndex = data.users.findIndex(
         (otherUser, otherIndex) => otherIndex !== index && otherUser.email === user.email
       )
