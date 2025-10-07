@@ -4,9 +4,9 @@ import { PermissionType } from '~/routes/permission/permission.model'
 import { HTTPMethod, RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
-const DepartmentHeadModules = ['AUTH', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
+const DepartmentHeadModules = ['AUTH', 'ROLES', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
 
-const AcademicDepartmentModules = ['AUTH', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
+const AcademicDepartmentModules = ['AUTH', 'ROLES', 'PROFILES', 'ENROLLMENT', 'DEPARTMENTS', 'COURSES', 'SUBJECTS']
 
 const prisma = new PrismaService()
 
