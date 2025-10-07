@@ -16,7 +16,7 @@ export const UserSchema = z.object({
   gender: z.enum([GenderStatus.MALE, GenderStatus.FEMALE]),
   phoneNumber: z.string().min(9).max(15).nullable(),
   avatarUrl: z.string().nullable(),
-  departmentId: z.uuid().nullable(),
+  departmentId: z.uuid().nullable().optional(),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),

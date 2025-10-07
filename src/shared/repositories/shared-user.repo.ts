@@ -8,6 +8,7 @@ import {
 import { UserNotFoundException } from '~/routes/user/user.error'
 import { UpdateUserInternalType, UserType } from '~/routes/user/user.model'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { EidService } from '~/shared/services/eid.service'
 
@@ -45,28 +46,21 @@ export class SharedUserRepository {
     })
   }
 
-  async findUniqueIncludeProfile(where: WhereUniqueUserType): Promise<UserIncludeProfileType | null> {
+  async findUniqueIncludeProfile(
+    where: WhereUniqueUserType,
+    { includeDeleted = false }: IncludeDeletedQueryType = {}
+  ): Promise<UserIncludeProfileType | null> {
     const user = await this.prismaService.user.findFirst({
       where: {
         ...where,
-        deletedAt: null
+        deletedAt: includeDeleted ? undefined : null
       },
       include: {
         role: {
-          include: {
-            permissions: {
-              select: {
-                method: true,
-                id: true,
-                description: true,
-                isActive: true,
-                module: true,
-                name: true,
-                path: true,
-                viewModule: true,
-                viewName: true
-              }
-            }
+          select: {
+            id: true,
+            name: true,
+            description: true
           }
         },
         department: {
@@ -79,7 +73,6 @@ export class SharedUserRepository {
         traineeProfile: true
       }
     })
-    console.log(user, 'user')
     return user
   }
   async findDisableUniqueIncludeProfile(where: WhereUniqueUserType): Promise<UserIncludeProfileType | null> {

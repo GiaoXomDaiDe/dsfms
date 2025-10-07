@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
   UnprocessableEntityException
@@ -21,7 +22,6 @@ export const CannotUpdateAdminUserException = new ForbiddenException('Cannot upd
 
 export const CannotDeleteAdminUserException = new ForbiddenException('Cannot delete admin user')
 
-// Chỉ Admin mới có thể đặt role là ADMIN
 export const CannotSetAdminRoleToUserException = new ForbiddenException('Cannot set admin role to user')
 
 export const RoleNotFoundException = new UnprocessableEntityException([
@@ -31,10 +31,68 @@ export const RoleNotFoundException = new UnprocessableEntityException([
   }
 ])
 
-// Không thể xóa hoặc cập nhật chính bản thân mình
 export const CannotUpdateOrDeleteYourselfException = new ForbiddenException('Cannot update or delete yourself')
 
+export const InvalidDepartmentAssignmentException = (roleName: string) =>
+  new ForbiddenException(`Only TRAINER or DEPARTMENT_HEAD can be assigned to a department. Current role: ${roleName}`)
+
+export const RequiredProfileMissingException = (roleName: string, requiredProfile: string) =>
+  new ConflictException(`Role ${roleName} must have ${requiredProfile}. Please provide profile information.`)
+
+export const ForbiddenProfileException = (roleName: string, forbiddenProfile: string, message: string) =>
+  new ConflictException(`Role ${roleName} cannot have ${forbiddenProfile}. ${message}`)
+
+export const TrainerProfileNotAllowedException = (roleName: string) =>
+  new ConflictException(
+    `Role ${roleName} cannot have trainerProfile. Only TRAINER role is allowed to have trainer profile.`
+  )
+
+export const TraineeProfileNotAllowedException = (roleName: string) =>
+  new ConflictException(
+    `Role ${roleName} cannot have traineeProfile. Only TRAINEE role is allowed to have trainee profile.`
+  )
+
+export const OnlyAdminCanManageAdminRoleException = new ForbiddenException(
+  'Only ADMINISTRATOR can create, update, or delete users with ADMINISTRATOR role.'
+)
+
+export const BulkRoleNotFoundAtIndexException = (index: number) => `Role not found for user at index ${index}`
+
+export const BulkInvalidDepartmentAssignmentException = (index: number, roleName: string) =>
+  `User at index ${index}: Department assignment not allowed for ${roleName} role. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
+
+export const BulkRequiredProfileMissingException = (
+  userIndex: number,
+  roleName: string,
+  requiredProfile: string,
+  message: string
+) => `User at index ${userIndex}: Role ${roleName} must have ${requiredProfile}. ${message}`
+
+export const BulkForbiddenProfileException = (
+  userIndex: number,
+  roleName: string,
+  forbiddenProfile: string,
+  message: string
+) => `User at index ${userIndex}: Role ${roleName} cannot have ${forbiddenProfile}. ${message}`
+
+export const BulkTrainerProfileNotAllowedException = (userIndex: number, roleName: string) =>
+  `User at index ${userIndex}: Role ${roleName} cannot have trainerProfile. Only TRAINER role is allowed to have trainer profile.`
+
+export const BulkTraineeProfileNotAllowedException = (userIndex: number, roleName: string) =>
+  `User at index ${userIndex}: Role ${roleName} cannot have traineeProfile. Only TRAINEE role is allowed to have trainee profile.`
+
 export const UserIsNotDisabledException = new BadRequestException('User is not disabled')
+
+// Department validation exceptions
+export const DepartmentNotFoundException = new UnprocessableEntityException([
+  {
+    message: 'Department not found',
+    path: 'departmentId'
+  }
+])
+
+export const BulkDepartmentNotFoundAtIndexException = (index: number, departmentId: string) =>
+  `User at index ${index}: Department with ID "${departmentId}" not found`
 
 export class BulkUserCreationException extends BadRequestException {
   constructor(message: string, details?: any) {
