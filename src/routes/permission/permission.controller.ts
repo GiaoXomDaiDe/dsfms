@@ -18,9 +18,9 @@ export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
   @Get()
   @ZodSerializerDto(GetPermissionsResDTO)
-  list(@Query() query: GetPermissionsQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+  list(@Query() { includeDeleted }: GetPermissionsQueryDTO, @ActiveRolePermissions('name') roleName: string) {
     return this.permissionService.list({
-      includeDeleted: query.includeDeleted,
+      includeDeleted,
       userRole: roleName
     })
   }
