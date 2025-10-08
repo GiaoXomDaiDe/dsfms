@@ -1,18 +1,22 @@
 import { Injectable } from '@nestjs/common'
 import { NodemailerService } from '~/routes/email/nodemailer.service'
 import {
+  BulkDepartmentIsDisabledAtIndexException,
   BulkDepartmentNotFoundAtIndexException,
   BulkForbiddenProfileException,
   BulkRequiredProfileMissingException,
+  BulkRoleIsDisabledAtIndexException,
   BulkRoleNotFoundAtIndexException,
   BulkTraineeProfileNotAllowedException,
   BulkTrainerProfileNotAllowedException,
   CannotUpdateOrDeleteYourselfException,
   DefaultRoleValidationException,
+  DepartmentIsDisabledException,
   DepartmentNotFoundException,
   ForbiddenProfileException,
   OnlyAdminCanManageAdminRoleException,
   RequiredProfileMissingException,
+  RoleIsDisabledException,
   RoleNotFoundException,
   TraineeProfileNotAllowedException,
   TrainerProfileNotAllowedException,
@@ -28,6 +32,7 @@ import {
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { ActiveStatus } from '~/shared/constants/default.constant'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import {
   isForeignKeyConstraintPrismaError,
@@ -39,6 +44,12 @@ import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
+
+interface ProcessRoleChangeResult {
+  newRoleId: string
+  newRoleName: string
+  roleIdForPermissionCheck: string
+}
 
 @Injectable()
 export class UserService {
@@ -123,11 +134,21 @@ export class UserService {
         throw RoleNotFoundException
       }
 
-      // Kiểm tra departmentId có tồn tại không (nếu được cung cấp)
+      // Kiểm tra role có đang active không
+      if (!targetRole.isActive) {
+        throw RoleIsDisabledException
+      }
+
+      // Kiểm tra departmentId có tồn tại và active không (nếu được cung cấp)
       if (data.departmentId) {
-        const departmentExists = await this.sharedDepartmentRepository.exists(data.departmentId)
-        if (!departmentExists) {
+        const department = await this.sharedDepartmentRepository.findById(data.departmentId)
+        if (!department) {
           throw DepartmentNotFoundException
+        }
+
+        // Kiểm tra department có đang active không
+        if (department.isActive !== ActiveStatus.ACTIVE) {
+          throw DepartmentIsDisabledException
         }
       }
 
@@ -215,11 +236,21 @@ export class UserService {
             throw new Error(BulkRoleNotFoundAtIndexException(index))
           }
 
-          // Kiểm tra departmentId có tồn tại không
+          // Kiểm tra role có đang active không
+          if (!targetRole.isActive) {
+            throw new Error(BulkRoleIsDisabledAtIndexException(index, targetRole.name))
+          }
+
+          // Kiểm tra departmentId có tồn tại và active không
           if (userData.departmentId) {
-            const departmentExists = await this.sharedDepartmentRepository.exists(userData.departmentId)
-            if (!departmentExists) {
+            const department = await this.sharedDepartmentRepository.findById(userData.departmentId)
+            if (!department) {
               throw new Error(BulkDepartmentNotFoundAtIndexException(index, userData.departmentId))
+            }
+
+            // Kiểm tra department có đang active không
+            if (department.isActive !== ActiveStatus.ACTIVE) {
+              throw new Error(BulkDepartmentIsDisabledAtIndexException(index, department.name))
             }
           }
 
@@ -375,7 +406,7 @@ export class UserService {
         bulkResult.summary.failed += invalidUsers.length
         bulkResult.summary.total = users.length
 
-        // Send welcome emails to successfully created users
+        // Gửi email chào mừng cho những user tạo thành công
         if (bulkResult.success.length > 0) {
           try {
             const emailUsers = bulkResult.success.map((user) => {
@@ -397,14 +428,14 @@ export class UserService {
               `Bulk email sending completed: ${emailResults.results.filter((r) => r.success).length}/${emailResults.results.length} emails sent successfully`
             )
 
-            // Log individual email failures for debugging
+            // Log từng lỗi email để debug
             emailResults.results.forEach((result) => {
               if (!result.success) {
                 console.error(`Failed to send welcome email to ${result.email}: ${result.message}`)
               }
             })
           } catch (emailError) {
-            // Log email error but don't fail the user creation
+            // Log lỗi gửi email nhưng không làm thất bại việc tạo user
             console.error('Failed to send bulk welcome emails:', emailError)
           }
         }
@@ -413,7 +444,7 @@ export class UserService {
       } catch (dbError) {
         console.error('Database error in bulk creation:', dbError)
 
-        // Convert all processed users to failed status
+        // Nếu lỗi là do ràng buộc duy nhất (unique constraint) thì báo lỗi trùng lặp
         const allFailed = processedUsersData.map(({ originalIndex, eid }) => ({
           index: originalIndex,
           error:
@@ -436,7 +467,7 @@ export class UserService {
     } catch (error) {
       console.error('Bulk user creation failed:', error)
 
-      // Return all as failed if there's a critical error
+      // Trả ra tất cả là thất bại nếu có lỗi nghiêm trọng
       return {
         success: [],
         failed: data.users.map((userData, index) => ({
@@ -516,16 +547,23 @@ export class UserService {
     return true
   }
 
+  /**
+   * Cập nhật thông tin người dùng.
+   * Chỉ ADMINISTRATOR mới được phép update user bị disabled.
+   * Ví dụ: PUT /users/:userId?includeDeleted=true
+   */
   async update({
     id,
     data,
     updatedById,
-    updatedByRoleName
+    updatedByRoleName,
+    includeDeleted = false
   }: {
     id: string
     data: UpdateUserBodyWithProfileType
     updatedById: string
     updatedByRoleName: string
+    includeDeleted?: boolean
   }) {
     try {
       // Không thể cập nhật chính mình
@@ -534,42 +572,48 @@ export class UserService {
         userTargetId: id
       })
 
-      // Lấy roleId ban đầu của người được update để kiểm tra xem liệu người update có quyền update không
-      // Không dùng data.roleId vì dữ liệu này có thể bị cố tình truyền sai
-      const roleIdTarget = await this.getRoleIdByUserId(id)
-      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id })
+      // Bước 2: Lấy thông tin user hiện tại
+      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(
+        { id },
+        { includeDeleted: updatedByRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false }
+      )
       if (!currentUser) {
         throw UserNotFoundException
       }
-      await this.verifyRole({
-        roleNameAgent: updatedByRoleName,
-        roleIdTarget
-      })
-      const { role, trainerProfile, traineeProfile, ...userData } = data
 
-      // Validate department exists (if being updated)
-      if (userData.departmentId !== undefined && userData.departmentId !== null) {
-        const departmentExists = await this.sharedDepartmentRepository.exists(userData.departmentId)
-        if (!departmentExists) {
+      // Bước 3: Xử lý role change logic
+      const { newRoleId, newRoleName } = await this.processRoleChange({
+        data,
+        currentUser,
+        updatedByRoleName
+      })
+
+      // Bước 4: Kiểm tra department exists và active (nếu có)
+      if (data.departmentId !== undefined && data.departmentId !== null) {
+        const department = await this.sharedDepartmentRepository.findById(data.departmentId)
+        if (!department) {
           throw DepartmentNotFoundException
         }
-      }
 
-      const targetRoleName = role
-        ? (await this.sharedRoleRepository.findRolebyId(role.id))?.name || currentUser.role.name
-        : currentUser.role.name
-      // Update user with profile
+        // Kiểm tra department có đang active không
+        if (department.isActive !== 'ACTIVE') {
+          throw DepartmentIsDisabledException
+        }
+      }
+      // Bước 5: Thực hiện update
+      const { role, trainerProfile, traineeProfile, ...userData } = data
       const updatedUser = await this.sharedUserRepository.updateWithProfile(
         { id },
         {
           updatedById,
           userData: {
             ...userData,
-            roleId: role?.id || currentUser.role.id
+            roleId: newRoleId
           },
-          newRoleName: targetRoleName,
+          newRoleName,
           trainerProfile,
-          traineeProfile
+          traineeProfile,
+          includeDeleted: updatedByRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false
         }
       )
 
@@ -588,10 +632,73 @@ export class UserService {
     }
   }
 
-  private async getRoleIdByUserId(userId: string) {
-    const currentUser = await this.sharedUserRepository.findUnique({
-      id: userId
+  /**
+   * Xử lý logic thay đổi role: validation, permission check
+   */
+  private async processRoleChange({
+    data,
+    currentUser,
+    updatedByRoleName
+  }: {
+    data: UpdateUserBodyWithProfileType
+    currentUser: any
+    updatedByRoleName: string
+  }): Promise<ProcessRoleChangeResult> {
+    const { role: inputRole, trainerProfile, traineeProfile } = data
+
+    // Case 1: Không thay đổi role
+    if (!inputRole?.id || inputRole.id === currentUser.role.id) {
+      await this.verifyRole({
+        roleNameAgent: updatedByRoleName,
+        roleIdTarget: currentUser.role.id
+      })
+
+      return {
+        newRoleId: currentUser.role.id,
+        newRoleName: currentUser.role.name,
+        roleIdForPermissionCheck: currentUser.role.id
+      }
+    }
+
+    // Case 2: Có thay đổi role
+    // Lấy thông tin role mới
+    const newRole = await this.sharedRoleRepository.findRolebyId(inputRole.id)
+    if (!newRole) {
+      throw RoleNotFoundException
+    }
+
+    // Kiểm tra role mới có đang active không
+    if (!newRole.isActive) {
+      throw RoleIsDisabledException
+    }
+
+    // Validate profile với role mới
+    this.validateProfileData(newRole.name, {
+      role: inputRole,
+      trainerProfile,
+      traineeProfile
+    } as CreateUserBodyWithProfileType)
+
+    // Kiểm tra quyền với role mới
+    await this.verifyRole({
+      roleNameAgent: updatedByRoleName,
+      roleIdTarget: inputRole.id
     })
+
+    return {
+      newRoleId: inputRole.id,
+      newRoleName: newRole.name,
+      roleIdForPermissionCheck: inputRole.id
+    }
+  }
+
+  private async getRoleIdByUserId({ userId, includeDeleted }: { userId: string; includeDeleted: boolean }) {
+    const currentUser = await this.sharedUserRepository.findUnique(
+      {
+        id: userId
+      },
+      { includeDeleted }
+    )
     if (!currentUser) {
       throw UserNotFoundException
     }
@@ -612,10 +719,29 @@ export class UserService {
         userTargetId: id
       })
 
-      const roleIdTarget = await this.getRoleIdByUserId(id)
+      // Lấy thông tin đầy đủ user thay vì chỉ roleId
+      // Chỉ admin mới có thể thao tác với user bị disabled (nếu cần)
+      const user = await this.sharedUserRepository.findUniqueIncludeProfile(
+        { id },
+        { includeDeleted: false } // Chỉ delete user đang active
+      )
+      if (!user) {
+        throw UserNotFoundException
+      }
+
+      // Kiểm tra role của user có đang active không
+      if (!user.role.isActive) {
+        throw RoleIsDisabledException
+      }
+
+      // Kiểm tra department của user có đang active không (nếu có)
+      if (user.department && user.department.isActive !== ActiveStatus.ACTIVE) {
+        throw DepartmentIsDisabledException
+      }
+
       await this.verifyRole({
         roleNameAgent: deletedByRoleName,
-        roleIdTarget
+        roleIdTarget: user.role.id
       })
 
       await this.userRepo.delete({
@@ -634,33 +760,48 @@ export class UserService {
   }
   async enable({ id, enabledById, enabledByRoleName }: { id: string; enabledById: string; enabledByRoleName: string }) {
     try {
-      //Không thể enable bản thân
+      // Không thể enable bản thân
       this.verifyYourself({
         userAgentId: enabledById,
         userTargetId: id
       })
 
-      //Lấy ra user để kiểm tra quyền
-      const user = await this.sharedUserRepository.findDisableUniqueIncludeProfile({ id })
-      if (!user) throw UserNotFoundException
+      // Lấy thông tin user (bao gồm cả disabled users) để kiểm tra quyền
+      const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: true })
+      if (!user) {
+        throw UserNotFoundException
+      }
 
-      //Kiểm tra quyền
+      // Kiểm tra role của user có đang active không
+      if (!user.role.isActive) {
+        throw RoleIsDisabledException
+      }
+
+      // Kiểm tra department của user có đang active không (nếu có)
+      if (user.department && user.department.isActive !== ActiveStatus.ACTIVE) {
+        throw DepartmentIsDisabledException
+      }
+
+      // Kiểm tra quyền
       await this.verifyRole({
         roleNameAgent: enabledByRoleName,
-        roleIdTarget: user.roleId
+        roleIdTarget: user.role.id
       })
 
-      //Kiểm tra xem trường hợp đã enabled r
+      // Kiểm tra xem user có thực sự bị disabled không
       if (user.status !== 'DISABLED' && user.deletedAt === null) {
         throw UserIsNotDisabledException
       }
+
       // Thực hiện enable và active lại profile nếu có
-      const enableUser = await this.userRepo.enable({
+      await this.userRepo.enable({
         id,
         enabledById
       })
-      console.log('user', user)
-      return enableUser
+
+      return {
+        message: 'Enable successfully'
+      }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw UserNotFoundException

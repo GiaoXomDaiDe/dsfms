@@ -37,7 +37,8 @@ export class SharedDepartmentRepository {
         id: true,
         name: true,
         code: true,
-        headUserId: true
+        headUserId: true,
+        isActive: true
       }
     })
   }

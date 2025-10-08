@@ -9,6 +9,19 @@ import {
   UpdateTrainerProfileSchema
 } from '~/routes/profile/profile.model'
 import { RoleSchema } from '~/routes/role/role.model'
+import {
+  AtLeastOneUserRequiredMessage,
+  DepartmentAssignmentNotAllowedMessage,
+  DepartmentNotAllowedForRoleMessage,
+  DepartmentRequiredForDepartmentHeadMessage,
+  DepartmentRequiredForTrainerMessage,
+  DuplicateEmailInBatchMessage,
+  InvalidRoleIdMessage,
+  InvalidRoleNameMessage,
+  InvalidRoleNameUpdateMessage,
+  MaximumUsersAllowedMessage,
+  ProfileNotAllowedForRoleMessage
+} from '~/routes/user/user.error'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { validateRoleProfile } from '~/shared/helper'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
@@ -75,7 +88,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
     if (!data.role.name) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Invalid Role Name',
+        message: InvalidRoleNameMessage,
         path: ['roleId']
       })
       return
@@ -84,7 +97,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
     if (!data.role.id) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Invalid role ID',
+        message: InvalidRoleIdMessage,
         path: ['roleId']
       })
       return
@@ -94,7 +107,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
       if (!data.departmentId) {
         ctx.addIssue({
           code: 'custom',
-          message: 'Department ID is required for DEPARTMENT_HEAD role',
+          message: DepartmentRequiredForDepartmentHeadMessage,
           path: ['departmentId']
         })
       }
@@ -102,7 +115,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
       if (!data.departmentId) {
         ctx.addIssue({
           code: 'custom',
-          message: 'Department ID is required for TRAINER role',
+          message: DepartmentRequiredForTrainerMessage,
           path: ['departmentId']
         })
       }
@@ -110,7 +123,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
       if (data.departmentId) {
         ctx.addIssue({
           code: 'custom',
-          message: `Department ID is not allowed for ${data.role.name} role. Only TRAINER and DEPARTMENT_HEAD roles can be assigned to a department.`,
+          message: DepartmentNotAllowedForRoleMessage(data.role.name),
           path: ['departmentId']
         })
       }
@@ -119,7 +132,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
     validateRoleProfile(data.role.name, data, ctx)
   })
 
-//Áp dụng cho Response của api GET('profile') và GET('users/:userId)
+// Schema cho Response của API GET('profile') và GET('users/:userId')
 export const GetUserResSchema = UserSchema.omit({
   passwordHash: true,
   signatureImageUrl: true,
@@ -129,18 +142,20 @@ export const GetUserResSchema = UserSchema.omit({
   role: RoleSchema.pick({
     id: true,
     name: true,
-    description: true
+    description: true,
+    isActive: true
   }),
   department: DepartmentSchema.pick({
     id: true,
-    name: true
+    name: true,
+    isActive: true
   }).nullable(),
   trainerProfile: TrainerProfileSchema.nullable().optional(),
   traineeProfile: TraineeProfileSchema.nullable().optional()
 })
 
 /**
- * Áp dụng cho Response của api PUT('profile') và PUT('users/:userId')
+ * Schema cho Response của API PUT('profile') và PUT('users/:userId')
  */
 export const UpdateUserResSchema = UserSchema.omit({
   passwordHash: true,
@@ -150,11 +165,13 @@ export const UpdateUserResSchema = UserSchema.omit({
 }).extend({
   role: RoleSchema.pick({
     id: true,
-    name: true
+    name: true,
+    isActive: true
   }),
   department: DepartmentSchema.pick({
     id: true,
-    name: true
+    name: true,
+    isActive: true
   }).nullable(),
   trainerProfile: TrainerProfileSchema.nullable().optional(),
   traineeProfile: TraineeProfileSchema.nullable().optional()
@@ -162,77 +179,81 @@ export const UpdateUserResSchema = UserSchema.omit({
 
 export const UpdateUserBodySchema = CreateUserBodySchema.partial()
 
-export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.extend({
-  trainerProfile: UpdateTrainerProfileSchema.optional(),
-  traineeProfile: UpdateTraineeProfileSchema.optional(),
-  role: RoleSchema.pick({
-    id: true,
-    name: true
-  })
+export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.omit({
+  roleId: true
 })
-  .omit({
-    roleId: true
+  .extend({
+    trainerProfile: UpdateTrainerProfileSchema.optional(),
+    traineeProfile: UpdateTraineeProfileSchema.optional(),
+    role: RoleSchema.pick({
+      id: true,
+      name: true
+    }).optional()
   })
+
   .strict()
   .superRefine((data, ctx) => {
-    if (!data.role?.id) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Invalid role ID',
-        path: ['roleId']
-      })
-      return
-    }
-
-    if (!data.role?.name) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Invalid role name',
-        path: ['role', 'name']
-      })
-      return
-    }
-
-    // Validate department requirements based on role (for updates)
-    if (data.role.name === 'DEPARTMENT_HEAD' || data.role.name === 'TRAINER') {
-      // For these roles, if departmentId is provided it should be valid
-      // If not provided, it means no change to department assignment
-    } else {
-      // Other roles should not have departmentId
-      if (data.departmentId !== undefined && data.departmentId !== null) {
+    // Chỉ validate role khi có role data
+    if (data.role) {
+      if (!data.role.id) {
         ctx.addIssue({
           code: 'custom',
-          message: `Department assignment is not allowed for ${data.role.name} role. Only TRAINER and DEPARTMENT_HEAD roles can be assigned to a department.`,
-          path: ['departmentId']
+          message: InvalidRoleIdMessage,
+          path: ['role', 'id']
         })
+        return
       }
-    }
 
-    // For updates, only check forbidden profiles (not required)
-    const rules = ROLE_PROFILE_RULES[data.role.name as keyof typeof ROLE_PROFILE_RULES]
-
-    if (rules) {
-      // Fix: Type-safe access with proper key checking
-      const forbiddenKey = rules.forbiddenProfile as keyof typeof data
-      if (forbiddenKey in data && data[forbiddenKey]) {
+      if (!data.role.name) {
         ctx.addIssue({
           code: 'custom',
-          message: rules.forbiddenMessage,
-          path: [rules.forbiddenProfile]
+          message: InvalidRoleNameUpdateMessage,
+          path: ['role', 'name']
         })
+        return
       }
-    } else {
-      // Other roles shouldn't have any profile
-      const profileKeys: Array<'trainerProfile' | 'traineeProfile'> = ['trainerProfile', 'traineeProfile']
-      profileKeys.forEach((profile) => {
-        if (profile in data && data[profile]) {
+
+      // Validate department assignment chỉ khi có role và departmentId được cung cấp
+      if (data.departmentId !== undefined) {
+        if (data.role.name === 'DEPARTMENT_HEAD' || data.role.name === 'TRAINER') {
+          // Các role này được phép có departmentId (có thể null để remove)
+        } else {
+          // Các role khác không được có departmentId (phải null hoặc undefined)
+          if (data.departmentId !== null) {
+            ctx.addIssue({
+              code: 'custom',
+              message: DepartmentAssignmentNotAllowedMessage(data.role.name),
+              path: ['departmentId']
+            })
+          }
+        }
+      }
+
+      const rules = ROLE_PROFILE_RULES[data.role.name as keyof typeof ROLE_PROFILE_RULES]
+
+      if (rules) {
+        // Kiểm tra forbidden profile - chỉ khi profile được cung cấp
+        const forbiddenKey = rules.forbiddenProfile as keyof typeof data
+        if (forbiddenKey in data && data[forbiddenKey] !== undefined && data[forbiddenKey] !== null) {
           ctx.addIssue({
             code: 'custom',
-            message: `${profile} is not allowed for ${data.role.name} role`,
-            path: [profile]
+            message: rules.forbiddenMessage,
+            path: [rules.forbiddenProfile]
           })
         }
-      })
+      } else if (data.role.name !== 'TRAINER' && data.role.name !== 'TRAINEE') {
+        // Các role khác (ADMIN, DEPARTMENT_HEAD) không được có bất kỳ profile nào
+        const profileKeys: Array<'trainerProfile' | 'traineeProfile'> = ['trainerProfile', 'traineeProfile']
+        profileKeys.forEach((profile) => {
+          if (profile in data && data[profile] !== undefined && data[profile] !== null) {
+            ctx.addIssue({
+              code: 'custom',
+              message: ProfileNotAllowedForRoleMessage(profile, data.role!.name),
+              path: [profile]
+            })
+          }
+        })
+      }
     }
   })
 
@@ -240,8 +261,8 @@ export const CreateBulkUsersBodySchema = z
   .object({
     users: z
       .array(CreateUserBodyWithProfileSchema)
-      .min(1, 'At least one user is required')
-      .max(100, 'Maximum 100 users allowed per batch')
+      .min(1, AtLeastOneUserRequiredMessage)
+      .max(100, MaximumUsersAllowedMessage)
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -254,7 +275,7 @@ export const CreateBulkUsersBodySchema = z
       if (duplicateEmailIndex !== -1) {
         ctx.addIssue({
           code: 'custom',
-          message: `Duplicate email found: ${user.email} (users at index ${index} and ${duplicateEmailIndex})`,
+          message: DuplicateEmailInBatchMessage(user.email, index, duplicateEmailIndex),
           path: ['users', index, 'email']
         })
       }
