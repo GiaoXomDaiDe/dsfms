@@ -38,11 +38,11 @@ const DEFAULT_USERS = [
   },
   {
     roleName: RoleName.ACADEMIC_DEPARTMENT,
-    email: envConfig.DEPARTMENT_HEAD_EMAIL,
-    firstName: envConfig.DEPARTMENT_HEAD_FIRST_NAME,
-    middleName: envConfig.DEPARTMENT_HEAD_MIDDLE_NAME,
-    lastName: envConfig.DEPARTMENT_HEAD_LAST_NAME,
-    password: envConfig.DEPARTMENT_HEAD_PASSWORD,
+    email: envConfig.ACADEMIC_DEPARTMENT_EMAIL,
+    firstName: envConfig.ACADEMIC_DEPARTMENT_FIRST_NAME,
+    middleName: envConfig.ACADEMIC_DEPARTMENT_MIDDLE_NAME,
+    lastName: envConfig.ACADEMIC_DEPARTMENT_LAST_NAME,
+    password: envConfig.ACADEMIC_DEPARTMENT_PASSWORD,
     gender: GenderStatus.MALE
   }
 ]
