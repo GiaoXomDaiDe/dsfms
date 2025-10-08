@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
-import { UserNotFoundException } from '~/routes/user/user.error'
+import {
+  BulkDuplicateDataFoundMessage,
+  BulkEmailAlreadyExistsMessage,
+  BulkUnknownErrorMessage,
+  UserNotFoundException
+} from '~/routes/user/user.error'
 import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
@@ -441,7 +446,7 @@ export class UserRepo {
             }
           },
           {
-            timeout: 30000 // 30 seconds timeout for large batches
+            timeout: 30000
           }
         )
 
@@ -454,7 +459,6 @@ export class UserRepo {
           // Extract original user data without internal fields
           const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
 
-          // Reconstruct role object for failed response
           const failedUserData = {
             ...originalUserData,
             role: { id: roleId, name: roleName }
@@ -462,7 +466,7 @@ export class UserRepo {
 
           results.failed.push({
             index: originalIndex,
-            error: `Email already exists: ${originalUserData.email}`,
+            error: BulkEmailAlreadyExistsMessage(originalUserData.email),
             userData: failedUserData
           })
         })
@@ -479,12 +483,12 @@ export class UserRepo {
             role: { id: roleId, name: roleName }
           }
 
-          let errorMessage = 'Unknown error'
+          let errorMessage = BulkUnknownErrorMessage
           if (error instanceof Error) {
             if (error.message.includes('Unique constraint failed on the fields: (`email`)')) {
-              errorMessage = `Email already exists: ${originalUserData.email}`
+              errorMessage = BulkEmailAlreadyExistsMessage(originalUserData.email)
             } else if (error.message.includes('Unique constraint failed')) {
-              errorMessage = 'Duplicate data found'
+              errorMessage = BulkDuplicateDataFoundMessage
             } else {
               errorMessage = error.message
             }

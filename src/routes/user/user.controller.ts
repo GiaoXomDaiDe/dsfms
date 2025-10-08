@@ -76,6 +76,7 @@ export class UserController {
   update(
     @Body() body: UpdateUserBodyWithProfileDTO,
     @Param() params: GetUserParamsDTO,
+    @Query() { includeDeleted }: GetUsersQueryDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
   ) {
@@ -83,7 +84,8 @@ export class UserController {
       data: body,
       id: params.userId,
       updatedById: userId,
-      updatedByRoleName: roleName
+      updatedByRoleName: roleName,
+      includeDeleted
     })
   }
 
@@ -101,7 +103,7 @@ export class UserController {
     })
   }
   @Patch(':userId/enable')
-  @ZodSerializerDto(UpdateUserResDTO)
+  @ZodSerializerDto(MessageResDTO)
   enable(
     @Param() param: GetUserParamsDTO,
     @ActiveUser('userId') userId: string,
