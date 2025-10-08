@@ -58,7 +58,18 @@ jobs:
             cd ~/dsfms || { echo "Project directory not found, cloning..."; git clone https://github.com/GiaoXomDaiDe/dsfms.git ~/dsfms; cd ~/dsfms; }
             git fetch --all
             git reset --hard origin/main
-            echo "✅ Source code updated to latest version"
+            echo "Source code updated to latest version"
+
+            # DEBUG: Check current .env file
+            echo "DEBUG: Current directory: $(pwd)"
+            echo "DEBUG: .env file exists: $(ls -la .env 2>/dev/null || echo 'NOT FOUND')"
+            echo "DEBUG: .env file content:"
+            cat .env 2>/dev/null || echo "Cannot read .env file"
+            echo "DEBUG: Number of lines in .env: $(wc -l < .env 2>/dev/null || echo '0')"
+            echo "DEBUG: Checking for ACADEMIC_DEPARTMENT_MIDDLE_NAME:"
+            grep "ACADEMIC_DEPARTMENT_MIDDLE_NAME" .env 2>/dev/null || echo "Variable NOT FOUND in .env"
+            echo "DEBUG: All ACADEMIC variables in .env:"
+            grep "ACADEMIC" .env 2>/dev/null || echo "No ACADEMIC variables found"
 
             # Login to Docker Hub on server
             echo "Logging into Docker Hub..."
@@ -80,9 +91,21 @@ jobs:
             # Wait a moment for cleanup
             sleep 3
 
-            # Start new container
+            # DEBUG: Final check before starting container
+            echo "DEBUG: Final .env file check:"
+            echo "File path: $(pwd)/.env"
+            echo "File permissions: $(ls -la .env)"
+            echo "Last 5 lines of .env:"
+            tail -5 .env
+            
+            # Start new container with explicit .env file
             echo "Starting new container..."
-            docker run -d -p 4000:4000 --name dsfms --restart unless-stopped thisishuy/dsfms:v0
+            docker run -d \
+              --name dsfms \
+              --restart unless-stopped \
+              -p 4000:4000 \
+              --env-file $(pwd)/.env \
+              thisishuy/dsfms:v0
 
             #Delete old images to free up space
             echo "Cleaning up old Docker images..."
@@ -94,21 +117,32 @@ jobs:
 
             # Check if container is running
             if docker ps | grep -q dsfms; then
-              echo "✅ Container is running successfully"
+              echo "Container is running successfully"
               echo "Container status:"
               docker ps | grep dsfms
               echo "Recent logs:"
               docker logs dsfms --tail 20
               
+              # DEBUG: Check environment variables inside container
+              echo "DEBUG: Environment variables inside container:"
+              docker exec dsfms env | grep -E "(ACADEMIC|ADMIN|DEPARTMENT)" 2>/dev/null || echo "Cannot access container environment"
+              
               # Test application endpoint if possible
               echo "Testing application..."
-              curl -f http://localhost:4000/health 2>/dev/null || echo "⚠️ Health check endpoint not responding yet (this is normal during startup)"
+              curl -f http://localhost:4000/health 2>/dev/null || echo "Health check endpoint not responding yet (this is normal during startup)"
             else
-              echo "❌ Container failed to start"
+              echo "Container failed to start"
               echo "All running containers:"
               docker ps -a
               echo "Container logs:"
               docker logs dsfms --tail 50 2>/dev/null || echo "No logs available"
+              
+              # DEBUG: Check if .env file is being read
+              echo "DEBUG: Checking .env file on host:"
+              echo "File exists: $(test -f .env && echo 'YES' || echo 'NO')"
+              echo "File size: $(stat -c%s .env 2>/dev/null || echo 'N/A')"
+              echo "ACADEMIC_DEPARTMENT_MIDDLE_NAME value:"
+              grep "ACADEMIC_DEPARTMENT_MIDDLE_NAME" .env || echo "NOT FOUND"
               exit 1
             fi
 
