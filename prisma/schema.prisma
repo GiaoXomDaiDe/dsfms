@@ -38,9 +38,6 @@ model User {
   updatedDepartments     Department[]        @relation("DeptUpdatedBy")
   createdGlobalFields    GlobalField[]       @relation("GlobalFieldCreatedBy")
   updatedGlobalFields    GlobalField[]       @relation("GlobalFieldUpdatedBy")
-  createdTemplateForms   TemplateForm[]      @relation("TemplateFormCreatedBy")
-  createdTemplateFields  TemplateField[]     @relation("TemplateFieldCreatedBy")
-  updatedTemplateFields  TemplateField[]     @relation("TemplateFieldUpdatedBy")
   createdPermissions     Permission[]        @relation("PermissionCreatedBy")
   deletedPermissions     Permission[]        @relation("PermissionDeletedBy")
   updatedPermissions     Permission[]        @relation("PermissionUpdatedBy")
@@ -52,6 +49,9 @@ model User {
   updatedSubjects        Subject[]           @relation("SubjectUpdatedBy")
   subjectEnrollments     SubjectEnrollment[]
   subjectInstructions    SubjectInstructor[]
+  createdTemplateFields  TemplateField[]     @relation("TemplateFieldCreatedBy")
+  updatedTemplateFields  TemplateField[]     @relation("TemplateFieldUpdatedBy")
+  createdTemplateForms   TemplateForm[]      @relation("TemplateFormCreatedBy")
   createdTraineeProfiles TraineeProfile[]    @relation("TraineeCreatedBy")
   deletedTraineeProfiles TraineeProfile[]    @relation("TraineeDeletedBy")
   updatedTraineeProfiles TraineeProfile[]    @relation("TraineeUpdatedBy")
@@ -93,7 +93,6 @@ model Role {
   @@index([deletedAt])
   @@map("Role")
 }
-
 
 model Permission {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -164,25 +163,25 @@ model TraineeProfile {
 }
 
 model Department {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
-  description String?
-  headUserId  String?      @db.Uuid
-  createdById String?      @db.Uuid
-  updatedById String?      @db.Uuid
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @default(now()) @updatedAt
-  deletedAt   DateTime?
-  deletedById String?      @db.Uuid
-  isActive    ActiveStatus @default(ACTIVE)
-  code        String       @unique
-  courses     Course[]
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  description   String?
+  headUserId    String?        @db.Uuid
+  createdById   String?        @db.Uuid
+  updatedById   String?        @db.Uuid
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  deletedAt     DateTime?
+  deletedById   String?        @db.Uuid
+  isActive      ActiveStatus   @default(ACTIVE)
+  code          String         @unique
+  courses       Course[]
+  createdBy     User?          @relation("DeptCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy     User?          @relation("DeptDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  headUser      User?          @relation("DepartmentHead", fields: [headUserId], references: [id], onUpdate: NoAction)
+  updatedBy     User?          @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   templateForms TemplateForm[]
-  createdBy   User?        @relation("DeptCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
-  deletedBy   User?        @relation("DeptDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
-  headUser    User?        @relation("DepartmentHead", fields: [headUserId], references: [id], onUpdate: NoAction)
-  updatedBy   User?        @relation("DeptUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
-  users       User[]       @relation("DepartmentMembers")
+  users         User[]         @relation("DepartmentMembers")
 
   @@index([deletedAt])
   @@map("Department")
@@ -190,7 +189,7 @@ model Department {
 
 model Course {
   id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  departmentId  String       @db.Uuid
+  departmentId  String?      @db.Uuid
   name          String
   description   String?
   code          String       @unique
@@ -210,7 +209,7 @@ model Course {
   deletedById   String?      @db.Uuid
   createdBy     User?        @relation("CourseCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy     User?        @relation("CourseDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
-  department    Department   @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedBy     User?        @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   subjects      Subject[]
 
@@ -221,7 +220,7 @@ model Course {
 
 model Subject {
   id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  courseId    String              @db.Uuid
+  courseId    String?             @db.Uuid
   name        String
   code        String              @unique
   description String?
@@ -241,7 +240,7 @@ model Subject {
   createdById String?             @db.Uuid
   updatedById String?             @db.Uuid
   deletedById String?             @db.Uuid
-  course      Course              @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  course      Course?             @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   createdBy   User?               @relation("SubjectCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy   User?               @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?               @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
@@ -304,6 +303,74 @@ model GlobalField {
   @@index([createdById])
   @@index([updatedById])
   @@map("Global_Field")
+}
+
+model TemplateForm {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String            @db.VarChar(255)
+  description     String?
+  version         Int               @default(1)
+  departmentId    String            @db.Uuid
+  createdByUserId String            @db.Uuid
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+  templateContent String?           @db.VarChar(500)
+  templateSchema  Json?
+  createdByUser   User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department      Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sections        TemplateSection[]
+
+  @@index([departmentId])
+  @@index([createdByUserId])
+  @@index([isActive])
+  @@map("Template_Form")
+}
+
+model TemplateSection {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId        String          @db.Uuid
+  label             String          @db.VarChar(255)
+  displayOrder      Int
+  editBy            EditByRole
+  roleInSubject     RoleInSubject?
+  isSubmittable     Boolean         @default(false)
+  isToggleDependent Boolean         @default(false)
+  fields            TemplateField[]
+  template          TemplateForm    @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([templateId])
+  @@index([displayOrder])
+  @@map("Template_Section")
+}
+
+model TemplateField {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sectionId    String          @db.Uuid
+  label        String          @db.VarChar(255)
+  fieldName    String          @db.VarChar(255)
+  fieldType    FieldType
+  roleRequired RoleRequired?
+  options      Json?
+  displayOrder Int
+  parentId     String?         @db.Uuid
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @default(now()) @updatedAt
+  createdById  String?         @db.Uuid
+  updatedById  String?         @db.Uuid
+  createdBy    User?           @relation("TemplateFieldCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  parent       TemplateField?  @relation("TemplateFieldHierarchy", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  children     TemplateField[] @relation("TemplateFieldHierarchy")
+  section      TemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  updatedBy    User?           @relation("TemplateFieldUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+
+  @@unique([sectionId, fieldName])
+  @@index([sectionId])
+  @@index([parentId])
+  @@index([displayOrder])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("Template_Field")
 }
 
 enum UserStatus {
@@ -397,78 +464,4 @@ enum EditByRole {
 enum RoleInSubject {
   ASSESSMENT_REVIEWER
   EXAMINER
-}
-
-model TemplateForm {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name             String            @db.VarChar(255)
-  description      String?           @db.Text
-  version          Int               @default(1)
-  departmentId     String            @db.Uuid
-  createdByUserId  String            @db.Uuid
-  isActive         Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @default(now()) @updatedAt
-  templateContent  String?           @db.VarChar(500)
-  templateSchema   Json?
-
-  // Relations
-  department       Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  createdByUser    User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sections         TemplateSection[]
-
-  @@map("Template_Form")
-  @@index([departmentId])
-  @@index([createdByUserId])
-  @@index([isActive])
-}
-
-model TemplateSection {
-  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  templateId         String           @db.Uuid
-  label              String           @db.VarChar(255)
-  displayOrder       Int
-  editBy             EditByRole
-  roleInSubject      RoleInSubject?
-  isSubmittable      Boolean          @default(false)
-  isToggleDependent  Boolean          @default(false)
-
-  // Relations
-  template           TemplateForm     @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  fields             TemplateField[]
-
-  @@map("Template_Section")
-  @@index([templateId])
-  @@index([displayOrder])
-}
-
-model TemplateField {
-  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sectionId    String           @db.Uuid
-  label        String           @db.VarChar(255)
-  fieldName    String           @db.VarChar(255)
-  fieldType    FieldType
-  roleRequired RoleRequired?
-  options      Json?
-  displayOrder Int
-  parentId     String?          @db.Uuid
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @default(now()) @updatedAt
-  createdById  String?          @db.Uuid
-  updatedById  String?          @db.Uuid
-
-  // Relations
-  section      TemplateSection  @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  parent       TemplateField?   @relation("TemplateFieldHierarchy", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  children     TemplateField[]  @relation("TemplateFieldHierarchy")
-  createdBy    User?            @relation("TemplateFieldCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  updatedBy    User?            @relation("TemplateFieldUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
-
-  @@map("Template_Field")
-  @@index([sectionId])
-  @@index([parentId])
-  @@index([displayOrder])
-  @@index([createdById])
-  @@index([updatedById])
-  @@unique([sectionId, fieldName]) // fieldName unique within a template section
 }

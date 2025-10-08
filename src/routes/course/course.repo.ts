@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CourseDetailResType,
-  CourseStatsType,
   CourseType,
   CourseWithInfoType,
   CreateCourseBodyType,
@@ -154,7 +153,7 @@ export class CourseRepo {
 
     traineeStats.forEach((stat) => {
       const subject = subjectToCourse.find((s) => s.id === stat.subjectId)
-      if (subject) {
+      if (subject && subject.courseId) {
         const currentCount = traineeCountMap.get(subject.courseId) || 0
         traineeCountMap.set(subject.courseId, currentCount + stat._count.traineeUserId)
       }
@@ -162,7 +161,7 @@ export class CourseRepo {
 
     trainerStats.forEach((stat) => {
       const subject = subjectToCourse.find((s) => s.id === stat.subjectId)
-      if (subject) {
+      if (subject && subject.courseId) {
         const currentCount = trainerCountMap.get(subject.courseId) || 0
         trainerCountMap.set(subject.courseId, currentCount + stat._count.trainerUserId)
       }
@@ -371,76 +370,6 @@ export class CourseRepo {
         updatedAt: new Date()
       }
     })) as unknown as CourseType
-  }
-
-  async getStats({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<CourseStatsType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
-
-    const [totalCourses, levelStats, statusStats, departmentStats] = await Promise.all([
-      // Total courses count
-      this.prisma.course.count({ where: whereClause }),
-
-      // Courses by level
-      this.prisma.course.groupBy({
-        by: ['level'],
-        where: whereClause,
-        _count: true
-      }),
-
-      // Courses by status
-      this.prisma.course.groupBy({
-        by: ['status'],
-        where: whereClause,
-        _count: true
-      }),
-
-      // Courses by department
-      this.prisma.course.groupBy({
-        by: ['departmentId'],
-        where: whereClause,
-        _count: true,
-        _max: {
-          departmentId: true
-        }
-      })
-    ])
-
-    // Get department names for statistics
-    const departmentIds = departmentStats.map((stat) => stat.departmentId)
-    const departments = await this.prisma.department.findMany({
-      where: {
-        id: { in: departmentIds }
-      },
-      select: {
-        id: true,
-        name: true
-      }
-    })
-
-    const departmentMap = new Map(departments.map((dept) => [dept.id, dept.name]))
-
-    return {
-      totalCourses,
-      coursesByLevel: levelStats.reduce(
-        (acc, stat) => {
-          acc[stat.level] = stat._count
-          return acc
-        },
-        {} as Record<string, number>
-      ),
-      coursesByStatus: statusStats.reduce(
-        (acc, stat) => {
-          acc[stat.status] = stat._count
-          return acc
-        },
-        {} as Record<string, number>
-      ),
-      coursesByDepartment: departmentStats.map((stat) => ({
-        departmentId: stat.departmentId,
-        departmentName: departmentMap.get(stat.departmentId) || 'Unknown',
-        count: stat._count
-      }))
-    }
   }
 
   async checkCodeExists(code: string, excludeId?: string): Promise<boolean> {

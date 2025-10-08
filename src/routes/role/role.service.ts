@@ -14,10 +14,8 @@ export class RoleService {
   constructor(private roleRepo: RoleRepo) {}
 
   async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
-    // Chỉ admin mới có thể xem các role đã bị xóa mềm
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
     const data = await this.roleRepo.list({
-      includeDeleted: canViewDeleted ? includeDeleted : false
+      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
     })
     return data
   }
@@ -26,10 +24,8 @@ export class RoleService {
     id: string,
     { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
   ) {
-    // Chỉ admin mới có thể xem detail của role đã bị xóa mềm
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
     const role = await this.roleRepo.findById(id, {
-      includeDeleted: canViewDeleted ? includeDeleted : false
+      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
     })
     if (!role) {
       throw NotFoundRoleException

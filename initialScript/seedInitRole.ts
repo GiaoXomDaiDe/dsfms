@@ -35,6 +35,15 @@ const DEFAULT_USERS = [
     lastName: envConfig.DEPARTMENT_HEAD_LAST_NAME,
     password: envConfig.DEPARTMENT_HEAD_PASSWORD,
     gender: GenderStatus.MALE
+  },
+  {
+    roleName: RoleName.ACADEMIC_DEPARTMENT,
+    email: envConfig.DEPARTMENT_HEAD_EMAIL,
+    firstName: envConfig.DEPARTMENT_HEAD_FIRST_NAME,
+    middleName: envConfig.DEPARTMENT_HEAD_MIDDLE_NAME,
+    lastName: envConfig.DEPARTMENT_HEAD_LAST_NAME,
+    password: envConfig.DEPARTMENT_HEAD_PASSWORD,
+    gender: GenderStatus.MALE
   }
 ]
 
