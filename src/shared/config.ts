@@ -46,48 +46,7 @@ const configSchema = z.object({
   ACADEMIC_DEPARTMENT_MIDDLE_NAME: z.string()
 })
 
-const getEnvVars = () => {
-  if (process.env.NODE_ENV === 'test') {
-    return {
-      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-      PORT: '3001',
-      PASSWORD_SECRET: 'test-password-secret',
-      SECRET_API_KEY: 'test-api-key',
-      ACCESS_TOKEN_SECRET: 'test-access-secret',
-      ACCESS_TOKEN_EXPIRES_IN: '15m',
-      REFRESH_TOKEN_SECRET: 'test-refresh-secret',
-      REFRESH_TOKEN_EXPIRES_IN: '7d',
-      RESET_PASSWORD_SECRET: 'test-reset-password-secret',
-      AWS_REGION: 'us-east-1',
-      AWS_ACCESS_KEY_ID: 'test-aws-key',
-      AWS_SECRET_ACCESS_KEY: 'test-aws-secret',
-      SES_FROM_EMAIL: 'test@example.com',
-      GMAIL_USER: 'test@gmail.com',
-      GMAIL_APP_PASSWORD: 'test-app-password',
-      GMAIL_FROM_NAME: 'Test Sender',
-      FRONTEND_URL: 'http://localhost:3000',
-      ADMIN_EMAIL: 'admin@test.com',
-      ADMIN_PASSWORD: 'test-password',
-      ADMIN_FIRST_NAME: 'Test',
-      ADMIN_LAST_NAME: 'Admin',
-      ADMIN_MIDDLE_NAME: 'Test',
-      DEPARTMENT_HEAD_EMAIL: 'head@test.com',
-      DEPARTMENT_HEAD_PASSWORD: 'test-password',
-      DEPARTMENT_HEAD_FIRST_NAME: 'Department',
-      DEPARTMENT_HEAD_LAST_NAME: 'Head',
-      DEPARTMENT_HEAD_MIDDLE_NAME: 'Test',
-      ACADEMIC_DEPARTMENT_EMAIL: 'academic@test.com',
-      ACADEMIC_DEPARTMENT_PASSWORD: 'test-password',
-      ACADEMIC_DEPARTMENT_FIRST_NAME: 'Academic',
-      ACADEMIC_DEPARTMENT_LAST_NAME: 'Department',
-      ACADEMIC_DEPARTMENT_MIDDLE_NAME: 'Test',
-      ...process.env
-    }
-  }
-  return process.env
-}
-
-const configServer = configSchema.safeParse(getEnvVars())
+const configServer = configSchema.safeParse(process.env)
 
 if (!configServer.success) {
   console.error('Config env validation failed', configServer.error)
