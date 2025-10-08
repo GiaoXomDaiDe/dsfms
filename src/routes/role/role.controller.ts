@@ -20,9 +20,9 @@ export class RoleController {
 
   @Get()
   @ZodSerializerDto(GetRolesResDTO)
-  list(@Query() query: GetRolesQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+  list(@Query() { includeDeleted }: GetRolesQueryDTO, @ActiveRolePermissions('name') roleName: string) {
     return this.roleService.list({
-      includeDeleted: query.includeDeleted,
+      includeDeleted,
       userRole: roleName
     })
   }

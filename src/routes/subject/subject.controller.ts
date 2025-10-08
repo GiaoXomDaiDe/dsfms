@@ -1,4 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
+import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import {
   BulkCreateSubjectsBodyDto,
   CreateSubjectBodyDto,
@@ -17,14 +19,15 @@ export class SubjectController {
    * Tạo mới một subject và gán vào course
    */
   @Post()
-  async addSubjectToCourse(@Body() createSubjectDto: CreateSubjectBodyDto) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
-
+  async addSubjectToCourse(
+    @Body() createSubjectDto: CreateSubjectBodyDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
     return await this.subjectService.create({
       data: createSubjectDto,
-      createdById: mockUser.id,
-      createdByRoleName: mockUser.roleName
+      createdById: userId,
+      createdByRoleName: roleName
     })
   }
 
@@ -34,14 +37,15 @@ export class SubjectController {
    * Tạo nhiều subjects cùng lúc cho một course
    */
   @Post('bulk')
-  async bulkAddSubjectsToCourse(@Body() bulkCreateDto: BulkCreateSubjectsBodyDto) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
-
+  async bulkAddSubjectsToCourse(
+    @Body() bulkCreateDto: BulkCreateSubjectsBodyDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
     return await this.subjectService.bulkCreate({
       data: bulkCreateDto,
-      createdById: mockUser.id,
-      createdByRoleName: mockUser.roleName
+      createdById: userId,
+      createdByRoleName: roleName
     })
   }
 
@@ -51,10 +55,11 @@ export class SubjectController {
    * Lấy thông tin chi tiết subject kèm danh sách trainers và role của họ
    */
   @Get(':id')
-  async getSubjectDetailsWithTrainers(@Param('id') id: string, @Query('includeDeleted') includeDeleted?: string) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { roleName: 'ADMINISTRATOR' }
-
+  async getSubjectDetailsWithTrainers(
+    @Param('id') id: string,
+    @ActiveRolePermissions('name') roleName: string,
+    @Query('includeDeleted') includeDeleted?: string
+  ) {
     return await this.subjectService.findById(id, {
       includeDeleted: includeDeleted === 'true'
     })
@@ -66,15 +71,17 @@ export class SubjectController {
    * Cập nhật thông tin subject
    */
   @Put(':id')
-  async updateSubject(@Param('id') id: string, @Body() updateSubjectDto: UpdateSubjectBodyDto) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
-
+  async updateSubject(
+    @Param('id') id: string,
+    @Body() updateSubjectDto: UpdateSubjectBodyDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
     return await this.subjectService.update({
       id,
       data: updateSubjectDto,
-      updatedById: mockUser.id,
-      updatedByRoleName: mockUser.roleName
+      updatedById: userId,
+      updatedByRoleName: roleName
     })
   }
 
@@ -84,14 +91,15 @@ export class SubjectController {
    * Xóa mềm subject
    */
   @Delete(':id')
-  async removeSubject(@Param('id') id: string) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
-
+  async removeSubject(
+    @Param('id') id: string,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
     return await this.subjectService.delete({
       id,
-      deletedById: mockUser.id,
-      deletedByRoleName: mockUser.roleName
+      deletedById: userId,
+      deletedByRoleName: roleName
     })
   }
 
@@ -101,10 +109,7 @@ export class SubjectController {
    * Lấy danh sách subjects với filter và phân trang
    */
   @Get()
-  async getAllSubjects(@Query() query: GetSubjectsQueryDto) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { roleName: 'ADMINISTRATOR' }
-
+  async getAllSubjects(@Query() query: GetSubjectsQueryDto, @ActiveRolePermissions('name') roleName: string) {
     return await this.subjectService.list(query)
   }
 
@@ -114,10 +119,11 @@ export class SubjectController {
    * Lấy danh sách subjects theo course
    */
   @Get('course/:courseId')
-  async getSubjectsByCourse(@Param('courseId') courseId: string, @Query('includeDeleted') includeDeleted?: string) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { roleName: 'ADMINISTRATOR' }
-
+  async getSubjectsByCourse(
+    @Param('courseId') courseId: string,
+    @ActiveRolePermissions('name') roleName: string,
+    @Query('includeDeleted') includeDeleted?: string
+  ) {
     return await this.subjectService.getSubjectsByCourse({
       courseId,
       includeDeleted: includeDeleted === 'true'
@@ -130,14 +136,15 @@ export class SubjectController {
    * Khôi phục subject đã bị xóa mềm
    */
   @Put(':id/restore')
-  async restoreSubject(@Param('id') id: string) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
-
+  async restoreSubject(
+    @Param('id') id: string,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
     return await this.subjectService.restore({
       id,
-      restoredById: mockUser.id,
-      restoredByRoleName: mockUser.roleName
+      restoredById: userId,
+      restoredByRoleName: roleName
     })
   }
 
@@ -147,14 +154,15 @@ export class SubjectController {
    * Xóa cứng subject (chỉ dành cho ADMINISTRATOR)
    */
   @Delete(':id/hard')
-  async hardDeleteSubject(@Param('id') id: string) {
-    // Note: In a real implementation, user would come from authentication
-    const mockUser = { id: '1', roleName: 'ADMINISTRATOR' }
-
+  async hardDeleteSubject(
+    @Param('id') id: string,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
     return await this.subjectService.delete({
       id,
-      deletedById: mockUser.id,
-      deletedByRoleName: mockUser.roleName,
+      deletedById: userId,
+      deletedByRoleName: roleName,
       isHard: true
     })
   }

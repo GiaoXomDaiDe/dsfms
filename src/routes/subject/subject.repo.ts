@@ -9,7 +9,6 @@ import {
   GetSubjectsResType,
   SubjectDetailResType,
   SubjectEntityType,
-  SubjectStatsType,
   SubjectWithInfoType,
   UpdateEnrollmentStatusBodyType,
   UpdateSubjectBodyType
@@ -589,73 +588,6 @@ export class SubjectRepo {
     })
 
     return !!existingSubject
-  }
-
-  async getStats({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<SubjectStatsType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
-
-    const [totalSubjects, methodStats, typeStats, courseStats] = await Promise.all([
-      // Total subjects count
-      this.prisma.subject.count({ where: whereClause }),
-
-      // Subjects by method
-      this.prisma.subject.groupBy({
-        by: ['method'],
-        where: whereClause,
-        _count: true
-      }),
-
-      // Subjects by type
-      this.prisma.subject.groupBy({
-        by: ['type'],
-        where: whereClause,
-        _count: true
-      }),
-
-      // Subjects by course
-      this.prisma.subject.groupBy({
-        by: ['courseId'],
-        where: whereClause,
-        _count: true
-      })
-    ])
-
-    // Get course names for statistics
-    const courseIds = courseStats.map((stat) => stat.courseId)
-    const courses = await this.prisma.course.findMany({
-      where: {
-        id: { in: courseIds }
-      },
-      select: {
-        id: true,
-        name: true
-      }
-    })
-
-    const courseMap = new Map(courses.map((course) => [course.id, course.name]))
-
-    return {
-      totalSubjects,
-      subjectsByMethod: methodStats.reduce(
-        (acc, stat) => {
-          acc[stat.method] = stat._count
-          return acc
-        },
-        {} as Record<string, number>
-      ),
-      subjectsByType: typeStats.reduce(
-        (acc, stat) => {
-          acc[stat.type] = stat._count
-          return acc
-        },
-        {} as Record<string, number>
-      ),
-      subjectsByCourse: courseStats.map((stat) => ({
-        courseId: stat.courseId,
-        courseName: courseMap.get(stat.courseId) || 'Unknown',
-        count: stat._count
-      }))
-    }
   }
 
   /**

@@ -1,5 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request } from '@nestjs/common'
-import { CreateCourseBodyDto, GetCoursesQueryDto, UpdateCourseBodyDto } from './course.model'
+import {
+  AddSubjectToCourseBodyDto,
+  CreateCourseBodyDto,
+  GetCoursesQueryDto,
+  RemoveSubjectFromCourseBodyDto,
+  UpdateCourseBodyDto
+} from './course.model'
 import { CourseService } from './course.service'
 
 @Controller('courses')
@@ -13,13 +19,6 @@ export class CourseController {
       userId: user.id,
       userRole: user.roleName,
       departmentId: user.departmentId
-    })
-  }
-
-  @Get('stats')
-  async getCourseStats(@Query('includeDeleted') includeDeleted?: string) {
-    return await this.courseService.getStats({
-      includeDeleted: includeDeleted === 'true'
     })
   }
 
@@ -112,5 +111,29 @@ export class CourseController {
     })
 
     return { hasAccess }
+  }
+
+  @Post(':id/subjects')
+  async addSubjectsToCourse(@Param('id') id: string, @Body() body: AddSubjectToCourseBodyDto, @Request() req: any) {
+    const { user } = req
+    return await this.courseService.addSubjectsToCourse({
+      courseId: id,
+      data: body,
+      userRole: user.roleName
+    })
+  }
+
+  @Delete(':id/subjects')
+  async removeSubjectsFromCourse(
+    @Param('id') id: string,
+    @Body() body: RemoveSubjectFromCourseBodyDto,
+    @Request() req: any
+  ) {
+    const { user } = req
+    return await this.courseService.removeSubjectsFromCourse({
+      courseId: id,
+      data: body,
+      userRole: user.roleName
+    })
   }
 }

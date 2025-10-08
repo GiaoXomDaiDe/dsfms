@@ -1,5 +1,6 @@
 import z from 'zod'
 import { PermissionSchema } from '~/routes/permission/permission.model'
+import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 
 export const RoleSchema = z.object({
   id: z.uuid(),
@@ -13,6 +14,9 @@ export const RoleSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date()
 })
+
+export const GetRolesQuerySchema = IncludeDeletedQuerySchema.strict()
+
 export const RoleWithPermissionsSchema = RoleSchema.extend({
   permissions: z.array(PermissionSchema),
   userCount: z.number().default(0),
@@ -29,12 +33,6 @@ export const GetRolesResSchema = z.object({
 export const GetRoleParamsSchema = z
   .object({
     roleId: z.uuid()
-  })
-  .strict()
-
-export const GetRolesQuerySchema = z
-  .object({
-    includeDeleted: z.coerce.boolean().default(false).optional()
   })
   .strict()
 

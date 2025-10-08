@@ -167,9 +167,47 @@ export type DepartmentWithCoursesType = z.infer<typeof DepartmentWithCoursesSche
 
 // DTO exports
 export class CreateCourseBodyDto extends createZodDto(CreateCourseBodySchema) {}
+// Add Subject to Course Schema
+export const AddSubjectToCourseBodySchema = z.object({
+  subjectIds: z.array(z.string().uuid()).min(1, 'At least one subject is required')
+})
+
+export type AddSubjectToCourseBodyType = z.infer<typeof AddSubjectToCourseBodySchema>
+
+export const AddSubjectToCourseResSchema = z.object({
+  success: z.boolean(),
+  addedSubjects: z.array(z.string().uuid()),
+  notFoundSubjects: z.array(z.string().uuid()),
+  alreadyAssignedSubjects: z.array(z.string().uuid()),
+  message: z.string()
+})
+
+export type AddSubjectToCourseResType = z.infer<typeof AddSubjectToCourseResSchema>
+
+// Remove Subject from Course Schema
+export const RemoveSubjectFromCourseBodySchema = z.object({
+  subjectIds: z.array(z.string().uuid()).min(1, 'At least one subject is required')
+})
+
+export type RemoveSubjectFromCourseBodyType = z.infer<typeof RemoveSubjectFromCourseBodySchema>
+
+export const RemoveSubjectFromCourseResSchema = z.object({
+  success: z.boolean(),
+  removedSubjects: z.array(z.string().uuid()),
+  notFoundSubjects: z.array(z.string().uuid()),
+  notAssignedSubjects: z.array(z.string().uuid()),
+  message: z.string()
+})
+
+export type RemoveSubjectFromCourseResType = z.infer<typeof RemoveSubjectFromCourseResSchema>
+
 export class UpdateCourseBodyDto extends createZodDto(UpdateCourseBodySchema) {}
 export class GetCoursesQueryDto extends createZodDto(GetCoursesQuerySchema) {}
 export class GetCoursesResDto extends createZodDto(GetCoursesResSchema) {}
 export class CourseDetailResDto extends createZodDto(CourseDetailResSchema) {}
 export class CourseStatsDto extends createZodDto(CourseStatsSchema) {}
 export class DepartmentWithCoursesDto extends createZodDto(DepartmentWithCoursesSchema) {}
+export class AddSubjectToCourseBodyDto extends createZodDto(AddSubjectToCourseBodySchema) {}
+export class AddSubjectToCourseResDto extends createZodDto(AddSubjectToCourseResSchema) {}
+export class RemoveSubjectFromCourseBodyDto extends createZodDto(RemoveSubjectFromCourseBodySchema) {}
+export class RemoveSubjectFromCourseResDto extends createZodDto(RemoveSubjectFromCourseResSchema) {}

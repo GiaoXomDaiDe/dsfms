@@ -2,14 +2,17 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
+  AddSubjectToCourseBodyType,
+  AddSubjectToCourseResType,
   CourseDetailResType,
-  CourseStatsType,
   CourseType,
   CourseWithInfoType,
   CreateCourseBodyType,
   DepartmentWithCoursesType,
   GetCoursesQueryType,
   GetCoursesResType,
+  RemoveSubjectFromCourseBodyType,
+  RemoveSubjectFromCourseResType,
   UpdateCourseBodyType
 } from './course.model'
 import { CourseRepo } from './course.repo'
@@ -51,7 +54,9 @@ export class CourseService {
           }
         })
 
-        const courseIds = [...new Set(instructedCourses.map((i) => i.subject.courseId))]
+        const courseIds = [
+          ...new Set(instructedCourses.map((i) => i.subject.courseId).filter((id): id is string => id !== null))
+        ]
         enhancedQuery.courseIds = courseIds
       }
 
@@ -69,7 +74,9 @@ export class CourseService {
           }
         })
 
-        const courseIds = [...new Set(enrolledCourses.map((e) => e.subject.courseId))]
+        const courseIds = [
+          ...new Set(enrolledCourses.map((e) => e.subject.courseId).filter((id): id is string => id !== null))
+        ]
         enhancedQuery.courseIds = courseIds
       }
     }
@@ -287,10 +294,6 @@ export class CourseService {
     return await this.courseRepo.restore({ id, restoredById })
   }
 
-  async getStats({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<CourseStatsType> {
-    return await this.courseRepo.getStats({ includeDeleted })
-  }
-
   async getCoursesByDepartment({
     departmentId,
     includeDeleted = false
@@ -431,5 +434,152 @@ export class CourseService {
     }
 
     return false
+  }
+
+  /**
+   * Thêm subjects vào course
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
+   * - Kiểm tra course tồn tại
+   * - Kiểm tra subjects tồn tại và chưa được assign vào course khác
+   */
+  async addSubjectsToCourse({
+    courseId,
+    data,
+    userRole
+  }: {
+    courseId: string
+    data: AddSubjectToCourseBodyType
+    userRole: string
+  }): Promise<AddSubjectToCourseResType> {
+    // Chỉ ACADEMIC_DEPARTMENT mới có quyền
+    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can add subjects to courses')
+    }
+
+    // Kiểm tra course tồn tại
+    const course = await this.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    const { subjectIds } = data
+    const addedSubjects: string[] = []
+    const notFoundSubjects: string[] = []
+    const alreadyAssignedSubjects: string[] = []
+
+    // Kiểm tra từng subject
+    for (const subjectId of subjectIds) {
+      // Kiểm tra subject tồn tại
+      const subject = await this.prisma.subject.findUnique({
+        where: { id: subjectId, deletedAt: null },
+        select: { id: true, courseId: true }
+      })
+
+      if (!subject) {
+        notFoundSubjects.push(subjectId)
+        continue
+      }
+
+      // Kiểm tra subject đã được assign vào course khác chưa
+      if (subject.courseId && subject.courseId !== courseId) {
+        alreadyAssignedSubjects.push(subjectId)
+        continue
+      }
+
+      // Nếu subject chưa có courseId hoặc đã thuộc course này
+      if (!subject.courseId) {
+        // Assign subject vào course
+        await this.prisma.subject.update({
+          where: { id: subjectId },
+          data: { courseId }
+        })
+        addedSubjects.push(subjectId)
+      }
+    }
+
+    const totalRequested = subjectIds.length
+    const totalAdded = addedSubjects.length
+    const totalNotFound = notFoundSubjects.length
+    const totalAlreadyAssigned = alreadyAssignedSubjects.length
+
+    return {
+      success: totalAdded > 0,
+      addedSubjects,
+      notFoundSubjects,
+      alreadyAssignedSubjects,
+      message: `Successfully added ${totalAdded}/${totalRequested} subjects to course. ${totalNotFound} not found, ${totalAlreadyAssigned} already assigned to other courses.`
+    }
+  }
+
+  /**
+   * Remove subjects khỏi course
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
+   * - Kiểm tra course tồn tại
+   * - Set courseId = null cho subjects
+   */
+  async removeSubjectsFromCourse({
+    courseId,
+    data,
+    userRole
+  }: {
+    courseId: string
+    data: RemoveSubjectFromCourseBodyType
+    userRole: string
+  }): Promise<RemoveSubjectFromCourseResType> {
+    // Chỉ ACADEMIC_DEPARTMENT mới có quyền
+    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can remove subjects from courses')
+    }
+
+    // Kiểm tra course tồn tại
+    const course = await this.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    const { subjectIds } = data
+    const removedSubjects: string[] = []
+    const notFoundSubjects: string[] = []
+    const notAssignedSubjects: string[] = []
+
+    // Kiểm tra từng subject
+    for (const subjectId of subjectIds) {
+      // Kiểm tra subject tồn tại
+      const subject = await this.prisma.subject.findUnique({
+        where: { id: subjectId, deletedAt: null },
+        select: { id: true, courseId: true }
+      })
+
+      if (!subject) {
+        notFoundSubjects.push(subjectId)
+        continue
+      }
+
+      // Kiểm tra subject có thuộc course này không
+      if (subject.courseId !== courseId) {
+        notAssignedSubjects.push(subjectId)
+        continue
+      }
+
+      // Remove subject khỏi course
+      await this.prisma.subject.update({
+        where: { id: subjectId },
+        data: { courseId: null }
+      })
+      removedSubjects.push(subjectId)
+    }
+
+    const totalRequested = subjectIds.length
+    const totalRemoved = removedSubjects.length
+    const totalNotFound = notFoundSubjects.length
+    const totalNotAssigned = notAssignedSubjects.length
+
+    return {
+      success: totalRemoved > 0,
+      removedSubjects,
+      notFoundSubjects,
+      notAssignedSubjects,
+      message: `Successfully removed ${totalRemoved}/${totalRequested} subjects from course. ${totalNotFound} not found, ${totalNotAssigned} not assigned to this course.`
+    }
   }
 }

@@ -7,6 +7,7 @@ import { RoleName } from '~/shared/constants/auth.constant'
 export class SharedRoleRepository {
   private traineeRoleId: string | null = null
   private adminRoleId: string | null = null
+  private academicRoleId: string | null = null
 
   constructor(private readonly prismaService: PrismaService) {}
 
@@ -48,6 +49,16 @@ export class SharedRoleRepository {
     const role = await this.getRole(RoleName.ADMINISTRATOR)
 
     this.adminRoleId = role.id
+    return role.id
+  }
+
+  async getAcademicRoleId() {
+    if (this.academicRoleId) {
+      return this.academicRoleId
+    }
+    const role = await this.getRole(RoleName.ACADEMIC_DEPARTMENT)
+
+    this.academicRoleId = role.id
     return role.id
   }
 }

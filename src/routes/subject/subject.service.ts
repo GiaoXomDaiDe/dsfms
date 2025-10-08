@@ -7,6 +7,7 @@ import {
 } from '~/shared/helper'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
+import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import {
   BulkInvalidDateRangeAtIndexException,
@@ -16,7 +17,6 @@ import {
   CannotHardDeleteSubjectWithInstructorsException,
   CannotRestoreSubjectCodeConflictException,
   CourseNotFoundException,
-  DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException,
   InvalidDateRangeException,
   OnlyAdminAndDepartmentHeadCanCreateSubjectsException,
   OnlyAdminAndDepartmentHeadCanDeleteSubjectsException,
@@ -45,12 +45,13 @@ export class SubjectService {
     private readonly subjectRepo: SubjectRepo,
     private readonly sharedDepartmentRepository: SharedDepartmentRepository,
     private readonly sharedCourseRepository: SharedCourseRepository,
-    private readonly sharedUserRepository: SharedUserRepository
+    private readonly sharedUserRepository: SharedUserRepository,
+    private readonly sharedRoleRepository: SharedRoleRepository
   ) {}
 
   /**
    * Lấy danh sách subjects với phân trang và filter.
-   * Chỉ ADMINISTRATOR mới được phép xem subject đã bị xóa mềm.
+   * Chỉ ACADEMIC_DEPARTMENT mới được phép xem subject đã bị xóa mềm.
    * @param query - Query parameters bao gồm page, limit, search, filters
    */
   async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
@@ -59,7 +60,7 @@ export class SubjectService {
 
   /**
    * Lấy thông tin chi tiết một subject kèm theo instructors và enrollments.
-   * Chỉ ADMINISTRATOR mới được phép xem subject đã bị xóa mềm.
+   * Chỉ ACADEMIC_DEPARTMENT mới được phép xem subject đã bị xóa mềm.
    * @param id - ID của subject
    * @param options - Tùy chọn includeDeleted
    */
@@ -78,8 +79,8 @@ export class SubjectService {
 
   /**
    * Tạo mới một subject cho course.
-   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền tạo
-   * - DEPARTMENT_HEAD chỉ có thể tạo subject cho course thuộc department của họ
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
+   * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
    * - Kiểm tra course tồn tại và không bị xóa
    * - Kiểm tra subject code duy nhất
    * - Validate date range
@@ -97,16 +98,16 @@ export class SubjectService {
       // Kiểm tra quyền tạo subject
       this.validateCreatePermissions(createdByRoleName)
 
-      // Kiểm tra course tồn tại
-      const course = await this.sharedCourseRepository.findById(data.courseId)
-      if (!course) {
-        throw CourseNotFoundException
+      // Kiểm tra course tồn tại (nếu có courseId)
+      if (data.courseId) {
+        const course = await this.sharedCourseRepository.findById(data.courseId)
+        if (!course) {
+          throw CourseNotFoundException
+        }
       }
 
-      // Kiểm tra DEPARTMENT_HEAD chỉ tạo subject cho course trong department của họ
-      if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
-        await this.validateDepartmentHeadAccess(createdById, course.departmentId)
-      }
+      // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
+      // Không cần kiểm tra department access
 
       // Kiểm tra subject code unique
       const codeExists = await this.subjectRepo.checkCodeExists(data.code)
@@ -131,8 +132,8 @@ export class SubjectService {
 
   /**
    * Tạo nhiều subjects cùng lúc cho một course.
-   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền tạo
-   * - DEPARTMENT_HEAD chỉ có thể tạo subject cho course thuộc department của họ
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
+   * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
    * - Validate từng subject riêng biệt và trả về kết quả chi tiết
    */
   async bulkCreate({
@@ -155,10 +156,8 @@ export class SubjectService {
       throw CourseNotFoundException
     }
 
-    // Kiểm tra DEPARTMENT_HEAD chỉ tạo subject cho course trong department của họ
-    if (createdByRoleName === RoleName.DEPARTMENT_HEAD) {
-      await this.validateDepartmentHeadAccess(createdById, course.departmentId)
-    }
+    // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
+    // Không cần kiểm tra department access
 
     const createdSubjects: SubjectEntityType[] = []
     const failedSubjects: { subject: any; error: string }[] = []
@@ -218,8 +217,8 @@ export class SubjectService {
 
   /**
    * Cập nhật thông tin subject.
-   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền update
-   * - DEPARTMENT_HEAD chỉ có thể update subject của course trong department của họ
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền update
+   * - ACADEMIC_DEPARTMENT có thể update bất kỳ subject nào
    * - Kiểm tra subject code unique (nếu thay đổi)
    * - Validate date range
    */
@@ -244,15 +243,8 @@ export class SubjectService {
         throw SubjectNotFoundException
       }
 
-      // Kiểm tra DEPARTMENT_HEAD chỉ update subject trong department của họ
-      if (updatedByRoleName === RoleName.DEPARTMENT_HEAD) {
-        const targetCourseId = data.courseId || existingSubject.courseId
-        const targetCourse = await this.sharedCourseRepository.findById(targetCourseId)
-
-        if (targetCourse) {
-          await this.validateDepartmentHeadAccess(updatedById, targetCourse.departmentId)
-        }
-      }
+      // ACADEMIC_DEPARTMENT có thể update bất kỳ subject nào
+      // Không cần kiểm tra department access
 
       // Validate course mới nếu thay đổi
       if (data.courseId && data.courseId !== existingSubject.courseId) {
@@ -292,8 +284,8 @@ export class SubjectService {
 
   /**
    * Xóa subject (soft delete hoặc hard delete).
-   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền xóa
-   * - DEPARTMENT_HEAD chỉ có thể xóa subject của course trong department của họ
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền xóa
+   * - ACADEMIC_DEPARTMENT có thể xóa bất kỳ subject nào
    * - Hard delete chỉ được phép nếu không có instructors và enrollments
    */
   async delete({
@@ -316,12 +308,8 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
-    // Kiểm tra DEPARTMENT_HEAD chỉ xóa subject trong department của họ
-    if (deletedByRoleName === RoleName.DEPARTMENT_HEAD) {
-      if (existingSubject.course?.departmentId) {
-        await this.validateDepartmentHeadAccess(deletedById, existingSubject.course.departmentId)
-      }
-    }
+    // ACADEMIC_DEPARTMENT có thể xóa bất kỳ subject nào
+    // Không cần kiểm tra department access
 
     // Kiểm tra hard delete
     if (isHard) {
@@ -333,8 +321,8 @@ export class SubjectService {
 
   /**
    * Khôi phục subject đã bị xóa mềm.
-   * - Chỉ ADMINISTRATOR và DEPARTMENT_HEAD mới có quyền restore
-   * - DEPARTMENT_HEAD chỉ có thể restore subject của course trong department của họ
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền restore
+   * - ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
    * - Kiểm tra subject code không conflict
    */
   async restore({
@@ -360,12 +348,8 @@ export class SubjectService {
       throw SubjectIsNotDeletedException
     }
 
-    // Kiểm tra DEPARTMENT_HEAD chỉ restore subject trong department của họ
-    if (restoredByRoleName === RoleName.DEPARTMENT_HEAD) {
-      if (existingSubject.course?.departmentId) {
-        await this.validateDepartmentHeadAccess(restoredById, existingSubject.course.departmentId)
-      }
-    }
+    // ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
+    // Không cần kiểm tra department access
 
     // Kiểm tra subject code conflict
     const codeExists = await this.subjectRepo.checkCodeExists(existingSubject.code, id)
@@ -401,49 +385,38 @@ export class SubjectService {
   // =============== PRIVATE HELPER METHODS ===============
 
   /**
-   * Kiểm tra quyền tạo subject
+   * Kiểm tra quyền tạo subject - chỉ ACADEMIC_DEPARTMENT được phép
    */
   private validateCreatePermissions(roleName: string): void {
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
       throw OnlyAdminAndDepartmentHeadCanCreateSubjectsException
     }
   }
 
   /**
-   * Kiểm tra quyền update subject
+   * Kiểm tra quyền update subject - chỉ ACADEMIC_DEPARTMENT được phép
    */
   private validateUpdatePermissions(roleName: string): void {
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
       throw OnlyAdminAndDepartmentHeadCanUpdateSubjectsException
     }
   }
 
   /**
-   * Kiểm tra quyền xóa subject
+   * Kiểm tra quyền xóa subject - chỉ ACADEMIC_DEPARTMENT được phép
    */
   private validateDeletePermissions(roleName: string): void {
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
       throw OnlyAdminAndDepartmentHeadCanDeleteSubjectsException
     }
   }
 
   /**
-   * Kiểm tra quyền restore subject
+   * Kiểm tra quyền restore subject - chỉ ACADEMIC_DEPARTMENT được phép
    */
   private validateRestorePermissions(roleName: string): void {
-    if (![RoleName.ADMINISTRATOR, RoleName.DEPARTMENT_HEAD].includes(roleName as any)) {
+    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
       throw OnlyAdminAndDepartmentHeadCanRestoreSubjectsException
-    }
-  }
-
-  /**
-   * Kiểm tra DEPARTMENT_HEAD chỉ có thể thao tác với course trong department của họ
-   */
-  private async validateDepartmentHeadAccess(userId: string, courseDepartmentId: string): Promise<void> {
-    const user = await this.sharedUserRepository.findUnique({ id: userId })
-
-    if (!user?.departmentId || user.departmentId !== courseDepartmentId) {
-      throw DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException
     }
   }
 

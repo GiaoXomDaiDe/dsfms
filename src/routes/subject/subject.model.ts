@@ -80,7 +80,7 @@ export const SubjectWithInfoSchema = SubjectSchema.extend({
 // Create Subject Body Schema
 export const CreateSubjectBodySchema = z
   .object({
-    courseId: z.string().uuid(),
+    courseId: z.string().uuid().optional(),
     name: z.string().min(1).max(255),
     code: z.string().min(1).max(50),
     description: z.string().optional(),
