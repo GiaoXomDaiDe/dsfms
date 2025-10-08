@@ -6,6 +6,7 @@ import { APIKeyGuard } from '~/shared/guards/api-key.guard'
 import { AuthenticationGuard } from '~/shared/guards/authentication.guard'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
+import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
@@ -20,6 +21,7 @@ const sharedServices = [
   SharedRoleRepository,
   SharedDepartmentRepository,
   SharedCourseRepository,
+  SharedPermissionRepository,
   TokenService,
   AccessTokenGuard,
   APIKeyGuard,

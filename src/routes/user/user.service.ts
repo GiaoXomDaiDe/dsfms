@@ -63,11 +63,6 @@ export class UserService {
     private readonly nodemailerService: NodemailerService
   ) {}
 
-  /**
-   * Lấy danh sách người dùng. Chỉ ADMINISTRATOR mới được phép xem user đã bị xóa mềm.
-   * @param includeDeleted - Có lấy cả user đã bị xóa mềm không
-   * @param userRole - Vai trò của người thực hiện
-   */
   list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
     // Nếu không phải admin thì luôn luôn không cho xem user đã bị xóa mềm
     return this.userRepo.list({
@@ -75,13 +70,6 @@ export class UserService {
     })
   }
 
-  /**
-   * Lấy thông tin chi tiết một người dùng.
-   * Chỉ ADMINISTRATOR mới được phép xem user đã bị xóa mềm.
-   * @param id - ID người dùng
-   * @param includeDeleted - Có lấy cả user đã bị xóa mềm không
-   * @param userRole - Vai trò của người thực hiện
-   */
   async findById(
     id: string,
     { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
@@ -107,27 +95,8 @@ export class UserService {
     }
   }
 
-  /**
-   * Tạo mới một người dùng.
-   * Chỉ admin mới được phép tạo user có role là admin.
-   * Kiểm tra hợp lệ profile, department, sinh eid, hash password, gửi email chào mừng.
-   */
-  async create({
-    data,
-    createdById,
-    createdByRoleName
-  }: {
-    data: CreateUserBodyWithProfileType
-    createdById: string
-    createdByRoleName: string
-  }) {
+  async create({ data, createdById }: { data: CreateUserBodyWithProfileType; createdById: string }) {
     try {
-      // Chỉ admin mới được phép tạo user có role là admin
-      await this.verifyRole({
-        roleNameAgent: createdByRoleName,
-        roleIdTarget: data.role.id
-      })
-
       // Lấy thông tin role mục tiêu
       const targetRole = await this.sharedRoleRepository.findRolebyId(data.role.id)
       if (!targetRole) {
@@ -201,36 +170,13 @@ export class UserService {
     }
   }
 
-  /**
-   * Tạo mới nhiều người dùng cùng lúc (bulk create).
-   * Chỉ admin mới được phép tạo user có role là admin.
-   * - Kiểm tra hợp lệ profile, department cho từng user
-   * - Sinh eid theo role (tối ưu sinh nhiều eid cùng lúc)
-   * - Hash password
-   * - Gửi email chào mừng
-   */
-
-  async createBulk({
-    data,
-    createdById,
-    createdByRoleName
-  }: {
-    data: CreateBulkUsersBodyType
-    createdById: string
-    createdByRoleName: string
-  }) {
+  async createBulk({ data, createdById }: { data: CreateBulkUsersBodyType; createdById: string }) {
     try {
       const users = data.users
 
       // Bước 1: Validate tất cả các role và tính hợp lệ của profile
       const roleValidationPromises = users.map(async (userData, index) => {
         try {
-          // Kiểm tra role đang chỉnh có quyền ko
-          await this.verifyRole({
-            roleNameAgent: createdByRoleName,
-            roleIdTarget: userData.role.id
-          })
-
           const targetRole = await this.sharedRoleRepository.findRolebyId(userData.role.id)
           if (!targetRole) {
             throw new Error(BulkRoleNotFoundAtIndexException(index))
@@ -691,58 +637,34 @@ export class UserService {
       roleIdForPermissionCheck: inputRole.id
     }
   }
-
-  private async getRoleIdByUserId({ userId, includeDeleted }: { userId: string; includeDeleted: boolean }) {
-    const currentUser = await this.sharedUserRepository.findUnique(
-      {
-        id: userId
-      },
-      { includeDeleted }
-    )
-    if (!currentUser) {
-      throw UserNotFoundException
-    }
-    return currentUser.roleId
-  }
-
   private verifyYourself({ userAgentId, userTargetId }: { userAgentId: string; userTargetId: string }) {
     if (userAgentId === userTargetId) {
       throw CannotUpdateOrDeleteYourselfException
     }
   }
 
-  async delete({ id, deletedById, deletedByRoleName }: { id: string; deletedById: string; deletedByRoleName: string }) {
+  async delete({ id, deletedById }: { id: string; deletedById: string }) {
     try {
-      // Không thể xóa chính mình
+      // Business rule: Cannot delete yourself
       this.verifyYourself({
         userAgentId: deletedById,
         userTargetId: id
       })
 
-      // Lấy thông tin đầy đủ user thay vì chỉ roleId
-      // Chỉ admin mới có thể thao tác với user bị disabled (nếu cần)
-      const user = await this.sharedUserRepository.findUniqueIncludeProfile(
-        { id },
-        { includeDeleted: false } // Chỉ delete user đang active
-      )
+      // Get user info for validation
+      const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: false })
       if (!user) {
         throw UserNotFoundException
       }
 
-      // Kiểm tra role của user có đang active không
+      // Business rules: Validate data integrity
       if (!user.role.isActive) {
         throw RoleIsDisabledException
       }
 
-      // Kiểm tra department của user có đang active không (nếu có)
       if (user.department && user.department.isActive !== ActiveStatus.ACTIVE) {
         throw DepartmentIsDisabledException
       }
-
-      await this.verifyRole({
-        roleNameAgent: deletedByRoleName,
-        roleIdTarget: user.role.id
-      })
 
       await this.userRepo.delete({
         id,
@@ -758,42 +680,34 @@ export class UserService {
       throw error
     }
   }
-  async enable({ id, enabledById, enabledByRoleName }: { id: string; enabledById: string; enabledByRoleName: string }) {
+  async enable({ id, enabledById }: { id: string; enabledById: string }) {
     try {
-      // Không thể enable bản thân
+      // Business rule: Cannot enable yourself
       this.verifyYourself({
         userAgentId: enabledById,
         userTargetId: id
       })
 
-      // Lấy thông tin user (bao gồm cả disabled users) để kiểm tra quyền
+      // Get user info (including disabled users)
       const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: true })
       if (!user) {
         throw UserNotFoundException
       }
 
-      // Kiểm tra role của user có đang active không
+      // Business rules: Validate data integrity
       if (!user.role.isActive) {
         throw RoleIsDisabledException
       }
 
-      // Kiểm tra department của user có đang active không (nếu có)
       if (user.department && user.department.isActive !== ActiveStatus.ACTIVE) {
         throw DepartmentIsDisabledException
       }
 
-      // Kiểm tra quyền
-      await this.verifyRole({
-        roleNameAgent: enabledByRoleName,
-        roleIdTarget: user.role.id
-      })
-
-      // Kiểm tra xem user có thực sự bị disabled không
+      // Business rule: Check if user can be enabled
       if (user.status !== 'DISABLED' && user.deletedAt === null) {
         throw UserIsNotDisabledException
       }
 
-      // Thực hiện enable và active lại profile nếu có
       await this.userRepo.enable({
         id,
         enabledById

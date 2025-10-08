@@ -6,7 +6,7 @@ import {
   RoleWithPermissionsType,
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
-import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { ActiveStatus } from '~/shared/constants/default.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -119,7 +119,7 @@ export class RoleRepo {
         name: data.name,
         description: data.description,
         permissions: {
-          set: data.permissionIds.map((id) => ({ id }))
+          set: data.permissionIds?.map((id) => ({ id }))
         },
         updatedById
       },
@@ -157,7 +157,7 @@ export class RoleRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: STATUS_CONST.INACTIVE
+            isActive: ActiveStatus.INACTIVE
           }
         })
   }
@@ -171,7 +171,7 @@ export class RoleRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: STATUS_CONST.ACTIVE,
+        isActive: ActiveStatus.ACTIVE,
         updatedById: enabledById
       }
     })
