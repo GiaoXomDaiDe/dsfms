@@ -1,6 +1,9 @@
 import {
   Controller,
   Post,
+  Get,
+  Param,
+  Body,
   UploadedFile,
   UseInterceptors,
   BadRequestException
@@ -8,7 +11,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
-import { ParseTemplateResponseDTO } from './template.dto'
+import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { ParseTemplateResponseDTO, CreateTemplateFormDto } from './template.dto'
 import { TemplateService } from './template.service'
 
 @Controller('templates')
@@ -17,7 +21,6 @@ export class TemplateController {
 
   /**
    * POST /templates/parse
-   * Upload a DOCX file and parse its placeholders to generate JSON schema
    */
   @Post('parse')
   @IsPublic()
@@ -33,5 +36,60 @@ export class TemplateController {
     }
 
     return await this.templateService.parseDocxTemplate(file)
+  }
+
+  /**
+   * POST /templates
+   */
+  @Post()
+  @IsPublic()
+  async createTemplate(
+    @Body() createTemplateDto: CreateTemplateFormDto,
+    @ActiveUser() currentUser: any
+  ) {
+    try {
+      return await this.templateService.createTemplate(createTemplateDto, currentUser);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * GET /templates/:id
+   */
+  @Get(':id')
+  @IsPublic()
+  async getTemplateById(@Param('id') id: string) {
+    try {
+      return await this.templateService.getTemplateById(id);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * GET /templates
+   */
+  @Get()
+  @IsPublic()
+  async getAllTemplates() {
+    try {
+      return await this.templateService.getAllTemplates();
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * GET /templates/department/:departmentId
+   */
+  @Get('department/:departmentId')
+  @IsPublic()
+  async getTemplatesByDepartment(@Param('departmentId') departmentId: string) {
+    try {
+      return await this.templateService.getTemplatesByDepartment(departmentId);
+    } catch (error) {
+      throw error;
+    }
   }
 }

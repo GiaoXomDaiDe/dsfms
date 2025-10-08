@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, ForbiddenException } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
+import { TemplateRepository } from './template.repository'
+import { CreateTemplateFormDto } from './template.dto'
 
 interface PlaceholderInfo {
   type: 'field' | 'section' | 'condition' | 'inverted'
@@ -10,6 +12,7 @@ interface PlaceholderInfo {
 
 @Injectable()
 export class TemplateService {
+  constructor(private readonly templateRepository: TemplateRepository) {}
   /**
    * Parse DOCX và trích xuất placeholders
    * trả về JSON schema dựa trên các placeholders tìm thấy
@@ -159,5 +162,113 @@ export class TemplateService {
     }
     // Check for mathematical operations
     return /[+\-*/]/.test(field)
+  }
+
+  /**
+   * Create a complete template with sections and fields
+   * Only ADMINISTRATOR role can create templates
+   */
+  async createTemplate(
+    templateData: CreateTemplateFormDto,
+    currentUser: any
+  ) {
+    // Check if user has ADMINISTRATOR role
+    if (currentUser.roleName !== 'ADMINISTRATOR') {
+      throw new ForbiddenException('Only ADMINISTRATOR role can create templates');
+    }
+
+    // Validate department exists and user has access
+    // (Add department validation logic here if needed)
+
+    try {
+      // Generate template schema from all field names in sections
+      const allFieldNames = templateData.sections.flatMap(section => 
+        section.fields.map(field => field.fieldName)
+      );
+
+      const templateSchema = this.generateSchemaFromFieldNames(allFieldNames);
+
+      // Create template with all nested data
+      const result = await this.templateRepository.createTemplateWithSectionsAndFields(
+        templateData,
+        currentUser.userId,
+        templateSchema
+      );
+
+      return {
+        success: true,
+        data: result,
+        message: 'Template created successfully'
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to create template: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get template by ID with full details
+   */
+  async getTemplateById(id: string) {
+    const template = await this.templateRepository.findTemplateById(id);
+    
+    if (!template) {
+      throw new BadRequestException('Template not found');
+    }
+
+    return {
+      success: true,
+      data: template,
+      message: 'Template retrieved successfully'
+    };
+  }
+
+  /**
+   * Get all templates
+   */
+  async getAllTemplates() {
+    const templates = await this.templateRepository.findAllTemplates();
+
+    return {
+      success: true,
+      data: templates,
+      message: 'Templates retrieved successfully'
+    };
+  }
+
+  /**
+   * Get templates by department
+   */
+  async getTemplatesByDepartment(departmentId: string) {
+    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId);
+
+    return {
+      success: true,
+      data: templates,
+      message: 'Department templates retrieved successfully'
+    };
+  }
+
+  /**
+   * Generate basic schema from field names
+   */
+  private generateSchemaFromFieldNames(fieldNames: string[]): Record<string, any> {
+    const schema: Record<string, any> = {};
+    
+    fieldNames.forEach(fieldName => {
+      // Remove curly braces if present and clean field name
+      const cleanName = fieldName.replace(/[{}]/g, '').trim();
+      
+      schema[cleanName] = {
+        type: 'string',
+        required: false,
+        description: `Field: ${cleanName}`
+      };
+    });
+
+    return {
+      type: 'object',
+      properties: schema,
+      additionalProperties: false
+    };
   }
 }
