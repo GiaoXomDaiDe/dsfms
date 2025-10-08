@@ -17,11 +17,6 @@ export const RoleSchema = z.object({
 
 export const GetRolesQuerySchema = IncludeDeletedQuerySchema.strict()
 
-export const RoleWithPermissionsSchema = RoleSchema.extend({
-  permissions: z.array(PermissionSchema),
-  userCount: z.number().default(0),
-  permissionCount: z.number().default(0)
-})
 export const RoleWithUserCountSchema = RoleSchema.extend({
   userCount: z.number()
 })
@@ -36,6 +31,12 @@ export const GetRoleParamsSchema = z
   })
   .strict()
 
+export const RoleWithPermissionsSchema = RoleSchema.extend({
+  permissions: z.array(PermissionSchema),
+  userCount: z.number().default(0),
+  permissionCount: z.number().default(0)
+})
+
 export const GetRoleDetailResSchema = RoleWithPermissionsSchema
 
 export const CreateRoleBodySchema = RoleSchema.pick({
@@ -45,28 +46,16 @@ export const CreateRoleBodySchema = RoleSchema.pick({
   .extend({
     permissionIds: z
       .array(z.uuid())
-      .min(1, 'At least one permission is required')
-      .refine((ids) => new Set(ids).size === ids.length, {
-        message: 'Duplicate permission IDs are not allowed'
-      })
+      .min(1)
+      .refine((ids) => new Set(ids).size === ids.length)
   })
   .strict()
 
 export const CreateRoleResSchema = RoleSchema
 
-export const UpdateRoleBodySchema = RoleSchema.pick({
-  name: true,
-  description: true
-})
-  .extend({
-    permissionIds: z
-      .array(z.uuid())
-      .min(1, 'At least one permission is required')
-      .refine((ids) => new Set(ids).size === ids.length, {
-        message: 'Duplicate permission IDs are not allowed'
-      })
-  })
-  .strict()
+export const UpdateRoleBodySchema = CreateRoleBodySchema.partial()
+
+export const UpdateRoleResSchema = CreateRoleResSchema
 
 export type RoleType = z.infer<typeof RoleSchema>
 export type RoleWithPermissionsType = z.infer<typeof RoleWithPermissionsSchema>

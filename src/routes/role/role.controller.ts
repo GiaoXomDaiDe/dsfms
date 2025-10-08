@@ -7,7 +7,8 @@ import {
   GetRoleParamsDTO,
   GetRolesQueryDTO,
   GetRolesResDTO,
-  UpdateRoleBodyDTO
+  UpdateRoleBodyDTO,
+  UpdateRoleResDTO
 } from '~/routes/role/role.dto'
 import { RoleService } from '~/routes/role/role.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -50,7 +51,7 @@ export class RoleController {
   }
 
   @Put(':roleId')
-  @ZodSerializerDto(GetRoleDetailResDTO)
+  @ZodSerializerDto(UpdateRoleResDTO)
   update(@Body() body: UpdateRoleBodyDTO, @Param() params: GetRoleParamsDTO, @ActiveUser('userId') userId: string) {
     return this.roleService.update({
       data: body,
@@ -70,15 +71,10 @@ export class RoleController {
 
   @Patch(':roleId/enable')
   @ZodSerializerDto(MessageResDTO)
-  enable(
-    @Param() params: GetRoleParamsDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  enable(@Param() params: GetRoleParamsDTO, @ActiveUser('userId') userId: string) {
     return this.roleService.enable({
       id: params.roleId,
-      enabledById: userId,
-      enablerRole: roleName
+      enabledById: userId
     })
   }
 }

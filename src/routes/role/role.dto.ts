@@ -6,7 +6,8 @@ import {
   GetRoleParamsSchema,
   GetRolesQuerySchema,
   GetRolesResSchema,
-  UpdateRoleBodySchema
+  UpdateRoleBodySchema,
+  UpdateRoleResSchema
 } from '~/routes/role/role.model'
 
 export class GetRolesQueryDTO extends createZodDto(GetRolesQuerySchema) {}
@@ -22,3 +23,5 @@ export class CreateRoleBodyDTO extends createZodDto(CreateRoleBodySchema) {}
 export class CreateRoleResDTO extends createZodDto(CreateRoleResSchema) {}
 
 export class UpdateRoleBodyDTO extends createZodDto(UpdateRoleBodySchema) {}
+
+export class UpdateRoleResDTO extends createZodDto(UpdateRoleResSchema) {}
