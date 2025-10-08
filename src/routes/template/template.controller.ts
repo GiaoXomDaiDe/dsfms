@@ -21,7 +21,6 @@ export class TemplateController {
 
   /**
    * POST /templates/parse
-   * Upload a DOCX file and parse its placeholders to generate JSON schema
    */
   @Post('parse')
   @IsPublic()
@@ -41,10 +40,9 @@ export class TemplateController {
 
   /**
    * POST /templates
-   * Create a new template with sections and fields
-   * Only ADMINISTRATOR role can create templates
    */
   @Post()
+  @IsPublic()
   async createTemplate(
     @Body() createTemplateDto: CreateTemplateFormDto,
     @ActiveUser() currentUser: any
@@ -58,9 +56,9 @@ export class TemplateController {
 
   /**
    * GET /templates/:id
-   * Get template by ID with full details
    */
   @Get(':id')
+  @IsPublic()
   async getTemplateById(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateById(id);
@@ -71,13 +69,11 @@ export class TemplateController {
 
   /**
    * GET /templates
-   * Get all templates
    */
   @Get()
-  // @UseGuards(JwtGuard)
+  @IsPublic()
   async getAllTemplates() {
     try {
-      console.log("here");
       return await this.templateService.getAllTemplates();
     } catch (error) {
       throw error;
@@ -86,9 +82,9 @@ export class TemplateController {
 
   /**
    * GET /templates/department/:departmentId
-   * Get templates by department
    */
   @Get('department/:departmentId')
+  @IsPublic()
   async getTemplatesByDepartment(@Param('departmentId') departmentId: string) {
     try {
       return await this.templateService.getTemplatesByDepartment(departmentId);
