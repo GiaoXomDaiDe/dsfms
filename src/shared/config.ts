@@ -81,7 +81,6 @@ const getEnvVars = () => {
       ACADEMIC_DEPARTMENT_FIRST_NAME: 'Academic',
       ACADEMIC_DEPARTMENT_LAST_NAME: 'Department',
       ACADEMIC_DEPARTMENT_MIDDLE_NAME: 'Test',
-
       ...process.env
     }
   }
