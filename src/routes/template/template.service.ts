@@ -109,7 +109,7 @@ export class TemplateService {
         
         if (hasInverted) {
           // xác định đây là boolean
-          schema[sectionName] = true
+          schema[sectionName] = false
           conditionalSections.add(sectionName)
           // console.log(`  -> Added conditional section: ${sectionName}`)
         } else {
@@ -337,10 +337,13 @@ export class TemplateService {
       }))
     };
 
+    // Build nested schema structure from sections and fields
+    const schema = this.buildNestedSchema(template.sections);
+
     return {
       success: true,
       data: schemaFormat,
-      templateSchema: template.templateSchema,
+      schema: schema,
       metadata: {
         templateId: template.id,
         version: template.version,
@@ -369,6 +372,71 @@ export class TemplateService {
     };
 
     return fieldData;
+  }
+
+  /**
+   * Build nested schema structure from sections and fields
+   * Uses parent-child relationships to create nested objects
+   */
+  private buildNestedSchema(sections: any[]): Record<string, any> {
+    const schema: Record<string, any> = {};
+
+    // Process each section
+    for (const section of sections) {
+      // Process each field in the section
+      for (const field of section.fields) {
+        // If field has a parent, it's a child field
+        if (field.parentId) {
+          // Find the parent field
+          const parentField = section.fields.find((f: any) => f.id === field.parentId);
+          
+          if (parentField) {
+            const parentFieldName = parentField.fieldName;
+            
+            // Initialize parent object if not exists
+            if (!schema[parentFieldName]) {
+              schema[parentFieldName] = {};
+            }
+            
+            // Add child field to parent object
+            schema[parentFieldName][field.fieldName] = this.getDefaultValueForField(field);
+          }
+        } else {
+          // Top-level field (no parent)
+          // Check if this field has children
+          const hasChildren = section.fields.some((f: any) => f.parentId === field.id);
+          
+          if (hasChildren) {
+            // Initialize as object to hold children
+            if (!schema[field.fieldName]) {
+              schema[field.fieldName] = {};
+            }
+          } else {
+            // Simple field with no children
+            schema[field.fieldName] = this.getDefaultValueForField(field);
+          }
+        }
+      }
+    }
+
+    return schema;
+  }
+
+  /**
+   * Get default value for a field based on its type
+   */
+  private getDefaultValueForField(field: any): any {
+    switch (field.fieldType) {
+      case 'CHECK_BOX':
+      case 'TOGGLE':
+      case 'SECTION_CONTROL_TOGGLE':
+        return false;
+      case 'NUMBER':
+      case 'FINAL_SCORE_NUM':
+        return 0;
+      default:
+        return '';
+    }
   }
 
   /**
