@@ -220,4 +220,16 @@ export class TemplateRepository {
     });
     return !!template;
   }
+
+  async validateDepartmentExists(departmentId: string): Promise<boolean> {
+    const department = await this.prismaService.department.findUnique({
+      where: { 
+        id: departmentId,
+        deletedAt: null,
+        isActive: 'ACTIVE'
+      },
+      select: { id: true },
+    });
+    return !!department;
+  }
 }
