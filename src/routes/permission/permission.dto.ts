@@ -8,14 +8,14 @@ import {
   UpdatePermissionBodySchema
 } from '~/routes/permission/permission.model'
 
-export class GetPermissionsResDTO extends createZodDto(GetPermissionsResSchema) {}
+export class GetPermissionsQueryDTO extends createZodDto(GetPermissionsQuerySchema) {}
 
 export class GetPermissionParamsDTO extends createZodDto(GetPermissionParamsSchema) {}
+
+export class GetPermissionsResDTO extends createZodDto(GetPermissionsResSchema) {}
 
 export class GetPermissionDetailResDTO extends createZodDto(GetPermissionDetailResSchema) {}
 
 export class CreatePermissionBodyDTO extends createZodDto(CreatePermissionBodySchema) {}
 
 export class UpdatePermissionBodyDTO extends createZodDto(UpdatePermissionBodySchema) {}
-
-export class GetPermissionsQueryDTO extends createZodDto(GetPermissionsQuerySchema) {}
