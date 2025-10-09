@@ -1,5 +1,9 @@
 import z from 'zod'
 import { PermissionSchema } from '~/routes/permission/permission.model'
+import {
+  AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE,
+  PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE
+} from '~/routes/role/role.error'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 
 export const RoleSchema = z.object({
@@ -46,8 +50,8 @@ export const CreateRoleBodySchema = RoleSchema.pick({
   .extend({
     permissionIds: z
       .array(z.uuid())
-      .min(1)
-      .refine((ids) => new Set(ids).size === ids.length)
+      .min(1, AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE)
+      .refine((ids) => new Set(ids).size === ids.length, PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE)
   })
   .strict()
 
@@ -56,6 +60,20 @@ export const CreateRoleResSchema = RoleSchema
 export const UpdateRoleBodySchema = CreateRoleBodySchema.partial()
 
 export const UpdateRoleResSchema = CreateRoleResSchema
+
+export const AddPermissionsToRoleBodySchema = z
+  .object({
+    permissionIds: z
+      .array(z.uuid())
+      .min(1, AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE)
+      .refine((ids) => new Set(ids).size === ids.length, PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE)
+  })
+  .strict()
+
+export const AddPermissionsToRoleResSchema = z.object({
+  message: z.string(),
+  addedPermissions: z.array(PermissionSchema)
+})
 
 export type RoleType = z.infer<typeof RoleSchema>
 export type RoleWithPermissionsType = z.infer<typeof RoleWithPermissionsSchema>
@@ -67,3 +85,5 @@ export type GetRoleParamsType = z.infer<typeof GetRoleParamsSchema>
 export type GetRolesQueryType = z.infer<typeof GetRolesQuerySchema>
 export type UpdateRoleBodyType = z.infer<typeof UpdateRoleBodySchema>
 export type RoleWithUserCountType = z.infer<typeof RoleWithUserCountSchema>
+export type AddPermissionsToRoleBodyType = z.infer<typeof AddPermissionsToRoleBodySchema>
+export type AddPermissionsToRoleResType = z.infer<typeof AddPermissionsToRoleResSchema>

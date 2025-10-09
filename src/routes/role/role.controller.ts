@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
+  AddPermissionsToRoleBodyDTO,
+  AddPermissionsToRoleResDTO,
   CreateRoleBodyDTO,
   CreateRoleResDTO,
   GetRoleDetailResDTO,
@@ -13,6 +15,7 @@ import {
 import { RoleService } from '~/routes/role/role.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('roles')
@@ -75,6 +78,24 @@ export class RoleController {
     return this.roleService.enable({
       id: params.roleId,
       enabledById: userId
+    })
+  }
+
+  /**
+   * Internal API: Add permissions to a role
+   */
+  @Patch(':roleId/add-permissions')
+  @IsPublic()
+  @ZodSerializerDto(AddPermissionsToRoleResDTO)
+  addPermissions(
+    @Param() params: GetRoleParamsDTO,
+    @Body() body: AddPermissionsToRoleBodyDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    return this.roleService.addPermissions({
+      roleId: params.roleId,
+      permissionIds: body.permissionIds,
+      updatedById: userId
     })
   }
 }
