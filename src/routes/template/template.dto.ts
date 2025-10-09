@@ -4,7 +4,7 @@ import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString,
 import { Type } from 'class-transformer';
 import { EditByRole, RoleInSubject, FieldType, RoleRequired } from '@prisma/client';
 
-// Response schema
+// Response schema for parseTemplate (full schema with sections)
 export const ParseTemplateResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
@@ -15,6 +15,21 @@ export const ParseTemplateResponseSchema = z.object({
 export class ParseTemplateResponseDTO extends createZodDto(ParseTemplateResponseSchema) {}
 
 export type ParseTemplateResponseType = z.infer<typeof ParseTemplateResponseSchema>
+
+// Response schema for extractFields (just field names)
+export const ExtractFieldsResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  fields: z.array(z.object({
+    fieldName: z.string(),
+    placeholder: z.string()
+  })),
+  totalFields: z.number()
+})
+
+export class ExtractFieldsResponseDTO extends createZodDto(ExtractFieldsResponseSchema) {}
+
+export type ExtractFieldsResponseType = z.infer<typeof ExtractFieldsResponseSchema>
 
 // Template Creation DTOs
 export class CreateTemplateFieldDto {
