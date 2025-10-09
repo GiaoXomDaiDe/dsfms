@@ -6,8 +6,6 @@ import {
   UnprocessableEntityException 
 } from '@nestjs/common';
 
-// ==================== Template Form Errors ====================
-
 export class TemplateNotFoundError extends NotFoundException {
   constructor(templateId?: string) {
     super(templateId 
@@ -198,8 +196,6 @@ export class InvalidFieldOptionsError extends BadRequestException {
   }
 }
 
-// ==================== DOCX Parsing Errors ====================
-
 export class InvalidFileTypeError extends BadRequestException {
   constructor() {
     super('Only .docx files are allowed');
@@ -343,7 +339,6 @@ export class FieldValidationError extends BadRequestException {
   }
 }
 
-// ==================== Transaction Errors ====================
 
 export class TransactionFailedError extends BadRequestException {
   constructor(reason?: string) {

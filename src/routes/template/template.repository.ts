@@ -6,6 +6,92 @@ import { CreateTemplateFormDto } from './template.dto';
 export class TemplateRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
+  /**
+   * Validate parent-child field relationships before creating
+   * @throws Error if validation fails
+   */
+  private validateFieldHierarchy(fields: any[]): void {
+    const fieldNames = new Set(fields.map(f => f.fieldName));
+    
+    for (const field of fields) {
+      if (field.parentTempId) {
+        // Extract parent field name from parentTempId (format: "field_{fieldName}")
+        const parentFieldName = field.parentTempId.replace(/^field_/, '');
+        
+        // Check if parent exists in the same section
+        if (!fieldNames.has(parentFieldName)) {
+          throw new Error(
+            `Field '${field.fieldName}' references parent '${parentFieldName}' which does not exist in the same section`
+          );
+        }
+      }
+    }
+
+    // Check for self-reference
+    for (const field of fields) {
+      if (field.parentTempId === `field_${field.fieldName}`) {
+        throw new Error(
+          `Field '${field.fieldName}' cannot be its own parent`
+        );
+      }
+    }
+
+    // Detect cycles using DFS
+    const buildAdjList = () => {
+      const adjList = new Map<string, string[]>();
+      for (const field of fields) {
+        if (!adjList.has(field.fieldName)) {
+          adjList.set(field.fieldName, []);
+        }
+        if (field.parentTempId) {
+          const parentName = field.parentTempId.replace(/^field_/, '');
+          if (!adjList.has(parentName)) {
+            adjList.set(parentName, []);
+          }
+          adjList.get(parentName)!.push(field.fieldName);
+        }
+      }
+      return adjList;
+    };
+
+    const hasCycle = (adjList: Map<string, string[]>) => {
+      const visited = new Set<string>();
+      const recStack = new Set<string>();
+
+      const dfs = (node: string): boolean => {
+        visited.add(node);
+        recStack.add(node);
+
+        const neighbors = adjList.get(node) || [];
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            if (dfs(neighbor)) return true;
+          } else if (recStack.has(neighbor)) {
+            return true; // Cycle detected
+          }
+        }
+
+        recStack.delete(node);
+        return false;
+      };
+
+      for (const node of adjList.keys()) {
+        if (!visited.has(node)) {
+          if (dfs(node)) return true;
+        }
+      }
+      return false;
+    };
+
+    const adjList = buildAdjList();
+    if (hasCycle(adjList)) {
+      throw new Error(
+        'Circular reference detected in field hierarchy. ' +
+        'Fields cannot form a cycle through parent-child relationships.'
+      );
+    }
+  }
+
   async createTemplateWithSectionsAndFields(
     templateData: CreateTemplateFormDto,
     createdByUserId: string,
@@ -30,6 +116,9 @@ export class TemplateRepository {
       const createdSections = [];
       
       for (const sectionData of templateData.sections) {
+        // Validate field hierarchy before processing
+        this.validateFieldHierarchy(sectionData.fields);
+
         // Create section
         const section = await tx.templateSection.create({
           data: {
@@ -49,14 +138,35 @@ export class TemplateRepository {
         const createdFields = [];
 
         // Process fields in order, handling hierarchy
+        let maxIterations = fieldsToCreate.length + 1; // Prevent infinite loops
+        let iterations = 0;
+
         while (fieldsToCreate.length > 0) {
+          iterations++;
+          
+          // Safety check to prevent infinite loops
+          if (iterations > maxIterations) {
+            throw new Error(
+              `Failed to create fields after ${maxIterations} iterations. ` +
+              `Remaining fields: ${fieldsToCreate.map(f => f.fieldName).join(', ')}`
+            );
+          }
+
           const fieldsToProcess = fieldsToCreate.filter(field => {
             // If field has no parent OR parent already created
             return !field.parentTempId || fieldIdMapping.has(field.parentTempId);
           });
 
           if (fieldsToProcess.length === 0) {
-            throw new Error('Circular reference detected in field hierarchy');
+            // Provide detailed error message
+            const orphanFields = fieldsToCreate.map(f => ({
+              fieldName: f.fieldName,
+              parentTempId: f.parentTempId
+            }));
+            throw new Error(
+              `Circular reference or missing parent detected in field hierarchy. ` +
+              `Cannot resolve: ${JSON.stringify(orphanFields)}`
+            );
           }
 
           for (const fieldData of fieldsToProcess) {
