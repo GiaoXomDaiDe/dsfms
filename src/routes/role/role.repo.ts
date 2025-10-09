@@ -176,4 +176,54 @@ export class RoleRepo {
       }
     })
   }
+
+  async addPermissions({
+    roleId,
+    permissionIds,
+    updatedById
+  }: {
+    roleId: string
+    permissionIds: string[]
+    updatedById: string
+  }) {
+    const currentRole = await this.prismaService.role.findUnique({
+      where: { id: roleId, deletedAt: null },
+      include: {
+        permissions: {
+          where: { deletedAt: null },
+          select: { id: true }
+        }
+      }
+    })
+
+    if (!currentRole) {
+      throw new Error('Role not found')
+    }
+
+    const existingPermissionIds = currentRole.permissions.map((p) => p.id)
+    const newPermissionIds = permissionIds.filter((id) => !existingPermissionIds.includes(id))
+
+    if (newPermissionIds.length === 0) {
+      return { addedPermissions: [] }
+    }
+
+    await this.prismaService.role.update({
+      where: { id: roleId, deletedAt: null },
+      data: {
+        permissions: {
+          connect: newPermissionIds.map((id) => ({ id }))
+        },
+        updatedById
+      }
+    })
+
+    const addedPermissions = await this.prismaService.permission.findMany({
+      where: {
+        id: { in: newPermissionIds },
+        deletedAt: null
+      }
+    })
+
+    return { addedPermissions }
+  }
 }

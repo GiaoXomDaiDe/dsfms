@@ -188,3 +188,26 @@ export const UnexpectedEnableErrorException = new BadRequestException({
   errorCode: 'UNEXPECTED_ENABLE_ERROR',
   solution: 'Please contact system administrator if this persists'
 })
+
+// Lỗi khi tất cả permissions đã được assign cho role
+export const NoNewPermissionsToAddException = new BadRequestException({
+  message: 'All specified permissions are already assigned to this role',
+  errorCode: 'NO_NEW_PERMISSIONS_TO_ADD',
+  suggestion: 'Check current role permissions before adding new ones'
+})
+
+/* =========================
+ * Validation Error Messages - Messages cho schema validation
+ * Phục vụ: Cung cấp consistent error messages cho Zod schema validation
+ * ========================= */
+
+// Message cho permission validation
+export const AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE = 'At least one permission ID is required'
+export const PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE = 'Permission IDs must be unique'
+export const PERMISSION_ID_MUST_BE_UUID_MESSAGE = 'Permission ID must be a valid UUID'
+
+// Message cho role validation
+export const ROLE_NAME_REQUIRED_MESSAGE = 'Role name is required'
+export const ROLE_NAME_MAX_LENGTH_MESSAGE = 'Role name cannot exceed 500 characters'
+export const ROLE_DESCRIPTION_MAX_LENGTH_MESSAGE = 'Role description cannot exceed 1000 characters'
+export const INVALID_ROLE_STATUS_MESSAGE = 'Role status must be ACTIVE or INACTIVE'

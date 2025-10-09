@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
   createRoleAlreadyActiveError,
+  NoNewPermissionsToAddException,
   NotFoundRoleException,
   RoleAlreadyExistsException,
   UnexpectedEnableErrorException
@@ -11,7 +12,7 @@ import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
-import { preventAdminDeletion, validateEntityExists } from '~/shared/validation/entity-operation.validation'
+import { preventAdminDeletion } from '~/shared/validation/entity-operation.validation'
 
 @Injectable()
 export class RoleService {
@@ -71,9 +72,8 @@ export class RoleService {
 
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
     const role = await this.roleRepo.findById(id)
-    validateEntityExists(role, 'Role')
+    if (!role) throw NotFoundRoleException
 
-    // Business rule: Protect system integrity
     preventAdminDeletion(role.name)
 
     try {
@@ -87,7 +87,7 @@ export class RoleService {
 
   async enable({ id, enabledById }: { id: string; enabledById: string }) {
     const role = await this.roleRepo.findById(id, { includeDeleted: true })
-    validateEntityExists(role, 'Role')
+    if (!role) throw NotFoundRoleException
 
     // Business rule: Check if already active
     if (!role.deletedAt) throw createRoleAlreadyActiveError(role.name)
@@ -98,6 +98,41 @@ export class RoleService {
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       if (isUniqueConstraintPrismaError(error)) throw UnexpectedEnableErrorException
+      throw error
+    }
+  }
+
+  async addPermissions({
+    roleId,
+    permissionIds,
+    updatedById
+  }: {
+    roleId: string
+    permissionIds: string[]
+    updatedById: string
+  }) {
+    const role = await this.roleRepo.findById(roleId)
+    if (!role) throw NotFoundRoleException
+
+    await this.sharedPermissionRepo.validatePermissionIds(permissionIds)
+
+    try {
+      const result = await this.roleRepo.addPermissions({
+        roleId,
+        permissionIds,
+        updatedById
+      })
+
+      if (result.addedPermissions.length === 0) {
+        throw NoNewPermissionsToAddException
+      }
+
+      return {
+        message: `Successfully added ${result.addedPermissions.length} permission(s) to role "${role.name}"`,
+        addedPermissions: result.addedPermissions
+      }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       throw error
     }
   }
