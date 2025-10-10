@@ -106,6 +106,25 @@ export class SubjectController {
   }
 
   /**
+   * API: Archive a Subject
+   * POST /subjects/:id/archive
+   * Archive subject bằng cách đổi status sang ARCHIVED
+   */
+  @Post(':id/archive')
+  @ZodSerializerDto(SubjectResDto)
+  async archiveSubject(
+    @Param('id') id: string,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.archive({
+      id,
+      archivedById: userId,
+      archivedByRoleName: roleName
+    })
+  }
+
+  /**
    * API: Get All Subjects (with filters and pagination)
    * GET /subjects
    * Lấy danh sách subjects với filter và phân trang
