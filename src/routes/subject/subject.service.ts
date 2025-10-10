@@ -34,7 +34,7 @@ import {
   GetSubjectsResType,
   SubjectDetailResType,
   SubjectEntityType,
-  SubjectWithInfoType,
+  SubjectResType,
   UpdateSubjectBodyType
 } from './subject.model'
 import { SubjectRepo } from './subject.repo'
@@ -93,7 +93,7 @@ export class SubjectService {
     data: CreateSubjectBodyType
     createdById: string
     createdByRoleName: string
-  }): Promise<SubjectEntityType> {
+  }): Promise<SubjectResType> {
     try {
       // Kiểm tra quyền tạo subject
       this.validateCreatePermissions(createdByRoleName)
@@ -118,7 +118,7 @@ export class SubjectService {
       // Validate date range
       this.validateDateRange(data.startDate, data.endDate)
 
-      return await this.subjectRepo.create({ data, createdById })
+      return await this.subjectRepo.createSimple({ data, createdById })
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw CourseNotFoundException
@@ -232,7 +232,7 @@ export class SubjectService {
     data: UpdateSubjectBodyType
     updatedById: string
     updatedByRoleName: string
-  }): Promise<SubjectEntityType> {
+  }): Promise<SubjectResType> {
     try {
       // Kiểm tra quyền update
       this.validateUpdatePermissions(updatedByRoleName)
@@ -267,7 +267,7 @@ export class SubjectService {
       const endDate = data.endDate || existingSubject.endDate
       this.validateDateRange(startDate, endDate)
 
-      return await this.subjectRepo.update({ id, data, updatedById })
+      return await this.subjectRepo.updateSimple({ id, data, updatedById })
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw SubjectNotFoundException
@@ -320,6 +320,40 @@ export class SubjectService {
   }
 
   /**
+   * Archive subject bằng cách đổi status sang ARCHIVED.
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền archive
+   * - ACADEMIC_DEPARTMENT có thể archive bất kỳ subject nào
+   */
+  async archive({
+    id,
+    archivedById,
+    archivedByRoleName
+  }: {
+    id: string
+    archivedById: string
+    archivedByRoleName: string
+  }): Promise<SubjectResType> {
+    // Kiểm tra quyền archive
+    this.validateDeletePermissions(archivedByRoleName) // Sử dụng delete permission vì tương tự
+
+    // Lấy subject hiện tại
+    const existingSubject = await this.subjectRepo.findById(id)
+    if (!existingSubject) {
+      throw SubjectNotFoundException
+    }
+
+    // ACADEMIC_DEPARTMENT có thể archive bất kỳ subject nào
+    // Không cần kiểm tra department access
+
+    // Archive by changing status to ARCHIVED
+    return await this.subjectRepo.updateSimple({
+      id,
+      data: {},
+      updatedById: archivedById
+    })
+  }
+
+  /**
    * Khôi phục subject đã bị xóa mềm.
    * - Chỉ ACADEMIC_DEPARTMENT mới có quyền restore
    * - ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
@@ -361,25 +395,76 @@ export class SubjectService {
   }
 
   /**
-   * Lấy danh sách subjects theo course.
-   * @param courseId - ID của course
-   * @param includeDeleted - Có lấy subjects đã bị xóa không (chỉ ADMIN)
+   * Enroll trainees vào subject.
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
+   * - Validate tất cả trainees tồn tại và có role TRAINEE
    */
-  async getSubjectsByCourse({
-    courseId,
-    includeDeleted = false
+  async enrollTrainees({
+    subjectId,
+    data,
+    roleName
   }: {
-    courseId: string
-    includeDeleted?: boolean
-  }): Promise<SubjectWithInfoType[]> {
-    const result = await this.subjectRepo.list({
-      page: 1,
-      limit: 1000,
-      courseId,
-      includeDeleted
+    subjectId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    // Kiểm tra quyền
+    this.validateUpdatePermissions(roleName)
+
+    // Kiểm tra subject tồn tại
+    const subject = await this.subjectRepo.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    // Enroll trainees
+    const result = await this.subjectRepo.enrollTrainees({
+      subjectId,
+      trainees: data.trainees
     })
 
-    return result.subjects
+    return {
+      success: true,
+      enrolledTrainees: result.enrolledTrainees,
+      duplicateTrainees: result.duplicateTrainees,
+      message: `Successfully enrolled ${result.enrolledTrainees.length} trainees. ${result.duplicateTrainees.length} duplicates skipped.`
+    }
+  }
+
+  /**
+   * Xóa enrollments từ subject.
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
+   */
+  async removeEnrollments({
+    subjectId,
+    data,
+    roleName
+  }: {
+    subjectId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    // Kiểm tra quyền
+    this.validateUpdatePermissions(roleName)
+
+    // Kiểm tra subject tồn tại
+    const subject = await this.subjectRepo.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    // Xóa enrollments
+    const result = await this.subjectRepo.removeEnrollments({
+      subjectId,
+      traineeEids: data.traineeEids
+    })
+
+    return {
+      success: true,
+      removedTrainees: result.removedTrainees,
+      notFoundTrainees: result.notFoundTrainees,
+      message: `Successfully removed ${result.removedTrainees.length} trainees. ${result.notFoundTrainees.length} not found.`
+    }
   }
 
   // =============== PRIVATE HELPER METHODS ===============
@@ -445,6 +530,347 @@ export class SubjectService {
     const instructorCount = await this.subjectRepo.countInstructors(subjectId)
     if (instructorCount > 0) {
       throw CannotHardDeleteSubjectWithInstructorsException
+    }
+  }
+
+  // ========================================
+  // TRAINER ASSIGNMENT SERVICE METHODS
+  // ========================================
+
+  /**
+   * Get available trainers in a department for a course
+   */
+  async getAvailableTrainers({
+    departmentId,
+    courseId,
+    roleName
+  }: {
+    departmentId: string
+    courseId: string
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    const trainers = await this.subjectRepo.getAvailableTrainersInDepartment({
+      departmentId,
+      courseId
+    })
+
+    return {
+      trainers,
+      totalCount: trainers.length
+    }
+  }
+
+  /**
+   * Assign trainer to subject
+   */
+  async assignTrainer({ subjectId, data, roleName }: { subjectId: string; data: any; roleName: string }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    // Validate subject exists
+    const subject = await this.subjectRepo.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    // Check if trainer already assigned
+    const alreadyAssigned = await this.subjectRepo.isTrainerAssignedToSubject({
+      subjectId,
+      trainerUserId: data.trainerUserId
+    })
+
+    if (alreadyAssigned) {
+      throw new Error('Trainer is already assigned to this subject')
+    }
+
+    // Assign trainer
+    const assignment = await this.subjectRepo.assignTrainerToSubject({
+      subjectId,
+      trainerUserId: data.trainerUserId,
+      roleInSubject: data.roleInSubject
+    })
+
+    return {
+      message: 'Trainer assigned successfully',
+      data: assignment
+    }
+  }
+
+  /**
+   * Update trainer assignment
+   */
+  async updateTrainerAssignment({
+    currentSubjectId,
+    currentTrainerId,
+    data,
+    roleName
+  }: {
+    currentSubjectId: string
+    currentTrainerId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    // Validate current assignment exists
+    const exists = await this.subjectRepo.isTrainerAssignedToSubject({
+      subjectId: currentSubjectId,
+      trainerUserId: currentTrainerId
+    })
+
+    if (!exists) {
+      throw new Error('Trainer assignment not found')
+    }
+
+    // If changing subject, validate new subject exists
+    if (data.newSubjectId) {
+      const newSubject = await this.subjectRepo.findById(data.newSubjectId)
+      if (!newSubject) {
+        throw new Error('New subject not found')
+      }
+    }
+
+    // Update assignment
+    const updated = await this.subjectRepo.updateTrainerAssignment({
+      currentSubjectId,
+      currentTrainerUserId: currentTrainerId,
+      newSubjectId: data.newSubjectId,
+      newTrainerUserId: data.newTrainerUserId,
+      newRoleInSubject: data.newRoleInSubject
+    })
+
+    return {
+      message: 'Trainer assignment updated successfully',
+      data: updated
+    }
+  }
+
+  /**
+   * Remove trainer from subject
+   */
+  async removeTrainer({
+    subjectId,
+    trainerId,
+    roleName
+  }: {
+    subjectId: string
+    trainerId: string
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    // Validate assignment exists
+    const exists = await this.subjectRepo.isTrainerAssignedToSubject({
+      subjectId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw new Error('Trainer assignment not found')
+    }
+
+    await this.subjectRepo.removeTrainerFromSubject({
+      subjectId,
+      trainerUserId: trainerId
+    })
+
+    return {
+      message: 'Trainer removed successfully'
+    }
+  }
+
+  // ========================================
+  // TRAINEE ASSIGNMENT SERVICE METHODS
+  // ========================================
+
+  /**
+   * Lookup trainees by EID or email
+   */
+  async lookupTrainees({ data }: { data: any }): Promise<any> {
+    const result = await this.subjectRepo.lookupTrainees({
+      trainees: data.trainees
+    })
+
+    return {
+      foundTrainees: result.foundTrainees,
+      notFoundTrainees: result.notFoundTrainees
+    }
+  }
+
+  /**
+   * Assign trainees to subject with comprehensive validation
+   */
+  async assignTraineesToSubject({
+    subjectId,
+    data,
+    roleName
+  }: {
+    subjectId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    // Validate subject exists
+    const subject = await this.subjectRepo.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    // Validation 1: Check course max trainee limit
+    if (subject.course?.id) {
+      const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.course.id)
+
+      if (max !== null && current + data.traineeUserIds.length > max) {
+        throw new Error(
+          `Course is at capacity. Current: ${current}, Max: ${max}, Attempting to add: ${data.traineeUserIds.length}`
+        )
+      }
+    }
+
+    // Validation 2: Check recurrent subject constraints
+    if (subject.type === 'RECURRENT') {
+      for (const traineeId of data.traineeUserIds) {
+        const { canEnroll, reason } = await this.subjectRepo.canEnrollInRecurrentSubject({
+          traineeUserId: traineeId,
+          subjectId
+        })
+
+        if (!canEnroll) {
+          throw new Error(reason || 'Cannot enroll in recurrent subject')
+        }
+      }
+    }
+
+    // Assign trainees
+    const result = await this.subjectRepo.assignTraineesToSubject({
+      subjectId,
+      traineeUserIds: data.traineeUserIds,
+      batchCode: data.batchCode
+    })
+
+    return {
+      message: `Successfully enrolled ${result.enrolled.length} trainees`,
+      data: {
+        enrolledCount: result.enrolled.length,
+        duplicateCount: result.duplicates.length,
+        invalidCount: result.invalid.length,
+        enrolledTrainees: result.enrolled,
+        duplicateTrainees: result.duplicates,
+        invalidTrainees: result.invalid
+      }
+    }
+  }
+
+  /**
+   * Get all trainees in a course
+   */
+  async getCourseTrainees({
+    courseId,
+    query,
+    roleName
+  }: {
+    courseId: string
+    query: any
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    const { page = 1, limit = 10, batchCode } = query
+
+    const result = await this.subjectRepo.getCourseTrainees({
+      courseId,
+      page,
+      limit,
+      batchCode
+    })
+
+    return {
+      trainees: result.trainees,
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: page
+    }
+  }
+
+  /**
+   * Cancel all course enrollments for a trainee in a batch
+   */
+  async cancelCourseEnrollments({
+    courseId,
+    traineeId,
+    data,
+    roleName
+  }: {
+    courseId: string
+    traineeId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    const result = await this.subjectRepo.cancelCourseEnrollments({
+      courseId,
+      traineeUserId: traineeId,
+      batchCode: data.batchCode
+    })
+
+    return {
+      message: `Cancelled ${result.cancelledCount} enrollments. ${result.notCancelledCount} could not be cancelled (already in progress or finished).`,
+      data: {
+        cancelledCount: result.cancelledCount,
+        notCancelledCount: result.notCancelledCount
+      }
+    }
+  }
+
+  /**
+   * Get trainee enrollments
+   */
+  async getTraineeEnrollments({ traineeId, query }: { traineeId: string; query: any }): Promise<any> {
+    const enrollments = await this.subjectRepo.getTraineeEnrollments({
+      traineeUserId: traineeId,
+      batchCode: query.batchCode,
+      status: query.status
+    })
+
+    return {
+      enrollments,
+      totalCount: enrollments.length
+    }
+  }
+
+  /**
+   * Cancel specific subject enrollment
+   */
+  async cancelSubjectEnrollment({
+    subjectId,
+    traineeId,
+    data,
+    roleName
+  }: {
+    subjectId: string
+    traineeId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    this.validateUpdatePermissions(roleName)
+
+    const success = await this.subjectRepo.cancelSubjectEnrollment({
+      subjectId,
+      traineeUserId: traineeId,
+      batchCode: data.batchCode
+    })
+
+    if (!success) {
+      throw new Error(
+        'Cannot cancel enrollment. Either it does not exist, batch code mismatch, or status is not ENROLLED.'
+      )
+    }
+
+    return {
+      message: 'Enrollment cancelled successfully'
     }
   }
 }

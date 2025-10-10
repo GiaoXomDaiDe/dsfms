@@ -1,6 +1,8 @@
 import { createZodDto } from 'nestjs-zod'
 import {
   BulkCreateResultSchema,
+  BulkTraineeLookupBodySchema,
+  BulkTraineeLookupResSchema,
   CreateBulkUsersBodySchema,
   CreateUserBodySchema,
   CreateUserBodyWithProfileSchema,
@@ -39,3 +41,7 @@ export class BulkCreateResultDTO extends createZodDto(BulkCreateResultSchema) {}
 export class UpdateUserResDTO extends createZodDto(UpdateUserResSchema) {}
 
 export class CreateUserResDTO extends UpdateUserResDTO {}
+
+export class BulkTraineeLookupBodyDTO extends createZodDto(BulkTraineeLookupBodySchema) {}
+
+export class BulkTraineeLookupResDTO extends createZodDto(BulkTraineeLookupResSchema) {}

@@ -1,51 +1,53 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request } from '@nestjs/common'
+import { ZodSerializerDto } from 'nestjs-zod'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
+import { MessageResDTO } from '~/shared/dtos/response.dto'
+import {
+  CancelCourseEnrollmentsBodyDto,
+  CancelCourseEnrollmentsResDto,
+  GetCourseTraineesQueryDto,
+  GetCourseTraineesResDto,
+  GetTraineeEnrollmentsQueryDto,
+  GetTraineeEnrollmentsResDto
+} from '../subject/subject.model'
+import { SubjectService } from '../subject/subject.service'
 import {
   AddSubjectToCourseBodyDto,
+  AddSubjectToCourseResDto,
+  CourseDetailResDto,
   CreateCourseBodyDto,
+  GetCourseParamsDto,
   GetCoursesQueryDto,
+  GetCoursesResDto,
   RemoveSubjectFromCourseBodyDto,
+  RemoveSubjectFromCourseResDto,
   UpdateCourseBodyDto
-} from './course.model'
+} from './course.dto'
 import { CourseService } from './course.service'
 
 @Controller('courses')
 export class CourseController {
-  constructor(private readonly courseService: CourseService) {}
+  constructor(
+    private readonly courseService: CourseService,
+    private readonly subjectService: SubjectService
+  ) {}
 
   @Get()
-  async getCourses(@Query() query: GetCoursesQueryDto, @Request() req: any) {
-    const { user } = req
-    return await this.courseService.list(query, {
-      userId: user.id,
-      userRole: user.roleName,
-      departmentId: user.departmentId
-    })
-  }
-
-  @Get('department/:departmentId')
-  async getCoursesByDepartment(
-    @Param('departmentId') departmentId: string,
-    @Query() query: GetCoursesQueryDto,
-    @Request() req: any
-  ) {
-    const { user } = req
-    return await this.courseService.getDepartmentWithCourses({
-      departmentId,
-      includeDeleted: query.includeDeleted,
-      query,
-      userId: user.id,
-      userRole: user.roleName
-    })
+  @ZodSerializerDto(GetCoursesResDto)
+  async getCourses(@Query() query: GetCoursesQueryDto, @ActiveRolePermissions('name') roleName: string) {
+    return await this.courseService.list(query, { userRole: roleName })
   }
 
   @Get(':id')
-  async getCourseById(@Param('id') id: string, @Query('includeDeleted') includeDeleted?: string) {
-    return await this.courseService.findById(id, {
-      includeDeleted: includeDeleted === 'true'
+  @ZodSerializerDto(CourseDetailResDto)
+  async getCourseById(@Param() params: GetCourseParamsDto, @Query() query: GetCoursesQueryDto) {
+    return await this.courseService.findById(params.id, {
+      includeDeleted: query.includeDeleted
     })
   }
 
   @Post()
+  @ZodSerializerDto(CourseDetailResDto)
   async createCourse(@Body() createCourseDto: CreateCourseBodyDto, @Request() req: any) {
     const { user } = req
     return await this.courseService.create({
@@ -57,10 +59,15 @@ export class CourseController {
   }
 
   @Put(':id')
-  async updateCourse(@Param('id') id: string, @Body() updateCourseDto: UpdateCourseBodyDto, @Request() req: any) {
+  @ZodSerializerDto(CourseDetailResDto)
+  async updateCourse(
+    @Param() params: GetCourseParamsDto,
+    @Body() updateCourseDto: UpdateCourseBodyDto,
+    @Request() req: any
+  ) {
     const { user } = req
     return await this.courseService.update({
-      id,
+      id: params.id,
       data: updateCourseDto,
       updatedById: user.id,
       updatedByRoleName: user.roleName,
@@ -69,22 +76,24 @@ export class CourseController {
   }
 
   @Delete(':id')
-  async deleteCourse(@Param('id') id: string, @Request() req: any, @Query('hard') hard?: string) {
+  @ZodSerializerDto(MessageResDTO)
+  async deleteCourse(@Param() params: GetCourseParamsDto, @Request() req: any, @Query() query: GetCoursesQueryDto) {
     const { user } = req
     return await this.courseService.delete({
-      id,
+      id: params.id,
       deletedById: user.id,
       deletedByRoleName: user.roleName,
       userDepartmentId: user.departmentId,
-      isHard: hard === 'true'
+      isHard: query.includeDeleted // using includeDeleted as hard delete flag
     })
   }
 
   @Post(':id/archive')
-  async archiveCourse(@Param('id') id: string, @Request() req: any) {
+  @ZodSerializerDto(MessageResDTO)
+  async archiveCourse(@Param() params: GetCourseParamsDto, @Request() req: any) {
     const { user } = req
     return await this.courseService.archive({
-      id,
+      id: params.id,
       archivedById: user.id,
       archivedByRoleName: user.roleName,
       userDepartmentId: user.departmentId
@@ -92,48 +101,99 @@ export class CourseController {
   }
 
   @Post(':id/restore')
-  async restoreCourse(@Param('id') id: string, @Request() req: any) {
+  @ZodSerializerDto(MessageResDTO)
+  async restoreCourse(@Param() params: GetCourseParamsDto, @Request() req: any) {
     const { user } = req
     return await this.courseService.restore({
-      id,
+      id: params.id,
       restoredById: user.id,
       restoredByRoleName: user.roleName
     })
   }
 
-  @Get(':id/access-check')
-  async checkCourseAccess(@Param('id') id: string, @Request() req: any) {
-    const { user } = req
-    const hasAccess = await this.courseService.validateCourseAccess({
-      courseId: id,
-      userId: user.id,
-      userRole: user.roleName
-    })
-
-    return { hasAccess }
-  }
-
   @Post(':id/subjects')
-  async addSubjectsToCourse(@Param('id') id: string, @Body() body: AddSubjectToCourseBodyDto, @Request() req: any) {
+  @ZodSerializerDto(AddSubjectToCourseResDto)
+  async addSubjectsToCourse(
+    @Param() params: GetCourseParamsDto,
+    @Body() body: AddSubjectToCourseBodyDto,
+    @Request() req: any
+  ) {
     const { user } = req
     return await this.courseService.addSubjectsToCourse({
-      courseId: id,
+      courseId: params.id,
       data: body,
       userRole: user.roleName
     })
   }
 
   @Delete(':id/subjects')
+  @ZodSerializerDto(RemoveSubjectFromCourseResDto)
   async removeSubjectsFromCourse(
-    @Param('id') id: string,
+    @Param() params: GetCourseParamsDto,
     @Body() body: RemoveSubjectFromCourseBodyDto,
     @Request() req: any
   ) {
     const { user } = req
     return await this.courseService.removeSubjectsFromCourse({
-      courseId: id,
+      courseId: params.id,
       data: body,
       userRole: user.roleName
+    })
+  }
+
+  /**
+   * API: Get Course Trainees
+   * GET /courses/:id/trainees
+   * Lấy danh sách trainees đã enrollment vào course
+   */
+  @Get(':id/trainees')
+  @ZodSerializerDto(GetCourseTraineesResDto)
+  async getCourseTrainees(
+    @Param() params: GetCourseParamsDto,
+    @Query() query: GetCourseTraineesQueryDto,
+    @Request() req: any
+  ) {
+    const { user } = req
+    return await this.subjectService.getCourseTrainees({
+      courseId: params.id,
+      query,
+      roleName: user.roleName
+    })
+  }
+
+  /**
+   * API: Cancel Course Enrollments for a Trainee
+   * DELETE /courses/:id/trainees/:traineeId
+   * Hủy tất cả enrollments của trainee trong course (theo batch)
+   */
+  @Delete(':id/trainees/:traineeId')
+  @ZodSerializerDto(CancelCourseEnrollmentsResDto)
+  async cancelCourseEnrollments(
+    @Param('id') id: string,
+    @Param('traineeId') traineeId: string,
+    @Body() body: CancelCourseEnrollmentsBodyDto,
+    @Request() req: any
+  ) {
+    const { user } = req
+    return await this.subjectService.cancelCourseEnrollments({
+      courseId: id,
+      traineeId,
+      data: body,
+      roleName: user.roleName
+    })
+  }
+
+  /**
+   * API: Get Trainee Enrollments
+   * GET /trainees/:traineeId/enrollments
+   * Lấy danh sách enrollments của trainee
+   */
+  @Get('trainees/:traineeId/enrollments')
+  @ZodSerializerDto(GetTraineeEnrollmentsResDto)
+  async getTraineeEnrollments(@Param('traineeId') traineeId: string, @Query() query: GetTraineeEnrollmentsQueryDto) {
+    return await this.subjectService.getTraineeEnrollments({
+      traineeId,
+      query
     })
   }
 }

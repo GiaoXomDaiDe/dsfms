@@ -1,11 +1,32 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
+import { ZodSerializerDto } from 'nestjs-zod'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { MessageResDTO } from '~/shared/dtos/response.dto'
 import {
-  BulkCreateSubjectsBodyDto,
+  AssignTraineesBodyDto,
+  AssignTraineesResDto,
+  AssignTrainerBodyDto,
+  AssignTrainerResDto,
+  CancelSubjectEnrollmentBodyDto,
+  CancelSubjectEnrollmentResDto,
   CreateSubjectBodyDto,
+  EnrollTraineesBodyDto,
+  EnrollTraineesResDto,
+  GetAvailableTrainersQueryDto,
+  GetAvailableTrainersResDto,
   GetSubjectsQueryDto,
-  UpdateSubjectBodyDto
+  GetSubjectsResDto,
+  LookupTraineesBodyDto,
+  LookupTraineesResDto,
+  RemoveEnrollmentsBodyDto,
+  RemoveEnrollmentsResDto,
+  RemoveTrainerResDto,
+  SubjectDetailResDto,
+  SubjectResDto,
+  UpdateSubjectBodyDto,
+  UpdateTrainerAssignmentBodyDto,
+  UpdateTrainerAssignmentResDto
 } from './subject.model'
 import { SubjectService } from './subject.service'
 
@@ -13,13 +34,9 @@ import { SubjectService } from './subject.service'
 export class SubjectController {
   constructor(private readonly subjectService: SubjectService) {}
 
-  /**
-   * API: Add A Subject to Course
-   * POST /subjects
-   * Tạo mới một subject và gán vào course
-   */
   @Post()
-  async addSubjectToCourse(
+  @ZodSerializerDto(SubjectResDto)
+  async createSubject(
     @Body() createSubjectDto: CreateSubjectBodyDto,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
@@ -32,29 +49,12 @@ export class SubjectController {
   }
 
   /**
-   * API: Bulk Add Subjects to Course
-   * POST /subjects/bulk
-   * Tạo nhiều subjects cùng lúc cho một course
-   */
-  @Post('bulk')
-  async bulkAddSubjectsToCourse(
-    @Body() bulkCreateDto: BulkCreateSubjectsBodyDto,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    return await this.subjectService.bulkCreate({
-      data: bulkCreateDto,
-      createdById: userId,
-      createdByRoleName: roleName
-    })
-  }
-
-  /**
    * API: Get Subject Details + List Trainers with role
    * GET /subjects/:id
    * Lấy thông tin chi tiết subject kèm danh sách trainers và role của họ
    */
   @Get(':id')
+  @ZodSerializerDto(SubjectDetailResDto)
   async getSubjectDetailsWithTrainers(
     @Param('id') id: string,
     @ActiveRolePermissions('name') roleName: string,
@@ -71,6 +71,7 @@ export class SubjectController {
    * Cập nhật thông tin subject
    */
   @Put(':id')
+  @ZodSerializerDto(SubjectResDto)
   async updateSubject(
     @Param('id') id: string,
     @Body() updateSubjectDto: UpdateSubjectBodyDto,
@@ -91,6 +92,7 @@ export class SubjectController {
    * Xóa mềm subject
    */
   @Delete(':id')
+  @ZodSerializerDto(MessageResDTO)
   async removeSubject(
     @Param('id') id: string,
     @ActiveUser('userId') userId: string,
@@ -109,25 +111,9 @@ export class SubjectController {
    * Lấy danh sách subjects với filter và phân trang
    */
   @Get()
+  @ZodSerializerDto(GetSubjectsResDto)
   async getAllSubjects(@Query() query: GetSubjectsQueryDto, @ActiveRolePermissions('name') roleName: string) {
     return await this.subjectService.list(query)
-  }
-
-  /**
-   * API: Get Subjects by Course
-   * GET /subjects/course/:courseId
-   * Lấy danh sách subjects theo course
-   */
-  @Get('course/:courseId')
-  async getSubjectsByCourse(
-    @Param('courseId') courseId: string,
-    @ActiveRolePermissions('name') roleName: string,
-    @Query('includeDeleted') includeDeleted?: string
-  ) {
-    return await this.subjectService.getSubjectsByCourse({
-      courseId,
-      includeDeleted: includeDeleted === 'true'
-    })
   }
 
   /**
@@ -136,6 +122,7 @@ export class SubjectController {
    * Khôi phục subject đã bị xóa mềm
    */
   @Put(':id/restore')
+  @ZodSerializerDto(MessageResDTO)
   async restoreSubject(
     @Param('id') id: string,
     @ActiveUser('userId') userId: string,
@@ -149,21 +136,179 @@ export class SubjectController {
   }
 
   /**
-   * API: Hard Delete a Subject
-   * DELETE /subjects/:id/hard
-   * Xóa cứng subject (chỉ dành cho ADMINISTRATOR)
+   * API: Enroll Trainees to Subject
+   * POST /subjects/:id/enrollments
+   * Ghi danh trainees vào subject
    */
-  @Delete(':id/hard')
-  async hardDeleteSubject(
+  @Post(':id/enrollments')
+  @ZodSerializerDto(EnrollTraineesResDto)
+  async enrollTrainees(
     @Param('id') id: string,
-    @ActiveUser('userId') userId: string,
+    @Body() body: EnrollTraineesBodyDto,
     @ActiveRolePermissions('name') roleName: string
   ) {
-    return await this.subjectService.delete({
-      id,
-      deletedById: userId,
-      deletedByRoleName: roleName,
-      isHard: true
+    return await this.subjectService.enrollTrainees({
+      subjectId: id,
+      data: body,
+      roleName
+    })
+  }
+
+  /**
+   * API: Remove Enrollments from Subject
+   * DELETE /subjects/:id/enrollments
+   * Xóa trainees khỏi subject
+   */
+  @Delete(':id/enrollments')
+  @ZodSerializerDto(RemoveEnrollmentsResDto)
+  async removeEnrollments(
+    @Param('id') id: string,
+    @Body() body: RemoveEnrollmentsBodyDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.removeEnrollments({
+      subjectId: id,
+      data: body,
+      roleName
+    })
+  }
+
+  // ========================================
+  // TRAINER ASSIGNMENT ENDPOINTS
+  // ========================================
+
+  /**
+   * API: Get Available Trainers for Course
+   * GET /courses/:courseId/available-trainers
+   * Lấy danh sách trainers có sẵn trong department chưa được assign vào bất kỳ subject nào của course
+   */
+  @Get('courses/:courseId/available-trainers')
+  @ZodSerializerDto(GetAvailableTrainersResDto)
+  async getAvailableTrainers(
+    @Param('courseId') courseId: string,
+    @Query() query: GetAvailableTrainersQueryDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.getAvailableTrainers({
+      departmentId: query.departmentId,
+      courseId,
+      roleName
+    })
+  }
+
+  /**
+   * API: Assign Trainer to Subject
+   * POST /subjects/:id/trainers
+   * Gán trainer vào subject với role cụ thể
+   */
+  @Post(':id/trainers')
+  @ZodSerializerDto(AssignTrainerResDto)
+  async assignTrainer(
+    @Param('id') id: string,
+    @Body() body: AssignTrainerBodyDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.assignTrainer({
+      subjectId: id,
+      data: body,
+      roleName
+    })
+  }
+
+  /**
+   * API: Update Trainer Assignment
+   * PUT /subjects/:id/trainers/:trainerId
+   * Cập nhật trainer assignment (đổi trainer, subject, hoặc role)
+   */
+  @Put(':id/trainers/:trainerId')
+  @ZodSerializerDto(UpdateTrainerAssignmentResDto)
+  async updateTrainerAssignment(
+    @Param('id') id: string,
+    @Param('trainerId') trainerId: string,
+    @Body() body: UpdateTrainerAssignmentBodyDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.updateTrainerAssignment({
+      currentSubjectId: id,
+      currentTrainerId: trainerId,
+      data: body,
+      roleName
+    })
+  }
+
+  /**
+   * API: Remove Trainer from Subject
+   * DELETE /subjects/:id/trainers/:trainerId
+   * Xóa trainer khỏi subject
+   */
+  @Delete(':id/trainers/:trainerId')
+  @ZodSerializerDto(RemoveTrainerResDto)
+  async removeTrainer(
+    @Param('id') id: string,
+    @Param('trainerId') trainerId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.removeTrainer({
+      subjectId: id,
+      trainerId,
+      roleName
+    })
+  }
+
+  // ========================================
+  // TRAINEE ASSIGNMENT ENDPOINTS
+  // ========================================
+
+  /**
+   * API: Lookup Trainees
+   * POST /trainees/lookup
+   * Tra cứu trainees theo EID hoặc email (bulk import support)
+   */
+  @Post('trainees/lookup')
+  @ZodSerializerDto(LookupTraineesResDto)
+  async lookupTrainees(@Body() body: LookupTraineesBodyDto) {
+    return await this.subjectService.lookupTrainees({
+      data: body
+    })
+  }
+
+  /**
+   * API: Assign Trainees to Subject
+   * POST /subjects/:id/assign-trainees
+   * Gán nhiều trainees vào subject với validation đầy đủ
+   */
+  @Post(':id/assign-trainees')
+  @ZodSerializerDto(AssignTraineesResDto)
+  async assignTrainees(
+    @Param('id') id: string,
+    @Body() body: AssignTraineesBodyDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.assignTraineesToSubject({
+      subjectId: id,
+      data: body,
+      roleName
+    })
+  }
+
+  /**
+   * API: Cancel Specific Subject Enrollment
+   * DELETE /subjects/:id/trainees/:traineeId
+   * Hủy enrollment của trainee trong subject cụ thể
+   */
+  @Delete(':id/trainees/:traineeId')
+  @ZodSerializerDto(CancelSubjectEnrollmentResDto)
+  async cancelSubjectEnrollment(
+    @Param('id') id: string,
+    @Param('traineeId') traineeId: string,
+    @Body() body: CancelSubjectEnrollmentBodyDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.cancelSubjectEnrollment({
+      subjectId: id,
+      traineeId,
+      data: body,
+      roleName
     })
   }
 }

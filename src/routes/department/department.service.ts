@@ -4,20 +4,20 @@ import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/dep
 import { DepartmentRepo } from '~/routes/department/department.repo'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 export class DepartmentService {
   constructor(
     private readonly departmentRepo: DepartmentRepo,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly sharedUserRepo: SharedUserRepository
   ) {}
 
   async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
-    // Chỉ admin mới có thể xem các department đã bị xóa mềm
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
     return await this.departmentRepo.list({
-      includeDeleted: canViewDeleted ? includeDeleted : false
+      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
     })
   }
 
@@ -26,10 +26,8 @@ export class DepartmentService {
     { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
   ) {
     try {
-      // Chỉ admin mới có thể xem detail của department đã bị xóa mềm
-      const canViewDeleted = userRole === RoleName.ADMINISTRATOR
       const department = await this.departmentRepo.findById(id, {
-        includeDeleted: canViewDeleted ? includeDeleted : false
+        includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
       })
 
       if (!department) {
@@ -43,6 +41,11 @@ export class DepartmentService {
   }
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
+    // Validate headUserId has DEPARTMENT_HEAD role if provided
+    if (data.headUserId) {
+      await this.validateDepartmentHead(data.headUserId)
+    }
+
     try {
       return await this.departmentRepo.create({
         createdById,
@@ -57,6 +60,11 @@ export class DepartmentService {
   }
 
   async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
+    // Validate headUserId has DEPARTMENT_HEAD role if provided
+    if (data.headUserId) {
+      await this.validateDepartmentHead(data.headUserId)
+    }
+
     try {
       const department = await this.departmentRepo.update({
         id,
@@ -306,6 +314,23 @@ export class DepartmentService {
         throw NotFoundDepartmentException
       }
       throw error
+    }
+  }
+
+  private async validateDepartmentHead(headUserId: string) {
+    // Check if user exists and has DEPARTMENT_HEAD role
+    const user = await this.sharedUserRepo.findUniqueIncludeProfile({ id: headUserId })
+
+    if (!user) {
+      throw new Error('User not found')
+    }
+
+    if (user.role.name !== 'DEPARTMENT_HEAD') {
+      throw new Error('User must have DEPARTMENT_HEAD role to be assigned as department head')
+    }
+
+    if (user.role.isActive !== 'ACTIVE') {
+      throw new Error('User role must be active')
     }
   }
 }

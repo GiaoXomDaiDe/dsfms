@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   BulkCreateResultDTO,
+  BulkTraineeLookupBodyDTO,
+  BulkTraineeLookupResDTO,
   CreateBulkUsersBodyDTO,
   CreateUserBodyWithProfileDTO,
   CreateUserResDTO,
@@ -23,10 +25,14 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  list(@Query() { includeDeleted }: GetUsersQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+  list(
+    @Query() { includeDeleted, roleName }: GetUsersQueryDTO,
+    @ActiveRolePermissions('name') activeUserRoleName: string
+  ) {
     return this.userService.list({
       includeDeleted,
-      userRole: roleName
+      userRole: roleName,
+      activeUserRoleName
     })
   }
 
@@ -59,6 +65,17 @@ export class UserController {
       data: body,
       createdById: userId
     })
+  }
+
+  /**
+   * API: Bulk Trainee Lookup
+   * POST /users/lookup/trainees
+   * Tìm kiếm trainees theo EID và full name
+   */
+  @Post('lookup/trainees')
+  @ZodSerializerDto(BulkTraineeLookupResDTO)
+  bulkTraineeLookup(@Body() body: BulkTraineeLookupBodyDTO) {
+    return this.userService.bulkTraineeLookup(body)
   }
 
   @Put(':userId')
