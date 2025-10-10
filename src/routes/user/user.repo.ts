@@ -21,8 +21,17 @@ type BulkUserData = CreateUserInternalType & {
 export class UserRepo {
   constructor(private prismaService: PrismaService) {}
 
-  async list({ includeDeleted = false }: IncludeDeletedQueryType = {}): Promise<GetUsersResType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
+  async list({
+    includeDeleted = false,
+    roleName
+  }: IncludeDeletedQueryType & { roleName?: string } = {}): Promise<GetUsersResType> {
+    const whereClause: any = includeDeleted ? {} : { deletedAt: null }
+    if (roleName) {
+      whereClause.role = {
+        name: roleName,
+        ...(includeDeleted ? {} : { deletedAt: null })
+      }
+    }
 
     const [totalItems, data] = await Promise.all([
       this.prismaService.user.count({
@@ -505,6 +514,61 @@ export class UserRepo {
         console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
       }
     }
+
+    return results
+  }
+
+  async bulkTraineeLookup(trainees: { eid: string; fullName: string }[]): Promise<any[]> {
+    const eids = trainees.map((t) => t.eid)
+
+    // Get all users with TRAINEE role matching the EIDs
+    const foundUsers = await this.prismaService.user.findMany({
+      where: {
+        eid: { in: eids },
+        role: {
+          name: RoleName.TRAINEE,
+          deletedAt: null
+        },
+        deletedAt: null
+      },
+      include: {
+        role: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        traineeProfile: true
+      }
+    })
+
+    // Create a map for quick lookup
+    const userMap = new Map(foundUsers.map((user) => [user.eid, user]))
+
+    // Build results for each requested trainee
+    const results = trainees.map((trainee) => {
+      const foundUser = userMap.get(trainee.eid)
+      return {
+        eid: trainee.eid,
+        fullName: trainee.fullName,
+        found: !!foundUser,
+        user: foundUser
+          ? {
+              ...foundUser,
+              passwordHash: undefined,
+              signatureImageUrl: undefined,
+              roleId: undefined,
+              departmentId: undefined
+            }
+          : null
+      }
+    })
 
     return results
   }

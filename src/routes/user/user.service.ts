@@ -63,10 +63,15 @@ export class UserService {
     private readonly nodemailerService: NodemailerService
   ) {}
 
-  list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
+  list({
+    includeDeleted = false,
+    userRole,
+    activeUserRoleName
+  }: { includeDeleted?: boolean; userRole?: string; activeUserRoleName?: string } = {}) {
     // Nếu không phải admin thì luôn luôn không cho xem user đã bị xóa mềm
     return this.userRepo.list({
-      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
+      includeDeleted: activeUserRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false,
+      roleName: userRole
     })
   }
 
@@ -765,6 +770,22 @@ export class UserService {
       }
       if (userData.traineeProfile) {
         throw new Error(BulkTraineeProfileNotAllowedException(userIndex, roleName))
+      }
+    }
+  }
+
+  async bulkTraineeLookup(data: { trainees: { eid: string; fullName: string }[] }): Promise<any> {
+    const results = await this.userRepo.bulkTraineeLookup(data.trainees)
+
+    const foundCount = results.filter((r) => r.found).length
+    const notFoundCount = results.length - foundCount
+
+    return {
+      results,
+      summary: {
+        total: results.length,
+        found: foundCount,
+        notFound: notFoundCount
       }
     }
   }

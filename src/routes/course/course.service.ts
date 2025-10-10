@@ -6,9 +6,7 @@ import {
   AddSubjectToCourseResType,
   CourseDetailResType,
   CourseType,
-  CourseWithInfoType,
   CreateCourseBodyType,
-  DepartmentWithCoursesType,
   GetCoursesQueryType,
   GetCoursesResType,
   RemoveSubjectFromCourseBodyType,
@@ -30,58 +28,14 @@ export class CourseService {
     private readonly prisma: PrismaService
   ) {}
 
-  async list(
-    query: GetCoursesQueryType,
-    userContext?: { userId: string; userRole: string; departmentId?: string }
-  ): Promise<GetCoursesResType> {
-    // Apply role-based filtering
-    const enhancedQuery = { ...query }
-
-    if (userContext) {
-      // No special filtering for department heads - they have general access
-
-      // Trainers can see courses where they are instructors (if no department filter)
-      if (userContext.userRole === RoleName.TRAINER && !query.departmentId) {
-        const instructedCourses = await this.prisma.subjectInstructor.findMany({
-          where: {
-            trainerUserId: userContext.userId,
-            subject: { deletedAt: null }
-          },
-          select: {
-            subject: {
-              select: { courseId: true }
-            }
-          }
-        })
-
-        const courseIds = [
-          ...new Set(instructedCourses.map((i) => i.subject.courseId).filter((id): id is string => id !== null))
-        ]
-        enhancedQuery.courseIds = courseIds
-      }
-
-      // Trainees can see courses where they are enrolled (if no department filter)
-      if (userContext.userRole === RoleName.TRAINEE && !query.departmentId) {
-        const enrolledCourses = await this.prisma.subjectEnrollment.findMany({
-          where: {
-            traineeUserId: userContext.userId,
-            subject: { deletedAt: null }
-          },
-          select: {
-            subject: {
-              select: { courseId: true }
-            }
-          }
-        })
-
-        const courseIds = [
-          ...new Set(enrolledCourses.map((e) => e.subject.courseId).filter((id): id is string => id !== null))
-        ]
-        enhancedQuery.courseIds = courseIds
-      }
+  async list(query: GetCoursesQueryType, { userRole }: { userRole?: string } = {}): Promise<GetCoursesResType> {
+    // Simplified approach: Only ACADEMIC_DEPARTMENT can access course list
+    // Similar to role.service.ts pattern
+    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can access course list')
     }
 
-    return await this.courseRepo.list(enhancedQuery)
+    return await this.courseRepo.list(query)
   }
 
   async findById(
@@ -292,85 +246,6 @@ export class CourseService {
     }
 
     return await this.courseRepo.restore({ id, restoredById })
-  }
-
-  async getCoursesByDepartment({
-    departmentId,
-    includeDeleted = false
-  }: {
-    departmentId: string
-    includeDeleted?: boolean
-  }): Promise<CourseWithInfoType[]> {
-    const result = await this.courseRepo.list({
-      page: 1,
-      limit: 1000, // Large limit to get all courses
-      departmentId,
-      includeDeleted
-    })
-
-    return result.courses
-  }
-
-  async getDepartmentWithCourses({
-    departmentId,
-    includeDeleted = false,
-    query,
-    userId,
-    userRole
-  }: {
-    departmentId: string
-    includeDeleted?: boolean
-    query: GetCoursesQueryType
-    userId: string
-    userRole: string
-  }): Promise<DepartmentWithCoursesType> {
-    // No special access validation needed - all roles can view department courses
-
-    // Get department details
-    const department = await this.prisma.department.findUnique({
-      where: {
-        id: departmentId,
-        ...(includeDeleted ? {} : { deletedAt: null })
-      },
-      include: {
-        headUser: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    })
-
-    if (!department) {
-      throw DepartmentNotFoundException
-    }
-
-    // Get courses for this department (without pagination)
-    const coursesQuery = {
-      ...query,
-      departmentId,
-      includeDeleted,
-      // Use large page size to get all courses
-      page: 1,
-      limit: 1000
-    }
-
-    const coursesResult = await this.courseRepo.list(coursesQuery)
-
-    return {
-      id: department.id,
-      name: department.name,
-      code: department.code,
-      description: department.description,
-      headUser: department.headUser,
-      isActive: department.isActive === 'ACTIVE',
-      createdAt: department.createdAt.toISOString(),
-      updatedAt: department.updatedAt.toISOString(),
-      courses: coursesResult.courses
-    }
   }
 
   async validateCourseAccess({

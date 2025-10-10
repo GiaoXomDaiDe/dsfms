@@ -16,6 +16,10 @@ export function isForeignKeyConstraintPrismaError(error: any): error is PrismaCl
   return error instanceof PrismaClientKnownRequestError && error.code === 'P2003'
 }
 
+export function isCannotReachDatabasePrismaError(error: any): error is PrismaClientKnownRequestError {
+  return error instanceof PrismaClientKnownRequestError && error.code === 'P1001'
+}
+
 // Factory function to create ResponseDTO
 export function createResponseDto<T extends z.ZodTypeAny>(dataSchema: T, defaultMessage?: string) {
   const schema = z.object({

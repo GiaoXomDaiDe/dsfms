@@ -1,6 +1,9 @@
 import { CourseLevel, CourseStatus } from '@prisma/client'
-import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
+
+/* ===========================
+ * Base Schemas
+ * ========================== */
 
 // Base Course Schema
 export const CourseSchema = z.object({
@@ -22,14 +25,18 @@ export const CourseSchema = z.object({
   deletedAt: z.string().datetime().optional().nullable()
 })
 
-// Department info schema for nested relations
+/* ===========================
+ * Nested Relation Schemas
+ * ========================== */
+
+// Department info for course relations
 export const CourseDepartmentSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   code: z.string()
 })
 
-// User info schema for created/updated by
+// User info for audit fields (created/updated by)
 export const CourseUserSchema = z.object({
   id: z.string().uuid(),
   eid: z.string(),
@@ -37,7 +44,36 @@ export const CourseUserSchema = z.object({
   lastName: z.string()
 })
 
-// Course with relations
+// Subject summary for course details
+export const CourseSubjectSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  code: z.string(),
+  method: z.string(),
+  duration: z.number().int().optional().nullable(),
+  type: z.string(),
+  roomName: z.string().optional().nullable(),
+  timeSlot: z.string().optional().nullable(),
+  isSIM: z.boolean(),
+  passScore: z.number().optional().nullable(),
+  startDate: z.string().datetime().optional().nullable(),
+  endDate: z.string().datetime().optional().nullable(),
+  instructorCount: z.number().int().default(0),
+  enrollmentCount: z.number().int().default(0)
+})
+
+/* ===========================
+ * Extended Response Schemas
+ * ========================== */
+
+// Course with basic info (for list endpoints) - simplified without counts
+export const CourseListItemSchema = CourseSchema.extend({
+  department: CourseDepartmentSchema.optional(),
+  createdBy: CourseUserSchema.optional().nullable(),
+  updatedBy: CourseUserSchema.optional().nullable()
+})
+
+// Course with detailed info (for course detail endpoint)
 export const CourseWithInfoSchema = CourseSchema.extend({
   department: CourseDepartmentSchema.optional(),
   createdBy: CourseUserSchema.optional().nullable(),
@@ -47,7 +83,21 @@ export const CourseWithInfoSchema = CourseSchema.extend({
   trainerCount: z.number().int().default(0)
 })
 
-// Create Course Body Schema
+// Course detail with full relations (for detail endpoint)
+export const CourseDetailResSchema = CourseWithInfoSchema.extend({
+  subjects: z.array(CourseSubjectSummarySchema).default([])
+})
+
+/* ===========================
+ * Request/Input Schemas
+ * ========================== */
+
+// Course params for :id endpoints
+export const GetCourseParamsSchema = z.object({
+  id: z.string().uuid({ message: 'Invalid course ID format' })
+})
+
+// Create course body schema
 export const CreateCourseBodySchema = z
   .object({
     departmentId: z.string().uuid(),
@@ -76,13 +126,11 @@ export const CreateCourseBodySchema = z
     }
   )
 
-// Update Course Body Schema
+// Update course body schema
 export const UpdateCourseBodySchema = CreateCourseBodySchema.partial()
 
-// Course Query Schema
+// Query parameters for courses (removed pagination)
 export const GetCoursesQuerySchema = z.object({
-  page: z.string().regex(/^\d+$/).transform(Number).optional().default(1),
-  limit: z.string().regex(/^\d+$/).transform(Number).optional().default(10),
   search: z.string().optional(),
   departmentId: z.string().uuid().optional(),
   level: z.nativeEnum(CourseLevel).optional(),
@@ -96,38 +144,17 @@ export const GetCoursesQuerySchema = z.object({
     .default(false)
 })
 
-// Get Courses Response Schema
+/* ===========================
+ * Response Schemas
+ * ========================== */
+
+// Simple courses list response (no pagination, no counts)
 export const GetCoursesResSchema = z.object({
-  courses: z.array(CourseWithInfoSchema),
-  totalItems: z.number().int(),
-  totalPages: z.number().int(),
-  currentPage: z.number().int()
+  courses: z.array(CourseListItemSchema),
+  totalItems: z.number().int()
 })
 
-// Subject summary schema for course details
-export const CourseSubjectSummarySchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  code: z.string(),
-  method: z.string(), // Will be SubjectMethod enum
-  duration: z.number().int().optional().nullable(),
-  type: z.string(), // Will be SubjectType enum
-  roomName: z.string().optional().nullable(),
-  timeSlot: z.string().optional().nullable(),
-  isSIM: z.boolean(),
-  passScore: z.number().optional().nullable(),
-  startDate: z.string().datetime().optional().nullable(),
-  endDate: z.string().datetime().optional().nullable(),
-  instructorCount: z.number().int().default(0),
-  enrollmentCount: z.number().int().default(0)
-})
-
-// Course Detail Response Schema
-export const CourseDetailResSchema = CourseWithInfoSchema.extend({
-  subjects: z.array(CourseSubjectSummarySchema).default([])
-})
-
-// Course Statistics Schema
+// Course statistics response
 export const CourseStatsSchema = z.object({
   totalCourses: z.number().int(),
   coursesByLevel: z.record(z.string(), z.number().int()),
@@ -141,38 +168,14 @@ export const CourseStatsSchema = z.object({
   )
 })
 
-// Department with Courses Response Schema (without pagination)
-export const DepartmentWithCoursesSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  code: z.string(),
-  description: z.string().optional().nullable(),
-  headUser: CourseUserSchema.optional().nullable(),
-  isActive: z.boolean(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  courses: z.array(CourseWithInfoSchema)
-})
+/* ===========================
+ * Subject Management Schemas
+ * ========================== */
 
-// Type exports
-export type CourseType = z.infer<typeof CourseSchema>
-export type CourseWithInfoType = z.infer<typeof CourseWithInfoSchema>
-export type CreateCourseBodyType = z.infer<typeof CreateCourseBodySchema>
-export type UpdateCourseBodyType = z.infer<typeof UpdateCourseBodySchema>
-export type GetCoursesQueryType = z.infer<typeof GetCoursesQuerySchema>
-export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
-export type CourseDetailResType = z.infer<typeof CourseDetailResSchema>
-export type CourseStatsType = z.infer<typeof CourseStatsSchema>
-export type DepartmentWithCoursesType = z.infer<typeof DepartmentWithCoursesSchema>
-
-// DTO exports
-export class CreateCourseBodyDto extends createZodDto(CreateCourseBodySchema) {}
-// Add Subject to Course Schema
+// Add subjects to course
 export const AddSubjectToCourseBodySchema = z.object({
   subjectIds: z.array(z.string().uuid()).min(1, 'At least one subject is required')
 })
-
-export type AddSubjectToCourseBodyType = z.infer<typeof AddSubjectToCourseBodySchema>
 
 export const AddSubjectToCourseResSchema = z.object({
   success: z.boolean(),
@@ -182,14 +185,10 @@ export const AddSubjectToCourseResSchema = z.object({
   message: z.string()
 })
 
-export type AddSubjectToCourseResType = z.infer<typeof AddSubjectToCourseResSchema>
-
-// Remove Subject from Course Schema
+// Remove subjects from course
 export const RemoveSubjectFromCourseBodySchema = z.object({
   subjectIds: z.array(z.string().uuid()).min(1, 'At least one subject is required')
 })
-
-export type RemoveSubjectFromCourseBodyType = z.infer<typeof RemoveSubjectFromCourseBodySchema>
 
 export const RemoveSubjectFromCourseResSchema = z.object({
   success: z.boolean(),
@@ -199,15 +198,21 @@ export const RemoveSubjectFromCourseResSchema = z.object({
   message: z.string()
 })
 
-export type RemoveSubjectFromCourseResType = z.infer<typeof RemoveSubjectFromCourseResSchema>
+/* ===========================
+ * Type Exports
+ * ========================== */
 
-export class UpdateCourseBodyDto extends createZodDto(UpdateCourseBodySchema) {}
-export class GetCoursesQueryDto extends createZodDto(GetCoursesQuerySchema) {}
-export class GetCoursesResDto extends createZodDto(GetCoursesResSchema) {}
-export class CourseDetailResDto extends createZodDto(CourseDetailResSchema) {}
-export class CourseStatsDto extends createZodDto(CourseStatsSchema) {}
-export class DepartmentWithCoursesDto extends createZodDto(DepartmentWithCoursesSchema) {}
-export class AddSubjectToCourseBodyDto extends createZodDto(AddSubjectToCourseBodySchema) {}
-export class AddSubjectToCourseResDto extends createZodDto(AddSubjectToCourseResSchema) {}
-export class RemoveSubjectFromCourseBodyDto extends createZodDto(RemoveSubjectFromCourseBodySchema) {}
-export class RemoveSubjectFromCourseResDto extends createZodDto(RemoveSubjectFromCourseResSchema) {}
+export type CourseType = z.infer<typeof CourseSchema>
+export type CourseListItemType = z.infer<typeof CourseListItemSchema>
+export type CourseWithInfoType = z.infer<typeof CourseWithInfoSchema>
+export type CourseDetailResType = z.infer<typeof CourseDetailResSchema>
+export type CreateCourseBodyType = z.infer<typeof CreateCourseBodySchema>
+export type UpdateCourseBodyType = z.infer<typeof UpdateCourseBodySchema>
+export type GetCourseParamsType = z.infer<typeof GetCourseParamsSchema>
+export type GetCoursesQueryType = z.infer<typeof GetCoursesQuerySchema>
+export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
+export type CourseStatsType = z.infer<typeof CourseStatsSchema>
+export type AddSubjectToCourseBodyType = z.infer<typeof AddSubjectToCourseBodySchema>
+export type AddSubjectToCourseResType = z.infer<typeof AddSubjectToCourseResSchema>
+export type RemoveSubjectFromCourseBodyType = z.infer<typeof RemoveSubjectFromCourseBodySchema>
+export type RemoveSubjectFromCourseResType = z.infer<typeof RemoveSubjectFromCourseResSchema>

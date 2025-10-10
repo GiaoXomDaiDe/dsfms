@@ -17,7 +17,6 @@ export const DepartmentSchema = z.object({
 
 export type DepartmentType = z.infer<typeof DepartmentSchema>
 
-// Create Department Schema
 export const CreateDepartmentBodySchema = DepartmentSchema.pick({
   name: true,
   code: true,
@@ -34,12 +33,20 @@ export type UpdateDepartmentBodyType = z.infer<typeof UpdateDepartmentBodySchema
 
 // Department with additional info
 export const DepartmentResSchema = DepartmentSchema.extend({
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().nullable(),
   headUser: z
     .object({
       id: z.string(),
       firstName: z.string(),
       lastName: z.string(),
-      email: z.string()
+      middleName: z.string().nullable(),
+      email: z.string(),
+      role: z.object({
+        id: z.string(),
+        name: z.string()
+      })
     })
     .nullable()
 })
@@ -59,15 +66,36 @@ export const DepartmentTrainerSchema = z.object({
   phoneNumber: z.string().nullable()
 })
 
+// Course Detail Schema for Department
+export const DepartmentCourseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  description: z.string().nullable(),
+  maxNumTrainee: z.number().nullable(),
+  venue: z.string().nullable(),
+  note: z.string().nullable(),
+  passScore: z.number().nullable(),
+  startDate: z.string().nullable(),
+  endDate: z.string().nullable(),
+  level: z.string(),
+  status: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  subjectCount: z.number().default(0)
+})
+
 export const DepartmentDetailResSchema = DepartmentResSchema.extend({
   courseCount: z.number().default(0),
   traineeCount: z.number().default(0),
   trainerCount: z.number().default(0),
-  trainers: z.array(DepartmentTrainerSchema)
+  trainers: z.array(DepartmentTrainerSchema),
+  courses: z.array(DepartmentCourseSchema)
 })
 
 export type DepartmentDetailResType = z.infer<typeof DepartmentDetailResSchema>
 export type DepartmentTrainerType = z.infer<typeof DepartmentTrainerSchema>
+export type DepartmentCourseType = z.infer<typeof DepartmentCourseSchema>
 
 // Response Schemas
 export const GetDepartmentsResSchema = z.object({
@@ -87,6 +115,12 @@ export const GetDepartmentsQuerySchema = z
   })
   .strict()
 
+export const GetDepartmentDetailQuerySchema = z
+  .object({
+    includeDeleted: z.coerce.boolean().default(false).optional()
+  })
+  .strict()
+
 export const GetDepartmentDetailResSchema = DepartmentDetailResSchema
 
 export const CreateDepartmentResSchema = DepartmentSchema
@@ -97,6 +131,7 @@ export type GetDepartmentDetailResType = z.infer<typeof GetDepartmentDetailResSc
 export type CreateDepartmentResType = z.infer<typeof CreateDepartmentResSchema>
 export type GetDepartmentParamsType = z.infer<typeof GetDepartmentParamsSchema>
 export type GetDepartmentsQueryType = z.infer<typeof GetDepartmentsQuerySchema>
+export type GetDepartmentDetailQueryType = z.infer<typeof GetDepartmentDetailQuerySchema>
 
 // Department Head Users Schema
 export const DepartmentHeadUserSchema = z.object({
@@ -151,7 +186,6 @@ export const UpdateDepartmentEnhancedResSchema = z.object({
   availableDepartmentHeads: z.array(DepartmentHeadUserSchema)
 })
 
-// Types
 export type DepartmentHeadUserType = z.infer<typeof DepartmentHeadUserSchema>
 export type GetDepartmentHeadsResType = z.infer<typeof GetDepartmentHeadsResSchema>
 export type AddTrainersToDepartmentBodyType = z.infer<typeof AddTrainersToDepartmentBodySchema>

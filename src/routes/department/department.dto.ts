@@ -4,6 +4,7 @@ import {
   AddTrainersToDepartmentParamsSchema,
   CreateDepartmentBodySchema,
   CreateDepartmentResSchema,
+  GetDepartmentDetailQuerySchema,
   GetDepartmentDetailResSchema,
   GetDepartmentHeadsResSchema,
   GetDepartmentParamsSchema,
@@ -21,6 +22,8 @@ export class GetDepartmentsResDTO extends createZodDto(GetDepartmentsResSchema) 
 export class GetDepartmentsQueryDTO extends createZodDto(GetDepartmentsQuerySchema) {}
 
 export class GetDepartmentParamsDTO extends createZodDto(GetDepartmentParamsSchema) {}
+
+export class GetDepartmentDetailQueryDTO extends createZodDto(GetDepartmentDetailQuerySchema) {}
 
 export class GetDepartmentDetailResDTO extends createZodDto(GetDepartmentDetailResSchema) {}
 
