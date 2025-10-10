@@ -8,6 +8,21 @@ import {
 import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
 
+// Helper to convert Date to ISO string
+const dateToString = z.preprocess((val) => {
+  if (val instanceof Date) {
+    return val.toISOString()
+  }
+  return val
+}, z.string().datetime())
+
+const nullableDateToString = z.preprocess((val) => {
+  if (val instanceof Date) {
+    return val.toISOString()
+  }
+  return val
+}, z.string().datetime().optional().nullable())
+
 // Base Subject Schema
 export const SubjectSchema = z.object({
   id: z.string().uuid(),
@@ -23,12 +38,12 @@ export const SubjectSchema = z.object({
   timeSlot: z.string().optional().nullable(),
   isSIM: z.boolean(),
   passScore: z.number().min(0).max(100).optional().nullable(),
-  startDate: z.string().datetime().optional().nullable(),
+  startDate: nullableDateToString,
   status: z.nativeEnum(SubjectStatus),
-  endDate: z.string().datetime().optional().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  deletedAt: z.string().datetime().optional().nullable()
+  endDate: nullableDateToString,
+  createdAt: dateToString,
+  updatedAt: dateToString,
+  deletedAt: nullableDateToString
 })
 
 // Course info schema for nested relations
@@ -58,19 +73,19 @@ export const SubjectInstructorSchema = z.object({
   subjectId: z.string().uuid(),
   roleInSubject: z.nativeEnum(SubjectInstructorRole),
   trainer: SubjectUserSchema,
-  createdAt: z.string().datetime()
+  createdAt: dateToString
 })
 
 // Enrollment info schema
 export const SubjectEnrollmentSchema = z.object({
   traineeUserId: z.string().uuid(),
   subjectId: z.string().uuid(),
-  enrollmentDate: z.string().datetime(),
+  enrollmentDate: dateToString,
   batchCode: z.string(),
   status: z.nativeEnum(SubjectEnrollmentStatus),
   trainee: SubjectUserSchema,
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime()
+  createdAt: dateToString,
+  updatedAt: dateToString
 })
 
 // Subject with relations
