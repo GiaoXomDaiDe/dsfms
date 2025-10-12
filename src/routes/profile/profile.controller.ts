@@ -28,9 +28,12 @@ export class ProfileController {
   @Put('reset-password')
   @ZodSerializerDto(MessageResDTO)
   resetPassword(@Body() body: ResetPasswordBodyDTO, @ActiveUser('userId') userId: string) {
+    // Sau khi validate ở tầng model (confirmNewPassword khớp với newPassword),
+    // chỉ truyền oldPassword và newPassword xuống service
+    const { oldPassword, newPassword } = body
     return this.profileService.resetPassword({
       userId,
-      body
+      body: { oldPassword, newPassword }
     })
   }
 }

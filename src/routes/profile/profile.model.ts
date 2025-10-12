@@ -111,23 +111,27 @@ export const ChangePasswordBodySchema = UserSchema.pick({
     if (newPassword !== confirmNewPassword) {
       ctx.addIssue({
         code: 'custom',
-        message: 'New password and confirm new password do not match',
+        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp',
         path: ['confirmNewPassword']
       })
     }
   })
 
+// Schema để reset mật khẩu - yêu cầu mật khẩu cũ, mật khẩu mới và xác nhận mật khẩu mới
+// Validation: confirmNewPassword phải khớp với newPassword
 export const ResetPasswordBodySchema = z
   .object({
-    newPassword: z.string().min(6).max(100),
-    confirmNewPassword: z.string().min(6).max(100)
+    oldPassword: z.string().min(6).max(100), // Mật khẩu cũ để xác thực
+    newPassword: z.string().min(6).max(100), // Mật khẩu mới
+    confirmNewPassword: z.string().min(6).max(100) // Xác nhận mật khẩu mới
   })
   .strict()
   .superRefine(({ confirmNewPassword, newPassword }, ctx) => {
+    // Kiểm tra confirmNewPassword có khớp với newPassword không
     if (newPassword !== confirmNewPassword) {
       ctx.addIssue({
         code: 'custom',
-        message: 'New password and confirm new password do not match',
+        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp',
         path: ['confirmNewPassword']
       })
     }
