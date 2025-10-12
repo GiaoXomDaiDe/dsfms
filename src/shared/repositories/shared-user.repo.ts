@@ -328,4 +328,31 @@ export class SharedUserRepository {
       data
     })
   }
+
+  /**
+   * Tìm department head hiện tại của một department
+   * Business rule: Mỗi department chỉ có 1 department head
+   * @param departmentId - ID của department cần kiểm tra
+   * @param excludeUserId - ID của user cần loại trừ (dùng cho update case)
+   * @returns User hoặc null nếu không tìm thấy
+   */
+  async findDepartmentHeadByDepartment({
+    departmentId,
+    excludeUserId
+  }: {
+    departmentId: string
+    excludeUserId?: string
+  }): Promise<UserType | null> {
+    return await this.prismaService.user.findFirst({
+      where: {
+        departmentId,
+        role: {
+          name: RoleName.DEPARTMENT_HEAD,
+          deletedAt: null
+        },
+        deletedAt: null,
+        ...(excludeUserId && { id: { not: excludeUserId } })
+      }
+    })
+  }
 }

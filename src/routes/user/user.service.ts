@@ -9,8 +9,11 @@ import {
   BulkRoleNotFoundAtIndexException,
   BulkTraineeProfileNotAllowedException,
   BulkTrainerProfileNotAllowedException,
+  CannotChangeRoleOfActiveDepartmentHeadException,
   CannotUpdateOrDeleteYourselfException,
   DefaultRoleValidationException,
+  DepartmentHeadAlreadyExistsException,
+  DepartmentHeadRequiresDepartmentException,
   DepartmentIsDisabledException,
   DepartmentNotFoundException,
   ForbiddenProfileException,
@@ -128,6 +131,13 @@ export class UserService {
 
       // Kiểm tra dữ liệu profile có hợp lệ không
       this.validateProfileData(targetRole.name, data)
+
+      // Kiểm tra unique department head constraint
+      await this.validateUniqueDepartmentHead({
+        departmentId: data.departmentId ?? undefined,
+        roleName: targetRole.name
+      })
+
       // Sinh eid theo role
       const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
       // Hash mật khẩu mặc định
@@ -179,6 +189,24 @@ export class UserService {
     try {
       const users = data.users
 
+      // Bước 0: Check duplicate department heads trong batch
+      const departmentHeadMap = new Map<string, number>() // departmentId -> index
+      for (let i = 0; i < users.length; i++) {
+        const userData = users[i]
+        const role = await this.sharedRoleRepository.findRolebyId(userData.role.id)
+
+        if (role?.name === RoleName.DEPARTMENT_HEAD && userData.departmentId) {
+          const existingIndex = departmentHeadMap.get(userData.departmentId)
+          if (existingIndex !== undefined) {
+            const department = await this.sharedDepartmentRepository.findById(userData.departmentId)
+            throw new Error(
+              `Duplicate department heads in batch: Users at index ${existingIndex} and ${i} are both assigned as department head for "${department?.name || 'Unknown'}"`
+            )
+          }
+          departmentHeadMap.set(userData.departmentId, i)
+        }
+      }
+
       // Bước 1: Validate tất cả các role và tính hợp lệ của profile
       const roleValidationPromises = users.map(async (userData, index) => {
         try {
@@ -207,6 +235,12 @@ export class UserService {
 
           // Kiểm tra profile có đúng không
           this.validateProfileDataForRole(targetRole.name, userData, index)
+
+          // Validate unique department head constraint
+          await this.validateUniqueDepartmentHead({
+            departmentId: userData.departmentId ?? undefined,
+            roleName: targetRole.name
+          })
 
           return { index, targetRole, success: true }
         } catch (error) {
@@ -551,6 +585,20 @@ export class UserService {
           throw DepartmentIsDisabledException
         }
       }
+
+      // Bước 4.5: Validate unique department head constraint
+      // Chỉ validate nếu role hoặc department đang được thay đổi
+      const isRoleChanging = data.role?.id && data.role.id !== currentUser.role.id
+      const isDepartmentChanging = data.departmentId !== undefined && data.departmentId !== currentUser.department?.id
+
+      if (isRoleChanging || isDepartmentChanging) {
+        await this.validateUniqueDepartmentHead({
+          departmentId: data.departmentId ?? currentUser.department?.id ?? undefined,
+          roleName: newRoleName,
+          excludeUserId: id // Important: exclude current user
+        })
+      }
+
       // Bước 5: Thực hiện update
       const { role, trainerProfile, traineeProfile, ...userData } = data
       const updatedUser = await this.sharedUserRepository.updateWithProfile(
@@ -612,6 +660,21 @@ export class UserService {
     }
 
     // Case 2: Có thay đổi role
+    if (currentUser.role.name === RoleName.DEPARTMENT_HEAD && currentUser.department?.id) {
+      // Xác nhận user hiện tại có phải department head đang active không
+      const isDepartmentHead = await this.sharedUserRepository.findDepartmentHeadByDepartment({
+        departmentId: currentUser.department.id,
+        excludeUserId: undefined // Don't exclude anyone, check if this user is head
+      })
+
+      if (isDepartmentHead && isDepartmentHead.id === currentUser.id) {
+        throw CannotChangeRoleOfActiveDepartmentHeadException(
+          currentUser.department.name || 'Unknown Department',
+          currentUser.eid
+        )
+      }
+    }
+
     // Lấy thông tin role mới
     const newRole = await this.sharedRoleRepository.findRolebyId(inputRole.id)
     if (!newRole) {
@@ -771,6 +834,50 @@ export class UserService {
       if (userData.traineeProfile) {
         throw new Error(BulkTraineeProfileNotAllowedException(userIndex, roleName))
       }
+    }
+  }
+
+  /**
+   * Validate unique department head constraint
+   * Business rule: Mỗi department chỉ được có 1 department head
+   * @param departmentId - ID của department cần check
+   * @param roleName - Role name của user
+   * @param excludeUserId - ID của user cần loại trừ (dùng cho update case)
+   * @throws DepartmentHeadAlreadyExistsException nếu department đã có head
+   * @throws DepartmentHeadRequiresDepartmentException nếu department head không có department
+   */
+  private async validateUniqueDepartmentHead({
+    departmentId,
+    roleName,
+    excludeUserId
+  }: {
+    departmentId?: string
+    roleName: string
+    excludeUserId?: string
+  }): Promise<void> {
+    // Chỉ validate khi role là DEPARTMENT_HEAD
+    if (roleName !== RoleName.DEPARTMENT_HEAD) {
+      return
+    }
+
+    // Department head bắt buộc phải có department
+    if (!departmentId) {
+      throw DepartmentHeadRequiresDepartmentException
+    }
+
+    // Kiểm tra xem department đã có head chưa
+    const existingHead = await this.sharedUserRepository.findDepartmentHeadByDepartment({
+      departmentId,
+      excludeUserId
+    })
+
+    if (existingHead) {
+      // Lấy thông tin department để hiển thị tên
+      const department = await this.sharedDepartmentRepository.findById(departmentId)
+      const departmentName = department?.name || 'Unknown Department'
+      const existingHeadFullName = `${existingHead.firstName} ${existingHead.lastName}`.trim()
+
+      throw DepartmentHeadAlreadyExistsException(departmentName, existingHeadFullName, existingHead.eid)
     }
   }
 
