@@ -229,3 +229,34 @@ export const DepartmentNotAllowedForRoleMessage = (roleName: string) =>
 // Message cho profile validation
 export const ProfileNotAllowedForRoleMessage = (profile: string, roleName: string) =>
   `${profile} is not allowed for ${roleName} role`
+
+/* =========================
+ * Department Head Unique Constraint - Validation cho unique department head
+ * Phục vụ: Enforce business rule: 1 department chỉ có 1 department head
+ * ========================= */
+
+// Lỗi khi department đã có department head
+export const DepartmentHeadAlreadyExistsException = (departmentName: string, existingHead: string, eid: string) =>
+  new UnprocessableEntityException(
+    `Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
+  )
+
+// Message cho bulk create khi department đã có head
+export const BulkDepartmentHeadAlreadyExistsAtIndexException = (
+  index: number,
+  departmentName: string,
+  existingHead: string,
+  eid: string
+) =>
+  `User at index ${index}: Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
+
+// Lỗi khi department head không có departmentId
+export const DepartmentHeadRequiresDepartmentException = new BadRequestException(
+  'Department Head must be assigned to a department'
+)
+
+// Lỗi khi cố gắng đổi role của department head đang active
+export const CannotChangeRoleOfActiveDepartmentHeadException = (departmentName: string, eid: string) =>
+  new ForbiddenException(
+    `Cannot change role of active department head (${eid}) for department "${departmentName}". Please assign a new department head first, then change this user's role.`
+  )
