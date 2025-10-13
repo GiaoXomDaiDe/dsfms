@@ -1,6 +1,23 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
+import {
+  CannotHardDeleteCourseWithActiveSubjectsException,
+  CannotRestoreCourseCodeConflictException,
+  CourseCodeAlreadyExistsException,
+  CourseIsNotDeletedException,
+  CourseNotFoundException,
+  DepartmentNotFoundException,
+  InvalidDateRangeException,
+  OnlyAcademicDepartmentCanAccessCourseListException,
+  OnlyAcademicDepartmentCanAddSubjectsToCourseException,
+  OnlyAcademicDepartmentCanArchiveCourseException,
+  OnlyAcademicDepartmentCanCreateCourseException,
+  OnlyAcademicDepartmentCanDeleteCourseException,
+  OnlyAcademicDepartmentCanRemoveSubjectsFromCourseException,
+  OnlyAcademicDepartmentCanRestoreCourseException,
+  OnlyAcademicDepartmentCanUpdateCourseException
+} from './course.error'
 import {
   AddSubjectToCourseBodyType,
   AddSubjectToCourseResType,
@@ -15,12 +32,6 @@ import {
 } from './course.model'
 import { CourseRepo } from './course.repo'
 
-// Custom exceptions
-export const CourseNotFoundException = new NotFoundException('Course not found')
-export const CourseCodeAlreadyExistsException = new BadRequestException('Course code already exists')
-export const DepartmentNotFoundException = new NotFoundException('Department not found')
-export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
-
 @Injectable()
 export class CourseService {
   constructor(
@@ -32,7 +43,7 @@ export class CourseService {
     // Simplified approach: Only ACADEMIC_DEPARTMENT can access course list
     // Similar to role.service.ts pattern
     if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can access course list')
+      throw OnlyAcademicDepartmentCanAccessCourseListException
     }
 
     return await this.courseRepo.list(query)
@@ -62,7 +73,7 @@ export class CourseService {
   }): Promise<CourseType> {
     // Validate permissions - only ACADEMIC_DEPARTMENT can create courses
     if (createdByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can create courses')
+      throw OnlyAcademicDepartmentCanCreateCourseException
     }
 
     // Validate department exists
@@ -111,7 +122,7 @@ export class CourseService {
 
     // Validate permissions - only ACADEMIC_DEPARTMENT can update courses
     if (updatedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can update courses')
+      throw OnlyAcademicDepartmentCanUpdateCourseException
     }
 
     // Validate new department exists if changing department
@@ -167,7 +178,7 @@ export class CourseService {
 
     // Validate permissions - only ACADEMIC_DEPARTMENT can delete courses
     if (deletedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can delete courses')
+      throw OnlyAcademicDepartmentCanDeleteCourseException
     }
 
     // Check if course has subjects before deletion
@@ -177,7 +188,7 @@ export class CourseService {
       })
 
       if (subjectCount > 0) {
-        throw new BadRequestException('Cannot permanently delete course with active subjects')
+        throw CannotHardDeleteCourseWithActiveSubjectsException
       }
     }
 
@@ -203,7 +214,7 @@ export class CourseService {
 
     // Validate permissions - only ACADEMIC_DEPARTMENT can archive courses
     if (archivedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can archive courses')
+      throw OnlyAcademicDepartmentCanArchiveCourseException
     }
 
     // Archive by changing status to ARCHIVED instead of soft delete
@@ -231,18 +242,18 @@ export class CourseService {
 
     // Check if course is actually deleted
     if (!existingCourse.deletedAt) {
-      throw new BadRequestException('Course is not deleted')
+      throw CourseIsNotDeletedException
     }
 
     // Validate permissions - only ACADEMIC_DEPARTMENT can restore courses
     if (restoredByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can restore courses')
+      throw OnlyAcademicDepartmentCanRestoreCourseException
     }
 
     // Check if course code conflicts with existing active courses
     const codeExists = await this.courseRepo.checkCodeExists(existingCourse.code, id)
     if (codeExists) {
-      throw new BadRequestException('Cannot restore course: code conflicts with existing active course')
+      throw CannotRestoreCourseCodeConflictException
     }
 
     return await this.courseRepo.restore({ id, restoredById })
@@ -328,7 +339,7 @@ export class CourseService {
   }): Promise<AddSubjectToCourseResType> {
     // Chỉ ACADEMIC_DEPARTMENT mới có quyền
     if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can add subjects to courses')
+      throw OnlyAcademicDepartmentCanAddSubjectsToCourseException
     }
 
     // Kiểm tra course tồn tại
@@ -403,7 +414,7 @@ export class CourseService {
   }): Promise<RemoveSubjectFromCourseResType> {
     // Chỉ ACADEMIC_DEPARTMENT mới có quyền
     if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can remove subjects from courses')
+      throw OnlyAcademicDepartmentCanRemoveSubjectsFromCourseException
     }
 
     // Kiểm tra course tồn tại
