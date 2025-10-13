@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { MessageResType } from '~/shared/models/response.model'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CannotHardDeleteCourseWithActiveSubjectsException,
@@ -169,7 +170,7 @@ export class CourseService {
     deletedByRoleName: string
     userDepartmentId?: string
     isHard?: boolean
-  }): Promise<CourseType> {
+  }): Promise<MessageResType> {
     // Check if course exists
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
@@ -192,7 +193,9 @@ export class CourseService {
       }
     }
 
-    return await this.courseRepo.delete({ id, deletedById, isHard })
+    await this.courseRepo.delete({ id, deletedById, isHard })
+
+    return { message: isHard ? 'Course permanently deleted successfully' : 'Course deleted successfully' }
   }
 
   async archive({
@@ -205,7 +208,7 @@ export class CourseService {
     archivedById: string
     archivedByRoleName: string
     userDepartmentId?: string
-  }): Promise<CourseType> {
+  }): Promise<MessageResType> {
     // Check if course exists
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
@@ -218,11 +221,13 @@ export class CourseService {
     }
 
     // Archive by changing status to ARCHIVED instead of soft delete
-    return await this.courseRepo.update({
+    await this.courseRepo.update({
       id,
       data: { status: 'ARCHIVED' as any },
       updatedById: archivedById
     })
+
+    return { message: 'Course archived successfully' }
   }
 
   async restore({
@@ -233,7 +238,7 @@ export class CourseService {
     id: string
     restoredById: string
     restoredByRoleName: string
-  }): Promise<CourseType> {
+  }): Promise<MessageResType> {
     // Check if course exists (including deleted)
     const existingCourse = await this.courseRepo.findById(id, { includeDeleted: true })
     if (!existingCourse) {
@@ -256,7 +261,9 @@ export class CourseService {
       throw CannotRestoreCourseCodeConflictException
     }
 
-    return await this.courseRepo.restore({ id, restoredById })
+    await this.courseRepo.restore({ id, restoredById })
+
+    return { message: 'Course restored successfully' }
   }
 
   async validateCourseAccess({
