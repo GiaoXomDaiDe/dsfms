@@ -32,26 +32,8 @@ export const GetUsersQuerySchema = IncludeDeletedQuerySchema.extend({
   roleName: z.string().optional()
 }).strict()
 
-export const GetUsersResSchema = z.object({
-  data: z.array(
-    UserSchema.omit({
-      passwordHash: true,
-      signatureImageUrl: true,
-      roleId: true,
-      departmentId: true
-    }).extend({
-      role: RoleSchema.pick({
-        id: true,
-        name: true
-      }),
-      department: DepartmentSchema.pick({
-        id: true,
-        name: true
-      }).nullable()
-    })
-  ),
-  totalItems: z.number()
-})
+export { PaginatedUserListSchema as GetUsersResSchema } from '~/shared/models/shared-user-list.model'
+export type { PaginatedUserListType as GetUsersResType } from '~/shared/models/shared-user-list.model'
 
 export const GetUserParamsSchema = z
   .object({
@@ -388,7 +370,6 @@ export type BulkTraineeLookupResType = z.infer<typeof BulkTraineeLookupResSchema
 export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
-export type GetUsersResType = z.infer<typeof GetUsersResSchema>
 
 // DTO exports
 export class BulkTraineeLookupBodyDto extends createZodDto(BulkTraineeLookupBodySchema) {}

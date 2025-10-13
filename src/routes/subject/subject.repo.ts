@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
+import { TraineeNotFoundException, TraineeResolutionFailureException } from './subject.error'
 import {
   CreateSubjectBodyType,
   EnrollTraineesBodyType,
@@ -34,7 +35,7 @@ export class SubjectRepo {
       ...(courseId && { courseId })
     }
 
-    // Get subjects with relations
+    // Get subjects with relations (exclude createdBy/updatedBy)
     const subjects = await this.prisma.subject.findMany({
       where,
       include: {
@@ -47,22 +48,6 @@ export class SubjectRepo {
                 code: true
               }
             }
-          }
-        },
-        createdBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        updatedBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
           }
         },
         _count: {
@@ -81,16 +66,21 @@ export class SubjectRepo {
     const totalItems = await this.prisma.subject.count({ where })
 
     // Transform data
-    const transformedSubjects = subjects.map((subject) => ({
-      ...subject,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString(),
-      deletedAt: subject.deletedAt?.toISOString() || null,
-      instructorCount: subject._count.instructors,
-      enrollmentCount: subject._count.enrollments
-    })) as unknown as SubjectWithInfoType[]
+    const transformedSubjects = subjects.map((subject) => {
+      const { _count, ...subjectWithoutCount } = subject
+      return {
+        ...subjectWithoutCount,
+        startDate: subject.startDate?.toISOString() || null,
+        endDate: subject.endDate?.toISOString() || null,
+        createdAt: subject.createdAt.toISOString(),
+        updatedAt: subject.updatedAt.toISOString(),
+        deletedAt: subject.deletedAt?.toISOString() || null,
+        instructors: [],
+        enrollments: [],
+        instructorCount: _count.instructors,
+        enrollmentCount: _count.enrollments
+      }
+    }) as unknown as SubjectWithInfoType[]
 
     const totalPages = Math.ceil(totalItems / limit)
 
@@ -123,22 +113,6 @@ export class SubjectRepo {
             }
           }
         },
-        createdBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        updatedBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
         instructors: {
           include: {
             trainer: {
@@ -168,8 +142,36 @@ export class SubjectRepo {
 
     if (!subject) return null
 
+    // Transform instructors - flatten structure
+    const transformedInstructors = subject.instructors.map((instructor) => ({
+      id: instructor.trainer.id,
+      eid: instructor.trainer.eid,
+      firstName: instructor.trainer.firstName,
+      lastName: instructor.trainer.lastName,
+      roleInSubject: instructor.roleInSubject,
+      assignedAt: instructor.createdAt.toISOString()
+    }))
+
+    // Transform enrollments - flatten structure
+    const transformedEnrollments = subject.enrollments.map((enrollment) => ({
+      id: enrollment.trainee.id,
+      eid: enrollment.trainee.eid,
+      firstName: enrollment.trainee.firstName,
+      lastName: enrollment.trainee.lastName,
+      enrollmentDate: enrollment.enrollmentDate.toISOString(),
+      batchCode: enrollment.batchCode,
+      status: enrollment.status
+    }))
+
     return {
       ...subject,
+      startDate: subject.startDate?.toISOString() || null,
+      endDate: subject.endDate?.toISOString() || null,
+      createdAt: subject.createdAt.toISOString(),
+      updatedAt: subject.updatedAt.toISOString(),
+      deletedAt: subject.deletedAt?.toISOString() || null,
+      instructors: transformedInstructors,
+      enrollments: transformedEnrollments,
       instructorCount: subject.instructors.length,
       enrollmentCount: subject.enrollments.length
     } as unknown as SubjectDetailResType
@@ -780,9 +782,9 @@ export class SubjectRepo {
     trainees
   }: {
     trainees: Array<{ eid?: string; email?: string }>
-  }): Promise<{ foundTrainees: any[]; notFoundTrainees: any[] }> {
-    const foundTrainees: any[] = []
-    const notFoundTrainees: any[] = []
+  }): Promise<{ foundUsers: any[]; notFoundIdentifiers: any[] }> {
+    const foundUsers: any[] = []
+    const notFoundIdentifiers: any[] = []
 
     for (const trainee of trainees) {
       const where: any = {
@@ -800,23 +802,36 @@ export class SubjectRepo {
 
       const found = await this.prisma.user.findFirst({
         where,
-        select: {
-          id: true,
-          eid: true,
-          firstName: true,
-          lastName: true,
-          email: true
+        include: {
+          role: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          department: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
         }
       })
 
       if (found) {
-        foundTrainees.push(found)
+        // Transform to match user list format
+        const { passwordHash, signatureImageUrl, roleId, departmentId, ...userWithoutSensitive } = found
+        foundUsers.push({
+          ...userWithoutSensitive,
+          role: found.role,
+          department: found.department
+        })
       } else {
-        notFoundTrainees.push(trainee)
+        notFoundIdentifiers.push(trainee)
       }
     }
 
-    return { foundTrainees, notFoundTrainees }
+    return { foundUsers, notFoundIdentifiers }
   }
 
   /**
@@ -831,42 +846,129 @@ export class SubjectRepo {
     traineeUserIds: string[]
     batchCode: string
   }): Promise<{
-    enrolled: string[]
-    duplicates: string[]
-    invalid: string[]
+    enrolled: Array<{
+      userId: string
+      eid: string
+      fullName: string
+      email: string
+      department: { id: string; name: string } | null
+    }>
+    duplicates: Array<{
+      userId: string
+      eid: string
+      fullName: string
+      email: string
+      department: { id: string; name: string } | null
+      enrolledAt: string
+      batchCode: string
+    }>
+    invalid: Array<{
+      submittedId: string
+      eid?: string
+      email?: string
+      reason: 'USER_NOT_FOUND' | 'ROLE_NOT_TRAINEE' | 'USER_INACTIVE'
+      note?: string
+    }>
   }> {
-    // Validate trainees have TRAINEE role
-    const validTrainees = await this.prisma.user.findMany({
+    const requestedUsers = await this.prisma.user.findMany({
       where: {
-        id: { in: traineeUserIds },
-        role: {
-          name: RoleName.TRAINEE
-        },
-        deletedAt: null
-      },
-      select: { id: true, eid: true }
-    })
-
-    const validIds = validTrainees.map((t) => t.id)
-    const invalidIds = traineeUserIds.filter((id) => !validIds.includes(id))
-
-    // Check for existing enrollments
-    const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
-      where: {
-        subjectId,
-        traineeUserId: { in: validIds }
+        id: { in: traineeUserIds }
       },
       select: {
-        traineeUserId: true,
-        trainee: { select: { eid: true } }
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        deletedAt: true,
+        role: {
+          select: { name: true }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     })
 
-    const existingIds = existingEnrollments.map((e) => e.traineeUserId)
-    const duplicateEids = existingEnrollments.map((e) => e.trainee.eid)
+    const requestedUserMap = new Map(requestedUsers.map((user) => [user.id, user]))
 
-    // New enrollments
-    const newIds = validIds.filter((id) => !existingIds.includes(id))
+    const invalidMap = new Map<
+      string,
+      {
+        submittedId: string
+        eid?: string
+        email?: string
+        reason: 'USER_NOT_FOUND' | 'ROLE_NOT_TRAINEE' | 'USER_INACTIVE'
+        note?: string
+      }
+    >()
+
+    const missingIds = traineeUserIds.filter((id) => !requestedUserMap.has(id))
+    missingIds.forEach((id) => {
+      invalidMap.set(id, {
+        submittedId: id,
+        reason: 'USER_NOT_FOUND'
+      })
+    })
+
+    requestedUsers.forEach((user) => {
+      if (user.deletedAt) {
+        invalidMap.set(user.id, {
+          submittedId: user.id,
+          eid: user.eid,
+          email: user.email,
+          reason: 'USER_INACTIVE',
+          note: 'User is inactive or deleted'
+        })
+        return
+      }
+
+      if (user.role?.name !== RoleName.TRAINEE) {
+        invalidMap.set(user.id, {
+          submittedId: user.id,
+          eid: user.eid,
+          email: user.email,
+          reason: 'ROLE_NOT_TRAINEE',
+          note: `Expected role TRAINEE but received ${user.role?.name ?? 'UNKNOWN'}`
+        })
+      }
+    })
+
+    const eligibleUserIds = traineeUserIds.filter((id) => !invalidMap.has(id))
+
+    const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        subjectId,
+        traineeUserId: { in: eligibleUserIds }
+      },
+      select: {
+        traineeUserId: true,
+        batchCode: true,
+        enrollmentDate: true,
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    const existingIds = new Set(existingEnrollments.map((enrollment) => enrollment.traineeUserId))
+
+    const newIds = eligibleUserIds.filter((id) => !existingIds.has(id))
     const newEnrollments = newIds.map((id) => ({
       subjectId,
       traineeUserId: id,
@@ -881,20 +983,55 @@ export class SubjectRepo {
       })
     }
 
-    const enrolledTrainees = await this.prisma.user.findMany({
-      where: { id: { in: newIds } },
-      select: { eid: true }
+    type AssignmentUserRecord = {
+      id: string
+      eid: string
+      firstName: string | null
+      lastName: string | null
+      email: string
+      department: { id: string; name: string } | null
+    }
+
+    const resolveUserPayload = (user: AssignmentUserRecord) => {
+      const nameParts = [user.firstName ?? '', user.lastName ?? ''].filter((part) => part.trim().length > 0)
+      const fullName = nameParts.join(' ').trim()
+
+      return {
+        userId: user.id,
+        eid: user.eid,
+        fullName: fullName.length > 0 ? fullName : user.eid,
+        email: user.email,
+        department: user.department ? { id: user.department.id, name: user.department.name } : null
+      }
+    }
+
+    const enrolled = newIds.map((id) => {
+      const user = requestedUserMap.get(id) as AssignmentUserRecord | undefined
+      if (!user) {
+        throw TraineeResolutionFailureException(id)
+      }
+      return resolveUserPayload(user)
     })
 
-    const invalidTrainees = await this.prisma.user.findMany({
-      where: { id: { in: invalidIds } },
-      select: { eid: true }
+    const duplicates = existingEnrollments.map((enrollment) => {
+      const fallbackUser = enrollment.trainee as AssignmentUserRecord
+      const user = (requestedUserMap.get(enrollment.traineeUserId) as AssignmentUserRecord | undefined) ?? fallbackUser
+
+      const payload = resolveUserPayload(user)
+
+      return {
+        ...payload,
+        enrolledAt: enrollment.enrollmentDate ? enrollment.enrollmentDate.toISOString() : new Date().toISOString(),
+        batchCode: enrollment.batchCode
+      }
     })
+
+    const invalid = Array.from(invalidMap.values())
 
     return {
-      enrolled: enrolledTrainees.map((t) => t.eid),
-      duplicates: duplicateEids,
-      invalid: invalidTrainees.map((t) => t.eid)
+      enrolled,
+      duplicates,
+      invalid
     }
   }
 
@@ -1051,7 +1188,55 @@ export class SubjectRepo {
     traineeUserId: string
     batchCode?: string
     status?: any
-  }): Promise<any[]> {
+  }): Promise<{
+    trainee: {
+      userId: string
+      eid: string
+      fullName: string
+      email: string
+      department: { id: string; name: string } | null
+    }
+    enrollments: Array<{
+      subject: {
+        id: string
+        code: string
+        name: string
+        status: string
+        type: string
+        method: string
+        startDate: string | null
+        endDate: string | null
+        course: { id: string; name: string } | null
+      }
+      enrollment: {
+        batchCode: string
+        status: string
+        enrollmentDate: string
+        updatedAt: string
+      }
+    }>
+  }> {
+    const trainee = await this.prisma.user.findUnique({
+      where: { id: traineeUserId },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    })
+
+    if (!trainee) {
+      throw TraineeNotFoundException
+    }
+
     const where: any = {
       traineeUserId
     }
@@ -1068,9 +1253,18 @@ export class SubjectRepo {
       where,
       include: {
         subject: {
-          include: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            type: true,
+            method: true,
+            startDate: true,
+            endDate: true,
             course: {
               select: {
+                id: true,
                 name: true
               }
             }
@@ -1079,16 +1273,39 @@ export class SubjectRepo {
       }
     })
 
-    return enrollments.map((e) => ({
-      subjectId: e.subjectId,
-      subjectName: e.subject.name,
-      subjectCode: e.subject.code,
-      courseName: e.subject.course?.name || 'N/A',
-      enrollmentDate: e.enrollmentDate.toISOString(),
-      batchCode: e.batchCode,
-      status: e.status,
-      updatedAt: e.updatedAt.toISOString()
+    const nameParts = [trainee.firstName ?? '', trainee.lastName ?? ''].filter((part) => part.trim().length > 0)
+    const traineeInfo = {
+      userId: trainee.id,
+      eid: trainee.eid,
+      fullName: nameParts.length > 0 ? nameParts.join(' ') : trainee.eid,
+      email: trainee.email,
+      department: trainee.department ? { id: trainee.department.id, name: trainee.department.name } : null
+    }
+
+    const enrollmentDetails = enrollments.map((e) => ({
+      subject: {
+        id: e.subject.id,
+        code: e.subject.code,
+        name: e.subject.name,
+        status: e.subject.status,
+        type: e.subject.type,
+        method: e.subject.method,
+        startDate: e.subject.startDate ? e.subject.startDate.toISOString() : null,
+        endDate: e.subject.endDate ? e.subject.endDate.toISOString() : null,
+        course: e.subject.course ? { id: e.subject.course.id, name: e.subject.course.name } : null
+      },
+      enrollment: {
+        batchCode: e.batchCode,
+        status: e.status,
+        enrollmentDate: e.enrollmentDate.toISOString(),
+        updatedAt: e.updatedAt.toISOString()
+      }
     }))
+
+    return {
+      trainee: traineeInfo,
+      enrollments: enrollmentDetails
+    }
   }
 
   /**

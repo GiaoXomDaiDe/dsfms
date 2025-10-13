@@ -7,6 +7,7 @@ import {
 } from '@prisma/client'
 import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
+import { UserLookupResSchema } from '~/shared/models/shared-user-list.model'
 
 // Helper to convert Date to ISO string
 const dateToString = z.preprocess((val) => {
@@ -67,29 +68,38 @@ export const SubjectUserSchema = z.object({
   lastName: z.string()
 })
 
-// Instructor info schema
+// Instructor info schema (simplified for response)
 export const SubjectInstructorSchema = z.object({
-  trainerUserId: z.string().uuid(),
-  subjectId: z.string().uuid(),
+  id: z.string().uuid(),
+  eid: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
   roleInSubject: z.nativeEnum(SubjectInstructorRole),
-  trainer: SubjectUserSchema,
-  createdAt: dateToString
+  assignedAt: dateToString
 })
 
-// Enrollment info schema
+// Enrollment info schema (simplified for response)
 export const SubjectEnrollmentSchema = z.object({
-  traineeUserId: z.string().uuid(),
-  subjectId: z.string().uuid(),
+  id: z.string().uuid(),
+  eid: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
   enrollmentDate: dateToString,
   batchCode: z.string(),
-  status: z.nativeEnum(SubjectEnrollmentStatus),
-  trainee: SubjectUserSchema,
-  createdAt: dateToString,
-  updatedAt: dateToString
+  status: z.nativeEnum(SubjectEnrollmentStatus)
 })
 
-// Subject with relations
+// Subject with relations (for response - no createdBy/updatedBy)
 export const SubjectWithInfoSchema = SubjectSchema.extend({
+  course: SubjectCourseSchema.optional(),
+  instructors: z.array(SubjectInstructorSchema).optional().default([]),
+  enrollments: z.array(SubjectEnrollmentSchema).optional().default([]),
+  instructorCount: z.number().int().default(0),
+  enrollmentCount: z.number().int().default(0)
+})
+
+// Subject with relations including user info (for internal use)
+export const SubjectWithUserInfoSchema = SubjectSchema.extend({
   course: SubjectCourseSchema.optional(),
   createdBy: SubjectUserSchema.optional().nullable(),
   updatedBy: SubjectUserSchema.optional().nullable(),
@@ -431,6 +441,7 @@ export const TraineeSubjectsOverviewResSchema = z.object({
 export type SubjectEntityType = z.infer<typeof SubjectSchema>
 export type SubjectResType = z.infer<typeof SubjectResSchema>
 export type SubjectWithInfoType = z.infer<typeof SubjectWithInfoSchema>
+export type SubjectWithUserInfoType = z.infer<typeof SubjectWithUserInfoSchema>
 export type CreateSubjectBodyType = z.infer<typeof CreateSubjectBodySchema>
 export type UpdateSubjectBodyType = z.infer<typeof UpdateSubjectBodySchema>
 export type GetSubjectsQueryType = z.infer<typeof GetSubjectsQuerySchema>
@@ -527,21 +538,10 @@ export const AssignTrainerResSchema = z.object({
   })
 })
 
-// Update Trainer Assignment Schema
-export const UpdateTrainerAssignmentBodySchema = z
-  .object({
-    newTrainerUserId: z.string().uuid().optional(),
-    newSubjectId: z.string().uuid().optional(),
-    newRoleInSubject: z.nativeEnum(SubjectInstructorRole).optional()
-  })
-  .refine(
-    (data) => {
-      return data.newTrainerUserId || data.newSubjectId || data.newRoleInSubject
-    },
-    {
-      message: 'At least one field (newTrainerUserId, newSubjectId, or newRoleInSubject) must be provided'
-    }
-  )
+// Update Trainer Assignment Schema - Only allow role update
+export const UpdateTrainerAssignmentBodySchema = z.object({
+  roleInSubject: z.nativeEnum(SubjectInstructorRole)
+})
 
 export const UpdateTrainerAssignmentResSchema = z.object({
   message: z.string(),
@@ -577,23 +577,8 @@ export const LookupTraineesBodySchema = z.object({
     .min(1)
 })
 
-export const LookupTraineeInfoSchema = z.object({
-  id: z.string().uuid(),
-  eid: z.string(),
-  firstName: z.string(),
-  lastName: z.string(),
-  email: z.string().email()
-})
-
-export const LookupTraineesResSchema = z.object({
-  foundTrainees: z.array(LookupTraineeInfoSchema),
-  notFoundTrainees: z.array(
-    z.object({
-      eid: z.string().optional(),
-      email: z.string().optional()
-    })
-  )
-})
+export { UserLookupResSchema as LookupTraineesResSchema } from '~/shared/models/shared-user-list.model'
+export type { UserLookupResType as LookupTraineesResType } from '~/shared/models/shared-user-list.model'
 
 // Assign Trainees Schema
 export const AssignTraineesBodySchema = z.object({
@@ -601,16 +586,37 @@ export const AssignTraineesBodySchema = z.object({
   traineeUserIds: z.array(z.string().uuid()).min(1)
 })
 
-export const AssignTraineesResSchema = z.object({
-  message: z.string(),
-  data: z.object({
-    enrolledCount: z.number().int(),
-    duplicateCount: z.number().int(),
-    invalidCount: z.number().int(),
-    enrolledTrainees: z.array(z.string()),
-    duplicateTrainees: z.array(z.string()),
-    invalidTrainees: z.array(z.string())
+const TraineeAssignmentDepartmentSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string()
   })
+  .nullable()
+
+export const TraineeAssignmentUserSchema = z.object({
+  userId: z.string().uuid(),
+  eid: z.string(),
+  fullName: z.string(),
+  email: z.string().email(),
+  department: TraineeAssignmentDepartmentSchema
+})
+
+export const TraineeAssignmentDuplicateSchema = TraineeAssignmentUserSchema.extend({
+  enrolledAt: z.string().datetime(),
+  batchCode: z.string()
+})
+
+export const TraineeAssignmentIssueSchema = z.object({
+  submittedId: z.string().uuid(),
+  eid: z.string().optional(),
+  email: z.string().email().optional(),
+  reason: z.enum(['USER_NOT_FOUND', 'ROLE_NOT_TRAINEE', 'USER_INACTIVE']),
+  note: z.string().optional()
+})
+
+export const AssignTraineesResSchema = z.object({
+  enrolledCount: z.number().int(),
+  enrolled: z.array(TraineeAssignmentUserSchema)
 })
 
 // Get Course Trainees Schema
@@ -656,19 +662,49 @@ export const GetTraineeEnrollmentsQuerySchema = z.object({
   status: z.nativeEnum(SubjectEnrollmentStatus).optional()
 })
 
-export const TraineeEnrollmentInfoSchema = z.object({
-  subjectId: z.string().uuid(),
-  subjectName: z.string(),
-  subjectCode: z.string(),
-  courseName: z.string(),
-  enrollmentDate: z.string().datetime(),
-  batchCode: z.string(),
-  status: z.nativeEnum(SubjectEnrollmentStatus),
-  updatedAt: z.string().datetime()
+export const TraineeEnrollmentUserSchema = z.object({
+  userId: z.string().uuid(),
+  eid: z.string(),
+  fullName: z.string(),
+  email: z.string().email(),
+  department: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string()
+    })
+    .nullable()
+})
+
+export const TraineeEnrollmentSubjectSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  status: z.nativeEnum(SubjectStatus),
+  type: z.nativeEnum(SubjectType),
+  method: z.nativeEnum(SubjectMethod),
+  startDate: z.string().datetime().nullable(),
+  endDate: z.string().datetime().nullable(),
+  course: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string()
+    })
+    .nullable()
+})
+
+export const TraineeEnrollmentRecordSchema = z.object({
+  subject: TraineeEnrollmentSubjectSchema,
+  enrollment: z.object({
+    batchCode: z.string(),
+    status: z.nativeEnum(SubjectEnrollmentStatus),
+    enrollmentDate: z.string().datetime(),
+    updatedAt: z.string().datetime()
+  })
 })
 
 export const GetTraineeEnrollmentsResSchema = z.object({
-  enrollments: z.array(TraineeEnrollmentInfoSchema),
+  trainee: TraineeEnrollmentUserSchema,
+  enrollments: z.array(TraineeEnrollmentRecordSchema),
   totalCount: z.number().int()
 })
 
@@ -691,17 +727,20 @@ export type UpdateTrainerAssignmentBodyType = z.infer<typeof UpdateTrainerAssign
 export type UpdateTrainerAssignmentResType = z.infer<typeof UpdateTrainerAssignmentResSchema>
 export type RemoveTrainerResType = z.infer<typeof RemoveTrainerResSchema>
 export type LookupTraineesBodyType = z.infer<typeof LookupTraineesBodySchema>
-export type LookupTraineeInfoType = z.infer<typeof LookupTraineeInfoSchema>
-export type LookupTraineesResType = z.infer<typeof LookupTraineesResSchema>
 export type AssignTraineesBodyType = z.infer<typeof AssignTraineesBodySchema>
 export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
+export type TraineeAssignmentUserType = z.infer<typeof TraineeAssignmentUserSchema>
+export type TraineeAssignmentDuplicateType = z.infer<typeof TraineeAssignmentDuplicateSchema>
+export type TraineeAssignmentIssueType = z.infer<typeof TraineeAssignmentIssueSchema>
 export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
 export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
 export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
 export type CancelCourseEnrollmentsBodyType = z.infer<typeof CancelCourseEnrollmentsBodySchema>
 export type CancelCourseEnrollmentsResType = z.infer<typeof CancelCourseEnrollmentsResSchema>
 export type GetTraineeEnrollmentsQueryType = z.infer<typeof GetTraineeEnrollmentsQuerySchema>
-export type TraineeEnrollmentInfoType = z.infer<typeof TraineeEnrollmentInfoSchema>
+export type TraineeEnrollmentUserType = z.infer<typeof TraineeEnrollmentUserSchema>
+export type TraineeEnrollmentSubjectType = z.infer<typeof TraineeEnrollmentSubjectSchema>
+export type TraineeEnrollmentRecordType = z.infer<typeof TraineeEnrollmentRecordSchema>
 export type GetTraineeEnrollmentsResType = z.infer<typeof GetTraineeEnrollmentsResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
 export type CancelSubjectEnrollmentResType = z.infer<typeof CancelSubjectEnrollmentResSchema>
@@ -715,7 +754,7 @@ export class UpdateTrainerAssignmentBodyDto extends createZodDto(UpdateTrainerAs
 export class UpdateTrainerAssignmentResDto extends createZodDto(UpdateTrainerAssignmentResSchema) {}
 export class RemoveTrainerResDto extends createZodDto(RemoveTrainerResSchema) {}
 export class LookupTraineesBodyDto extends createZodDto(LookupTraineesBodySchema) {}
-export class LookupTraineesResDto extends createZodDto(LookupTraineesResSchema) {}
+export class LookupTraineesResDto extends createZodDto(UserLookupResSchema) {}
 export class AssignTraineesBodyDto extends createZodDto(AssignTraineesBodySchema) {}
 export class AssignTraineesResDto extends createZodDto(AssignTraineesResSchema) {}
 export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQuerySchema) {}

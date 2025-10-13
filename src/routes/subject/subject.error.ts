@@ -49,6 +49,48 @@ export const DuplicateEnrollmentException = new BadRequestException(
 )
 export const EnrollmentNotFoundException = new BadRequestException('Trainee enrollment not found')
 
+export const TrainerAssignmentNotFoundException = new NotFoundException('Trainer assignment not found')
+
+export const CourseAtCapacityException = (current: number, max: number, attempting: number) =>
+  new BadRequestException(`Course is at capacity. Current: ${current}, Max: ${max}, Attempting to add: ${attempting}`)
+
+export const CannotEnrollInRecurrentSubjectException = (reason?: string) =>
+  new BadRequestException(reason ?? 'Cannot enroll in recurrent subject')
+
+export const DuplicateTraineeEnrollmentException = (
+  duplicates: Array<{
+    eid: string
+    email: string
+    batchCode: string
+    enrolledAt: string
+  }>
+) =>
+  new BadRequestException({
+    message: 'Duplicate trainee enrollments detected',
+    duplicates
+  })
+
+export const InvalidTraineeSubmissionException = (
+  invalid: Array<{
+    submittedId: string
+    eid?: string
+    email?: string
+    reason: string
+    note?: string
+  }>
+) =>
+  new BadRequestException({
+    message: 'Invalid trainee submissions',
+    invalid
+  })
+
+export const CannotCancelSubjectEnrollmentException = new BadRequestException(
+  'Cannot cancel enrollment. Either it does not exist, batch code mismatch, or status is not ENROLLED.'
+)
+
+export const TraineeResolutionFailureException = (traineeId: string) =>
+  new BadRequestException(`Unable to resolve trainee user ${traineeId}`)
+
 // Hard Delete Prevention Errors
 export const CannotHardDeleteSubjectWithEnrollmentsException = new BadRequestException(
   'Cannot permanently delete subject with existing enrollments'

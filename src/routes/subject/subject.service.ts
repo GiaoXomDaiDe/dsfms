@@ -13,18 +13,25 @@ import {
   BulkInvalidDateRangeAtIndexException,
   BulkSubjectCodeAlreadyExistsAtIndexException,
   BulkSubjectCreationFailedException,
+  CannotCancelSubjectEnrollmentException,
+  CannotEnrollInRecurrentSubjectException,
   CannotHardDeleteSubjectWithEnrollmentsException,
   CannotHardDeleteSubjectWithInstructorsException,
   CannotRestoreSubjectCodeConflictException,
+  CourseAtCapacityException,
   CourseNotFoundException,
+  DuplicateInstructorException,
+  DuplicateTraineeEnrollmentException,
   InvalidDateRangeException,
+  InvalidTraineeSubmissionException,
   OnlyAdminAndDepartmentHeadCanCreateSubjectsException,
   OnlyAdminAndDepartmentHeadCanDeleteSubjectsException,
   OnlyAdminAndDepartmentHeadCanRestoreSubjectsException,
   OnlyAdminAndDepartmentHeadCanUpdateSubjectsException,
   SubjectCodeAlreadyExistsException,
   SubjectIsNotDeletedException,
-  SubjectNotFoundException
+  SubjectNotFoundException,
+  TrainerAssignmentNotFoundException
 } from './subject.error'
 import {
   BulkCreateSubjectsBodyType,
@@ -170,14 +177,14 @@ export class SubjectService {
         // Kiểm tra subject code unique
         const codeExists = await this.subjectRepo.checkCodeExists(subject.code)
         if (codeExists) {
-          throw new Error(BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code))
+          throw BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code)
         }
 
         // Validate date range
         if (subject.startDate && subject.endDate) {
           const isValidRange = new Date(subject.startDate) < new Date(subject.endDate)
           if (!isValidRange) {
-            throw new Error(BulkInvalidDateRangeAtIndexException(i))
+            throw BulkInvalidDateRangeAtIndexException(i)
           }
         }
 
@@ -581,7 +588,7 @@ export class SubjectService {
     })
 
     if (alreadyAssigned) {
-      throw new Error('Trainer is already assigned to this subject')
+      throw DuplicateInstructorException
     }
 
     // Assign trainer
@@ -598,7 +605,8 @@ export class SubjectService {
   }
 
   /**
-   * Update trainer assignment
+   * Update trainer assignment - Only allows role update
+   * To change trainer or subject, use remove + assign operations
    */
   async updateTrainerAssignment({
     currentSubjectId,
@@ -608,7 +616,7 @@ export class SubjectService {
   }: {
     currentSubjectId: string
     currentTrainerId: string
-    data: any
+    data: { roleInSubject: any }
     roleName: string
   }): Promise<any> {
     this.validateUpdatePermissions(roleName)
@@ -620,28 +628,20 @@ export class SubjectService {
     })
 
     if (!exists) {
-      throw new Error('Trainer assignment not found')
+      throw TrainerAssignmentNotFoundException
     }
 
-    // If changing subject, validate new subject exists
-    if (data.newSubjectId) {
-      const newSubject = await this.subjectRepo.findById(data.newSubjectId)
-      if (!newSubject) {
-        throw new Error('New subject not found')
-      }
-    }
-
-    // Update assignment
+    // Update only the role - no trainer or subject change allowed
     const updated = await this.subjectRepo.updateTrainerAssignment({
       currentSubjectId,
       currentTrainerUserId: currentTrainerId,
-      newSubjectId: data.newSubjectId,
-      newTrainerUserId: data.newTrainerUserId,
-      newRoleInSubject: data.newRoleInSubject
+      newSubjectId: currentSubjectId, // Keep same subject
+      newTrainerUserId: currentTrainerId, // Keep same trainer
+      newRoleInSubject: data.roleInSubject // Only change role
     })
 
     return {
-      message: 'Trainer assignment updated successfully',
+      message: 'Trainer role updated successfully',
       data: updated
     }
   }
@@ -667,7 +667,7 @@ export class SubjectService {
     })
 
     if (!exists) {
-      throw new Error('Trainer assignment not found')
+      throw TrainerAssignmentNotFoundException
     }
 
     await this.subjectRepo.removeTrainerFromSubject({
@@ -693,8 +693,8 @@ export class SubjectService {
     })
 
     return {
-      foundTrainees: result.foundTrainees,
-      notFoundTrainees: result.notFoundTrainees
+      foundUsers: result.foundUsers,
+      notFoundIdentifiers: result.notFoundIdentifiers
     }
   }
 
@@ -723,9 +723,7 @@ export class SubjectService {
       const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.course.id)
 
       if (max !== null && current + data.traineeUserIds.length > max) {
-        throw new Error(
-          `Course is at capacity. Current: ${current}, Max: ${max}, Attempting to add: ${data.traineeUserIds.length}`
-        )
+        throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
       }
     }
 
@@ -738,7 +736,7 @@ export class SubjectService {
         })
 
         if (!canEnroll) {
-          throw new Error(reason || 'Cannot enroll in recurrent subject')
+          throw CannotEnrollInRecurrentSubjectException(reason)
         }
       }
     }
@@ -750,16 +748,24 @@ export class SubjectService {
       batchCode: data.batchCode
     })
 
+    if (result.duplicates.length > 0) {
+      const duplicateDetails = result.duplicates.map((item) => ({
+        eid: item.eid,
+        email: item.email,
+        batchCode: item.batchCode,
+        enrolledAt: item.enrolledAt
+      }))
+
+      throw DuplicateTraineeEnrollmentException(duplicateDetails)
+    }
+
+    if (result.invalid.length > 0) {
+      throw InvalidTraineeSubmissionException(result.invalid)
+    }
+
     return {
-      message: `Successfully enrolled ${result.enrolled.length} trainees`,
-      data: {
-        enrolledCount: result.enrolled.length,
-        duplicateCount: result.duplicates.length,
-        invalidCount: result.invalid.length,
-        enrolledTrainees: result.enrolled,
-        duplicateTrainees: result.duplicates,
-        invalidTrainees: result.invalid
-      }
+      enrolledCount: result.enrolled.length,
+      enrolled: result.enrolled
     }
   }
 
@@ -829,15 +835,16 @@ export class SubjectService {
    * Get trainee enrollments
    */
   async getTraineeEnrollments({ traineeId, query }: { traineeId: string; query: any }): Promise<any> {
-    const enrollments = await this.subjectRepo.getTraineeEnrollments({
+    const result = await this.subjectRepo.getTraineeEnrollments({
       traineeUserId: traineeId,
       batchCode: query.batchCode,
       status: query.status
     })
 
     return {
-      enrollments,
-      totalCount: enrollments.length
+      trainee: result.trainee,
+      enrollments: result.enrollments,
+      totalCount: result.enrollments.length
     }
   }
 
@@ -864,9 +871,7 @@ export class SubjectService {
     })
 
     if (!success) {
-      throw new Error(
-        'Cannot cancel enrollment. Either it does not exist, batch code mismatch, or status is not ENROLLED.'
-      )
+      throw CannotCancelSubjectEnrollmentException
     }
 
     return {
