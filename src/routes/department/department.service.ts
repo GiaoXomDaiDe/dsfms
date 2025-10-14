@@ -1,5 +1,18 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
-import { DepartmentAlreadyExistsException, NotFoundDepartmentException } from '~/routes/department/department.error'
+import { Injectable } from '@nestjs/common'
+import {
+  DepartmentAlreadyActiveException,
+  DepartmentAlreadyExistsException,
+  DepartmentHeadMustHaveRoleException,
+  DepartmentHeadRoleInactiveException,
+  DepartmentHeadUserNotFoundException,
+  NotFoundDepartmentException,
+  NoTrainersFoundInDepartmentException,
+  OnlyAdministratorCanEnableDepartmentException,
+  TrainersAlreadyInDepartmentException,
+  TrainersBelongToOtherDepartmentsException,
+  TrainersNotFoundOrInvalidRoleException,
+  TrainersNotInDepartmentException
+} from '~/routes/department/department.error'
 import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/department/department.model'
 import { DepartmentRepo } from '~/routes/department/department.repo'
 import { RoleName } from '~/shared/constants/auth.constant'
@@ -41,7 +54,6 @@ export class DepartmentService {
   }
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
-    // Validate headUserId has DEPARTMENT_HEAD role if provided
     if (data.headUserId) {
       await this.validateDepartmentHead(data.headUserId)
     }
@@ -55,12 +67,12 @@ export class DepartmentService {
       if (isUniqueConstraintPrismaError(error)) {
         throw DepartmentAlreadyExistsException
       }
+
       throw error
     }
   }
 
   async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
-    // Validate headUserId has DEPARTMENT_HEAD role if provided
     if (data.headUserId) {
       await this.validateDepartmentHead(data.headUserId)
     }
@@ -76,9 +88,11 @@ export class DepartmentService {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
       }
+
       if (isUniqueConstraintPrismaError(error)) {
         throw DepartmentAlreadyExistsException
       }
+
       throw error
     }
   }
@@ -89,6 +103,7 @@ export class DepartmentService {
         id,
         deletedById
       })
+
       return {
         message: 'Disable successfully'
       }
@@ -96,14 +111,14 @@ export class DepartmentService {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
       }
+
       throw error
     }
   }
 
   async enable({ id, enabledById, enablerRole }: { id: string; enabledById: string; enablerRole: string }) {
-    // Chỉ admin mới có thể enable department
     if (enablerRole !== RoleName.ADMINISTRATOR) {
-      throw new Error('Only administrators can enable departments')
+      throw OnlyAdministratorCanEnableDepartmentException
     }
 
     try {
@@ -113,7 +128,7 @@ export class DepartmentService {
       }
 
       if (!department.deletedAt) {
-        throw new Error('Department is already active')
+        throw DepartmentAlreadyActiveException
       }
 
       await this.departmentRepo.enable({ id, enabledById })
@@ -125,11 +140,11 @@ export class DepartmentService {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
       }
+
       throw error
     }
   }
 
-  // Get all users with Department Head role
   async getDepartmentHeads() {
     const [totalItems, users] = await Promise.all([
       this.prisma.user.count({
@@ -166,7 +181,6 @@ export class DepartmentService {
     }
   }
 
-  // Add trainers to department by EID
   async addTrainersToDepartment({
     departmentId,
     trainerEids,
@@ -177,13 +191,11 @@ export class DepartmentService {
     updatedById: string
   }) {
     try {
-      // Check if department exists
       const department = await this.departmentRepo.findById(departmentId)
       if (!department) {
         throw NotFoundDepartmentException
       }
 
-      // Find trainers by EID and check if they have TRAINER role
       const trainers = await this.prisma.user.findMany({
         where: {
           eid: {
@@ -199,26 +211,21 @@ export class DepartmentService {
       if (trainers.length !== trainerEids.length) {
         const foundEids = trainers.map((t) => t.eid)
         const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
-        throw new Error(`Trainers not found or not have TRAINER role: ${notFoundEids.join(', ')}`)
+        throw TrainersNotFoundOrInvalidRoleException(notFoundEids)
       }
 
-      // Check if any trainer already belongs to this department
       const trainersAlreadyInDepartment = trainers.filter((t) => t.departmentId === departmentId)
       if (trainersAlreadyInDepartment.length > 0) {
         const alreadyAssignedEids = trainersAlreadyInDepartment.map((t) => t.eid)
-        throw new BadRequestException(`Trainers already belong to this department: ${alreadyAssignedEids.join(', ')}`)
+        throw TrainersAlreadyInDepartmentException(alreadyAssignedEids)
       }
 
-      // Check if any trainer already belongs to another department
       const trainersInOtherDepartments = trainers.filter((t) => t.departmentId && t.departmentId !== departmentId)
       if (trainersInOtherDepartments.length > 0) {
         const assignedToOtherDeptEids = trainersInOtherDepartments.map((t) => t.eid)
-        throw new BadRequestException(
-          `Trainers already belong to other departments: ${assignedToOtherDeptEids.join(', ')}`
-        )
+        throw TrainersBelongToOtherDepartmentsException(assignedToOtherDeptEids)
       }
 
-      // Update trainers' departmentId
       await this.prisma.user.updateMany({
         where: {
           id: {
@@ -243,11 +250,11 @@ export class DepartmentService {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
       }
+
       throw error
     }
   }
 
-  // Remove trainers from department by EID
   async removeTrainersFromDepartment({
     departmentId,
     trainerEids,
@@ -258,13 +265,11 @@ export class DepartmentService {
     updatedById: string
   }) {
     try {
-      // Check if department exists
       const department = await this.departmentRepo.findById(departmentId)
       if (!department) {
         throw NotFoundDepartmentException
       }
 
-      // Find trainers by EID who belong to this department
       const trainers = await this.prisma.user.findMany({
         where: {
           eid: {
@@ -273,22 +278,21 @@ export class DepartmentService {
           role: {
             name: RoleName.TRAINER
           },
-          departmentId: departmentId,
+          departmentId,
           deletedAt: null
         }
       })
 
       if (trainers.length === 0) {
-        throw new BadRequestException('No trainers found in this department with the provided EIDs')
+        throw NoTrainersFoundInDepartmentException
       }
 
       if (trainers.length !== trainerEids.length) {
         const foundEids = trainers.map((t) => t.eid)
         const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
-        throw new BadRequestException(`Trainers not found in this department: ${notFoundEids.join(', ')}`)
+        throw TrainersNotInDepartmentException(notFoundEids)
       }
 
-      // Remove trainers from department (set departmentId to null)
       await this.prisma.user.updateMany({
         where: {
           id: {
@@ -313,24 +317,24 @@ export class DepartmentService {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
       }
+
       throw error
     }
   }
 
   private async validateDepartmentHead(headUserId: string) {
-    // Check if user exists and has DEPARTMENT_HEAD role
     const user = await this.sharedUserRepo.findUniqueIncludeProfile({ id: headUserId })
 
     if (!user) {
-      throw new Error('User not found')
+      throw DepartmentHeadUserNotFoundException
     }
 
-    if (user.role.name !== 'DEPARTMENT_HEAD') {
-      throw new Error('User must have DEPARTMENT_HEAD role to be assigned as department head')
+    if (user.role.name !== RoleName.DEPARTMENT_HEAD) {
+      throw DepartmentHeadMustHaveRoleException
     }
 
     if (user.role.isActive !== 'ACTIVE') {
-      throw new Error('User role must be active')
+      throw DepartmentHeadRoleInactiveException
     }
   }
 }

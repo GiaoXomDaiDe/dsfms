@@ -7,14 +7,18 @@ import {
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
 import { ActiveStatus } from '~/shared/constants/default.constant'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 export class RoleRepo {
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
 
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetRolesResType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
+    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
     const [totalItems, rolesWithCount] = await Promise.all([
       this.prismaService.role.count({

@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CourseDetailResType,
-  CourseListItemType,
   CourseType,
-  CourseWithInfoType,
   CreateCourseBodyType,
   GetCoursesQueryType,
   GetCoursesResType,
@@ -13,48 +12,13 @@ import {
 
 @Injectable()
 export class CourseRepo {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
 
-  async list({
-    search,
-    departmentId,
-    level,
-    status,
-    courseIds,
-    includeDeleted = false
-  }: GetCoursesQueryType): Promise<GetCoursesResType> {
-    const whereClause: any = {}
-
-    // Base filter for soft delete
-    if (!includeDeleted) {
-      whereClause.deletedAt = null
-    }
-
-    // Search filter
-    if (search) {
-      whereClause.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { code: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ]
-    }
-
-    // Additional filters
-    if (departmentId) {
-      whereClause.departmentId = departmentId
-    }
-
-    if (level) {
-      whereClause.level = level
-    }
-
-    if (status) {
-      whereClause.status = status
-    }
-
-    if (courseIds && courseIds.length > 0) {
-      whereClause.id = { in: courseIds }
-    }
+  async list({ includeDeleted = false }: GetCoursesQueryType): Promise<GetCoursesResType> {
+    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
     const [totalItems, courses] = await Promise.all([
       this.prisma.course.count({ where: whereClause }),
@@ -65,42 +29,15 @@ export class CourseRepo {
             select: {
               id: true,
               name: true,
-              code: true
-            }
-          },
-          createdBy: {
-            select: {
-              id: true,
-              eid: true,
-              firstName: true,
-              lastName: true
-            }
-          },
-          updatedBy: {
-            select: {
-              id: true,
-              eid: true,
-              firstName: true,
-              lastName: true
+              code: true,
+              description: true
             }
           }
-        },
-        orderBy: { createdAt: 'desc' }
+        }
       })
     ])
-
-    // Format courses with proper date strings
-    const formattedCourses = courses.map((course) => ({
-      ...course,
-      startDate: course.startDate?.toISOString() || null,
-      endDate: course.endDate?.toISOString() || null,
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
-      deletedAt: course.deletedAt?.toISOString() || null
-    })) as unknown as CourseListItemType[]
-
     return {
-      courses: formattedCourses,
+      courses,
       totalItems
     }
   }
@@ -221,8 +158,8 @@ export class CourseRepo {
 
     return {
       ...courseData,
-      startDate: courseData.startDate?.toISOString() || null,
-      endDate: courseData.endDate?.toISOString() || null,
+      startDate: courseData.startDate.toISOString(),
+      endDate: courseData.endDate.toISOString(),
       createdAt: courseData.createdAt.toISOString(),
       updatedAt: courseData.updatedAt.toISOString(),
       deletedAt: courseData.deletedAt?.toISOString() || null,
@@ -244,8 +181,8 @@ export class CourseRepo {
 
     return {
       ...course,
-      startDate: course.startDate?.toISOString() || null,
-      endDate: course.endDate?.toISOString() || null,
+      startDate: course.startDate.toISOString(),
+      endDate: course.endDate.toISOString(),
       createdAt: course.createdAt.toISOString(),
       updatedAt: course.updatedAt.toISOString(),
       deletedAt: course.deletedAt?.toISOString() || null
@@ -272,8 +209,8 @@ export class CourseRepo {
 
     return {
       ...course,
-      startDate: course.startDate?.toISOString() || null,
-      endDate: course.endDate?.toISOString() || null,
+      startDate: course.startDate.toISOString(),
+      endDate: course.endDate.toISOString(),
       createdAt: course.createdAt.toISOString(),
       updatedAt: course.updatedAt.toISOString(),
       deletedAt: course.deletedAt?.toISOString() || null
@@ -295,8 +232,8 @@ export class CourseRepo {
       })
       return {
         ...course,
-        startDate: course.startDate?.toISOString() || null,
-        endDate: course.endDate?.toISOString() || null,
+        startDate: course.startDate.toISOString(),
+        endDate: course.endDate.toISOString(),
         createdAt: course.createdAt.toISOString(),
         updatedAt: course.updatedAt.toISOString(),
         deletedAt: course.deletedAt?.toISOString() || null
@@ -313,8 +250,8 @@ export class CourseRepo {
 
     return {
       ...course,
-      startDate: course.startDate?.toISOString() || null,
-      endDate: course.endDate?.toISOString() || null,
+      startDate: course.startDate.toISOString(),
+      endDate: course.endDate.toISOString(),
       createdAt: course.createdAt.toISOString(),
       updatedAt: course.updatedAt.toISOString(),
       deletedAt: course.deletedAt?.toISOString() || null
@@ -334,8 +271,8 @@ export class CourseRepo {
 
     return {
       ...course,
-      startDate: course.startDate?.toISOString() || null,
-      endDate: course.endDate?.toISOString() || null,
+      startDate: course.startDate.toISOString(),
+      endDate: course.endDate.toISOString(),
       createdAt: course.createdAt.toISOString(),
       updatedAt: course.updatedAt.toISOString(),
       deletedAt: course.deletedAt?.toISOString() || null

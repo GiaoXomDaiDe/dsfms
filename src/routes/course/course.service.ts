@@ -10,7 +10,6 @@ import {
   CourseNotFoundException,
   DepartmentNotFoundException,
   InvalidDateRangeException,
-  OnlyAcademicDepartmentCanAccessCourseListException,
   OnlyAcademicDepartmentCanAddSubjectsToCourseException,
   OnlyAcademicDepartmentCanArchiveCourseException,
   OnlyAcademicDepartmentCanCreateCourseException,
@@ -40,14 +39,13 @@ export class CourseService {
     private readonly prisma: PrismaService
   ) {}
 
-  async list(query: GetCoursesQueryType, { userRole }: { userRole?: string } = {}): Promise<GetCoursesResType> {
-    // Simplified approach: Only ACADEMIC_DEPARTMENT can access course list
-    // Similar to role.service.ts pattern
-    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanAccessCourseListException
-    }
-
-    return await this.courseRepo.list(query)
+  async list({
+    includeDeleted = false,
+    activeUserRoleName
+  }: GetCoursesQueryType & { activeUserRoleName?: string } = {}): Promise<GetCoursesResType> {
+    return await this.courseRepo.list({
+      includeDeleted: activeUserRoleName === RoleName.ACADEMIC_DEPARTMENT ? includeDeleted : false
+    })
   }
 
   async findById(

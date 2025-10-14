@@ -9,6 +9,7 @@ import {
 import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 type BulkUserData = CreateUserInternalType & {
@@ -19,19 +20,27 @@ type BulkUserData = CreateUserInternalType & {
 
 @Injectable()
 export class UserRepo {
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
 
   async list({
     includeDeleted = false,
     roleName
   }: IncludeDeletedQueryType & { roleName?: string } = {}): Promise<GetUsersResType> {
-    const whereClause: any = includeDeleted ? {} : { deletedAt: null }
-    if (roleName) {
-      whereClause.role = {
-        name: roleName,
-        ...(includeDeleted ? {} : { deletedAt: null })
-      }
-    }
+    const whereClause = this.sharedUserRepository.buildListFilters({
+      includeDeleted,
+      extend: ({ includeDeleted: includeDeletedContext }) =>
+        roleName
+          ? {
+              role: {
+                name: roleName,
+                ...(includeDeletedContext ? {} : { deletedAt: null })
+              }
+            }
+          : {}
+    })
 
     const [totalItems, data] = await Promise.all([
       this.prismaService.user.count({

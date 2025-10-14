@@ -783,20 +783,16 @@ export class SubjectService {
   }): Promise<any> {
     this.validateUpdatePermissions(roleName)
 
-    const { page = 1, limit = 10, batchCode } = query
+    const { batchCode } = query
 
     const result = await this.subjectRepo.getCourseTrainees({
       courseId,
-      page,
-      limit,
       batchCode
     })
 
     return {
       trainees: result.trainees,
-      totalItems: result.totalItems,
-      totalPages: result.totalPages,
-      currentPage: page
+      totalItems: result.totalItems
     }
   }
 
