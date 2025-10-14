@@ -42,6 +42,7 @@ import {
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
+import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -68,13 +69,13 @@ export class UserService {
 
   list({
     includeDeleted = false,
-    userRole,
+    roleName,
     activeUserRoleName
-  }: { includeDeleted?: boolean; userRole?: string; activeUserRoleName?: string } = {}) {
+  }: IncludeDeletedQueryType & { roleName?: string; activeUserRoleName?: string } = {}) {
     // Nếu không phải admin thì luôn luôn không cho xem user đã bị xóa mềm
     return this.userRepo.list({
       includeDeleted: activeUserRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false,
-      roleName: userRole
+      roleName
     })
   }
 

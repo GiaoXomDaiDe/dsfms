@@ -9,12 +9,12 @@ datasource db {
 
 model User {
   id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  eid                    String              @db.VarChar(8)
+  eid                    String              @db.VarChar(8) @unique
   firstName              String
   middleName             String?
   lastName               String
   address                String?
-  email                  String              @db.Citext
+  email                  String              @db.Citext @unique
   passwordHash           String
   status                 UserStatus          @default(ACTIVE)
   signatureImageUrl      String?
@@ -75,7 +75,7 @@ model User {
 
 model Role {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
+  name        String       @unique
   description String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @default(now()) @updatedAt
@@ -189,16 +189,16 @@ model Department {
 
 model Course {
   id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  departmentId  String?      @db.Uuid
+  departmentId  String       @db.Uuid
   name          String
   description   String?
   code          String       @unique
-  maxNumTrainee Int?
+  maxNumTrainee Int
   venue         String?
   note          String?
   passScore     Float?
-  startDate     DateTime?
-  endDate       DateTime?
+  startDate     DateTime
+  endDate       DateTime
   level         CourseLevel
   status        CourseStatus @default(PLANNED)
   createdAt     DateTime     @default(now())
@@ -209,7 +209,7 @@ model Course {
   deletedById   String?      @db.Uuid
   createdBy     User?        @relation("CourseCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy     User?        @relation("CourseDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
-  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department    Department   @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedBy     User?        @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   subjects      Subject[]
 

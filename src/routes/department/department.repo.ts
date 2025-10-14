@@ -7,14 +7,18 @@ import {
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
 import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 export class DepartmentRepo {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
 
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetDepartmentsResType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
+    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
     const [totalItems, departments] = await Promise.all([
       this.prisma.department.count({

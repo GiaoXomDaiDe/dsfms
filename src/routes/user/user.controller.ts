@@ -31,7 +31,7 @@ export class UserController {
   ) {
     return this.userService.list({
       includeDeleted,
-      userRole: roleName,
+      roleName,
       activeUserRoleName
     })
   }

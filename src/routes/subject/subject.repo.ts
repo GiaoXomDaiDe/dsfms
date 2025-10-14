@@ -1040,15 +1040,11 @@ export class SubjectRepo {
    */
   async getCourseTrainees({
     courseId,
-    page,
-    limit,
     batchCode
   }: {
     courseId: string
-    page: number
-    limit: number
     batchCode?: string
-  }): Promise<{ trainees: any[]; totalItems: number; totalPages: number }> {
+  }): Promise<{ trainees: any[]; totalItems: number }> {
     // Get all subject IDs in course
     const subjectIds = await this.prisma.subject.findMany({
       where: { courseId, deletedAt: null },
@@ -1107,13 +1103,10 @@ export class SubjectRepo {
     }))
 
     const totalItems = trainees.length
-    const totalPages = Math.ceil(totalItems / limit)
-    const skip = (page - 1) * limit
 
     return {
-      trainees: trainees.slice(skip, skip + limit),
-      totalItems,
-      totalPages
+      trainees: trainees,
+      totalItems
     }
   }
 

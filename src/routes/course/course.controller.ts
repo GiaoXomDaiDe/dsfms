@@ -1,16 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
-import { MessageResDTO } from '~/shared/dtos/response.dto'
-import {
-  CancelCourseEnrollmentsBodyDto,
-  CancelCourseEnrollmentsResDto,
-  GetCourseTraineesQueryDto,
-  GetCourseTraineesResDto,
-  GetTraineeEnrollmentsQueryDto,
-  GetTraineeEnrollmentsResDto
-} from '../subject/subject.model'
-import { SubjectService } from '../subject/subject.service'
 import {
   AddSubjectToCourseBodyDto,
   AddSubjectToCourseResDto,
@@ -22,8 +11,19 @@ import {
   RemoveSubjectFromCourseBodyDto,
   RemoveSubjectFromCourseResDto,
   UpdateCourseBodyDto
-} from './course.dto'
-import { CourseService } from './course.service'
+} from '~/routes/course/course.dto'
+import { CourseService } from '~/routes/course/course.service'
+import {
+  CancelCourseEnrollmentsBodyDto,
+  CancelCourseEnrollmentsResDto,
+  GetCourseTraineesQueryDto,
+  GetCourseTraineesResDto,
+  GetTraineeEnrollmentsQueryDto,
+  GetTraineeEnrollmentsResDto
+} from '~/routes/subject/subject.model'
+import { SubjectService } from '~/routes/subject/subject.service'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
+import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('courses')
 export class CourseController {
@@ -34,8 +34,11 @@ export class CourseController {
 
   @Get()
   @ZodSerializerDto(GetCoursesResDto)
-  async getCourses(@Query() query: GetCoursesQueryDto, @ActiveRolePermissions('name') roleName: string) {
-    return await this.courseService.list(query, { userRole: roleName })
+  async getCourses(@Query() { includeDeleted }: GetCoursesQueryDto, @ActiveRolePermissions('name') roleName: string) {
+    return await this.courseService.list({
+      includeDeleted,
+      activeUserRoleName: roleName
+    })
   }
 
   @Get(':id')
