@@ -122,8 +122,8 @@ model Permission {
 model TrainerProfile {
   userId              String    @id @db.Uuid
   specialization      String
-  certificationNumber String?
-  yearsOfExp          Int       @default(0)
+  certificationNumber String
+  yearsOfExp          Int?      @default(0)
   bio                 String?
   createdById         String?   @db.Uuid
   updatedById         String?   @db.Uuid
@@ -143,10 +143,10 @@ model TrainerProfile {
 model TraineeProfile {
   userId         String    @id @db.Uuid
   dob            DateTime
-  enrollmentDate DateTime
+  enrollmentDate DateTime?
   trainingBatch  String
-  passportNo     String?
-  nation         String
+  passportNo     String
+  nation         String?
   createdById    String?   @db.Uuid
   updatedById    String?   @db.Uuid
   createdAt      DateTime  @default(now())
@@ -164,7 +164,7 @@ model TraineeProfile {
 
 model Department {
   id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String
+  name          String         @unique
   description   String?
   headUserId    String?        @db.Uuid
   createdById   String?        @db.Uuid

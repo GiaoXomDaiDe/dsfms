@@ -109,10 +109,10 @@ export class UserRepo {
           data: {
             userId: newUser.id,
             dob: traineeProfile.dob,
-            enrollmentDate: new Date(traineeProfile.enrollmentDate),
+            enrollmentDate: new Date(traineeProfile.enrollmentDate || ''),
             trainingBatch: traineeProfile.trainingBatch,
-            passportNo: traineeProfile.passportNo || null,
-            nation: traineeProfile.nation,
+            passportNo: traineeProfile.passportNo,
+            nation: traineeProfile.nation || null,
             createdById
           }
         })
@@ -411,10 +411,10 @@ export class UserRepo {
                 traineeProfiles.push({
                   userId,
                   dob: userData.traineeProfile.dob,
-                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate),
+                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
                   trainingBatch: userData.traineeProfile.trainingBatch,
                   passportNo: userData.traineeProfile.passportNo || null,
-                  nation: userData.traineeProfile.nation,
+                  nation: userData.traineeProfile.nation || null,
                   createdById
                 })
               }

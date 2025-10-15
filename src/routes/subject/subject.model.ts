@@ -23,9 +23,9 @@ export const SubjectSchema = z.object({
   timeSlot: z.string().optional().nullable(),
   isSIM: z.boolean(),
   passScore: z.number().min(0).max(100).optional().nullable(),
-  startDate: z.date(),
+  startDate: z.coerce.date(),
   status: z.nativeEnum(SubjectStatus),
-  endDate: z.date(),
+  endDate: z.coerce.date(),
   createdAt: z.date(),
   updatedAt: z.date(),
   deletedAt: z.date().nullable()

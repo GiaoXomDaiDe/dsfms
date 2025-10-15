@@ -70,11 +70,6 @@ export class SubjectRepo {
       const { _count, ...subjectWithoutCount } = subject
       return {
         ...subjectWithoutCount,
-        startDate: subject.startDate?.toISOString() || null,
-        endDate: subject.endDate?.toISOString() || null,
-        createdAt: subject.createdAt.toISOString(),
-        updatedAt: subject.updatedAt.toISOString(),
-        deletedAt: subject.deletedAt?.toISOString() || null,
         instructors: [],
         enrollments: [],
         instructorCount: _count.instructors,
@@ -148,8 +143,8 @@ export class SubjectRepo {
       eid: instructor.trainer.eid,
       firstName: instructor.trainer.firstName,
       lastName: instructor.trainer.lastName,
-      roleInSubject: instructor.roleInSubject,
-      assignedAt: instructor.createdAt.toISOString()
+      assignedAt: instructor.createdAt,
+      roleInSubject: instructor.roleInSubject
     }))
 
     // Transform enrollments - flatten structure
@@ -158,18 +153,13 @@ export class SubjectRepo {
       eid: enrollment.trainee.eid,
       firstName: enrollment.trainee.firstName,
       lastName: enrollment.trainee.lastName,
-      enrollmentDate: enrollment.enrollmentDate.toISOString(),
       batchCode: enrollment.batchCode,
+      enrollmentDate: enrollment.enrollmentDate,
       status: enrollment.status
     }))
 
     return {
       ...subject,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString(),
-      deletedAt: subject.deletedAt?.toISOString() || null,
       instructors: transformedInstructors,
       enrollments: transformedEnrollments,
       instructorCount: subject.instructors.length,
