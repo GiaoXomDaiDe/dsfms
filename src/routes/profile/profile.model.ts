@@ -3,8 +3,8 @@ import { UserSchema } from '~/shared/models/shared-user.model'
 
 export const TrainerProfileSchema = z.object({
   specialization: z.string().max(100),
-  certificationNumber: z.string().max(50).nullable(),
-  yearsOfExp: z.number().min(0).max(50).default(0),
+  certificationNumber: z.string().max(50),
+  yearsOfExp: z.number().min(0).max(50).nullable().default(0),
   bio: z.string().max(1000).nullable(),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
@@ -16,10 +16,10 @@ export const TrainerProfileSchema = z.object({
 
 export const TraineeProfileSchema = z.object({
   dob: z.coerce.date(),
-  enrollmentDate: z.coerce.date(),
+  enrollmentDate: z.coerce.date().nullable(),
   trainingBatch: z.string().max(100),
-  passportNo: z.string().max(100).nullable(),
-  nation: z.string().max(100),
+  passportNo: z.string().max(100),
+  nation: z.string().max(100).nullable(),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
