@@ -9,22 +9,6 @@ import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
 import { UserLookupResSchema } from '~/shared/models/shared-user-list.model'
 
-// Helper to convert Date to ISO string
-const dateToString = z.preprocess((val) => {
-  if (val instanceof Date) {
-    return val.toISOString()
-  }
-  return val
-}, z.string().datetime())
-
-const nullableDateToString = z.preprocess((val) => {
-  if (val instanceof Date) {
-    return val.toISOString()
-  }
-  return val
-}, z.string().datetime().optional().nullable())
-
-// Base Subject Schema
 export const SubjectSchema = z.object({
   id: z.string().uuid(),
   courseId: z.string().uuid(),
@@ -39,12 +23,12 @@ export const SubjectSchema = z.object({
   timeSlot: z.string().optional().nullable(),
   isSIM: z.boolean(),
   passScore: z.number().min(0).max(100).optional().nullable(),
-  startDate: nullableDateToString,
+  startDate: z.date(),
   status: z.nativeEnum(SubjectStatus),
-  endDate: nullableDateToString,
-  createdAt: dateToString,
-  updatedAt: dateToString,
-  deletedAt: nullableDateToString
+  endDate: z.date(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable()
 })
 
 // Course info schema for nested relations
@@ -75,7 +59,7 @@ export const SubjectInstructorSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   roleInSubject: z.nativeEnum(SubjectInstructorRole),
-  assignedAt: dateToString
+  assignedAt: z.date()
 })
 
 // Enrollment info schema (simplified for response)
@@ -84,7 +68,7 @@ export const SubjectEnrollmentSchema = z.object({
   eid: z.string(),
   firstName: z.string(),
   lastName: z.string(),
-  enrollmentDate: dateToString,
+  enrollmentDate: z.date(),
   batchCode: z.string(),
   status: z.nativeEnum(SubjectEnrollmentStatus)
 })
@@ -110,36 +94,18 @@ export const SubjectWithUserInfoSchema = SubjectSchema.extend({
 })
 
 // Create Subject Body Schema
-export const CreateSubjectBodySchema = z
-  .object({
-    courseId: z.string().uuid().optional(),
-    name: z.string().min(1).max(255),
-    code: z.string().min(1).max(50),
-    description: z.string().optional(),
-    method: z.nativeEnum(SubjectMethod),
-    duration: z.number().int().positive().optional(),
-    type: z.nativeEnum(SubjectType),
-    roomName: z.string().optional(),
-    remarkNote: z.string().optional(),
-    timeSlot: z.string().optional(),
-    isSIM: z.boolean().default(false),
-    passScore: z.number().min(0).max(100).optional(),
-    startDate: z.string().datetime().optional(),
-    status: z.nativeEnum(SubjectStatus).optional(),
-    endDate: z.string().datetime().optional()
-  })
-  .refine(
-    (data) => {
-      if (data.startDate && data.endDate) {
-        return new Date(data.startDate) < new Date(data.endDate)
-      }
-      return true
-    },
-    {
-      message: 'End date must be after start date',
-      path: ['endDate']
+export const CreateSubjectBodySchema = SubjectSchema.refine(
+  (data) => {
+    if (data.startDate && data.endDate) {
+      return new Date(data.startDate) < new Date(data.endDate)
     }
-  )
+    return true
+  },
+  {
+    message: 'End date must be after start date',
+    path: ['endDate']
+  }
+)
 
 // Update Subject Body Schema - includes status field
 export const UpdateSubjectBodySchema = CreateSubjectBodySchema.partial()
@@ -621,8 +587,6 @@ export const AssignTraineesResSchema = z.object({
 
 // Get Course Trainees Schema
 export const GetCourseTraineesQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(10),
   batchCode: z.string().optional()
 })
 
@@ -638,9 +602,7 @@ export const CourseTraineeInfoSchema = z.object({
 
 export const GetCourseTraineesResSchema = z.object({
   trainees: z.array(CourseTraineeInfoSchema),
-  totalItems: z.number().int(),
-  totalPages: z.number().int(),
-  currentPage: z.number().int()
+  totalItems: z.number().int()
 })
 
 // Cancel Course Enrollments Schema

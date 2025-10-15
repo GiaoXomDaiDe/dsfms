@@ -6,10 +6,9 @@ import {
   CourseDetailResDto,
   CreateCourseBodyDto,
   GetCourseParamsDto,
+  GetCourseResDto,
   GetCoursesQueryDto,
   GetCoursesResDto,
-  RemoveSubjectFromCourseBodyDto,
-  RemoveSubjectFromCourseResDto,
   UpdateCourseBodyDto
 } from '~/routes/course/course.dto'
 import { CourseService } from '~/routes/course/course.service'
@@ -42,10 +41,10 @@ export class CourseController {
   }
 
   @Get(':id')
-  @ZodSerializerDto(CourseDetailResDto)
-  async getCourseById(@Param() params: GetCourseParamsDto, @Query() query: GetCoursesQueryDto) {
+  @ZodSerializerDto(GetCourseResDto)
+  async getCourseById(@Param() params: GetCourseParamsDto, @Query() { includeDeleted }: GetCoursesQueryDto) {
     return await this.courseService.findById(params.id, {
-      includeDeleted: query.includeDeleted
+      includeDeleted
     })
   }
 
@@ -129,20 +128,20 @@ export class CourseController {
     })
   }
 
-  @Delete(':id/subjects')
-  @ZodSerializerDto(RemoveSubjectFromCourseResDto)
-  async removeSubjectsFromCourse(
-    @Param() params: GetCourseParamsDto,
-    @Body() body: RemoveSubjectFromCourseBodyDto,
-    @Request() req: any
-  ) {
-    const { user } = req
-    return await this.courseService.removeSubjectsFromCourse({
-      courseId: params.id,
-      data: body,
-      userRole: user.roleName
-    })
-  }
+  // @Delete(':id/subjects')
+  // @ZodSerializerDto(RemoveSubjectFromCourseResDto)
+  // async removeSubjectsFromCourse(
+  //   @Param() params: GetCourseParamsDto,
+  //   @Body() body: RemoveSubjectFromCourseBodyDto,
+  //   @Request() req: any
+  // ) {
+  //   const { user } = req
+  //   return await this.courseService.removeSubjectsFromCourse({
+  //     courseId: params.id,
+  //     data: body,
+  //     userRole: user.roleName
+  //   })
+  // }
 
   /**
    * API: Get Course Trainees

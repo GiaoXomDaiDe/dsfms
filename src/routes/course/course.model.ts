@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DepartmentSchema } from '~/routes/department/department.model'
+import { SubjectSchema } from '~/routes/subject/subject.model'
 import { CourseStatus, LevelStatus } from '~/shared/constants/course.constant'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 import { CourseSchema } from '~/shared/models/shared-course.model'
@@ -18,6 +19,19 @@ export const GetCoursesResSchema = z.object({
     })
   ),
   totalItems: z.number()
+})
+
+export const GetCourseResSchema = CourseSchema.extend({
+  department: DepartmentSchema.pick({
+    id: true,
+    name: true,
+    code: true,
+    description: true
+  }),
+  subjectCount: z.number().int().default(0),
+  traineeCount: z.number().int().default(0),
+  trainerCount: z.number().int().default(0),
+  subjects: z.array(SubjectSchema.omit({ courseId: true }))
 })
 
 // Department info for course relations
@@ -167,6 +181,7 @@ export const RemoveSubjectFromCourseResSchema = z.object({
 
 export type CourseType = z.infer<typeof CourseSchema>
 export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
+export type GetCourseResType = z.infer<typeof GetCourseResSchema>
 export type CourseListItemType = z.infer<typeof CourseListItemSchema>
 export type CourseWithInfoType = z.infer<typeof CourseWithInfoSchema>
 export type CourseDetailResType = z.infer<typeof CourseDetailResSchema>
