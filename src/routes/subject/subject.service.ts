@@ -515,7 +515,7 @@ export class SubjectService {
   /**
    * Validate date range (end date phải sau start date)
    */
-  private validateDateRange(startDate?: string | null, endDate?: string | null): void {
+  private validateDateRange(startDate?: Date | null, endDate?: Date | null): void {
     if (startDate && endDate) {
       if (new Date(startDate) >= new Date(endDate)) {
         throw InvalidDateRangeException

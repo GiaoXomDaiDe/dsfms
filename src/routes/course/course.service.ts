@@ -14,20 +14,17 @@ import {
   OnlyAcademicDepartmentCanArchiveCourseException,
   OnlyAcademicDepartmentCanCreateCourseException,
   OnlyAcademicDepartmentCanDeleteCourseException,
-  OnlyAcademicDepartmentCanRemoveSubjectsFromCourseException,
   OnlyAcademicDepartmentCanRestoreCourseException,
   OnlyAcademicDepartmentCanUpdateCourseException
 } from './course.error'
 import {
   AddSubjectToCourseBodyType,
   AddSubjectToCourseResType,
-  CourseDetailResType,
   CourseType,
   CreateCourseBodyType,
+  GetCourseResType,
   GetCoursesQueryType,
   GetCoursesResType,
-  RemoveSubjectFromCourseBodyType,
-  RemoveSubjectFromCourseResType,
   UpdateCourseBodyType
 } from './course.model'
 import { CourseRepo } from './course.repo'
@@ -48,10 +45,7 @@ export class CourseService {
     })
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<CourseDetailResType> {
+  async findById(id: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetCourseResType> {
     const course = await this.courseRepo.findById(id, { includeDeleted })
     if (!course) {
       throw CourseNotFoundException
@@ -408,69 +402,69 @@ export class CourseService {
    * - Kiểm tra course tồn tại
    * - Set courseId = null cho subjects
    */
-  async removeSubjectsFromCourse({
-    courseId,
-    data,
-    userRole
-  }: {
-    courseId: string
-    data: RemoveSubjectFromCourseBodyType
-    userRole: string
-  }): Promise<RemoveSubjectFromCourseResType> {
-    // Chỉ ACADEMIC_DEPARTMENT mới có quyền
-    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanRemoveSubjectsFromCourseException
-    }
+  // async removeSubjectsFromCourse({
+  //   courseId,
+  //   data,
+  //   userRole
+  // }: {
+  //   courseId: string
+  //   data: RemoveSubjectFromCourseBodyType
+  //   userRole: string
+  // }): Promise<RemoveSubjectFromCourseResType> {
+  //   // Chỉ ACADEMIC_DEPARTMENT mới có quyền
+  //   if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
+  //     throw OnlyAcademicDepartmentCanRemoveSubjectsFromCourseException
+  //   }
 
-    // Kiểm tra course tồn tại
-    const course = await this.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
+  //   // Kiểm tra course tồn tại
+  //   const course = await this.findById(courseId)
+  //   if (!course) {
+  //     throw CourseNotFoundException
+  //   }
 
-    const { subjectIds } = data
-    const removedSubjects: string[] = []
-    const notFoundSubjects: string[] = []
-    const notAssignedSubjects: string[] = []
+  //   const { subjectIds } = data
+  //   const removedSubjects: string[] = []
+  //   const notFoundSubjects: string[] = []
+  //   const notAssignedSubjects: string[] = []
 
-    // Kiểm tra từng subject
-    for (const subjectId of subjectIds) {
-      // Kiểm tra subject tồn tại
-      const subject = await this.prisma.subject.findUnique({
-        where: { id: subjectId, deletedAt: null },
-        select: { id: true, courseId: true }
-      })
+  //   // Kiểm tra từng subject
+  //   for (const subjectId of subjectIds) {
+  //     // Kiểm tra subject tồn tại
+  //     const subject = await this.prisma.subject.findUnique({
+  //       where: { id: subjectId, deletedAt: null },
+  //       select: { id: true, courseId: true }
+  //     })
 
-      if (!subject) {
-        notFoundSubjects.push(subjectId)
-        continue
-      }
+  //     if (!subject) {
+  //       notFoundSubjects.push(subjectId)
+  //       continue
+  //     }
 
-      // Kiểm tra subject có thuộc course này không
-      if (subject.courseId !== courseId) {
-        notAssignedSubjects.push(subjectId)
-        continue
-      }
+  //     // Kiểm tra subject có thuộc course này không
+  //     if (subject.courseId !== courseId) {
+  //       notAssignedSubjects.push(subjectId)
+  //       continue
+  //     }
 
-      // Remove subject khỏi course
-      await this.prisma.subject.update({
-        where: { id: subjectId },
-        data: { courseId: null }
-      })
-      removedSubjects.push(subjectId)
-    }
+  //     // Remove subject khỏi course
+  //     await this.prisma.subject.update({
+  //       where: { id: subjectId },
+  //       data: { courseId: null }
+  //     })
+  //     removedSubjects.push(subjectId)
+  //   }
 
-    const totalRequested = subjectIds.length
-    const totalRemoved = removedSubjects.length
-    const totalNotFound = notFoundSubjects.length
-    const totalNotAssigned = notAssignedSubjects.length
+  //   const totalRequested = subjectIds.length
+  //   const totalRemoved = removedSubjects.length
+  //   const totalNotFound = notFoundSubjects.length
+  //   const totalNotAssigned = notAssignedSubjects.length
 
-    return {
-      success: totalRemoved > 0,
-      removedSubjects,
-      notFoundSubjects,
-      notAssignedSubjects,
-      message: `Successfully removed ${totalRemoved}/${totalRequested} subjects from course. ${totalNotFound} not found, ${totalNotAssigned} not assigned to this course.`
-    }
-  }
+  //   return {
+  //     success: totalRemoved > 0,
+  //     removedSubjects,
+  //     notFoundSubjects,
+  //     notAssignedSubjects,
+  //     message: `Successfully removed ${totalRemoved}/${totalRequested} subjects from course. ${totalNotFound} not found, ${totalNotAssigned} not assigned to this course.`
+  //   }
+  // }
 }

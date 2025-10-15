@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
-  CourseDetailResType,
   CourseType,
   CreateCourseBodyType,
+  GetCourseResType,
   GetCoursesQueryType,
   GetCoursesResType,
   UpdateCourseBodyType
@@ -45,7 +45,7 @@ export class CourseRepo {
   async findById(
     id: string,
     { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<CourseDetailResType | null> {
+  ): Promise<GetCourseResType | null> {
     const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
 
     const course = await this.prisma.course.findUnique({
@@ -55,42 +55,13 @@ export class CourseRepo {
           select: {
             id: true,
             name: true,
-            code: true
-          }
-        },
-        createdBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        updatedBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
+            code: true,
+            description: true
           }
         },
         subjects: {
           where: {
             deletedAt: null
-          },
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            method: true,
-            duration: true,
-            type: true,
-            roomName: true,
-            createdAt: true,
-            updatedAt: true
-          },
-          orderBy: {
-            createdAt: 'desc'
           }
         },
         _count: {
@@ -107,9 +78,7 @@ export class CourseRepo {
 
     if (!course) return null
 
-    // Get detailed statistics for this course
     const [traineeCount, trainerCount] = await Promise.all([
-      // Count unique trainees enrolled in course subjects
       this.prisma.subjectEnrollment
         .findMany({
           where: {
@@ -124,7 +93,6 @@ export class CourseRepo {
           distinct: ['traineeUserId']
         })
         .then((enrollments) => enrollments.length),
-      // Count unique trainers assigned to course subjects
       this.prisma.subjectInstructor
         .findMany({
           where: {
@@ -141,33 +109,15 @@ export class CourseRepo {
         .then((instructors) => instructors.length)
     ])
 
-    // Transform subjects from course include
-    const subjectSummaries = course.subjects.map((subject) => ({
-      id: subject.id,
-      name: subject.name,
-      code: subject.code,
-      method: subject.method,
-      duration: subject.duration,
-      type: subject.type,
-      roomName: subject.roomName,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString()
-    }))
-
     const { subjects, _count, ...courseData } = course
 
     return {
       ...courseData,
-      startDate: courseData.startDate.toISOString(),
-      endDate: courseData.endDate.toISOString(),
-      createdAt: courseData.createdAt.toISOString(),
-      updatedAt: courseData.updatedAt.toISOString(),
-      deletedAt: courseData.deletedAt?.toISOString() || null,
       subjectCount: _count.subjects,
       traineeCount,
       trainerCount,
-      subjects: subjectSummaries
-    } as unknown as CourseDetailResType
+      subjects
+    }
   }
 
   async create({ data, createdById }: { data: CreateCourseBodyType; createdById: string }): Promise<CourseType> {

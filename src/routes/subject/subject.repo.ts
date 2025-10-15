@@ -192,14 +192,7 @@ export class SubjectRepo {
       }
     })
 
-    return {
-      ...subject,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString(),
-      deletedAt: subject.deletedAt?.toISOString() || null
-    } as SubjectResType
+    return subject as unknown as SubjectResType
   }
 
   async create({
@@ -312,14 +305,7 @@ export class SubjectRepo {
       }
     })
 
-    return {
-      ...subject,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString(),
-      deletedAt: subject.deletedAt?.toISOString() || null
-    } as SubjectResType
+    return subject as unknown as SubjectResType
   }
 
   async update({
