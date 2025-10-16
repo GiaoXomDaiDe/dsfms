@@ -457,6 +457,7 @@ enum FieldType {
   FINAL_SCORE_TEXT
   FINAL_SCORE_NUM
   CHECK_BOX
+  PARENT
 }
 
 enum RoleRequired {

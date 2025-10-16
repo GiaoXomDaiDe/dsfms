@@ -11,17 +11,19 @@ export class TemplateRepository {
    * @throws Error if validation fails
    */
   private validateFieldHierarchy(fields: any[]): void {
-    const fieldNames = new Set(fields.map(f => f.fieldName));
+    const fieldsByTempId = new Map<string, any>();
+    fields.forEach(f => {
+      if (f.tempId) {
+        fieldsByTempId.set(f.tempId, f);
+      }
+    });
     
     for (const field of fields) {
       if (field.parentTempId) {
-        // Extract parent field name from parentTempId (format: "field_{fieldName}")
-        const parentFieldName = field.parentTempId.replace(/^field_/, '');
-        
-        // Check if parent exists in the same section
-        if (!fieldNames.has(parentFieldName)) {
+        // Check if parent exists in the same section by tempId
+        if (!fieldsByTempId.has(field.parentTempId)) {
           throw new Error(
-            `Field '${field.fieldName}' references parent '${parentFieldName}' which does not exist in the same section`
+            `Field '${field.fieldName}' references parent '${field.parentTempId}' which does not exist in the same section`
           );
         }
       }
@@ -29,7 +31,7 @@ export class TemplateRepository {
 
     // Check for self-reference
     for (const field of fields) {
-      if (field.parentTempId === `field_${field.fieldName}`) {
+      if (field.parentTempId === field.tempId) {
         throw new Error(
           `Field '${field.fieldName}' cannot be its own parent`
         );
@@ -44,11 +46,13 @@ export class TemplateRepository {
           adjList.set(field.fieldName, []);
         }
         if (field.parentTempId) {
-          const parentName = field.parentTempId.replace(/^field_/, '');
-          if (!adjList.has(parentName)) {
-            adjList.set(parentName, []);
+          const parentField = fieldsByTempId.get(field.parentTempId);
+          if (parentField) {
+            if (!adjList.has(parentField.fieldName)) {
+              adjList.set(parentField.fieldName, []);
+            }
+            adjList.get(parentField.fieldName)!.push(field.fieldName);
           }
-          adjList.get(parentName)!.push(field.fieldName);
         }
       }
       return adjList;
@@ -107,20 +111,130 @@ export class TemplateRepository {
           departmentId: templateData.departmentId,
           createdByUserId,
           isActive: true,
-          templateContent: 'test later', // As requested
+          templateContent: templateData.templateContent,
           templateSchema: templateSchema || null,
         },
       });
 
-      // 2. Create Template Sections with Fields
-      const createdSections = [];
-      
-      for (const sectionData of templateData.sections) {
+      // 2. Create Template Sections first (batch operation)
+      const sectionsToCreate = templateData.sections.map(sectionData => ({
+        templateId: templateForm.id,
+        label: sectionData.label, 
+        displayOrder: sectionData.displayOrder,
+        editBy: sectionData.editBy,
+        roleInSubject: sectionData.roleInSubject,
+        isSubmittable: sectionData.isSubmittable || false,
+        isToggleDependent: sectionData.isToggleDependent || false,
+      }));
+
+      // Create all sections at once
+      const createdSections: any[] = [];
+      for (let i = 0; i < sectionsToCreate.length; i++) {
+        const section = await tx.templateSection.create({
+          data: sectionsToCreate[i],
+        });
+        createdSections.push(section);
+      }
+
+      // 3. Create all fields (optimized batch processing)
+      const allFieldsToCreate = [];
+      const sectionFieldMapping = new Map<number, any[]>();
+
+      // Prepare all fields for batch creation
+      for (let sectionIndex = 0; sectionIndex < templateData.sections.length; sectionIndex++) {
+        const sectionData = templateData.sections[sectionIndex];
+        const section = createdSections[sectionIndex];
+        
         // Validate field hierarchy before processing
         this.validateFieldHierarchy(sectionData.fields);
 
+        // Since your current data doesn't use parentTempId, we can create all fields directly
+        const fieldsForSection = sectionData.fields.map(fieldData => ({
+          sectionId: section.id,
+          label: fieldData.label,
+          fieldName: fieldData.fieldName,
+          fieldType: fieldData.fieldType,
+          roleRequired: fieldData.roleRequired,
+          options: fieldData.options,
+          displayOrder: fieldData.displayOrder,
+          parentId: null, // No hierarchy in current data
+          createdById: createdByUserId,
+        }));
+
+        sectionFieldMapping.set(sectionIndex, fieldsForSection);
+        allFieldsToCreate.push(...fieldsForSection);
+      }
+
+      // Create all fields in smaller batches to avoid transaction timeout
+      const batchSize = 20; // Process 20 fields at a time
+      const createdFieldsBySections = new Map<number, any[]>();
+      
+      for (let sectionIndex = 0; sectionIndex < templateData.sections.length; sectionIndex++) {
+        const fieldsForSection = sectionFieldMapping.get(sectionIndex);
+        const createdFieldsForSection = [];
+        
+        if (fieldsForSection) {
+          // Process fields for this section in batches
+          for (let i = 0; i < fieldsForSection.length; i += batchSize) {
+            const batch = fieldsForSection.slice(i, i + batchSize);
+            
+            // Create batch of fields
+            for (const fieldData of batch) {
+              const field = await tx.templateField.create({
+                data: fieldData,
+              });
+              createdFieldsForSection.push(field);
+            }
+          }
+        }
+        
+        createdFieldsBySections.set(sectionIndex, createdFieldsForSection);
+      }
+
+      // 4. Build final result
+      const finalSections = createdSections.map((section, index) => ({
+        ...section,
+        fields: createdFieldsBySections.get(index) || [],
+      }));
+
+      return {
+        templateForm,
+        sections: finalSections,
+      };
+    }, {
+      timeout: 30000, // Increase timeout to 30 seconds
+    });
+  }
+
+  // Alternative method without transaction for large templates
+  async createTemplateWithSectionsAndFieldsNoTransaction(
+    templateData: CreateTemplateFormDto,
+    createdByUserId: string,
+    templateSchema?: any
+  ) {
+    let templateForm: any = null;
+    
+    try {
+      // 1. Create Template Form first
+      templateForm = await this.prismaService.templateForm.create({
+        data: {
+          name: templateData.name,
+          description: templateData.description,
+          version: 1,
+          departmentId: templateData.departmentId,
+          createdByUserId,
+          isActive: true,
+          templateContent: templateData.templateContent,
+          templateSchema: templateSchema || null,
+        },
+      });
+
+      // 2. Create sections and fields without transaction
+      const createdSections = [];
+      
+      for (const sectionData of templateData.sections) {
         // Create section
-        const section = await tx.templateSection.create({
+        const section = await this.prismaService.templateSection.create({
           data: {
             templateId: templateForm.id,
             label: sectionData.label,
@@ -132,68 +246,23 @@ export class TemplateRepository {
           },
         });
 
-        // Track field temp IDs to real IDs mapping for hierarchy
-        const fieldIdMapping = new Map<string, string>();
-        const fieldsToCreate = [...sectionData.fields];
+        // Create fields for this section
         const createdFields = [];
-
-        // Process fields in order, handling hierarchy
-        let maxIterations = fieldsToCreate.length + 1; // Prevent infinite loops
-        let iterations = 0;
-
-        while (fieldsToCreate.length > 0) {
-          iterations++;
-          
-          // Safety check to prevent infinite loops
-          if (iterations > maxIterations) {
-            throw new Error(
-              `Failed to create fields after ${maxIterations} iterations. ` +
-              `Remaining fields: ${fieldsToCreate.map(f => f.fieldName).join(', ')}`
-            );
-          }
-
-          const fieldsToProcess = fieldsToCreate.filter(field => {
-            // If field has no parent OR parent already created
-            return !field.parentTempId || fieldIdMapping.has(field.parentTempId);
+        for (const fieldData of sectionData.fields) {
+          const field = await this.prismaService.templateField.create({
+            data: {
+              sectionId: section.id,
+              label: fieldData.label,
+              fieldName: fieldData.fieldName,
+              fieldType: fieldData.fieldType,
+              roleRequired: fieldData.roleRequired,
+              options: fieldData.options,
+              displayOrder: fieldData.displayOrder,
+              parentId: null,
+              createdById: createdByUserId,
+            },
           });
-
-          if (fieldsToProcess.length === 0) {
-            // Provide detailed error message
-            const orphanFields = fieldsToCreate.map(f => ({
-              fieldName: f.fieldName,
-              parentTempId: f.parentTempId
-            }));
-            throw new Error(
-              `Circular reference or missing parent detected in field hierarchy. ` +
-              `Cannot resolve: ${JSON.stringify(orphanFields)}`
-            );
-          }
-
-          for (const fieldData of fieldsToProcess) {
-            const field = await tx.templateField.create({
-              data: {
-                sectionId: section.id,
-                label: fieldData.label,
-                fieldName: fieldData.fieldName,
-                fieldType: fieldData.fieldType,
-                roleRequired: fieldData.roleRequired,
-                options: fieldData.options,
-                displayOrder: fieldData.displayOrder,
-                parentId: fieldData.parentTempId 
-                  ? fieldIdMapping.get(fieldData.parentTempId) 
-                  : null,
-                createdById: createdByUserId,
-              },
-            });
-
-            // Map temp ID to real ID for future references
-            fieldIdMapping.set(`field_${fieldData.fieldName}`, field.id);
-            createdFields.push(field);
-            
-            // Remove processed field
-            const index = fieldsToCreate.indexOf(fieldData);
-            fieldsToCreate.splice(index, 1);
-          }
+          createdFields.push(field);
         }
 
         createdSections.push({
@@ -206,7 +275,19 @@ export class TemplateRepository {
         templateForm,
         sections: createdSections,
       };
-    });
+    } catch (error) {
+      // If any error occurs, try to cleanup the template form
+      if (templateForm?.id) {
+        try {
+          await this.prismaService.templateForm.delete({
+            where: { id: templateForm.id }
+          });
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
+      throw error;
+    }
   }
 
   async findTemplateById(id: string) {
@@ -332,7 +413,7 @@ export class TemplateRepository {
   }
 
   async validateDepartmentExists(departmentId: string): Promise<boolean> {
-    const department = await this.prismaService.department.findUnique({
+    const department = await this.prismaService.department.findFirst({
       where: { 
         id: departmentId,
         deletedAt: null,

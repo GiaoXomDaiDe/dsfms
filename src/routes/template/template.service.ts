@@ -199,15 +199,41 @@ export class TemplateService {
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
       
-      // Process placeholders to get unique field names
+      // Process placeholders to get unique field names and detect parent sections
       const fieldSet = new Set<string>()
+      const parentSections = new Set<string>()
       const fields: Array<{ fieldName: string; placeholder: string }> = []
 
+      // First pass: identify section start tags (parent PART fields)
       for (const tag of tags) {
         const cleaned = tag.replace(/[{}]/g, '')
         
-        // Skip section control tags (#, ^, /)
-        if (cleaned.startsWith('#') || cleaned.startsWith('^') || cleaned.startsWith('/')) {
+        // Detect section start tags (#sectionName)
+        if (cleaned.startsWith('#')) {
+          const sectionName = cleaned.substring(1)
+          parentSections.add(sectionName)
+        }
+      }
+
+      // Second pass: process all fields and include parent sections
+      for (const tag of tags) {
+        const cleaned = tag.replace(/[{}]/g, '')
+        
+        // Skip section control tags (^, /) but NOT start tags (#)
+        if (cleaned.startsWith('^') || cleaned.startsWith('/')) {
+          continue
+        }
+
+        // Handle section start tags (#sectionName) - these become PART fields
+        if (cleaned.startsWith('#')) {
+          const sectionName = cleaned.substring(1)
+          if (!fieldSet.has(sectionName)) {
+            fieldSet.add(sectionName)
+            fields.push({
+              fieldName: sectionName,
+              placeholder: `{${sectionName}}` // Convert to standard placeholder format
+            })
+          }
           continue
         }
 
@@ -216,7 +242,7 @@ export class TemplateService {
           continue
         }
 
-        // Add unique fields only
+        // Add unique regular fields only
         if (!fieldSet.has(cleaned)) {
           fieldSet.add(cleaned)
           fields.push({
@@ -266,14 +292,11 @@ export class TemplateService {
     }
 
     try {
-      // Generate template schema from all field names in sections
-      const allFieldNames = templateData.sections.flatMap(section => 
-        section.fields.map(field => field.fieldName)
-      );
-
-      const templateSchema = this.generateSchemaFromFieldNames(allFieldNames);
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
       // Create template with all nested data
+      // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
         templateData,
         currentUser.userId,
@@ -318,13 +341,14 @@ export class TemplateService {
       throw new BadRequestException('Template not found');
     }
 
-    // Transform the template data to match the create template format
-    const schemaFormat = {
+    // Transform the template data to match the create template format for FE editing
+    const templateStructure = {
       name: template.name,
       description: template.description,
       departmentId: template.departmentId,
       templateContent: template.templateContent,
       sections: template.sections.map(section => ({
+        id: section.id,
         label: section.label,
         displayOrder: section.displayOrder,
         editBy: section.editBy,
@@ -337,13 +361,10 @@ export class TemplateService {
       }))
     };
 
-    // Build nested schema structure from sections and fields
-    const schema = this.buildNestedSchema(template.sections);
-
     return {
       success: true,
-      data: schemaFormat,
-      schema: schema,
+      data: templateStructure, // Complete structure for FE editing
+      schema: template.templateSchema, // Raw templateSchema for form rendering
       metadata: {
         templateId: template.id,
         version: template.version,
@@ -466,7 +487,121 @@ export class TemplateService {
   }
 
   /**
-   * Generate basic schema from field names
+   * Generate nested schema based on field hierarchy (parent-child relationships)
+   */
+  private generateNestedSchemaFromSections(sections: any[]): Record<string, any> {
+    const schema: Record<string, any> = {};
+    
+    sections.forEach(section => {
+      // Build field maps for parent-child relationships
+      const fieldByTempId = new Map<string, any>();
+      const fieldByName = new Map<string, any>();
+      const rootFields: any[] = [];
+      
+      // First pass: create field maps and identify parent fields
+      section.fields.forEach((field: any) => {
+        const fieldObj = {
+          name: field.fieldName,
+          tempId: field.tempId,
+          parentTempId: field.parentTempId,
+          type: this.getSchemaTypeFromFieldType(field.fieldType),
+          children: [] as any[]
+        };
+        
+        // Map by both tempId (if exists) and field name
+        if (field.tempId) {
+          fieldByTempId.set(field.tempId, fieldObj);
+        }
+        fieldByName.set(field.fieldName, fieldObj);
+        
+        // If no parent, it's a root field
+        if (!field.parentTempId) {
+          rootFields.push(fieldObj);
+        }
+      });
+      
+      // Second pass: build parent-child relationships using tempId references
+      section.fields.forEach((field: any) => {
+        if (field.parentTempId) {
+          const parentField = fieldByTempId.get(field.parentTempId);
+          const currentField = fieldByName.get(field.fieldName);
+          
+          if (parentField && currentField) {
+            parentField.children.push(currentField);
+          }
+        }
+      });
+      
+      // Build nested schema structure
+      this.buildNestedSchemaFromFields(rootFields, schema);
+    });
+    
+    return schema;
+  }
+  
+  /**
+   * Recursively build nested schema structure from field hierarchy
+   */
+  private buildNestedSchemaFromFields(fields: any[], target: Record<string, any>): void {
+    fields.forEach(field => {
+      if (field.children && field.children.length > 0) {
+        // This field has children - create an object
+        // For PART type fields, use the field name as the object key
+        if (field.type === 'part') {
+          target[field.name] = {};
+          this.buildNestedSchemaFromFields(field.children, target[field.name]);
+        } else {
+          // Non-part field with children (shouldn't happen but handle anyway)
+          target[field.name] = {};
+          this.buildNestedSchemaFromFields(field.children, target[field.name]);
+        }
+      } else {
+        // Leaf field - set default value based on type
+        // Skip PART type fields without children
+        if (field.type !== 'part') {
+          target[field.name] = this.getDefaultValueForType(field.type);
+        }
+      }
+    });
+  }
+  
+  /**
+   * Get schema type from FieldType enum
+   */
+  private getSchemaTypeFromFieldType(fieldType: string): string {
+    switch (fieldType) {
+      case 'TOGGLE':
+        return 'boolean';
+      case 'NUMBER':
+        return 'number';
+      case 'PART':
+        return 'part'; // Special type for parent/section fields
+      case 'TEXT':
+      case 'IMAGE':
+      case 'SIGNATURE_DRAW':
+      case 'SIGNATURE_IMG':
+      default:
+        return 'string';
+    }
+  }
+  
+  /**
+   * Get default value for schema type
+   */
+  private getDefaultValueForType(type: string): any {
+    switch (type) {
+      case 'boolean':
+        return false;
+      case 'number':
+        return 0;
+      case 'string':
+      default:
+        return '';
+    }
+  }
+
+  /**
+   * Generate basic schema from field names (legacy method)
    */
   private generateSchemaFromFieldNames(fieldNames: string[]): Record<string, any> {
     const schema: Record<string, any> = {};
@@ -488,4 +623,5 @@ export class TemplateService {
       additionalProperties: false
     };
   }
+
 }
