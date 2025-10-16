@@ -16,10 +16,22 @@ export const DepartmentAlreadyExistsException = new UnprocessableEntityException
 // Lỗi không tìm thấy phòng ban
 export const NotFoundDepartmentException = new NotFoundException('Department not found')
 
-// Lỗi khi cố gắng xóa phòng ban đang có course hoạt động
-export const DepartmentHasActiveCoursesException = new ForbiddenException(
-  'Cannot delete department with active courses'
-)
+// Lỗi khi phòng ban vẫn còn liên kết hoạt động (course/trainer/trainee) nên không thể disable
+export const DepartmentDisableHasActiveEntitiesException = ({
+  courseCount,
+  trainerCount,
+  traineeCount
+}: {
+  courseCount: number
+  trainerCount: number
+  traineeCount: number
+}) =>
+  new ForbiddenException({
+    message: 'Cannot disable department that still has active courses, trainers, or trainees',
+    courseCount,
+    trainerCount,
+    traineeCount
+  })
 
 // Lỗi liên quan đến department head
 export const InvalidDepartmentHeadException = new UnprocessableEntityException([
@@ -33,6 +45,9 @@ export const DepartmentHeadMustHaveRoleException = new BadRequestException(
   'User must have DEPARTMENT_HEAD role to be assigned as department head'
 )
 export const DepartmentHeadRoleInactiveException = new BadRequestException('Department head role must be active')
+export const DepartmentHeadAlreadyAssignedException = new BadRequestException(
+  'Department head is already assigned to another department'
+)
 
 // Lỗi phân quyền kích hoạt phòng ban
 export const OnlyAdministratorCanEnableDepartmentException = new ForbiddenException(

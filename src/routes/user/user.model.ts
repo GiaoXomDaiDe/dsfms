@@ -11,10 +11,8 @@ import {
 import { RoleSchema } from '~/routes/role/role.model'
 import {
   AtLeastOneUserRequiredMessage,
-  DepartmentAssignmentNotAllowedMessage,
   DepartmentNotAllowedForRoleMessage,
   DepartmentRequiredForDepartmentHeadMessage,
-  DepartmentRequiredForTrainerMessage,
   DuplicateEmailInBatchMessage,
   InvalidRoleIdMessage,
   InvalidRoleNameMessage,
@@ -88,6 +86,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
       return
     }
 
+    // Department validation - only DEPARTMENT_HEAD still requires department
     if (data.role.name === 'DEPARTMENT_HEAD') {
       if (!data.departmentId) {
         ctx.addIssue({
@@ -97,13 +96,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
         })
       }
     } else if (data.role.name === 'TRAINER') {
-      if (!data.departmentId) {
-        ctx.addIssue({
-          code: 'custom',
-          message: DepartmentRequiredForTrainerMessage,
-          path: ['departmentId']
-        })
-      }
+      // TRAINER no longer requires department - removed validation
     } else {
       if (data.departmentId) {
         ctx.addIssue({
@@ -198,26 +191,9 @@ export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.omit({
         return
       }
 
-      // Validate department assignment chỉ khi có role và departmentId được cung cấp
-      if (data.departmentId !== undefined) {
-        if (data.role.name === 'DEPARTMENT_HEAD' || data.role.name === 'TRAINER') {
-          // Các role này được phép có departmentId (có thể null để remove)
-        } else {
-          // Các role khác không được có departmentId (phải null hoặc undefined)
-          if (data.departmentId !== null) {
-            ctx.addIssue({
-              code: 'custom',
-              message: DepartmentAssignmentNotAllowedMessage(data.role.name),
-              path: ['departmentId']
-            })
-          }
-        }
-      }
-
       const rules = ROLE_PROFILE_RULES[data.role.name as keyof typeof ROLE_PROFILE_RULES]
 
       if (rules) {
-        // Kiểm tra forbidden profile - chỉ khi profile được cung cấp
         const forbiddenKey = rules.forbiddenProfile as keyof typeof data
         if (forbiddenKey in data && data[forbiddenKey] !== undefined && data[forbiddenKey] !== null) {
           ctx.addIssue({
@@ -227,7 +203,6 @@ export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.omit({
           })
         }
       } else if (data.role.name !== 'TRAINER' && data.role.name !== 'TRAINEE') {
-        // Các role khác (ADMIN, DEPARTMENT_HEAD) không được có bất kỳ profile nào
         const profileKeys: Array<'trainerProfile' | 'traineeProfile'> = ['trainerProfile', 'traineeProfile']
         profileKeys.forEach((profile) => {
           if (profile in data && data[profile] !== undefined && data[profile] !== null) {

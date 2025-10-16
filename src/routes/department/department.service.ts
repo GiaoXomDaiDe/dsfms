@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common'
 import {
   DepartmentAlreadyActiveException,
   DepartmentAlreadyExistsException,
+  DepartmentDisableHasActiveEntitiesException,
+  DepartmentHeadAlreadyAssignedException,
   DepartmentHeadMustHaveRoleException,
   DepartmentHeadRoleInactiveException,
   DepartmentHeadUserNotFoundException,
@@ -55,7 +57,7 @@ export class DepartmentService {
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
     if (data.headUserId) {
-      await this.validateDepartmentHead(data.headUserId)
+      await this.validateDepartmentHead({ headUserId: data.headUserId })
     }
 
     try {
@@ -74,7 +76,7 @@ export class DepartmentService {
 
   async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
     if (data.headUserId) {
-      await this.validateDepartmentHead(data.headUserId)
+      await this.validateDepartmentHead({ headUserId: data.headUserId, departmentId: id })
     }
 
     try {
@@ -98,6 +100,22 @@ export class DepartmentService {
   }
 
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
+    const department = await this.departmentRepo.findById(id)
+
+    if (!department) {
+      throw NotFoundDepartmentException
+    }
+
+    const { courseCount, traineeCount, trainerCount } = department
+
+    if (courseCount > 0 || traineeCount > 0 || trainerCount > 0) {
+      throw DepartmentDisableHasActiveEntitiesException({
+        courseCount,
+        traineeCount,
+        trainerCount
+      })
+    }
+
     try {
       await this.departmentRepo.delete({
         id,
@@ -152,7 +170,13 @@ export class DepartmentService {
           role: {
             name: RoleName.DEPARTMENT_HEAD
           },
-          deletedAt: null
+          deletedAt: null,
+          departmentId: null,
+          headOfDepartments: {
+            none: {
+              deletedAt: null
+            }
+          }
         }
       }),
       this.prisma.user.findMany({
@@ -160,7 +184,13 @@ export class DepartmentService {
           role: {
             name: RoleName.DEPARTMENT_HEAD
           },
-          deletedAt: null
+          deletedAt: null,
+          departmentId: null,
+          headOfDepartments: {
+            none: {
+              deletedAt: null
+            }
+          }
         },
         select: {
           id: true,
@@ -322,7 +352,7 @@ export class DepartmentService {
     }
   }
 
-  private async validateDepartmentHead(headUserId: string) {
+  private async validateDepartmentHead({ headUserId, departmentId }: { headUserId: string; departmentId?: string }) {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile({ id: headUserId })
 
     if (!user) {
@@ -335,6 +365,22 @@ export class DepartmentService {
 
     if (user.role.isActive !== 'ACTIVE') {
       throw DepartmentHeadRoleInactiveException
+    }
+
+    if (user.department?.id && (!departmentId || user.department.id !== departmentId)) {
+      throw DepartmentHeadAlreadyAssignedException
+    }
+
+    const existingDepartment = await this.prisma.department.findFirst({
+      where: {
+        headUserId,
+        deletedAt: null,
+        ...(departmentId ? { NOT: { id: departmentId } } : {})
+      }
+    })
+
+    if (existingDepartment) {
+      throw DepartmentHeadAlreadyAssignedException
     }
   }
 }

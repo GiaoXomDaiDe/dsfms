@@ -105,6 +105,7 @@ export class DepartmentRepo {
 
     // Complex logic: Get trainer count through department → courses → subjects → instructors
     const trainerCountResult = await this.getTrainerCountByDepartment(id)
+
     const trainerCount = trainerCountResult.count
 
     // Get ALL trainers của department này (for detailed info)

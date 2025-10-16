@@ -218,7 +218,6 @@ export const InvalidRoleNameUpdateMessage = 'Invalid role name'
 
 // Messages cho department assignment rules
 export const DepartmentRequiredForDepartmentHeadMessage = 'Department ID is required for DEPARTMENT_HEAD role'
-export const DepartmentRequiredForTrainerMessage = 'Department ID is required for TRAINER role'
 
 export const DepartmentAssignmentNotAllowedMessage = (roleName: string) =>
   `Department assignment is not allowed for ${roleName} role. Only TRAINER and DEPARTMENT_HEAD roles can be assigned to a department.`
