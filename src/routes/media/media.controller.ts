@@ -24,14 +24,20 @@ import {
 import { MediaService } from '~/routes/media/media.service'
 import { ParseFilePipeWithUnlink } from '~/routes/media/parse-file-with-unlink.pipe'
 import { UPLOAD_DIR } from '~/shared/constants/default.constant'
+import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 
 @Controller('media')
-@IsPublic()
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
-  @Post('images/upload')
+  @Post('images/upload/presigned-url')
+  @ZodSerializerDto(PresignedUploadFileResDTO)
+  async createPresignedUrl(@Body() body: PresignedUploadFileBodyDTO, @ActiveUser('userId') userId: string) {
+    return this.mediaService.getPresignUrl(body, userId)
+  }
+
+  @Post('images/upload/:type')
   @ZodSerializerDto(UploadFilesResDTO)
   @UseInterceptors(
     FilesInterceptor('files', 100, {
@@ -41,6 +47,8 @@ export class MediaController {
     })
   )
   uploadFile(
+    @Param('type') type: string,
+    @ActiveUser('userId') userId: string,
     @UploadedFiles(
       new ParseFilePipeWithUnlink({
         validators: [
@@ -51,10 +59,11 @@ export class MediaController {
     )
     files: Express.Multer.File[]
   ) {
-    return this.mediaService.uploadFile(files)
+    return this.mediaService.uploadFile(files, type, userId)
   }
 
   @Get('static/:filename')
+  @IsPublic()
   serveFile(@Param('filename') filename: string, @Res() res: Response) {
     return res.sendFile(path.resolve(UPLOAD_DIR, filename), (error) => {
       if (error) {
@@ -64,22 +73,24 @@ export class MediaController {
     })
   }
 
-  @Post('images/upload/presigned-url')
+  @Post('docs/upload/presigned-url')
   @ZodSerializerDto(PresignedUploadFileResDTO)
-  async createPresignedUrl(@Body() body: PresignedUploadFileBodyDTO) {
-    return this.mediaService.getPresignUrl(body)
+  createDocPresignedUrl(@Body() body: PresignedUploadDocBodyDTO, @ActiveUser('userId') userId: string) {
+    return this.mediaService.getDocPresignUrl(body, userId)
   }
 
-  @Post('docs/upload')
+  @Post('docs/upload/:type')
   @ZodSerializerDto(UploadFilesResDTO)
   @UseInterceptors(
     FilesInterceptor('files', 20, {
       limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB per file
+        fileSize: 10 * 1024 * 1024
       }
     })
   )
   uploadDocFile(
+    @Param('type') type: string,
+    @ActiveUser('userId') userId: string,
     @UploadedFiles(
       new ParseFilePipeWithUnlink({
         validators: [
@@ -94,12 +105,6 @@ export class MediaController {
     )
     files: Express.Multer.File[]
   ) {
-    return this.mediaService.uploadDocFile(files)
-  }
-
-  @Post('docs/upload/presigned-url')
-  @ZodSerializerDto(PresignedUploadFileResDTO)
-  createDocPresignedUrl(@Body() body: PresignedUploadDocBodyDTO) {
-    return this.mediaService.getDocPresignUrl(body)
+    return this.mediaService.uploadDocFile(files, type, userId)
   }
 }

@@ -2,15 +2,23 @@ import { z } from 'zod'
 
 export const PresignedUploadFileBodySchema = z
   .object({
-    filename: z.string(),
-    filesize: z.number().max(10 * 1024 * 1024) // 10MB để support cả docs và images
+    extension: z.string().regex(/^\.(jpg|jpeg|png|webp)$/i, 'Invalid image extension'),
+    filesize: z
+      .number()
+      .max(5 * 1024 * 1024)
+      .optional(),
+    type: z.string().min(1).optional()
   })
   .strict()
 
 export const PresignedUploadDocBodySchema = z
   .object({
-    filename: z.string(),
-    filesize: z.number().max(10 * 1024 * 1024) // 10MB cho documents
+    extension: z.string().regex(/^\.(pdf|docx|doc|txt)$/i, 'Invalid document extension'),
+    filesize: z
+      .number()
+      .max(10 * 1024 * 1024)
+      .optional(),
+    type: z.string().min(1).optional()
   })
   .strict()
 

@@ -1,19 +1,30 @@
 import { Injectable } from '@nestjs/common'
 import { unlink } from 'fs/promises'
+import path from 'path'
 import { PresignedUploadDocBodyType, PresignedUploadFileBodyType } from '~/routes/media/media.model'
-import { generateRandomFilename } from '~/shared/helper'
 import { S3Service } from '~/shared/services/s3.service'
 
 @Injectable()
 export class MediaService {
   constructor(private readonly s3Service: S3Service) {}
 
-  async uploadFile(files: Array<Express.Multer.File>) {
+  private generateControlledFilename(extension: string, type: string = 'file', userId: string): string {
+    return `${type}_${userId}${extension}`
+  }
+
+  async uploadFile(files: Array<Express.Multer.File>, type: string, userId: string) {
+    console.log('type', type)
     const result = await Promise.all(
-      files.map((file) => {
+      files.map((file, index) => {
+        const extension = path.extname(file.originalname)
+        const controlledFilename = this.generateControlledFilename(
+          extension,
+          type,
+          files.length > 1 ? `${userId}_${index + 1}` : userId
+        )
         return this.s3Service
           .uploadedFile({
-            filename: 'images/' + file.filename,
+            filename: 'images/' + controlledFilename,
             filepath: file.path,
             contentType: file.mimetype
           })
@@ -36,9 +47,9 @@ export class MediaService {
     }
   }
 
-  async getPresignUrl(body: PresignedUploadFileBodyType) {
-    const randomFilename = generateRandomFilename(body.filename)
-    const presignedUrl = await this.s3Service.createPresignedUrlWithClient('images/' + randomFilename, 30)
+  async getPresignUrl(body: PresignedUploadFileBodyType, userId: string) {
+    const controlledFilename = this.generateControlledFilename(body.extension, body.type, userId)
+    const presignedUrl = await this.s3Service.createPresignedUrlWithClient('images/' + controlledFilename, 300)
     const url = presignedUrl.split('?')[0]
     return {
       presignedUrl,
@@ -46,12 +57,18 @@ export class MediaService {
     }
   }
 
-  async uploadDocFile(files: Array<Express.Multer.File>) {
+  async uploadDocFile(files: Array<Express.Multer.File>, type: string, userId: string) {
     const result = await Promise.all(
-      files.map((file) => {
+      files.map((file, index) => {
+        const extension = path.extname(file.originalname)
+        const controlledFilename = this.generateControlledFilename(
+          extension,
+          type,
+          files.length > 1 ? `${userId}_${index + 1}` : userId
+        )
         return this.s3Service
           .uploadedFile({
-            filename: 'docs/' + file.filename,
+            filename: 'docs/' + controlledFilename,
             filepath: file.path,
             contentType: file.mimetype
           })
@@ -74,9 +91,9 @@ export class MediaService {
     }
   }
 
-  async getDocPresignUrl(body: PresignedUploadDocBodyType) {
-    const randomFilename = generateRandomFilename(body.filename)
-    const presignedUrl = await this.s3Service.createPresignedUrlWithClient('docs/' + randomFilename, 60)
+  async getDocPresignUrl(body: PresignedUploadDocBodyType, userId: string) {
+    const controlledFilename = this.generateControlledFilename(body.extension, body.type, userId)
+    const presignedUrl = await this.s3Service.createPresignedUrlWithClient('docs/' + controlledFilename, 600)
     const url = presignedUrl.split('?')[0]
     return {
       presignedUrl,
