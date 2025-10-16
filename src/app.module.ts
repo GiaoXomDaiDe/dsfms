@@ -6,6 +6,7 @@ import { CourseModule } from '~/routes/course/course.module'
 import { DepartmentModule } from '~/routes/department/department.module'
 import { MediaModule } from '~/routes/media/media.module'
 import { PublicModule } from '~/routes/public/public.module'
+import { ReportsModule } from '~/routes/reports/reports.module'
 import { RoleModule } from '~/routes/role/role.module'
 import { SubjectModule } from '~/routes/subject/subject.module'
 import { UserModule } from '~/routes/user/user.module'
@@ -39,6 +40,7 @@ import { TemplateModule } from './routes/template/template.module'
     CourseModule,
     SubjectModule,
     TemplateModule,
+    ReportsModule,
     PublicModule,
     MediaModule
   ],

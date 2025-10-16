@@ -19,6 +19,8 @@ import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissio
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 import {
+  BulkCreateSubjectsBodyDto,
+  BulkCreateSubjectsResDto,
   CreateSubjectBodyDto,
   EnrollTraineesBodyDto,
   EnrollTraineesResDto,
@@ -45,6 +47,25 @@ export class SubjectController {
   ) {
     return await this.subjectService.create({
       data: createSubjectDto,
+      createdById: userId,
+      createdByRoleName: roleName
+    })
+  }
+
+  /**
+   * API: Bulk Create Subjects
+   * POST /subjects/bulk
+   * Tạo nhiều subjects cùng lúc cho một course
+   */
+  @Post('bulk')
+  @ZodSerializerDto(BulkCreateSubjectsResDto)
+  async bulkCreateSubjects(
+    @Body() bulkCreateDto: BulkCreateSubjectsBodyDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.bulkCreate({
+      data: bulkCreateDto,
       createdById: userId,
       createdByRoleName: roleName
     })
