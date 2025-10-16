@@ -8,6 +8,7 @@
   "scripts": {
     "seed-init-role": "ts-node initialScript/seedInitRole.ts",
     "create-permissions": "ts-node initialScript/createPermissions.ts",
+    "add-media-permissions": "ts-node initialScript/addMediaPermissions.ts",
     "seed-departments": "ts-node initialScript/seedDepartments.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
