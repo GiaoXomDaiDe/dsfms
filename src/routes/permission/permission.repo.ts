@@ -5,10 +5,12 @@ import {
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
 import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class PermissionRepo {
   constructor(
     private readonly prisma: PrismaService,

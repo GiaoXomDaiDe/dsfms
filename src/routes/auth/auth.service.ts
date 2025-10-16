@@ -49,10 +49,12 @@ export class AuthService {
       return userWithoutPassword
     } catch (error) {
       // If it's one of our custom errors, re-throw it
-      if (error instanceof AuthErrors.MissingCredentialsException.constructor ||
-          error instanceof AuthErrors.UserNotFoundException.constructor ||
-          error instanceof AuthErrors.AccountDisabledException.constructor ||
-          error instanceof AuthErrors.InvalidCredentialsException.constructor) {
+      if (
+        error instanceof AuthErrors.MissingCredentialsException.constructor ||
+        error instanceof AuthErrors.UserNotFoundException.constructor ||
+        error instanceof AuthErrors.AccountDisabledException.constructor ||
+        error instanceof AuthErrors.InvalidCredentialsException.constructor
+      ) {
         throw error
       }
       // For unexpected errors, throw internal server error
@@ -157,8 +159,8 @@ export class AuthService {
 
       // Create JWT reset token
       const resetToken = this.jwtService.sign(
-        { 
-          userId: user.id, 
+        {
+          userId: user.id,
           email: user.email,
           type: 'password-reset',
           iat: Math.floor(Date.now() / 1000)
@@ -168,7 +170,7 @@ export class AuthService {
           expiresIn: '24h'
         }
       )
-      
+
       // Send reset password email
       await this.nodemailerService.sendResetPasswordEmail(
         user.email,
@@ -177,7 +179,7 @@ export class AuthService {
         `${user.firstName} ${user.lastName}`
       )
 
-      return { 
+      return {
         message: 'If the email exists, a reset link has been sent.'
       }
     } catch (error) {
@@ -228,9 +230,11 @@ export class AuthService {
         throw AuthErrors.InvalidTokenException
       }
       // If it's one of our custom errors, re-throw it
-      if (error instanceof AuthErrors.MissingCredentialsException.constructor ||
-          error instanceof AuthErrors.InvalidTokenException.constructor ||
-          error instanceof AuthErrors.UserNotFoundException.constructor) {
+      if (
+        error instanceof AuthErrors.MissingCredentialsException.constructor ||
+        error instanceof AuthErrors.InvalidTokenException.constructor ||
+        error instanceof AuthErrors.UserNotFoundException.constructor
+      ) {
         throw error
       }
       throw AuthErrors.AuthenticationServiceException

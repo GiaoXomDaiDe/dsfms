@@ -14,9 +14,12 @@ export const RoleSchema = z.object({
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  deletedAt: z.iso
+    .datetime()
+    .transform((d) => new Date(d))
+    .nullable(),
+  createdAt: z.iso.datetime().transform((d) => new Date(d)),
+  updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
 
 export const GetRolesQuerySchema = IncludeDeletedQuerySchema.strict()

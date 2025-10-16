@@ -10,17 +10,17 @@ export const InvalidDateRangeException = new BadRequestException('End date must 
 export const SubjectIsNotDeletedException = new BadRequestException('Subject is not deleted')
 
 // Permission Errors
-export const OnlyAdminAndDepartmentHeadCanCreateSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can create subjects'
+export const OnlyAcademicDepartmentCanCreateSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can create subjects'
 )
-export const OnlyAdminAndDepartmentHeadCanUpdateSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can update subjects'
+export const OnlyAcademicDepartmentCanUpdateSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can update subjects'
 )
-export const OnlyAdminAndDepartmentHeadCanDeleteSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can delete subjects'
+export const OnlyAcademicDepartmentCanDeleteSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can delete subjects'
 )
-export const OnlyAdminAndDepartmentHeadCanRestoreSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can restore subjects'
+export const OnlyAcademicDepartmentCanRestoreSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can restore subjects'
 )
 export const DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException = new ForbiddenException(
   'Department heads can only manage subjects in courses of their own department'

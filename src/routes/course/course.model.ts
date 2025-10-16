@@ -1,11 +1,17 @@
+import { SubjectEnrollmentStatus } from '@prisma/client'
 import { z } from 'zod'
-import { DepartmentSchema } from '~/routes/department/department.model'
-import { SubjectSchema } from '~/routes/subject/subject.model'
-import { CourseStatus, LevelStatus } from '~/shared/constants/course.constant'
+import { TraineeEnrollmentSubjectSchema } from '~/routes/subject/subject.model'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 import { CourseSchema } from '~/shared/models/shared-course.model'
+import { DepartmentSchema } from '~/shared/models/shared-department.model'
+import { SubjectSchema } from '~/shared/models/shared-subject.model'
+import { UserSchema } from '~/shared/models/shared-user.model'
 
 export const GetCoursesQuerySchema = IncludeDeletedQuerySchema.strict()
+
+export const GetCourseParamsSchema = z.object({
+  courseId: z.uuid()
+})
 
 export const GetCoursesResSchema = z.object({
   courses: z.array(
@@ -32,6 +38,98 @@ export const GetCourseResSchema = CourseSchema.extend({
   traineeCount: z.number().int().default(0),
   trainerCount: z.number().int().default(0),
   subjects: z.array(SubjectSchema.omit({ courseId: true }))
+})
+
+export const CreateCourseBodySchema = CourseSchema.pick({
+  departmentId: true,
+  name: true,
+  description: true,
+  code: true,
+  maxNumTrainee: true,
+  venue: true,
+  note: true,
+  passScore: true,
+  startDate: true,
+  endDate: true,
+  level: true,
+  status: true
+}).refine(
+  (data) => {
+    return new Date(data.startDate) < new Date(data.endDate)
+  },
+  {
+    message: 'End date must be after start date',
+    path: ['endDate']
+  }
+)
+
+export const CreateCourseResSchema = CourseSchema.extend({
+  department: DepartmentSchema.pick({
+    id: true,
+    name: true,
+    code: true,
+    description: true
+  })
+}).omit({ departmentId: true })
+
+export const UpdateCourseBodySchema = CreateCourseBodySchema.partial()
+
+export const UpdateCourseResSchema = CreateCourseResSchema
+
+export const GetCourseTraineesQuerySchema = z.object({
+  batchCode: z.string().optional()
+})
+
+export const CourseTraineeInfoSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  lastName: true,
+  email: true
+}).extend({
+  enrollmentCount: z.number().int(),
+  batches: z.array(z.string())
+})
+
+export const GetCourseTraineesResSchema = z.object({
+  trainees: z.array(CourseTraineeInfoSchema),
+  totalItems: z.number().int()
+})
+
+export const CancelCourseEnrollmentsBodySchema = z.object({
+  batchCode: z.string().min(1)
+})
+
+export const TraineeEnrollmentUserSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true
+}).extend({
+  department: DepartmentSchema.pick({
+    id: true,
+    name: true,
+    code: true,
+    description: true
+  }).nullable()
+})
+
+export const TraineeEnrollmentRecordSchema = z.object({
+  subject: TraineeEnrollmentSubjectSchema,
+  enrollment: z.object({
+    batchCode: z.string(),
+    status: z.nativeEnum(SubjectEnrollmentStatus),
+    enrollmentDate: z.string().datetime(),
+    updatedAt: z.string().datetime()
+  })
+})
+
+export const GetTraineeEnrollmentsResSchema = z.object({
+  trainee: TraineeEnrollmentUserSchema,
+  enrollments: z.array(TraineeEnrollmentRecordSchema),
+  totalCount: z.number().int()
 })
 
 // Department info for course relations
@@ -93,48 +191,6 @@ export const CourseDetailResSchema = CourseWithInfoSchema.extend({
   subjects: z.array(CourseSubjectSummarySchema).default([])
 })
 
-/* ===========================
- * Request/Input Schemas
- * ========================== */
-
-// Course params for :id endpoints
-export const GetCourseParamsSchema = z.object({
-  id: z.string().uuid({ message: 'Invalid course ID format' })
-})
-
-// Create course body schema
-export const CreateCourseBodySchema = z
-  .object({
-    departmentId: z.string().uuid(),
-    name: z.string().min(1).max(255),
-    description: z.string().optional(),
-    code: z.string().min(1).max(50),
-    maxNumTrainee: z.number().int().positive(),
-    venue: z.string().optional(),
-    note: z.string().optional(),
-    passScore: z.number().min(0).max(100).optional(),
-    startDate: z.string().datetime(),
-    endDate: z.string().datetime(),
-    level: z.nativeEnum(LevelStatus).default(LevelStatus.BEGINNER),
-    status: z.nativeEnum(CourseStatus).default(CourseStatus.PLANNED)
-  })
-  .refine(
-    (data) => {
-      return new Date(data.startDate) < new Date(data.endDate)
-    },
-    {
-      message: 'End date must be after start date',
-      path: ['endDate']
-    }
-  )
-
-// Update course body schema
-export const UpdateCourseBodySchema = CreateCourseBodySchema.partial()
-
-/* ===========================
- * Response Schemas
- * ========================== */
-
 // Course statistics response
 export const CourseStatsSchema = z.object({
   totalCourses: z.number().int(),
@@ -152,19 +208,6 @@ export const CourseStatsSchema = z.object({
 /* ===========================
  * Subject Management Schemas
  * ========================== */
-
-// Add subjects to course
-export const AddSubjectToCourseBodySchema = z.object({
-  subjectIds: z.array(z.string().uuid()).min(1, 'At least one subject is required')
-})
-
-export const AddSubjectToCourseResSchema = z.object({
-  success: z.boolean(),
-  addedSubjects: z.array(z.string().uuid()),
-  notFoundSubjects: z.array(z.string().uuid()),
-  alreadyAssignedSubjects: z.array(z.string().uuid()),
-  message: z.string()
-})
 
 // Remove subjects from course
 export const RemoveSubjectFromCourseBodySchema = z.object({
@@ -186,11 +229,14 @@ export type CourseListItemType = z.infer<typeof CourseListItemSchema>
 export type CourseWithInfoType = z.infer<typeof CourseWithInfoSchema>
 export type CourseDetailResType = z.infer<typeof CourseDetailResSchema>
 export type CreateCourseBodyType = z.infer<typeof CreateCourseBodySchema>
+export type CreateCourseResType = z.infer<typeof CreateCourseResSchema>
 export type UpdateCourseBodyType = z.infer<typeof UpdateCourseBodySchema>
+export type UpdateCourseResType = z.infer<typeof UpdateCourseResSchema>
 export type GetCourseParamsType = z.infer<typeof GetCourseParamsSchema>
 export type GetCoursesQueryType = z.infer<typeof GetCoursesQuerySchema>
+export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
+export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
+export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
 export type CourseStatsType = z.infer<typeof CourseStatsSchema>
-export type AddSubjectToCourseBodyType = z.infer<typeof AddSubjectToCourseBodySchema>
-export type AddSubjectToCourseResType = z.infer<typeof AddSubjectToCourseResSchema>
 export type RemoveSubjectFromCourseBodyType = z.infer<typeof RemoveSubjectFromCourseBodySchema>
 export type RemoveSubjectFromCourseResType = z.infer<typeof RemoveSubjectFromCourseResSchema>

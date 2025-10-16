@@ -7,29 +7,7 @@ import {
 } from '@prisma/client'
 import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
-import { UserLookupResSchema } from '~/shared/models/shared-user-list.model'
-
-export const SubjectSchema = z.object({
-  id: z.string().uuid(),
-  courseId: z.string().uuid(),
-  name: z.string().min(1).max(255),
-  code: z.string().min(1).max(50),
-  description: z.string().optional().nullable(),
-  method: z.nativeEnum(SubjectMethod),
-  duration: z.number().int().positive().optional().nullable(),
-  type: z.nativeEnum(SubjectType),
-  roomName: z.string().optional().nullable(),
-  remarkNote: z.string().optional().nullable(),
-  timeSlot: z.string().optional().nullable(),
-  isSIM: z.boolean(),
-  passScore: z.number().min(0).max(100).optional().nullable(),
-  startDate: z.coerce.date(),
-  status: z.nativeEnum(SubjectStatus),
-  endDate: z.coerce.date(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  deletedAt: z.date().nullable()
-})
+import { SubjectSchema } from '~/shared/models/shared-subject.model'
 
 // Course info schema for nested relations
 export const SubjectCourseSchema = z.object({
@@ -59,7 +37,7 @@ export const SubjectInstructorSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   roleInSubject: z.nativeEnum(SubjectInstructorRole),
-  assignedAt: z.date()
+  assignedAt: z.iso.datetime().transform((value) => new Date(value))
 })
 
 // Enrollment info schema (simplified for response)
@@ -68,7 +46,7 @@ export const SubjectEnrollmentSchema = z.object({
   eid: z.string(),
   firstName: z.string(),
   lastName: z.string(),
-  enrollmentDate: z.date(),
+  enrollmentDate: z.iso.datetime().transform((value) => new Date(value)),
   batchCode: z.string(),
   status: z.nativeEnum(SubjectEnrollmentStatus)
 })
@@ -586,29 +564,8 @@ export const AssignTraineesResSchema = z.object({
 })
 
 // Get Course Trainees Schema
-export const GetCourseTraineesQuerySchema = z.object({
-  batchCode: z.string().optional()
-})
-
-export const CourseTraineeInfoSchema = z.object({
-  id: z.string().uuid(),
-  eid: z.string(),
-  firstName: z.string(),
-  lastName: z.string(),
-  email: z.string().email(),
-  enrollmentCount: z.number().int(),
-  batches: z.array(z.string())
-})
-
-export const GetCourseTraineesResSchema = z.object({
-  trainees: z.array(CourseTraineeInfoSchema),
-  totalItems: z.number().int()
-})
 
 // Cancel Course Enrollments Schema
-export const CancelCourseEnrollmentsBodySchema = z.object({
-  batchCode: z.string().min(1)
-})
 
 export const CancelCourseEnrollmentsResSchema = z.object({
   message: z.string(),
@@ -624,21 +581,8 @@ export const GetTraineeEnrollmentsQuerySchema = z.object({
   status: z.nativeEnum(SubjectEnrollmentStatus).optional()
 })
 
-export const TraineeEnrollmentUserSchema = z.object({
-  userId: z.string().uuid(),
-  eid: z.string(),
-  fullName: z.string(),
-  email: z.string().email(),
-  department: z
-    .object({
-      id: z.string().uuid(),
-      name: z.string()
-    })
-    .nullable()
-})
-
 export const TraineeEnrollmentSubjectSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   code: z.string(),
   name: z.string(),
   status: z.nativeEnum(SubjectStatus),
@@ -652,22 +596,6 @@ export const TraineeEnrollmentSubjectSchema = z.object({
       name: z.string()
     })
     .nullable()
-})
-
-export const TraineeEnrollmentRecordSchema = z.object({
-  subject: TraineeEnrollmentSubjectSchema,
-  enrollment: z.object({
-    batchCode: z.string(),
-    status: z.nativeEnum(SubjectEnrollmentStatus),
-    enrollmentDate: z.string().datetime(),
-    updatedAt: z.string().datetime()
-  })
-})
-
-export const GetTraineeEnrollmentsResSchema = z.object({
-  trainee: TraineeEnrollmentUserSchema,
-  enrollments: z.array(TraineeEnrollmentRecordSchema),
-  totalCount: z.number().int()
 })
 
 // Cancel Subject Enrollment Schema
@@ -694,36 +622,11 @@ export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
 export type TraineeAssignmentUserType = z.infer<typeof TraineeAssignmentUserSchema>
 export type TraineeAssignmentDuplicateType = z.infer<typeof TraineeAssignmentDuplicateSchema>
 export type TraineeAssignmentIssueType = z.infer<typeof TraineeAssignmentIssueSchema>
-export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
-export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
-export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
-export type CancelCourseEnrollmentsBodyType = z.infer<typeof CancelCourseEnrollmentsBodySchema>
+
 export type CancelCourseEnrollmentsResType = z.infer<typeof CancelCourseEnrollmentsResSchema>
 export type GetTraineeEnrollmentsQueryType = z.infer<typeof GetTraineeEnrollmentsQuerySchema>
-export type TraineeEnrollmentUserType = z.infer<typeof TraineeEnrollmentUserSchema>
 export type TraineeEnrollmentSubjectType = z.infer<typeof TraineeEnrollmentSubjectSchema>
-export type TraineeEnrollmentRecordType = z.infer<typeof TraineeEnrollmentRecordSchema>
-export type GetTraineeEnrollmentsResType = z.infer<typeof GetTraineeEnrollmentsResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
 export type CancelSubjectEnrollmentResType = z.infer<typeof CancelSubjectEnrollmentResSchema>
 
 // DTO exports
-export class GetAvailableTrainersQueryDto extends createZodDto(GetAvailableTrainersQuerySchema) {}
-export class GetAvailableTrainersResDto extends createZodDto(GetAvailableTrainersResSchema) {}
-export class AssignTrainerBodyDto extends createZodDto(AssignTrainerBodySchema) {}
-export class AssignTrainerResDto extends createZodDto(AssignTrainerResSchema) {}
-export class UpdateTrainerAssignmentBodyDto extends createZodDto(UpdateTrainerAssignmentBodySchema) {}
-export class UpdateTrainerAssignmentResDto extends createZodDto(UpdateTrainerAssignmentResSchema) {}
-export class RemoveTrainerResDto extends createZodDto(RemoveTrainerResSchema) {}
-export class LookupTraineesBodyDto extends createZodDto(LookupTraineesBodySchema) {}
-export class LookupTraineesResDto extends createZodDto(UserLookupResSchema) {}
-export class AssignTraineesBodyDto extends createZodDto(AssignTraineesBodySchema) {}
-export class AssignTraineesResDto extends createZodDto(AssignTraineesResSchema) {}
-export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQuerySchema) {}
-export class GetCourseTraineesResDto extends createZodDto(GetCourseTraineesResSchema) {}
-export class CancelCourseEnrollmentsBodyDto extends createZodDto(CancelCourseEnrollmentsBodySchema) {}
-export class CancelCourseEnrollmentsResDto extends createZodDto(CancelCourseEnrollmentsResSchema) {}
-export class GetTraineeEnrollmentsQueryDto extends createZodDto(GetTraineeEnrollmentsQuerySchema) {}
-export class GetTraineeEnrollmentsResDto extends createZodDto(GetTraineeEnrollmentsResSchema) {}
-export class CancelSubjectEnrollmentBodyDto extends createZodDto(CancelSubjectEnrollmentBodySchema) {}
-export class CancelSubjectEnrollmentResDto extends createZodDto(CancelSubjectEnrollmentResSchema) {}
