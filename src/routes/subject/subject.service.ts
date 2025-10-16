@@ -24,10 +24,10 @@ import {
   DuplicateTraineeEnrollmentException,
   InvalidDateRangeException,
   InvalidTraineeSubmissionException,
-  OnlyAdminAndDepartmentHeadCanCreateSubjectsException,
-  OnlyAdminAndDepartmentHeadCanDeleteSubjectsException,
-  OnlyAdminAndDepartmentHeadCanRestoreSubjectsException,
-  OnlyAdminAndDepartmentHeadCanUpdateSubjectsException,
+  OnlyAcademicDepartmentCanCreateSubjectsException,
+  OnlyAcademicDepartmentCanDeleteSubjectsException,
+  OnlyAcademicDepartmentCanRestoreSubjectsException,
+  OnlyAcademicDepartmentCanUpdateSubjectsException,
   SubjectCodeAlreadyExistsException,
   SubjectIsNotDeletedException,
   SubjectNotFoundException,
@@ -481,7 +481,7 @@ export class SubjectService {
    */
   private validateCreatePermissions(roleName: string): void {
     if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanCreateSubjectsException
+      throw OnlyAcademicDepartmentCanCreateSubjectsException
     }
   }
 
@@ -490,7 +490,7 @@ export class SubjectService {
    */
   private validateUpdatePermissions(roleName: string): void {
     if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanUpdateSubjectsException
+      throw OnlyAcademicDepartmentCanUpdateSubjectsException
     }
   }
 
@@ -499,7 +499,7 @@ export class SubjectService {
    */
   private validateDeletePermissions(roleName: string): void {
     if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanDeleteSubjectsException
+      throw OnlyAcademicDepartmentCanDeleteSubjectsException
     }
   }
 
@@ -508,7 +508,7 @@ export class SubjectService {
    */
   private validateRestorePermissions(roleName: string): void {
     if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanRestoreSubjectsException
+      throw OnlyAcademicDepartmentCanRestoreSubjectsException
     }
   }
 
@@ -770,62 +770,8 @@ export class SubjectService {
   }
 
   /**
-   * Get all trainees in a course
-   */
-  async getCourseTrainees({
-    courseId,
-    query,
-    roleName
-  }: {
-    courseId: string
-    query: any
-    roleName: string
-  }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
-    const { batchCode } = query
-
-    const result = await this.subjectRepo.getCourseTrainees({
-      courseId,
-      batchCode
-    })
-
-    return {
-      trainees: result.trainees,
-      totalItems: result.totalItems
-    }
-  }
-
-  /**
    * Cancel all course enrollments for a trainee in a batch
    */
-  async cancelCourseEnrollments({
-    courseId,
-    traineeId,
-    data,
-    roleName
-  }: {
-    courseId: string
-    traineeId: string
-    data: any
-    roleName: string
-  }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
-    const result = await this.subjectRepo.cancelCourseEnrollments({
-      courseId,
-      traineeUserId: traineeId,
-      batchCode: data.batchCode
-    })
-
-    return {
-      message: `Cancelled ${result.cancelledCount} enrollments. ${result.notCancelledCount} could not be cancelled (already in progress or finished).`,
-      data: {
-        cancelledCount: result.cancelledCount,
-        notCancelledCount: result.notCancelledCount
-      }
-    }
-  }
 
   /**
    * Get trainee enrollments

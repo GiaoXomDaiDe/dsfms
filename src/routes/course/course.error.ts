@@ -11,19 +11,19 @@ export const OnlyAcademicDepartmentCanAccessCourseListException = new ForbiddenE
   'Only ACADEMIC_DEPARTMENT can access course list'
 )
 export const OnlyAcademicDepartmentCanCreateCourseException = new ForbiddenException(
-  'Only academic department can create courses'
+  'Only ACADEMIC_DEPARTMENT can create courses'
 )
 export const OnlyAcademicDepartmentCanUpdateCourseException = new ForbiddenException(
-  'Only academic department can update courses'
+  'Only ACADEMIC_DEPARTMENT can update courses'
 )
 export const OnlyAcademicDepartmentCanDeleteCourseException = new ForbiddenException(
-  'Only academic department can delete courses'
+  'Only ACADEMIC_DEPARTMENT can delete courses'
 )
 export const OnlyAcademicDepartmentCanArchiveCourseException = new ForbiddenException(
-  'Only academic department can archive courses'
+  'Only ACADEMIC_DEPARTMENT can archive courses'
 )
 export const OnlyAcademicDepartmentCanRestoreCourseException = new ForbiddenException(
-  'Only academic department can restore courses'
+  'Only ACADEMIC_DEPARTMENT can restore courses'
 )
 export const OnlyAcademicDepartmentCanAddSubjectsToCourseException = new ForbiddenException(
   'Only ACADEMIC_DEPARTMENT can add subjects to courses'
@@ -31,7 +31,6 @@ export const OnlyAcademicDepartmentCanAddSubjectsToCourseException = new Forbidd
 export const OnlyAcademicDepartmentCanRemoveSubjectsFromCourseException = new ForbiddenException(
   'Only ACADEMIC_DEPARTMENT can remove subjects from courses'
 )
-
 // Lỗi ràng buộc nghiệp vụ course
 export const CannotHardDeleteCourseWithActiveSubjectsException = new BadRequestException(
   'Cannot permanently delete course with active subjects'

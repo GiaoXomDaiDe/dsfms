@@ -1,6 +1,5 @@
 import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
-import { DepartmentSchema } from '~/routes/department/department.model'
 import {
   CreateTraineeProfileSchema,
   CreateTrainerProfileSchema,
@@ -26,6 +25,7 @@ import {
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { validateRoleProfile } from '~/shared/helper'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
+import { DepartmentSchema } from '~/shared/models/shared-department.model'
 import { UserSchema } from '~/shared/models/shared-user.model'
 
 export const GetUsersQuerySchema = IncludeDeletedQuerySchema.extend({

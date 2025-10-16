@@ -45,7 +45,7 @@ export class NodemailerService {
       }
 
       const result = await this.transporter.sendMail(mailOptions)
-      
+
       return {
         success: true,
         messageId: result.messageId
@@ -64,19 +64,19 @@ export class NodemailerService {
     results: Array<{ success: boolean; messageId?: string; error?: string; recipient: string }>
   }> {
     const results = []
-    
+
     for (const email of emails) {
       const recipient = Array.isArray(email.to) ? email.to[0] : email.to
       const result = await this.sendEmail(email)
-      
+
       results.push({
         ...result,
         recipient
       })
     }
 
-    const successCount = results.filter(r => r.success).length
-    
+    const successCount = results.filter((r) => r.success).length
+
     return {
       success: successCount === emails.length,
       results
@@ -94,8 +94,8 @@ export class NodemailerService {
   }
 
   async sendResetPasswordEmail(
-    userEmail: string, 
-    resetToken: string, 
+    userEmail: string,
+    resetToken: string,
     magicLink: string,
     userName?: string
   ): Promise<{ success: boolean; message: string }> {
@@ -112,7 +112,7 @@ export class NodemailerService {
       // Thay thế placeholders trong template
       htmlTemplate = htmlTemplate.replace('[Your_Logo_URL]', 'https://via.placeholder.com/150x50?text=DSFMS')
       htmlTemplate = htmlTemplate.replace('[Your_Magic_Link]', resetLink)
-      
+
       // Thay thế tên nếu có
       if (userName) {
         htmlTemplate = htmlTemplate.replace('Chào bạn,', `Chào ${userName},`)
@@ -126,7 +126,7 @@ export class NodemailerService {
       }
 
       const result = await this.sendEmail(emailData)
-      
+
       if (result.success) {
         return {
           success: true,
@@ -197,7 +197,7 @@ This account was created on ${creationDate}.`
       }
 
       const result = await this.sendEmail(emailData)
-      
+
       if (result.success) {
         return {
           success: true,
@@ -235,16 +235,10 @@ This account was created on ${creationDate}.`
     }>
   }> {
     const results = []
-    
+
     for (const user of users) {
-      const result = await this.sendNewUserAccountEmail(
-        user.email,
-        user.eid,
-        user.password,
-        user.fullName,
-        user.role
-      )
-      
+      const result = await this.sendNewUserAccountEmail(user.email, user.eid, user.password, user.fullName, user.role)
+
       results.push({
         email: user.email,
         success: result.success,
@@ -252,8 +246,8 @@ This account was created on ${creationDate}.`
       })
     }
 
-    const successCount = results.filter(r => r.success).length
-    
+    const successCount = results.filter((r) => r.success).length
+
     return {
       success: successCount === users.length,
       results

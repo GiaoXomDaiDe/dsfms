@@ -7,10 +7,12 @@ import {
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
 import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class DepartmentRepo {
   constructor(
     private readonly prisma: PrismaService,
@@ -51,10 +53,7 @@ export class DepartmentRepo {
 
     // Format departments data with proper date strings
     const formattedDepartments = departments.map((dept) => ({
-      ...dept,
-      createdAt: dept.createdAt.toISOString(),
-      updatedAt: dept.updatedAt.toISOString(),
-      deletedAt: dept.deletedAt?.toISOString() || null
+      ...dept
     }))
 
     return {
@@ -142,19 +141,12 @@ export class DepartmentRepo {
     // Format courses data with subject count
     const formattedCourses = courses.map(({ _count, ...course }) => ({
       ...course,
-      startDate: course.startDate?.toISOString() || null,
-      endDate: course.endDate?.toISOString() || null,
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
       subjectCount: _count.subjects
     }))
 
     const { _count, ...departmentData } = department
     return {
       ...departmentData,
-      createdAt: departmentData.createdAt.toISOString(),
-      updatedAt: departmentData.updatedAt.toISOString(),
-      deletedAt: departmentData.deletedAt?.toISOString() || null,
       courseCount: _count.courses,
       traineeCount,
       trainerCount,

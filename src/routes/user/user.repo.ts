@@ -8,6 +8,7 @@ import {
 } from '~/routes/user/user.error'
 import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -19,6 +20,7 @@ type BulkUserData = CreateUserInternalType & {
 }
 
 @Injectable()
+@SerializeAll()
 export class UserRepo {
   constructor(
     private prismaService: PrismaService,

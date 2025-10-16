@@ -7,10 +7,12 @@ import {
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
 import { ActiveStatus } from '~/shared/constants/default.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class RoleRepo {
   constructor(
     private prismaService: PrismaService,

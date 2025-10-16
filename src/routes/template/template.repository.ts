@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '~/shared/services/prisma.service';
-import { CreateTemplateFormDto } from './template.dto';
+import { Injectable } from '@nestjs/common'
+import { PrismaService } from '~/shared/services/prisma.service'
+import { CreateTemplateFormDto } from './template.dto'
 
 @Injectable()
 export class TemplateRepository {
@@ -40,10 +40,10 @@ export class TemplateRepository {
 
     // Detect cycles using DFS
     const buildAdjList = () => {
-      const adjList = new Map<string, string[]>();
+      const adjList = new Map<string, string[]>()
       for (const field of fields) {
         if (!adjList.has(field.fieldName)) {
-          adjList.set(field.fieldName, []);
+          adjList.set(field.fieldName, [])
         }
         if (field.parentTempId) {
           const parentField = fieldsByTempId.get(field.parentTempId);
@@ -55,44 +55,44 @@ export class TemplateRepository {
           }
         }
       }
-      return adjList;
-    };
+      return adjList
+    }
 
     const hasCycle = (adjList: Map<string, string[]>) => {
-      const visited = new Set<string>();
-      const recStack = new Set<string>();
+      const visited = new Set<string>()
+      const recStack = new Set<string>()
 
       const dfs = (node: string): boolean => {
-        visited.add(node);
-        recStack.add(node);
+        visited.add(node)
+        recStack.add(node)
 
-        const neighbors = adjList.get(node) || [];
+        const neighbors = adjList.get(node) || []
         for (const neighbor of neighbors) {
           if (!visited.has(neighbor)) {
-            if (dfs(neighbor)) return true;
+            if (dfs(neighbor)) return true
           } else if (recStack.has(neighbor)) {
-            return true; // Cycle detected
+            return true // Cycle detected
           }
         }
 
-        recStack.delete(node);
-        return false;
-      };
+        recStack.delete(node)
+        return false
+      }
 
       for (const node of adjList.keys()) {
         if (!visited.has(node)) {
-          if (dfs(node)) return true;
+          if (dfs(node)) return true
         }
       }
-      return false;
-    };
+      return false
+    }
 
-    const adjList = buildAdjList();
+    const adjList = buildAdjList()
     if (hasCycle(adjList)) {
       throw new Error(
         'Circular reference detected in field hierarchy. ' +
-        'Fields cannot form a cycle through parent-child relationships.'
-      );
+          'Fields cannot form a cycle through parent-child relationships.'
+      )
     }
   }
 
@@ -242,9 +242,9 @@ export class TemplateRepository {
             editBy: sectionData.editBy,
             roleInSubject: sectionData.roleInSubject,
             isSubmittable: sectionData.isSubmittable || false,
-            isToggleDependent: sectionData.isToggleDependent || false,
-          },
-        });
+            isToggleDependent: sectionData.isToggleDependent || false
+          }
+        })
 
         // Create fields for this section
         const createdFields = [];
@@ -267,8 +267,8 @@ export class TemplateRepository {
 
         createdSections.push({
           ...section,
-          fields: createdFields,
-        });
+          fields: createdFields
+        })
       }
 
       return {
@@ -298,15 +298,15 @@ export class TemplateRepository {
           select: {
             id: true,
             name: true,
-            code: true,
-          },
+            code: true
+          }
         },
         createdByUser: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         sections: {
           include: {
@@ -318,21 +318,21 @@ export class TemplateRepository {
                   select: {
                     id: true,
                     firstName: true,
-                    lastName: true,
-                  },
-                },
+                    lastName: true
+                  }
+                }
               },
               orderBy: {
-                displayOrder: 'asc',
-              },
-            },
+                displayOrder: 'asc'
+              }
+            }
           },
           orderBy: {
-            displayOrder: 'asc',
-          },
-        },
-      },
-    });
+            displayOrder: 'asc'
+          }
+        }
+      }
+    })
   }
 
   async findAllTemplates() {
@@ -342,74 +342,74 @@ export class TemplateRepository {
           select: {
             id: true,
             name: true,
-            code: true,
-          },
+            code: true
+          }
         },
         createdByUser: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         _count: {
           select: {
-            sections: true,
-          },
-        },
+            sections: true
+          }
+        }
       },
       orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        createdAt: 'desc'
+      }
+    })
   }
 
   async findTemplatesByDepartment(departmentId: string) {
     return this.prismaService.templateForm.findMany({
       where: {
         departmentId,
-        isActive: true,
+        isActive: true
       },
       include: {
         department: {
           select: {
             id: true,
             name: true,
-            code: true,
-          },
+            code: true
+          }
         },
         createdByUser: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         _count: {
           select: {
-            sections: true,
-          },
-        },
+            sections: true
+          }
+        }
       },
       orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        createdAt: 'desc'
+      }
+    })
   }
 
   async updateTemplateStatus(id: string, isActive: boolean) {
     return this.prismaService.templateForm.update({
       where: { id },
-      data: { isActive },
-    });
+      data: { isActive }
+    })
   }
 
   async templateExists(id: string): Promise<boolean> {
     const template = await this.prismaService.templateForm.findUnique({
       where: { id },
-      select: { id: true },
-    });
-    return !!template;
+      select: { id: true }
+    })
+    return !!template
   }
 
   async validateDepartmentExists(departmentId: string): Promise<boolean> {
@@ -419,8 +419,8 @@ export class TemplateRepository {
         deletedAt: null,
         isActive: 'ACTIVE'
       },
-      select: { id: true },
-    });
-    return !!department;
+      select: { id: true }
+    })
+    return !!department
   }
 }

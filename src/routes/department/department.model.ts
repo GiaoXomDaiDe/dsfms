@@ -1,19 +1,6 @@
 import z from 'zod'
-
-export const DepartmentSchema = z.object({
-  id: z.uuid(),
-  name: z.string().min(1).max(255),
-  code: z.string().min(1).max(50),
-  description: z.string().max(1000).nullable(),
-  headUserId: z.uuid().nullable(),
-  isActive: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
-})
+import { CourseSchema } from '~/shared/models/shared-course.model'
+import { DepartmentSchema } from '~/shared/models/shared-department.model'
 
 export type DepartmentType = z.infer<typeof DepartmentSchema>
 
@@ -33,9 +20,6 @@ export type UpdateDepartmentBodyType = z.infer<typeof UpdateDepartmentBodySchema
 
 // Department with additional info
 export const DepartmentResSchema = DepartmentSchema.extend({
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  deletedAt: z.string().nullable(),
   headUser: z
     .object({
       id: z.string(),
@@ -67,22 +51,8 @@ export const DepartmentTrainerSchema = z.object({
 })
 
 // Course Detail Schema for Department
-export const DepartmentCourseSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  code: z.string(),
-  description: z.string().nullable(),
-  maxNumTrainee: z.number().nullable(),
-  venue: z.string().nullable(),
-  note: z.string().nullable(),
-  passScore: z.number().nullable(),
-  startDate: z.string().nullable(),
-  endDate: z.string().nullable(),
-  level: z.string(),
-  status: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  subjectCount: z.number().default(0)
+export const DepartmentCourseSchema = CourseSchema.extend({
+  subjectCount: z.number().int().default(0)
 })
 
 export const DepartmentDetailResSchema = DepartmentResSchema.extend({

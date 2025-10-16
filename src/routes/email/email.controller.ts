@@ -16,7 +16,7 @@ export class EmailController {
     if (provider === 'ses') {
       return this.emailService.sendEmail(sendEmailDto)
     }
-    
+
     // Use Nodemailer (Gmail) by default
     return this.nodemailerService.sendEmail({
       to: sendEmailDto.to,
@@ -33,7 +33,7 @@ export class EmailController {
     }
 
     // Convert to Nodemailer format
-    const nodemailerEmails = bulkEmailDto.recipients.map(recipient => ({
+    const nodemailerEmails = bulkEmailDto.recipients.map((recipient) => ({
       to: recipient,
       subject: bulkEmailDto.subject,
       html: bulkEmailDto.htmlBody,
@@ -44,7 +44,10 @@ export class EmailController {
   }
 
   @Post('bulk-simple')
-  async bulkEmailSending(@Body() body: { recipients: string[]; subject?: string; content?: string }, @Query('provider') provider?: string) {
+  async bulkEmailSending(
+    @Body() body: { recipients: string[]; subject?: string; content?: string },
+    @Query('provider') provider?: string
+  ) {
     if (provider === 'ses') {
       return this.emailService.bulkEmailSending(body.recipients)
     }
@@ -52,8 +55,8 @@ export class EmailController {
     // Use Nodemailer for bulk simple emails
     const subject = body.subject || 'Notification'
     const content = body.content || 'This is a test notification email.'
-    
-    const nodemailerEmails = body.recipients.map(recipient => ({
+
+    const nodemailerEmails = body.recipients.map((recipient) => ({
       to: recipient,
       subject: subject,
       html: `<p>${content}</p>`,
@@ -81,7 +84,9 @@ export class EmailController {
   }
 
   @Post('bulk-send-gmail')
-  async sendBulkEmailGmail(@Body() body: { emails: Array<{ to: string | string[]; subject: string; html?: string; text?: string }> }) {
+  async sendBulkEmailGmail(
+    @Body() body: { emails: Array<{ to: string | string[]; subject: string; html?: string; text?: string }> }
+  ) {
     return this.nodemailerService.sendBulkEmails(body.emails)
   }
 

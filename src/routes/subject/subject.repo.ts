@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { TraineeNotFoundException, TraineeResolutionFailureException } from './subject.error'
 import {
@@ -15,6 +16,7 @@ import {
 } from './subject.model'
 
 @Injectable()
+@SerializeAll()
 export class SubjectRepo {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -1012,139 +1014,8 @@ export class SubjectRepo {
   }
 
   /**
-   * Get course trainees (distinct trainees enrolled in any subject of the course)
-   */
-  async getCourseTrainees({
-    courseId,
-    batchCode
-  }: {
-    courseId: string
-    batchCode?: string
-  }): Promise<{ trainees: any[]; totalItems: number }> {
-    // Get all subject IDs in course
-    const subjectIds = await this.prisma.subject.findMany({
-      where: { courseId, deletedAt: null },
-      select: { id: true }
-    })
-
-    const subjectIdsList = subjectIds.map((s) => s.id)
-
-    const where: any = {
-      subjectId: { in: subjectIdsList }
-    }
-
-    if (batchCode) {
-      where.batchCode = batchCode
-    }
-
-    // Get distinct trainee IDs
-    const enrollments = await this.prisma.subjectEnrollment.findMany({
-      where,
-      select: {
-        traineeUserId: true,
-        batchCode: true,
-        trainee: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      },
-      distinct: ['traineeUserId']
-    })
-
-    // Group by trainee and count enrollments
-    const traineeMap = new Map<string, any>()
-
-    for (const enr of enrollments) {
-      if (!traineeMap.has(enr.traineeUserId)) {
-        traineeMap.set(enr.traineeUserId, {
-          ...enr.trainee,
-          enrollmentCount: 0,
-          batches: new Set<string>()
-        })
-      }
-
-      const trainee = traineeMap.get(enr.traineeUserId)
-      trainee.enrollmentCount++
-      trainee.batches.add(enr.batchCode)
-    }
-
-    const trainees = Array.from(traineeMap.values()).map((t) => ({
-      ...t,
-      batches: Array.from(t.batches)
-    }))
-
-    const totalItems = trainees.length
-
-    return {
-      trainees: trainees,
-      totalItems
-    }
-  }
-
-  /**
    * Cancel all course enrollments for a trainee in a specific batch
    */
-  async cancelCourseEnrollments({
-    courseId,
-    traineeUserId,
-    batchCode
-  }: {
-    courseId: string
-    traineeUserId: string
-    batchCode: string
-  }): Promise<{ cancelledCount: number; notCancelledCount: number }> {
-    // Get all subject IDs in course
-    const subjectIds = await this.prisma.subject.findMany({
-      where: { courseId, deletedAt: null },
-      select: { id: true }
-    })
-
-    const subjectIdsList = subjectIds.map((s) => s.id)
-
-    // Get enrollments that can be cancelled (only ENROLLED status)
-    const enrollments = await this.prisma.subjectEnrollment.findMany({
-      where: {
-        traineeUserId,
-        subjectId: { in: subjectIdsList },
-        batchCode,
-        status: 'ENROLLED'
-      }
-    })
-
-    const cancelledCount = enrollments.length
-
-    // Update to CANCELLED
-    if (cancelledCount > 0) {
-      await this.prisma.subjectEnrollment.updateMany({
-        where: {
-          traineeUserId,
-          subjectId: { in: subjectIdsList },
-          batchCode,
-          status: 'ENROLLED'
-        },
-        data: {
-          status: 'CANCELLED'
-        }
-      })
-    }
-
-    // Count enrollments that cannot be cancelled
-    const notCancelledCount = await this.prisma.subjectEnrollment.count({
-      where: {
-        traineeUserId,
-        subjectId: { in: subjectIdsList },
-        batchCode,
-        status: { not: 'ENROLLED' }
-      }
-    })
-
-    return { cancelledCount, notCancelledCount }
-  }
 
   /**
    * Get trainee enrollments across all subjects

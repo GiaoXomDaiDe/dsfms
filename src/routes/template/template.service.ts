@@ -31,7 +31,7 @@ export class TemplateService {
 
       // load bằng pizzip
       const zip = new PizZip(file.buffer)
-      
+
       // dùng docxtemplater để tách placeholders
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
@@ -41,16 +41,16 @@ export class TemplateService {
       // lấy full text trong file docx đó
       const fullText = doc.getFullText()
       // console.log('Full text content:', fullText)
-      
+
       // Regex để duyệt qua các placeholders
       const tags = fullText.match(/\{[^}]+\}/g) || []
-      
+
       // console.log('Found tags:', tags)
-      
+
       // map từng placeholder thành string, từ đó sẽ ko bị tình trạng bỏ sát placeholder hoặc các placeolder
       // trùng tên
-      const placeholders: string[] = tags.map(tag => String(tag))
-      
+      const placeholders: string[] = tags.map((tag) => String(tag))
+
       // console.log('All placeholders (in order):', placeholders)
       // console.log('Total placeholders count:', placeholders.length)
 
@@ -65,15 +65,17 @@ export class TemplateService {
       }
     } catch (error) {
       // console.error('Error parsing DOCX template:', error)
-      
+
       // xử lí các lỗi với docxtemplater
       if (error.properties && error.properties.errors instanceof Array) {
-        const errorMessages = error.properties.errors.map((err: any) => {
-          return `${err.name}: ${err.message} at ${err.part}`
-        }).join('; ')
+        const errorMessages = error.properties.errors
+          .map((err: any) => {
+            return `${err.name}: ${err.message} at ${err.part}`
+          })
+          .join('; ')
         throw new BadRequestException(`Failed to parse template: ${errorMessages}`)
       }
-      
+
       // xử lí 400
       throw new BadRequestException(`Failed to parse template: ${error.message || 'Unknown error'}`)
     }
@@ -91,7 +93,7 @@ export class TemplateService {
     for (let i = 0; i < placeholders.length; i++) {
       const placeholder = placeholders[i]
       const cleaned = placeholder.replace(/[{}]/g, '')
-      
+
       // đối với những placeholer chứa phép toán thì bỏ qua (docxtemplater sẽ tự tính toán khi parse data)
       if (this.hasOperator(cleaned)) {
         continue
@@ -103,10 +105,10 @@ export class TemplateService {
       if (cleaned.startsWith('#')) {
         const sectionName = cleaned.substring(1)
         currentSection = sectionName
-        
+
         // check xem đây có phải inverted section ko (condition) bằng cách look ahead trong toàn bộ danh sách placeholders
-        const hasInverted = placeholders.some(p => p.replace(/[{}]/g, '') === `^${sectionName}`)
-        
+        const hasInverted = placeholders.some((p) => p.replace(/[{}]/g, '') === `^${sectionName}`)
+
         if (hasInverted) {
           // xác định đây là boolean
           schema[sectionName] = false
@@ -149,8 +151,6 @@ export class TemplateService {
     return schema
   }
 
-
-
   /**
    * Check if a field contains mathematical operators (+, -, *, /)
    * Excludes section tags that start with # ^ or /
@@ -186,7 +186,7 @@ export class TemplateService {
 
       // Load file with pizzip
       const zip = new PizZip(file.buffer)
-      
+
       // Use docxtemplater to extract placeholders
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
@@ -195,7 +195,7 @@ export class TemplateService {
 
       // Get full text from the DOCX file
       const fullText = doc.getFullText()
-      
+
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
       
@@ -261,12 +261,14 @@ export class TemplateService {
     } catch (error) {
       // Handle docxtemplater errors
       if (error.properties && error.properties.errors instanceof Array) {
-        const errorMessages = error.properties.errors.map((err: any) => {
-          return `${err.name}: ${err.message} at ${err.part}`
-        }).join('; ')
+        const errorMessages = error.properties.errors
+          .map((err: any) => {
+            return `${err.name}: ${err.message} at ${err.part}`
+          })
+          .join('; ')
         throw new BadRequestException(`Failed to parse template: ${errorMessages}`)
       }
-      
+
       // Handle other errors
       throw new BadRequestException(`Failed to parse template: ${error.message || 'Unknown error'}`)
     }
@@ -276,19 +278,16 @@ export class TemplateService {
    * Create a complete template with sections and fields
    * Only ADMINISTRATOR role can create templates
    */
-  async createTemplate(
-    templateData: CreateTemplateFormDto,
-    currentUser: any
-  ) {
+  async createTemplate(templateData: CreateTemplateFormDto, currentUser: any) {
     // Check if user has ADMINISTRATOR role
     if (currentUser.roleName !== 'ADMINISTRATOR') {
-      throw new ForbiddenException('Only ADMINISTRATOR role can create templates');
+      throw new ForbiddenException('Only ADMINISTRATOR role can create templates')
     }
 
     // Validate department exists
-    const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId);
+    const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
     if (!departmentExists) {
-      throw new BadRequestException(`Department with ID '${templateData.departmentId}' does not exist`);
+      throw new BadRequestException(`Department with ID '${templateData.departmentId}' does not exist`)
     }
 
     try {
@@ -301,15 +300,15 @@ export class TemplateService {
         templateData,
         currentUser.userId,
         templateSchema
-      );
+      )
 
       return {
         success: true,
         data: result,
         message: 'Template created successfully'
-      };
+      }
     } catch (error) {
-      throw new BadRequestException(`Failed to create template: ${error.message}`);
+      throw new BadRequestException(`Failed to create template: ${error.message}`)
     }
   }
 
@@ -317,17 +316,17 @@ export class TemplateService {
    * Get template by ID with full details
    */
   async getTemplateById(id: string) {
-    const template = await this.templateRepository.findTemplateById(id);
-    
+    const template = await this.templateRepository.findTemplateById(id)
+
     if (!template) {
-      throw new BadRequestException('Template not found');
+      throw new BadRequestException('Template not found')
     }
 
     return {
       success: true,
       data: template,
       message: 'Template retrieved successfully'
-    };
+    }
   }
 
   /**
@@ -335,10 +334,10 @@ export class TemplateService {
    * This is useful for editing/cloning templates
    */
   async getTemplateSchemaById(id: string) {
-    const template = await this.templateRepository.findTemplateById(id);
-    
+    const template = await this.templateRepository.findTemplateById(id)
+
     if (!template) {
-      throw new BadRequestException('Template not found');
+      throw new BadRequestException('Template not found')
     }
 
     // Transform the template data to match the create template format for FE editing
@@ -356,8 +355,8 @@ export class TemplateService {
         isSubmittable: section.isSubmittable,
         isToggleDependent: section.isToggleDependent,
         fields: section.fields
-          .filter(field => !field.parentId) // Get only parent fields first
-          .map(field => this.buildFieldWithChildren(field, section.fields))
+          .filter((field) => !field.parentId) // Get only parent fields first
+          .map((field) => this.buildFieldWithChildren(field, section.fields))
       }))
     };
 
@@ -375,7 +374,7 @@ export class TemplateService {
         createdByUser: template.createdByUser
       },
       message: 'Template schema retrieved successfully'
-    };
+    }
   }
 
   /**
@@ -390,9 +389,9 @@ export class TemplateService {
       options: field.options,
       displayOrder: field.displayOrder,
       ...(field.parentId && { parentTempId: `field_${field.parent?.fieldName}` })
-    };
+    }
 
-    return fieldData;
+    return fieldData
   }
 
   /**
@@ -400,7 +399,7 @@ export class TemplateService {
    * Uses parent-child relationships to create nested objects
    */
   private buildNestedSchema(sections: any[]): Record<string, any> {
-    const schema: Record<string, any> = {};
+    const schema: Record<string, any> = {}
 
     // Process each section
     for (const section of sections) {
@@ -409,38 +408,38 @@ export class TemplateService {
         // If field has a parent, it's a child field
         if (field.parentId) {
           // Find the parent field
-          const parentField = section.fields.find((f: any) => f.id === field.parentId);
-          
+          const parentField = section.fields.find((f: any) => f.id === field.parentId)
+
           if (parentField) {
-            const parentFieldName = parentField.fieldName;
-            
+            const parentFieldName = parentField.fieldName
+
             // Initialize parent object if not exists
             if (!schema[parentFieldName]) {
-              schema[parentFieldName] = {};
+              schema[parentFieldName] = {}
             }
-            
+
             // Add child field to parent object
-            schema[parentFieldName][field.fieldName] = this.getDefaultValueForField(field);
+            schema[parentFieldName][field.fieldName] = this.getDefaultValueForField(field)
           }
         } else {
           // Top-level field (no parent)
           // Check if this field has children
-          const hasChildren = section.fields.some((f: any) => f.parentId === field.id);
-          
+          const hasChildren = section.fields.some((f: any) => f.parentId === field.id)
+
           if (hasChildren) {
             // Initialize as object to hold children
             if (!schema[field.fieldName]) {
-              schema[field.fieldName] = {};
+              schema[field.fieldName] = {}
             }
           } else {
             // Simple field with no children
-            schema[field.fieldName] = this.getDefaultValueForField(field);
+            schema[field.fieldName] = this.getDefaultValueForField(field)
           }
         }
       }
     }
 
-    return schema;
+    return schema
   }
 
   /**
@@ -451,12 +450,12 @@ export class TemplateService {
       case 'CHECK_BOX':
       case 'TOGGLE':
       case 'SECTION_CONTROL_TOGGLE':
-        return false;
+        return false
       case 'NUMBER':
       case 'FINAL_SCORE_NUM':
-        return 0;
+        return 0
       default:
-        return '';
+        return ''
     }
   }
 
@@ -464,20 +463,20 @@ export class TemplateService {
    * Get all templates
    */
   async getAllTemplates() {
-    const templates = await this.templateRepository.findAllTemplates();
+    const templates = await this.templateRepository.findAllTemplates()
 
     return {
       success: true,
       data: templates,
       message: 'Templates retrieved successfully'
-    };
+    }
   }
 
   /**
    * Get templates by department
    */
   async getTemplatesByDepartment(departmentId: string) {
-    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId);
+    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId)
 
     return {
       success: true,
@@ -604,24 +603,24 @@ export class TemplateService {
    * Generate basic schema from field names (legacy method)
    */
   private generateSchemaFromFieldNames(fieldNames: string[]): Record<string, any> {
-    const schema: Record<string, any> = {};
-    
-    fieldNames.forEach(fieldName => {
+    const schema: Record<string, any> = {}
+
+    fieldNames.forEach((fieldName) => {
       // Remove curly braces if present and clean field name
-      const cleanName = fieldName.replace(/[{}]/g, '').trim();
-      
+      const cleanName = fieldName.replace(/[{}]/g, '').trim()
+
       schema[cleanName] = {
         type: 'string',
         required: false,
         description: `Field: ${cleanName}`
-      };
-    });
+      }
+    })
 
     return {
       type: 'object',
       properties: schema,
       additionalProperties: false
-    };
+    }
   }
 
 }
