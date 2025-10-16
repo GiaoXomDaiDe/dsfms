@@ -9,23 +9,32 @@ export const TrainerProfileSchema = z.object({
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  deletedAt: z.iso
+    .datetime()
+    .transform((d) => new Date(d))
+    .nullable(),
+  createdAt: z.iso.datetime().transform((d) => new Date(d)),
+  updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
 
 export const TraineeProfileSchema = z.object({
-  dob: z.coerce.date(),
-  enrollmentDate: z.coerce.date().nullable(),
+  dob: z.iso.datetime().transform((value) => new Date(value)),
+  enrollmentDate: z.iso
+    .datetime()
+    .transform((value) => new Date(value))
+    .nullable(),
   trainingBatch: z.string().max(100),
   passportNo: z.string().max(100),
   nation: z.string().max(100).nullable(),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  deletedAt: z.iso
+    .datetime()
+    .transform((d) => new Date(d))
+    .nullable(),
+  createdAt: z.iso.datetime().transform((d) => new Date(d)),
+  updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
 
 export const CreateTraineeProfileSchema = TraineeProfileSchema.pick({

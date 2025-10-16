@@ -1,5 +1,7 @@
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { createZodDto } from 'nestjs-zod'
+import path from 'path'
+import { v4 as uuidv4 } from 'uuid'
 import z from 'zod'
 import { CreateUserBodyWithProfileType } from '~/routes/user/user.model'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
@@ -68,4 +70,9 @@ export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithPr
 
     return { isValid: true }
   }
+}
+
+export const generateRandomFilename = (filename: string) => {
+  const ext = path.extname(filename)
+  return `${uuidv4()}${ext}`
 }

@@ -1,7 +1,7 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses'
-import { SendEmailDto, BulkEmailDto } from '~/routes/email/email.dto'
+import { BadRequestException, Injectable, Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import { BulkEmailDto, SendEmailDto } from '~/routes/email/email.dto'
 
 @Injectable()
 export class EmailService {

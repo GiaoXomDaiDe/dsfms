@@ -1,24 +1,41 @@
 import { Injectable } from '@nestjs/common'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
+import { SubjectEnrollmentStatus } from '@prisma/client'
+import { CourseStatus } from '~/shared/constants/course.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
+import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
+  CourseTraineeInfoType,
   CourseType,
   CreateCourseBodyType,
+  CreateCourseResType,
   GetCourseResType,
   GetCoursesQueryType,
   GetCoursesResType,
-  UpdateCourseBodyType
+  GetCourseTraineesResType,
+  UpdateCourseBodyType,
+  UpdateCourseResType
 } from './course.model'
 
 @Injectable()
+@SerializeAll(['aggregateCourseTrainees'])
 export class CourseRepo {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sharedUserRepository: SharedUserRepository
+    private readonly sharedSubjectRepo: SharedSubjectRepository,
+    private readonly sharedSubjectEnrollmentRepo: SharedSubjectEnrollmentRepository
   ) {}
 
   async list({ includeDeleted = false }: GetCoursesQueryType): Promise<GetCoursesResType> {
-    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
+    const whereClause = includeDeleted
+      ? {}
+      : {
+          status: {
+            not: CourseStatus.ARCHIVED
+          },
+          deletedAt: null
+        }
 
     const [totalItems, courses] = await Promise.all([
       this.prisma.course.count({ where: whereClause }),
@@ -36,9 +53,60 @@ export class CourseRepo {
         }
       })
     ])
+
     return {
       courses,
       totalItems
+    }
+  }
+
+  async getCourseTrainees({
+    courseId,
+    batchCode
+  }: {
+    courseId: string
+    batchCode?: string
+  }): Promise<GetCourseTraineesResType> {
+    const subjectIdsList = await this.sharedSubjectRepo.findIds({
+      courseId,
+      deletedAt: null
+    })
+
+    if (subjectIdsList.length === 0) {
+      return {
+        trainees: [],
+        totalItems: 0
+      }
+    }
+
+    const enrollments = await this.sharedSubjectEnrollmentRepo.findMany({
+      where: {
+        subjectId: {
+          in: subjectIdsList
+        },
+        ...(batchCode ? { batchCode } : {})
+      },
+      select: {
+        traineeUserId: true,
+        batchCode: true,
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    })
+
+    const trainees = this.aggregateCourseTrainees(enrollments)
+    console.log(trainees, trainees.length)
+
+    return {
+      trainees,
+      totalItems: trainees.length
     }
   }
 
@@ -46,9 +114,16 @@ export class CourseRepo {
     id: string,
     { includeDeleted = false }: { includeDeleted?: boolean } = {}
   ): Promise<GetCourseResType | null> {
-    const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
-
-    const course = await this.prisma.course.findUnique({
+    const whereClause = includeDeleted
+      ? { id }
+      : {
+          id,
+          status: {
+            not: CourseStatus.ARCHIVED
+          },
+          deletedAt: null
+        }
+    const course = await this.prisma.course.findFirst({
       where: whereClause,
       include: {
         department: {
@@ -120,23 +195,33 @@ export class CourseRepo {
     }
   }
 
-  async create({ data, createdById }: { data: CreateCourseBodyType; createdById: string }): Promise<CourseType> {
-    const course = await this.prisma.course.create({
+  async create({
+    data,
+    createdById
+  }: {
+    data: CreateCourseBodyType
+    createdById: string
+  }): Promise<CreateCourseResType> {
+    return this.prisma.course.create({
       data: {
         ...data,
         createdById,
         updatedById: createdById
+      },
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true
+          }
+        }
+      },
+      omit: {
+        departmentId: true
       }
     })
-
-    return {
-      ...course,
-      startDate: course.startDate.toISOString(),
-      endDate: course.endDate.toISOString(),
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
-      deletedAt: course.deletedAt?.toISOString() || null
-    } as unknown as CourseType
   }
 
   async update({
@@ -147,102 +232,139 @@ export class CourseRepo {
     id: string
     data: UpdateCourseBodyType
     updatedById: string
-  }): Promise<CourseType> {
-    const course = await this.prisma.course.update({
+  }): Promise<UpdateCourseResType> {
+    return this.prisma.course.update({
       where: { id },
       data: {
         ...data,
         updatedById,
         updatedAt: new Date()
+      },
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true
+          }
+        }
+      },
+      omit: {
+        departmentId: true
       }
     })
-
-    return {
-      ...course,
-      startDate: course.startDate.toISOString(),
-      endDate: course.endDate.toISOString(),
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
-      deletedAt: course.deletedAt?.toISOString() || null
-    } as unknown as CourseType
   }
 
-  async delete({
-    id,
-    deletedById,
-    isHard = false
-  }: {
-    id: string
-    deletedById: string
-    isHard?: boolean
-  }): Promise<CourseType> {
-    if (isHard) {
-      const course = await this.prisma.course.delete({
-        where: { id }
-      })
-      return {
-        ...course,
-        startDate: course.startDate.toISOString(),
-        endDate: course.endDate.toISOString(),
-        createdAt: course.createdAt.toISOString(),
-        updatedAt: course.updatedAt.toISOString(),
-        deletedAt: course.deletedAt?.toISOString() || null
-      } as unknown as CourseType
-    }
-
-    const course = await this.prisma.course.update({
+  async archive({ id, deletedById }: { id: string; deletedById: string }): Promise<CourseType> {
+    return this.prisma.course.update({
       where: { id },
       data: {
         deletedAt: new Date(),
-        deletedById
-      }
-    })
-
-    return {
-      ...course,
-      startDate: course.startDate.toISOString(),
-      endDate: course.endDate.toISOString(),
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
-      deletedAt: course.deletedAt?.toISOString() || null
-    } as unknown as CourseType
-  }
-
-  async restore({ id, restoredById }: { id: string; restoredById: string }): Promise<CourseType> {
-    const course = await this.prisma.course.update({
-      where: { id },
-      data: {
-        deletedAt: null,
-        deletedById: null,
-        updatedById: restoredById,
+        deletedById,
+        status: CourseStatus.ARCHIVED,
+        updatedById: deletedById,
         updatedAt: new Date()
       }
     })
-
-    return {
-      ...course,
-      startDate: course.startDate.toISOString(),
-      endDate: course.endDate.toISOString(),
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
-      deletedAt: course.deletedAt?.toISOString() || null
-    } as unknown as CourseType
   }
 
-  async checkCodeExists(code: string, excludeId?: string): Promise<boolean> {
-    const whereClause: any = {
-      code,
-      deletedAt: null
+  async cancelCourseEnrollments({
+    courseId,
+    traineeUserId,
+    batchCode
+  }: {
+    courseId: string
+    traineeUserId: string
+    batchCode: string
+  }): Promise<{ cancelledCount: number; notCancelledCount: number }> {
+    const subjectIdsList = await this.sharedSubjectRepo.findIds({ courseId, deletedAt: null })
+
+    if (subjectIdsList.length === 0) {
+      return { cancelledCount: 0, notCancelledCount: 0 }
     }
 
-    if (excludeId) {
-      whereClause.id = { not: excludeId }
+    const cancellationFilter = {
+      traineeUserId,
+      subjectId: { in: subjectIdsList },
+      batchCode,
+      status: SubjectEnrollmentStatus.ENROLLED
     }
 
-    const existingCourse = await this.prisma.course.findFirst({
-      where: whereClause
+    const cancelledCount = await this.sharedSubjectEnrollmentRepo.updateMany({
+      where: cancellationFilter,
+      data: {
+        status: SubjectEnrollmentStatus.CANCELLED
+      }
     })
 
-    return !!existingCourse
+    const notCancelledCount = await this.sharedSubjectEnrollmentRepo.count({
+      traineeUserId,
+      subjectId: { in: subjectIdsList },
+      batchCode,
+      status: { not: SubjectEnrollmentStatus.ENROLLED }
+    })
+
+    return { cancelledCount, notCancelledCount }
+  }
+
+  private aggregateCourseTrainees(
+    enrollments: Array<{
+      traineeUserId: string
+      batchCode: string | null
+      trainee: {
+        id: string
+        eid: string
+        firstName: string
+        lastName: string
+        email: string
+      } | null
+    }>
+  ): CourseTraineeInfoType[] {
+    type TraineeAccumulator = Omit<CourseTraineeInfoType, 'batches'> & { batches: Set<string> }
+
+    const traineeMap = new Map<string, TraineeAccumulator>()
+
+    for (const enrollment of enrollments) {
+      const trainee = enrollment.trainee
+      if (!trainee) {
+        continue
+      }
+
+      if (!traineeMap.has(enrollment.traineeUserId)) {
+        traineeMap.set(enrollment.traineeUserId, {
+          id: trainee.id,
+          eid: trainee.eid,
+          firstName: trainee.firstName,
+          lastName: trainee.lastName,
+          email: trainee.email,
+          enrollmentCount: 0,
+          batches: new Set<string>()
+        })
+      }
+      console.log('traineeMap', traineeMap.values())
+      const current = traineeMap.get(enrollment.traineeUserId)
+      if (!current) {
+        continue
+      }
+
+      current.enrollmentCount += 1
+
+      if (enrollment.batchCode) {
+        current.batches.add(enrollment.batchCode)
+      }
+    }
+
+    console.log(
+      Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
+        ...info,
+        batches: Array.from(batches)
+      }))
+    )
+
+    return Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
+      ...info,
+      batches: Array.from(batches)
+    }))
   }
 }

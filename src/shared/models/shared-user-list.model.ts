@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { DepartmentSchema } from '~/routes/department/department.model'
 import { RoleSchema } from '~/routes/role/role.model'
+import { DepartmentSchema } from '~/shared/models/shared-department.model'
 import { UserSchema } from '~/shared/models/shared-user.model'
 
 // Shared user info schema for list responses (used by both user list and lookup APIs)

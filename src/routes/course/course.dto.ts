@@ -1,28 +1,37 @@
 import { createZodDto } from 'nestjs-zod'
 import {
-  AddSubjectToCourseBodySchema,
-  AddSubjectToCourseResSchema,
+  CancelCourseEnrollmentsBodySchema,
   CourseDetailResSchema,
   CourseStatsSchema,
   CreateCourseBodySchema,
+  CreateCourseResSchema,
   GetCourseParamsSchema,
   GetCourseResSchema,
   GetCoursesQuerySchema,
   GetCoursesResSchema,
+  GetCourseTraineesQuerySchema,
+  GetCourseTraineesResSchema,
+  GetTraineeEnrollmentsResSchema,
   RemoveSubjectFromCourseBodySchema,
   RemoveSubjectFromCourseResSchema,
-  UpdateCourseBodySchema
+  UpdateCourseBodySchema,
+  UpdateCourseResSchema
 } from '~/routes/course/course.model'
 
 export class GetCoursesQueryDto extends createZodDto(GetCoursesQuerySchema) {}
 export class GetCourseParamsDto extends createZodDto(GetCourseParamsSchema) {}
 export class GetCoursesResDto extends createZodDto(GetCoursesResSchema) {}
 export class GetCourseResDto extends createZodDto(GetCourseResSchema) {}
-export class CourseDetailResDto extends createZodDto(CourseDetailResSchema) {}
 export class CreateCourseBodyDto extends createZodDto(CreateCourseBodySchema) {}
+export class CreateCourseResDto extends createZodDto(CreateCourseResSchema) {}
 export class UpdateCourseBodyDto extends createZodDto(UpdateCourseBodySchema) {}
+export class UpdateCourseResDto extends createZodDto(UpdateCourseResSchema) {}
+export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQuerySchema) {}
+export class GetCourseTraineesResDto extends createZodDto(GetCourseTraineesResSchema) {}
+export class CancelCourseEnrollmentsBodyDto extends createZodDto(CancelCourseEnrollmentsBodySchema) {}
+export class GetTraineeEnrollmentsResDto extends createZodDto(GetTraineeEnrollmentsResSchema) {}
+
+export class CourseDetailResDto extends createZodDto(CourseDetailResSchema) {}
 export class CourseStatsDto extends createZodDto(CourseStatsSchema) {}
-export class AddSubjectToCourseBodyDto extends createZodDto(AddSubjectToCourseBodySchema) {}
-export class AddSubjectToCourseResDto extends createZodDto(AddSubjectToCourseResSchema) {}
 export class RemoveSubjectFromCourseBodyDto extends createZodDto(RemoveSubjectFromCourseBodySchema) {}
 export class RemoveSubjectFromCourseResDto extends createZodDto(RemoveSubjectFromCourseResSchema) {}

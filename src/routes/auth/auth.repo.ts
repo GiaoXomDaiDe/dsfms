@@ -102,7 +102,7 @@ export class AuthRepo {
   async updateUserPassword(userId: string, hashedPassword: string): Promise<void> {
     await this.prismaService.user.update({
       where: { id: userId },
-      data: { 
+      data: {
         passwordHash: hashedPassword,
         updatedAt: new Date()
       }

@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Param,
-  Body,
-  UploadedFile,
-  UseInterceptors,
-  BadRequestException
-} from '@nestjs/common'
+import { Controller, Post, Get, Param, Body, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
@@ -65,11 +56,8 @@ export class TemplateController {
    * Requires ADMINISTRATOR role authentication
    */
   @Post()
-  async createTemplate(
-    @Body() createTemplateDto: CreateTemplateFormDto,
-    @ActiveUser() currentUser: any
-  ) {
-    return await this.templateService.createTemplate(createTemplateDto, currentUser);
+  async createTemplate(@Body() createTemplateDto: CreateTemplateFormDto, @ActiveUser() currentUser: any) {
+    return await this.templateService.createTemplate(createTemplateDto, currentUser)
   }
 
   /**
@@ -79,9 +67,9 @@ export class TemplateController {
   @IsPublic()
   async getTemplateById(@Param('id') id: string) {
     try {
-      return await this.templateService.getTemplateById(id);
+      return await this.templateService.getTemplateById(id)
     } catch (error) {
-      throw error;
+      throw error
     }
   }
 
@@ -94,9 +82,9 @@ export class TemplateController {
   @IsPublic()
   async getTemplateSchema(@Param('id') id: string) {
     try {
-      return await this.templateService.getTemplateSchemaById(id);
+      return await this.templateService.getTemplateSchemaById(id)
     } catch (error) {
-      throw error;
+      throw error
     }
   }
 
@@ -107,9 +95,9 @@ export class TemplateController {
   @IsPublic()
   async getAllTemplates() {
     try {
-      return await this.templateService.getAllTemplates();
+      return await this.templateService.getAllTemplates()
     } catch (error) {
-      throw error;
+      throw error
     }
   }
 
@@ -120,9 +108,9 @@ export class TemplateController {
   @IsPublic()
   async getTemplatesByDepartment(@Param('departmentId') departmentId: string) {
     try {
-      return await this.templateService.getTemplatesByDepartment(departmentId);
+      return await this.templateService.getTemplatesByDepartment(departmentId)
     } catch (error) {
-      throw error;
+      throw error
     }
   }
 }

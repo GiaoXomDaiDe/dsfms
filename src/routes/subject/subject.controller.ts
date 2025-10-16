@@ -1,8 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
-import { ActiveUser } from '~/shared/decorators/active-user.decorator'
-import { MessageResDTO } from '~/shared/dtos/response.dto'
 import {
   AssignTraineesBodyDto,
   AssignTraineesResDto,
@@ -10,23 +7,28 @@ import {
   AssignTrainerResDto,
   CancelSubjectEnrollmentBodyDto,
   CancelSubjectEnrollmentResDto,
+  GetAvailableTrainersQueryDto,
+  GetAvailableTrainersResDto,
+  LookupTraineesBodyDto,
+  LookupTraineesResDto,
+  RemoveTrainerResDto,
+  UpdateTrainerAssignmentBodyDto,
+  UpdateTrainerAssignmentResDto
+} from '~/routes/subject/subject.dto'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
+import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { MessageResDTO } from '~/shared/dtos/response.dto'
+import {
   CreateSubjectBodyDto,
   EnrollTraineesBodyDto,
   EnrollTraineesResDto,
-  GetAvailableTrainersQueryDto,
-  GetAvailableTrainersResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
-  LookupTraineesBodyDto,
-  LookupTraineesResDto,
   RemoveEnrollmentsBodyDto,
   RemoveEnrollmentsResDto,
-  RemoveTrainerResDto,
   SubjectDetailResDto,
   SubjectResDto,
-  UpdateSubjectBodyDto,
-  UpdateTrainerAssignmentBodyDto,
-  UpdateTrainerAssignmentResDto
+  UpdateSubjectBodyDto
 } from './subject.model'
 import { SubjectService } from './subject.service'
 
