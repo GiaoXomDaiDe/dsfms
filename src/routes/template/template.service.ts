@@ -313,6 +313,88 @@ export class TemplateService {
   }
 
   /**
+   * Create a new version of an existing template
+   */
+  async createTemplateVersion(originalTemplateId: string, templateData: CreateTemplateFormDto, currentUser: any) {
+    // Check if user has ADMINISTRATOR role
+    if (currentUser.roleName !== 'ADMINISTRATOR') {
+      throw new ForbiddenException('Only ADMINISTRATOR role can create template versions')
+    }
+
+    // Validate that original template exists
+    const originalTemplateExists = await this.templateRepository.templateExists(originalTemplateId)
+    if (!originalTemplateExists) {
+      throw new BadRequestException(`Original template with ID '${originalTemplateId}' does not exist`)
+    }
+
+    // Validate department exists
+    const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
+    if (!departmentExists) {
+      throw new BadRequestException(`Department with ID '${templateData.departmentId}' does not exist`)
+    }
+
+    try {
+      // Get the original template to determine the first version ID
+      const originalTemplate = await this.templateRepository.findTemplateById(originalTemplateId)
+      if (!originalTemplate) {
+        throw new BadRequestException('Original template not found')
+      }
+
+      // Determine which template group this belongs to
+      const firstVersionId = originalTemplate.referFirstVersionId || originalTemplateId
+
+      // Get the next version number
+      const maxVersion = await this.templateRepository.getMaxVersionNumber(firstVersionId)
+      const newVersion = maxVersion + 1
+
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+
+      // Create the new version
+      const result = await this.templateRepository.createNewVersion(
+        originalTemplateId,
+        { ...templateData, templateSchema },
+        newVersion,
+        currentUser.userId
+      )
+
+      return {
+        success: true,
+        data: result,
+        message: `Template version ${newVersion} created successfully`,
+        version: newVersion,
+        referFirstVersionId: firstVersionId
+      }
+    } catch (error) {
+      throw new BadRequestException(`Failed to create template version: ${error.message}`)
+    }
+  }
+
+  /**
+   * Get all versions of a template
+   */
+  async getTemplateVersions(templateId: string) {
+    const template = await this.templateRepository.findTemplateById(templateId)
+    if (!template) {
+      throw new BadRequestException('Template not found')
+    }
+
+    // Get the first version ID (either the template itself or its reference)
+    const firstVersionId = template.referFirstVersionId || templateId
+
+    // Get all versions
+    const versions = await this.templateRepository.findTemplatesByFirstVersionId(firstVersionId)
+
+    return {
+      success: true,
+      data: versions,
+      message: 'Template versions retrieved successfully',
+      totalVersions: versions.length,
+      firstVersionId
+    }
+  }
+
+  /**
    * Get template by ID with full details
    */
   async getTemplateById(id: string) {

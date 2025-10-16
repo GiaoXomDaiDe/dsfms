@@ -293,7 +293,19 @@ export class TemplateRepository {
   async findTemplateById(id: string) {
     return this.prismaService.templateForm.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        version: true,
+        departmentId: true,
+        createdByUserId: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        templateContent: true,
+        templateSchema: true,
+        referFirstVersionId: true,
         department: {
           select: {
             id: true,
@@ -422,5 +434,150 @@ export class TemplateRepository {
       select: { id: true }
     })
     return !!department
+  }
+
+  /**
+   * Find templates by their first version ID (to get all versions of a template)
+   */
+  async findTemplatesByFirstVersionId(referFirstVersionId: string) {
+    return this.prismaService.templateForm.findMany({
+      where: {
+        OR: [
+          { id: referFirstVersionId }, // The original template
+          { referFirstVersionId } // All versions of that template
+        ]
+      },
+      include: {
+        department: true,
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            eid: true
+          }
+        }
+      },
+      orderBy: {
+        version: 'asc'
+      }
+    })
+  }
+
+  /**
+   * Get the maximum version number for a template group
+   */
+  async getMaxVersionNumber(referFirstVersionId: string): Promise<number> {
+    const result = await this.prismaService.templateForm.aggregate({
+      where: {
+        OR: [
+          { id: referFirstVersionId }, // The original template
+          { referFirstVersionId } // All versions of that template
+        ]
+      },
+      _max: {
+        version: true
+      }
+    })
+    
+    return result._max?.version || 1
+  }
+
+  /**
+   * Create a new version of a template
+   */
+  async createNewVersion(
+    originalTemplateId: string,
+    templateData: CreateTemplateFormDto & { templateSchema?: any },
+    newVersion: number,
+    createdByUserId: string
+  ) {
+    return this.prismaService.$transaction(async (prisma) => {
+      // Get the original template to determine referFirstVersionId
+      const originalTemplate = await prisma.templateForm.findUnique({
+        where: { id: originalTemplateId },
+        select: { referFirstVersionId: true }
+      })
+
+      if (!originalTemplate) {
+        throw new Error('Original template not found')
+      }
+
+      // Determine the referFirstVersionId
+      // If original template has referFirstVersionId, use that
+      // Otherwise, use the original template's ID (it's the first version)
+      const referFirstVersionId = originalTemplate.referFirstVersionId || originalTemplateId
+
+      // Create the new template version
+      const newTemplate = await prisma.templateForm.create({
+        data: {
+          name: templateData.name,
+          description: templateData.description,
+          version: newVersion,
+          departmentId: templateData.departmentId,
+          createdByUserId,
+          templateContent: templateData.templateContent,
+          templateSchema: templateData.templateSchema,
+          referFirstVersionId,
+          isActive: true
+        }
+      })
+
+      // Create sections and fields for the new version
+      for (const sectionData of templateData.sections) {
+        const section = await prisma.templateSection.create({
+          data: {
+            templateId: newTemplate.id,
+            label: sectionData.label,
+            displayOrder: sectionData.displayOrder,
+            editBy: sectionData.editBy,
+            roleInSubject: sectionData.roleInSubject,
+            isSubmittable: sectionData.isSubmittable,
+            isToggleDependent: sectionData.isToggleDependent
+          }
+        })
+
+        // Create fields for this section
+        // Validate field hierarchy first
+        this.validateFieldHierarchy(sectionData.fields);
+        
+        for (const fieldData of sectionData.fields) {
+          await prisma.templateField.create({
+            data: {
+              sectionId: section.id,
+              label: fieldData.label,
+              fieldName: fieldData.fieldName,
+              fieldType: fieldData.fieldType,
+              roleRequired: fieldData.roleRequired,
+              options: fieldData.options,
+              displayOrder: fieldData.displayOrder,
+              parentId: null, // Handle parent-child relationships if needed
+              createdById: createdByUserId,
+            }
+          })
+        }
+      }
+
+      // Return the complete new template
+      return prisma.templateForm.findUnique({
+        where: { id: newTemplate.id },
+        include: {
+          department: true,
+          createdByUser: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              eid: true
+            }
+          },
+          sections: {
+            include: {
+              fields: true
+            }
+          }
+        }
+      })
+    })
   }
 }

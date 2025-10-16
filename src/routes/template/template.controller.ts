@@ -102,6 +102,35 @@ export class TemplateController {
   }
 
   /**
+   * POST /templates/:id/new-version
+   * Create a new version of an existing template
+   * Body: same as create template API
+   * Auto-increments version number based on existing versions
+   */
+  @Post(':id/new-version')
+  async createTemplateVersion(
+    @Param('id') originalTemplateId: string,
+    @Body() createTemplateDto: CreateTemplateFormDto,
+    @ActiveUser() currentUser: any
+  ) {
+    return await this.templateService.createTemplateVersion(originalTemplateId, createTemplateDto, currentUser)
+  }
+
+  /**
+   * GET /templates/:id/versions
+   * Get all versions of a template
+   */
+  @Get(':id/versions')
+  @IsPublic()
+  async getTemplateVersions(@Param('id') templateId: string) {
+    try {
+      return await this.templateService.getTemplateVersions(templateId)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
    * GET /templates/department/:departmentId
    */
   @Get('department/:departmentId')
