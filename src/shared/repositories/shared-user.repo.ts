@@ -8,6 +8,7 @@ import {
 import { UserNotFoundException } from '~/routes/user/user.error'
 import { GetUserProfileResType, UpdateUserInternalType, UserType } from '~/routes/user/user.model'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { EidService } from '~/shared/services/eid.service'
@@ -15,6 +16,7 @@ import { PrismaService } from '~/shared/services/prisma.service'
 
 export type WhereUniqueUserType = { id: string } | { email: string }
 @Injectable()
+@SerializeAll()
 export class SharedUserRepository {
   constructor(
     private readonly prismaService: PrismaService,

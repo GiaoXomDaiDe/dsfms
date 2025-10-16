@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { createPermissionNotFoundError } from '~/shared/errors/shared.error'
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -6,6 +7,7 @@ import { PrismaService } from '~/shared/services/prisma.service'
  * Repository chia sẻ cho các thao tác permission validation
  */
 @Injectable()
+@SerializeAll()
 export class SharedPermissionRepository {
   constructor(private readonly prismaService: PrismaService) {}
 

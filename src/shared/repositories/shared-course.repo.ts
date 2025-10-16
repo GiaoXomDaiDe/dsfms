@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class SharedCourseRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
