@@ -17,7 +17,7 @@ export const PermissionSchema = z.object({
     HTTPMethod.OPTIONS,
     HTTPMethod.HEAD
   ]),
-  isActive: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
+  isActive: z.boolean().default(true),
   viewName: z.string().max(500).nullable().default(''),
   viewModule: z.string().max(500).nullable().default(''),
   createdById: z.uuid().nullable(),

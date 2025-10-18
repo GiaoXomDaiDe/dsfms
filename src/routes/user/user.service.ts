@@ -35,7 +35,6 @@ import {
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import { RoleName } from '~/shared/constants/auth.constant'
-import { ActiveStatus } from '~/shared/constants/default.constant'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import {
   isForeignKeyConstraintPrismaError,
@@ -125,7 +124,7 @@ export class UserService {
         }
 
         // Kiểm tra department có đang active không
-        if (department.isActive !== ActiveStatus.ACTIVE) {
+        if (department.isActive !== true) {
           throw DepartmentIsDisabledException
         }
       }
@@ -229,7 +228,7 @@ export class UserService {
             }
 
             // Kiểm tra department có đang active không
-            if (department.isActive !== ActiveStatus.ACTIVE) {
+            if (department.isActive !== true) {
               throw new Error(BulkDepartmentIsDisabledAtIndexException(index, department.name))
             }
           }
@@ -582,7 +581,7 @@ export class UserService {
         }
 
         // Kiểm tra department có đang active không
-        if (department.isActive !== 'ACTIVE') {
+        if (department.isActive !== true) {
           throw DepartmentIsDisabledException
         }
       }
@@ -731,7 +730,7 @@ export class UserService {
         throw RoleIsDisabledException
       }
 
-      if (user.department && user.department.isActive !== ActiveStatus.ACTIVE) {
+      if (user.department && user.department.isActive !== true) {
         throw DepartmentIsDisabledException
       }
 
@@ -768,7 +767,7 @@ export class UserService {
         throw RoleIsDisabledException
       }
 
-      if (user.department && user.department.isActive !== ActiveStatus.ACTIVE) {
+      if (user.department && !user.department.isActive) {
         throw DepartmentIsDisabledException
       }
 

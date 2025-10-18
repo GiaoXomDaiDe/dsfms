@@ -1,7 +1,6 @@
 import { NestFactory } from '@nestjs/core'
 import { AppModule } from '~/app.module'
 import { HTTPMethod, RoleName } from '~/shared/constants/auth.constant'
-import { ActiveStatus } from '~/shared/constants/default.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 const prisma = new PrismaService()
@@ -16,7 +15,7 @@ const MEDIA_PERMISSIONS = [
     module: 'MEDIA',
     viewName: 'Upload Images',
     viewModule: 'Media Management',
-    isActive: ActiveStatus.ACTIVE
+    isActive: true
   },
   {
     path: '/media/images/upload/presigned-url',
@@ -25,7 +24,7 @@ const MEDIA_PERMISSIONS = [
     module: 'MEDIA',
     viewName: 'Create Image Presigned URL',
     viewModule: 'Media Management',
-    isActive: ActiveStatus.ACTIVE
+    isActive: true
   },
 
   // Documents upload permissions
@@ -36,7 +35,7 @@ const MEDIA_PERMISSIONS = [
     module: 'MEDIA',
     viewName: 'Upload Documents',
     viewModule: 'Media Management',
-    isActive: ActiveStatus.ACTIVE
+    isActive: true
   },
   {
     path: '/media/docs/upload/presigned-url',
@@ -45,7 +44,7 @@ const MEDIA_PERMISSIONS = [
     module: 'MEDIA',
     viewName: 'Create Document Presigned URL',
     viewModule: 'Media Management',
-    isActive: ActiveStatus.ACTIVE
+    isActive: true
   },
 
   // Static file serving (public - no permission needed, but documented)
@@ -56,7 +55,7 @@ const MEDIA_PERMISSIONS = [
     module: 'MEDIA',
     viewName: 'Serve Static Files',
     viewModule: 'Media Management',
-    isActive: ActiveStatus.ACTIVE
+    isActive: true
   }
 ]
 

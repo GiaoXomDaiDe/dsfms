@@ -333,7 +333,7 @@ export class DepartmentService {
       throw DepartmentHeadMustHaveRoleException
     }
 
-    if (user.role.isActive !== 'ACTIVE') {
+    if (user.role.isActive === false) {
       throw DepartmentHeadRoleInactiveException
     }
   }

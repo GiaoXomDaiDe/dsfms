@@ -141,7 +141,7 @@ export class ReportsRepo {
     const skip = (page - 1) * limit
 
     const where: Prisma.RequestWhereInput = {
-      createdByUserId: userId,
+      createdById: userId,
       requestType: { in: reportType ? [reportType as RequestType] : this.reportTypes },
       ...(status && { status: status as RequestStatus })
     }
@@ -194,7 +194,7 @@ export class ReportsRepo {
     const report = await this.prisma.request.create({
       data: {
         requestType: data.reportType as RequestType,
-        createdByUserId: createdById,
+        createdById,
         severity: data.severity as RequestSeverity,
         title: data.title,
         description: data.description ?? null,
@@ -233,7 +233,7 @@ export class ReportsRepo {
       },
       data: {
         status: RequestStatus.ACKNOWLEDGED,
-        managedByUserId: managedById,
+        managedById,
         updatedById: managedById
       },
       include: this.reportInclude
@@ -259,7 +259,7 @@ export class ReportsRepo {
       data: {
         status: RequestStatus.RESOLVED,
         response: data.response,
-        managedByUserId: managedById,
+        managedById,
         updatedById: managedById
       },
       include: this.reportInclude

@@ -6,7 +6,6 @@ import {
   GetDepartmentsResType,
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
-import { STATUS_CONST } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -225,7 +224,7 @@ export class DepartmentRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: STATUS_CONST.INACTIVE
+            isActive: false
           }
         })
   }
@@ -239,7 +238,7 @@ export class DepartmentRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: STATUS_CONST.ACTIVE,
+        isActive: true,
         updatedById: enabledById
       }
     })

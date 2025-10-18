@@ -8,7 +8,7 @@ export const PublicCourseSchema = z.object({
   description: z.string().nullable(),
   departmentId: z.string().uuid(),
   departmentName: z.string(), // Include department name for convenience
-  isActive: z.enum(['ACTIVE', 'INACTIVE'])
+  isActive: z.boolean().default(true)
 })
 
 // Response schemas

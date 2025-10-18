@@ -6,7 +6,7 @@ export const PublicRoleSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   description: z.string().nullable(),
-  isActive: z.enum(['ACTIVE', 'INACTIVE'])
+  isActive: z.boolean().default(true)
 })
 
 // Response schemas

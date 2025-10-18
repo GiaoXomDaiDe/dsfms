@@ -14,7 +14,7 @@ export class PublicDepartmentService {
     const departments = await this.prisma.department.findMany({
       where: {
         deletedAt: null,
-        isActive: 'ACTIVE'
+        isActive: true
       },
       select: {
         id: true,
@@ -42,7 +42,7 @@ export class PublicDepartmentService {
       where: {
         id,
         deletedAt: null,
-        isActive: 'ACTIVE'
+        isActive: true
       },
       select: {
         id: true,
