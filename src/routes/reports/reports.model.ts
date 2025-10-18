@@ -56,9 +56,7 @@ export const GetMyReportsQuerySchema = paginationSchema
 
 export const GetReportsResSchema = z.object({
   reports: z.array(ReportListItemSchema),
-  totalItems: z.number().int(),
-  totalPages: z.number().int(),
-  currentPage: z.number().int()
+  totalItems: z.number().int()
 })
 
 export const GetMyReportsResSchema = GetReportsResSchema
