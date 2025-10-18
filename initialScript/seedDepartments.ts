@@ -1,5 +1,4 @@
 import { DepartmentType } from '~/routes/department/department.model'
-import { ActiveStatus } from '~/shared/constants/default.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 const prismaService = new PrismaService()
@@ -81,7 +80,7 @@ async function ensureDepartment(departmentData: (typeof SYSTEM_DEPARTMENTS)[0]) 
         code: departmentData.code,
         name: departmentData.name,
         description: departmentData.description,
-        isActive: ActiveStatus.ACTIVE
+        isActive: true
       }
     })
     console.log(`[CREATE] Department created: ${departmentData.code} - ${departmentData.name}`)

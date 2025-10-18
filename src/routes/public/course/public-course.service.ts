@@ -42,7 +42,7 @@ export class PublicCourseService {
       description: course.description,
       departmentId: course.departmentId,
       departmentName: course.department?.name || '',
-      isActive: course.status === CourseStatus.ARCHIVED ? 'INACTIVE' : 'ACTIVE'
+      isActive: course.status === CourseStatus.ARCHIVED ? false : true
     })) as PublicCourseType[]
 
     return {
@@ -86,7 +86,7 @@ export class PublicCourseService {
       description: course.description,
       departmentId: course.departmentId,
       departmentName: course.department?.name || '',
-      isActive: course.status === CourseStatus.ARCHIVED ? 'INACTIVE' : 'ACTIVE'
+      isActive: course.status === CourseStatus.ARCHIVED ? false : true
     })) as PublicCourseType[]
 
     return {
@@ -129,7 +129,7 @@ export class PublicCourseService {
       description: course.description,
       departmentId: course.departmentId,
       departmentName: course.department?.name || '',
-      isActive: course.status === CourseStatus.ARCHIVED ? 'INACTIVE' : 'ACTIVE'
+      isActive: course.status === CourseStatus.ARCHIVED ? false : true
     } as PublicCourseType
   }
 }

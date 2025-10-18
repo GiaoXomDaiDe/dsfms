@@ -14,7 +14,7 @@ export class PublicRoleService {
     const roles = await this.prisma.role.findMany({
       where: {
         deletedAt: null,
-        isActive: 'ACTIVE'
+        isActive: true
       },
       select: {
         id: true,
@@ -41,7 +41,7 @@ export class PublicRoleService {
       where: {
         id,
         deletedAt: null,
-        isActive: 'ACTIVE'
+        isActive: true
       },
       select: {
         id: true,

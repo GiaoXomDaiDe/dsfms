@@ -4,7 +4,6 @@ import {
   PermissionType,
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
-import { STATUS_CONST } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -95,7 +94,7 @@ export class PermissionRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: STATUS_CONST.INACTIVE
+            isActive: false
           }
         })
   }
@@ -109,7 +108,7 @@ export class PermissionRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: STATUS_CONST.ACTIVE,
+        isActive: true,
         updatedById: enabledById
       }
     })

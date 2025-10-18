@@ -6,7 +6,6 @@ import {
   RoleWithPermissionsType,
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
-import { ActiveStatus } from '~/shared/constants/default.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -163,7 +162,7 @@ export class RoleRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: ActiveStatus.INACTIVE
+            isActive: false
           }
         })
   }
@@ -177,7 +176,7 @@ export class RoleRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: ActiveStatus.ACTIVE,
+        isActive: true,
         updatedById: enabledById
       }
     })
