@@ -1,8 +1,6 @@
 import { createZodDto } from 'nestjs-zod'
 import {
   CancelCourseEnrollmentsBodySchema,
-  CourseDetailResSchema,
-  CourseStatsSchema,
   CreateCourseBodySchema,
   CreateCourseResSchema,
   GetCourseParamsSchema,
@@ -12,8 +10,6 @@ import {
   GetCourseTraineesQuerySchema,
   GetCourseTraineesResSchema,
   GetTraineeEnrollmentsResSchema,
-  RemoveSubjectFromCourseBodySchema,
-  RemoveSubjectFromCourseResSchema,
   UpdateCourseBodySchema,
   UpdateCourseResSchema
 } from '~/routes/course/course.model'
@@ -30,8 +26,3 @@ export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQue
 export class GetCourseTraineesResDto extends createZodDto(GetCourseTraineesResSchema) {}
 export class CancelCourseEnrollmentsBodyDto extends createZodDto(CancelCourseEnrollmentsBodySchema) {}
 export class GetTraineeEnrollmentsResDto extends createZodDto(GetTraineeEnrollmentsResSchema) {}
-
-export class CourseDetailResDto extends createZodDto(CourseDetailResSchema) {}
-export class CourseStatsDto extends createZodDto(CourseStatsSchema) {}
-export class RemoveSubjectFromCourseBodyDto extends createZodDto(RemoveSubjectFromCourseBodySchema) {}
-export class RemoveSubjectFromCourseResDto extends createZodDto(RemoveSubjectFromCourseResSchema) {}

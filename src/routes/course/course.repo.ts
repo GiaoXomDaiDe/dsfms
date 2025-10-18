@@ -102,7 +102,6 @@ export class CourseRepo {
     })
 
     const trainees = this.aggregateCourseTrainees(enrollments)
-    console.log(trainees, trainees.length)
 
     return {
       trainees,
@@ -342,7 +341,6 @@ export class CourseRepo {
           batches: new Set<string>()
         })
       }
-      console.log('traineeMap', traineeMap.values())
       const current = traineeMap.get(enrollment.traineeUserId)
       if (!current) {
         continue

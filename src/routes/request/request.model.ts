@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/request.constant'
+import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/report.constant'
 
 const requestTypeValues = Object.values(RequestType) as [string, ...string[]]
 const requestSeverityValues = Object.values(RequestSeverity) as [string, ...string[]]
