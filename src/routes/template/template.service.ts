@@ -362,7 +362,7 @@ export class TemplateService {
 
     return {
       success: true,
-      data: templateStructure, // Complete structure for FE editing
+      // data: templateStructure, // Complete structure for FE editing
       schema: template.templateSchema, // Raw templateSchema for form rendering
       metadata: {
         templateId: template.id,
