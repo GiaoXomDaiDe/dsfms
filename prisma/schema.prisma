@@ -92,7 +92,7 @@ model Role {
   createdById String?      @db.Uuid
   updatedById String?      @db.Uuid
   deletedById String?      @db.Uuid
-  isActive    ActiveStatus @default(ACTIVE)
+  isActive    Boolean      @default(true)
   createdBy   User?        @relation("RoleCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy   User?        @relation("RoleDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?        @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
@@ -106,8 +106,8 @@ model Role {
 model Permission {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   method      HttpMethod
-  path        String
-  name        String
+  path        String       
+  name        String       
   module      String
   description String?
   createdById String?      @db.Uuid
@@ -116,9 +116,9 @@ model Permission {
   updatedAt   DateTime     @default(now()) @updatedAt
   deletedAt   DateTime?
   deletedById String?      @db.Uuid
-  viewModule  String?      @default("")
-  viewName    String?      @default("")
-  isActive    ActiveStatus @default(ACTIVE)
+  viewModule  String?
+  viewName    String?
+  isActive    Boolean      @default(true)
   createdBy   User?        @relation("PermissionCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy   User?        @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?        @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
@@ -132,7 +132,7 @@ model TrainerProfile {
   userId              String    @id @db.Uuid
   specialization      String
   certificationNumber String
-  yearsOfExp          Int?      @default(0)
+  yearsOfExp          Int?
   bio                 String?
   createdById         String?   @db.Uuid
   updatedById         String?   @db.Uuid
@@ -182,7 +182,7 @@ model Department {
   updatedAt     DateTime       @default(now()) @updatedAt
   deletedAt     DateTime?
   deletedById   String?        @db.Uuid
-  isActive      ActiveStatus   @default(ACTIVE)
+  isActive      Boolean        @default(true)
   code          String         @unique
   courses       Course[]
   createdBy     User?          @relation("DeptCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
@@ -251,7 +251,7 @@ model Subject {
   createdById     String?             @db.Uuid
   updatedById     String?             @db.Uuid
   deletedById     String?             @db.Uuid
-  course          Course?             @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  course          Course              @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   createdBy       User?               @relation("SubjectCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy       User?               @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy       User?               @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
@@ -358,28 +358,28 @@ model AssessmentSection {
 model Request {
   id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   requestType     RequestType
-  createdByUserId String           @db.Uuid
+  createdById     String           @db.Uuid
   severity        RequestSeverity?
   title           String?
   description     String?
   actionsTaken    String?
   isAnonymous     Boolean          @default(false)
   status          RequestStatus    @default(CREATED)
-  managedByUserId String?          @db.Uuid
+  managedById     String?          @db.Uuid
   response        String?
   assessmentId    String?          @db.Uuid
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @default(now()) @updatedAt
   updatedById     String?          @db.Uuid
-  createdBy       User             @relation("RequestCreatedBy", fields: [createdByUserId], references: [id], onUpdate: NoAction)
-  managedBy       User?            @relation("RequestManagedBy", fields: [managedByUserId], references: [id], onUpdate: NoAction)
+  createdBy       User             @relation("RequestCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  managedBy       User?            @relation("RequestManagedBy", fields: [managedById], references: [id], onUpdate: NoAction)
   updatedBy       User?            @relation("RequestUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   assessment      AssessmentForm?  @relation(fields: [assessmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([requestType])
   @@index([status])
-  @@index([createdByUserId])
-  @@index([managedByUserId])
+  @@index([createdById])
+  @@index([managedById])
   @@index([createdAt])
   @@map("Request")
 }
@@ -528,11 +528,6 @@ enum RequestStatus {
 enum GenderStatus {
   MALE
   FEMALE
-}
-
-enum ActiveStatus {
-  ACTIVE
-  INACTIVE
 }
 
 enum SubjectInstructorRole {
