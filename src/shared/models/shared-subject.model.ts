@@ -8,7 +8,18 @@ export const SubjectSchema = z.object({
   code: z.string().min(1).max(50),
   description: z.string().optional().nullable(),
   method: z.enum(SubjectMethod),
-  duration: z.number().int().positive().optional().nullable(),
+  // duration can be fractional (hours), store as decimal with 2dp in DB
+  // accept numbers or numeric strings; coerce to number and validate positive
+  duration: z
+    .union([z.number(), z.string()])
+    .optional()
+    .nullable()
+    .transform((val) => {
+      if (val === null || val === undefined) return null
+      const n = typeof val === 'string' ? Number(val) : val
+      return Number.isNaN(n) ? null : n
+    })
+    .refine((v) => v === null || v >= 0, { message: 'duration must be a positive number' }),
   type: z.nativeEnum(SubjectType),
   roomName: z.string().optional().nullable(),
   remarkNote: z.string().optional().nullable(),

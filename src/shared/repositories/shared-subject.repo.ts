@@ -9,11 +9,11 @@ export class SharedSubjectRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
   async findIds(where: Prisma.SubjectWhereInput): Promise<string[]> {
-    const subjects = await this.prismaService.subject.findMany({
+    const subjectIds = await this.prismaService.subject.findMany({
       where,
       select: { id: true }
     })
 
-    return subjects.map((subject) => subject.id)
+    return subjectIds.map((subjectId) => subjectId.id)
   }
 }

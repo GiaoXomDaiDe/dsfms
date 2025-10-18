@@ -1,49 +1,13 @@
 import { z } from 'zod'
-import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/request.constant'
+import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/report.constant'
+import { ReportSchema } from '~/shared/models/shared-report.model'
 
 const requestTypeValues = Object.values(RequestType) as [string, ...string[]]
 const requestSeverityValues = Object.values(RequestSeverity) as [string, ...string[]]
 const requestStatusValues = Object.values(RequestStatus) as [string, ...string[]]
 
-// Report types (subset of request types for reports only)
-const reportTypeValues = [RequestType.SAFETY_REPORT, RequestType.INCIDENT_REPORT, RequestType.FEEDBACK_REPORT] as [
-  string,
-  ...string[]
-]
-
-const coerceDateSchema = z.preprocess((value) => {
-  if (value instanceof Date) {
-    return value
-  }
-
-  if (typeof value === 'string' || typeof value === 'number') {
-    const parsed = new Date(value)
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed
-  }
-
-  return undefined
-}, z.date())
-
 const optionalBoundedString = (max: number) => z.string().trim().min(1).max(max)
 const nullableBoundedString = (max: number) => z.string().max(max).nullable()
-
-export const ReportSchema = z.object({
-  id: z.string().uuid(),
-  requestType: z.enum(reportTypeValues),
-  createdByUserId: z.string().uuid(),
-  severity: z.enum(requestSeverityValues),
-  title: z.string().max(255),
-  description: z.string().max(4000).nullable(),
-  actionsTaken: z.string().max(2000).nullable(),
-  isAnonymous: z.boolean().default(false),
-  status: z.enum(requestStatusValues),
-  managedByUserId: z.string().uuid().nullable(),
-  response: z.string().max(4000).nullable(),
-  assessmentId: z.string().uuid().nullable(),
-  createdAt: coerceDateSchema,
-  updatedAt: coerceDateSchema,
-  updatedById: z.string().uuid().nullable()
-})
 
 export const ReportUserSummarySchema = z.object({
   id: z.string().uuid(),
@@ -76,23 +40,17 @@ const paginationSchema = z.object({
   limit: z.coerce.number().int().positive().optional().default(10)
 })
 
-export const GetReportsQuerySchema = paginationSchema
-  .extend({
-    reportType: z.enum(reportTypeValues).optional(),
-    severity: z.enum(requestSeverityValues).optional(),
-    status: z.enum(requestStatusValues).optional(),
-    managedByUserId: z.string().uuid().optional(),
-    createdByUserId: z.string().uuid().optional(),
-    search: z.string().trim().max(255).optional(),
-    fromDate: z.string().datetime().optional(),
-    toDate: z.string().datetime().optional()
-  })
-  .strict()
+export const GetReportsQuerySchema = ReportSchema.pick({
+  requestType: true,
+  status: true,
+  isAnonymous: true,
+  severity: true
+}).strict()
 
 export const GetMyReportsQuerySchema = paginationSchema
   .extend({
-    reportType: z.enum(reportTypeValues).optional(),
-    status: z.enum(requestStatusValues).optional()
+    reportType: z.enum(RequestType).optional(),
+    status: z.enum(RequestStatus).optional()
   })
   .strict()
 
@@ -113,8 +71,8 @@ export const GetReportParamsSchema = z
 
 export const CreateReportBodySchema = z
   .object({
-    reportType: z.enum(reportTypeValues),
-    severity: z.enum(requestSeverityValues),
+    reportType: z.enum(RequestType).optional(),
+    severity: z.enum(RequestSeverity).optional(),
     title: optionalBoundedString(255),
     description: optionalBoundedString(4000).optional(),
     actionsTaken: optionalBoundedString(2000).optional(),
