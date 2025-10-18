@@ -76,63 +76,28 @@ export class ReportsRepo {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: GetReportsQueryType): Promise<GetReportsResType> {
-    const {
-      page = 1,
-      limit = 10,
-      reportType,
-      severity,
-      status,
-      managedByUserId,
-      createdByUserId,
-      search,
-      fromDate,
-      toDate
-    } = query
-    const skip = (page - 1) * limit
+    const { severity, status, isAnonymous, requestType } = query
 
     const where: Prisma.RequestWhereInput = {
-      requestType: { in: reportType ? [reportType as RequestType] : this.reportTypes },
+      requestType: { in: requestType ? [requestType as RequestType] : this.reportTypes },
       ...(severity && { severity: severity as RequestSeverity }),
       ...(status && { status: status as RequestStatus }),
-      ...(managedByUserId && { managedByUserId }),
-      ...(createdByUserId && { createdByUserId }),
-      ...(search && {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-          { actionsTaken: { contains: search, mode: 'insensitive' } }
-        ]
-      }),
-      ...(fromDate || toDate
-        ? {
-            createdAt: {
-              ...(fromDate && { gte: new Date(fromDate) }),
-              ...(toDate && { lte: new Date(toDate) })
-            }
-          }
-        : {})
+      ...(isAnonymous !== undefined && { isAnonymous })
     }
 
     const [totalItems, reports] = await this.prisma.$transaction([
       this.prisma.request.count({ where }),
       this.prisma.request.findMany({
         where,
-        include: this.reportInclude,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit
+        include: this.reportInclude
       })
     ])
 
     const formattedReports = reports.map((report) => this.mapReport(report))
 
-    const totalPages = limit === 0 ? 0 : Math.ceil(totalItems / limit)
-
     return {
       reports: formattedReports,
-      totalItems,
-      totalPages,
-      currentPage: page
+      totalItems
     }
   }
 
@@ -162,9 +127,7 @@ export class ReportsRepo {
 
     return {
       reports: formattedReports,
-      totalItems,
-      totalPages,
-      currentPage: page
+      totalItems
     }
   }
 

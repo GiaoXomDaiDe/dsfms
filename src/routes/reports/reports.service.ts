@@ -47,7 +47,7 @@ export class ReportsService {
     }
 
     // Only report creator can cancel their own report
-    if (existingReport.createdByUserId !== userId) {
+    if (existingReport.createdById !== userId) {
       throw new BadRequestException('You can only cancel your own reports')
     }
 

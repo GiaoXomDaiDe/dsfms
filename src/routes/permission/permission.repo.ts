@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
   CreatePermissionBodyType,
+  PermissionModuleType,
   PermissionType,
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
@@ -18,7 +19,7 @@ export class PermissionRepo {
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}) {
     const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
-    const [totalItems, data] = await Promise.all([
+    const [totalItems, permissions] = await Promise.all([
       this.prisma.permission.count({
         where: whereClause
       }),
@@ -26,8 +27,34 @@ export class PermissionRepo {
         where: whereClause
       })
     ])
+
+    const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
+      const rawModuleName = permission.viewModule ?? permission.module ?? ''
+      const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
+      const rawPermissionName = permission.viewName ?? permission.name ?? ''
+      const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : permission.name
+
+      let moduleEntry = acc.find((entry) => entry.module.name === moduleName)
+      if (!moduleEntry) {
+        moduleEntry = {
+          module: {
+            name: moduleName,
+            listPermissions: []
+          }
+        }
+        acc.push(moduleEntry)
+      }
+
+      moduleEntry.module.listPermissions.push({
+        permissionId: permission.id,
+        name: permissionName
+      })
+
+      return acc
+    }, [])
+
     return {
-      data,
+      data: grouped,
       totalItems
     }
   }

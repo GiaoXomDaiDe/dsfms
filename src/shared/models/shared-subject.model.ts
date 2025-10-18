@@ -1,4 +1,4 @@
-import { SubjectMethod, SubjectStatus, SubjectType } from '@prisma/client'
+import { Prisma, SubjectMethod, SubjectStatus, SubjectType } from '@prisma/client'
 import z from 'zod'
 
 export const SubjectSchema = z.object({
@@ -10,16 +10,7 @@ export const SubjectSchema = z.object({
   method: z.enum(SubjectMethod),
   // duration can be fractional (hours), store as decimal with 2dp in DB
   // accept numbers or numeric strings; coerce to number and validate positive
-  duration: z
-    .union([z.number(), z.string()])
-    .optional()
-    .nullable()
-    .transform((val) => {
-      if (val === null || val === undefined) return null
-      const n = typeof val === 'string' ? Number(val) : val
-      return Number.isNaN(n) ? null : n
-    })
-    .refine((v) => v === null || v >= 0, { message: 'duration must be a positive number' }),
+  duration: z.instanceof(Prisma.Decimal).optional().nullable(),
   type: z.nativeEnum(SubjectType),
   roomName: z.string().optional().nullable(),
   remarkNote: z.string().optional().nullable(),
