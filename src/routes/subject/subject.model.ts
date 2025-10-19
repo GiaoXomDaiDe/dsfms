@@ -72,7 +72,9 @@ export const SubjectWithUserInfoSchema = SubjectSchema.extend({
 })
 
 // Create Subject Body Schema
-export const CreateSubjectBodySchema = SubjectSchema.refine(
+export const CreateSubjectBodySchema = SubjectSchema.omit({
+  duration: true // duration sẽ tự động tính, không cho phép input
+}).refine(
   (data) => {
     if (data.startDate && data.endDate) {
       return new Date(data.startDate) < new Date(data.endDate)
@@ -86,6 +88,7 @@ export const CreateSubjectBodySchema = SubjectSchema.refine(
 )
 
 // Update Subject Body Schema - includes status field
+// Note: duration is omitted from input but will be calculated internally
 export const UpdateSubjectBodySchema = CreateSubjectBodySchema.partial()
 
 // Bulk Create Subjects Body Schema

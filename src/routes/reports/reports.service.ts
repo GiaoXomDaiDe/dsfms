@@ -1,13 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { RequestStatus } from '@prisma/client'
+import {
+  CanOnlyAcknowledgeCreatedReportException,
+  CanOnlyCancelCreatedReportException,
+  CanOnlyCancelOwnReportException,
+  CanOnlyRespondAcknowledgedReportException,
+  ReportNotFoundException
+} from '~/routes/reports/reports.error'
 import {
   CreateReportBodyType,
   CreateReportResType,
-  GetMyReportsQueryType,
   GetMyReportsResType,
+  GetReportResType,
   GetReportsQueryType,
   GetReportsResType,
-  ReportWithRelationsType,
   RespondReportBodyType,
   RespondReportResType
 } from '~/routes/reports/reports.model'
@@ -21,17 +27,16 @@ export class ReportsService {
     return this.reportsRepo.list(query)
   }
 
-  async getMyReports(userId: string, query: GetMyReportsQueryType): Promise<GetMyReportsResType> {
-    return this.reportsRepo.listMine(userId, query)
+  async getMyReports(userId: string, query: GetReportsQueryType): Promise<GetMyReportsResType> {
+    return this.reportsRepo.listMe(userId, query)
   }
 
-  async getReportById(id: string): Promise<ReportWithRelationsType> {
+  async getReportById(id: string): Promise<GetReportResType> {
     const report = await this.reportsRepo.findById(id)
 
     if (!report) {
-      throw new NotFoundException('Report not found')
+      throw ReportNotFoundException
     }
-
     return report
   }
 
@@ -39,36 +44,36 @@ export class ReportsService {
     return this.reportsRepo.create({ data, createdById })
   }
 
-  async cancelReport(id: string, userId: string): Promise<ReportWithRelationsType> {
+  async cancelReport(id: string, userId: string): Promise<GetReportResType> {
     const existingReport = await this.reportsRepo.findById(id)
 
     if (!existingReport) {
-      throw new NotFoundException('Report not found')
+      throw ReportNotFoundException
     }
 
-    // Only report creator can cancel their own report
+    // Chỉ có ng tạo report mới được cancel
     if (existingReport.createdById !== userId) {
-      throw new BadRequestException('You can only cancel your own reports')
+      throw CanOnlyCancelOwnReportException
     }
 
-    // Can only cancel reports that are not yet acknowledged or resolved
+    // Chỉ có thể cancel report đang không được acknowledge hoặc resolved
     if (existingReport.status !== RequestStatus.CREATED) {
-      throw new BadRequestException('Can only cancel reports with CREATED status')
+      throw CanOnlyCancelCreatedReportException
     }
 
     return this.reportsRepo.cancel({ id, updatedById: userId })
   }
 
-  async acknowledgeReport(id: string, managedById: string): Promise<ReportWithRelationsType> {
+  async acknowledgeReport(id: string, managedById: string): Promise<GetReportResType> {
     const existingReport = await this.reportsRepo.findById(id)
 
     if (!existingReport) {
-      throw new NotFoundException('Report not found')
+      throw ReportNotFoundException
     }
 
-    // Can only acknowledge reports that are in CREATED status
+    // Chỉ có thể acknowledge report đang ở trạng thái CREATED
     if (existingReport.status !== RequestStatus.CREATED) {
-      throw new BadRequestException('Can only acknowledge reports with CREATED status')
+      throw CanOnlyAcknowledgeCreatedReportException
     }
 
     return this.reportsRepo.acknowledge({ id, managedById })
@@ -78,12 +83,12 @@ export class ReportsService {
     const existingReport = await this.reportsRepo.findById(id)
 
     if (!existingReport) {
-      throw new NotFoundException('Report not found')
+      throw ReportNotFoundException
     }
 
-    // Can only respond to reports that are acknowledged
+    // Chỉ có thể respond report đang ở trạng thái ACKNOWLEDGED
     if (existingReport.status !== RequestStatus.ACKNOWLEDGED) {
-      throw new BadRequestException('Can only respond to reports with ACKNOWLEDGED status')
+      throw CanOnlyRespondAcknowledgedReportException
     }
 
     return this.reportsRepo.respond({ id, data, managedById })

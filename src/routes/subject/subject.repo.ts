@@ -173,7 +173,7 @@ export class SubjectRepo {
     data,
     createdById
   }: {
-    data: CreateSubjectBodyType
+    data: CreateSubjectBodyType & { duration?: number }
     createdById: string
   }): Promise<SubjectResType> {
     const subject = await this.prisma.subject.create({
@@ -191,7 +191,7 @@ export class SubjectRepo {
     data,
     createdById
   }: {
-    data: CreateSubjectBodyType
+    data: CreateSubjectBodyType & { duration?: number }
     createdById: string
   }): Promise<SubjectDetailResType> {
     const subject = await this.prisma.subject.create({
@@ -285,7 +285,7 @@ export class SubjectRepo {
     updatedById
   }: {
     id: string
-    data: UpdateSubjectBodyType
+    data: UpdateSubjectBodyType & { duration?: number }
     updatedById: string
   }): Promise<SubjectResType> {
     const subject = await this.prisma.subject.update({
@@ -306,7 +306,7 @@ export class SubjectRepo {
     updatedById
   }: {
     id: string
-    data: UpdateSubjectBodyType
+    data: UpdateSubjectBodyType & { duration?: number }
     updatedById: string
   }): Promise<SubjectDetailResType> {
     const subject = await this.prisma.subject.update({

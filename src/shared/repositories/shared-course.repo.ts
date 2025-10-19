@@ -46,7 +46,11 @@ export class SharedCourseRepository {
             name: true,
             code: true
           }
-        }
+        },
+        startDate: true,
+        endDate: true,
+        createdAt: true,
+        updatedAt: true
       }
     })
   }

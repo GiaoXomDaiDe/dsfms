@@ -2,123 +2,86 @@ import { z } from 'zod'
 import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/report.constant'
 import { ReportSchema } from '~/shared/models/shared-report.model'
 
-const requestTypeValues = Object.values(RequestType) as [string, ...string[]]
-const requestSeverityValues = Object.values(RequestSeverity) as [string, ...string[]]
-const requestStatusValues = Object.values(RequestStatus) as [string, ...string[]]
-
-const optionalBoundedString = (max: number) => z.string().trim().min(1).max(max)
-const nullableBoundedString = (max: number) => z.string().max(max).nullable()
-
-export const ReportUserSummarySchema = z.object({
-  id: z.string().uuid(),
-  eid: z.string().nullable(),
-  firstName: z.string(),
-  lastName: z.string(),
-  email: z.string().email(),
-  roleName: z.string().nullable()
-})
-
-export const ReportAssessmentSchema = z
+export const GetReportsQuerySchema = z
   .object({
-    id: z.string().uuid(),
-    name: z.string(),
-    description: z.string().nullable()
-  })
-  .nullable()
-
-export const ReportWithRelationsSchema = ReportSchema.extend({
-  createdBy: ReportUserSummarySchema,
-  managedBy: ReportUserSummarySchema.nullable(),
-  updatedBy: ReportUserSummarySchema.nullable(),
-  assessment: ReportAssessmentSchema
-})
-
-export const ReportListItemSchema = ReportWithRelationsSchema
-
-const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().positive().optional().default(10)
-})
-
-export const GetReportsQuerySchema = ReportSchema.pick({
-  requestType: true,
-  status: true,
-  isAnonymous: true,
-  severity: true
-}).strict()
-
-export const GetMyReportsQuerySchema = paginationSchema
-  .extend({
-    reportType: z.enum(RequestType).optional(),
-    status: z.enum(RequestStatus).optional()
+    requestType: z.enum(RequestType).optional(),
+    status: z.enum(RequestStatus).optional(),
+    severity: z.enum(RequestSeverity).optional(),
+    isAnonymous: z.coerce.boolean().optional()
   })
   .strict()
 
 export const GetReportsResSchema = z.object({
-  reports: z.array(ReportListItemSchema),
+  reports: z.array(ReportSchema),
   totalItems: z.number().int()
 })
 
 export const GetMyReportsResSchema = GetReportsResSchema
 
-export const GetReportParamsSchema = z
-  .object({
-    id: z.string().uuid()
-  })
-  .strict()
+export const GetReportResSchema = ReportSchema
 
-export const CreateReportBodySchema = z
-  .object({
-    reportType: z.enum(RequestType).optional(),
-    severity: z.enum(RequestSeverity).optional(),
-    title: optionalBoundedString(255),
-    description: optionalBoundedString(4000).optional(),
-    actionsTaken: optionalBoundedString(2000).optional(),
-    isAnonymous: z.boolean().optional().default(false),
-    assessmentId: z.string().uuid().optional()
-  })
-  .strict()
+export const GetReportParamsSchema = ReportSchema.pick({
+  id: true
+}).strict()
 
-export const CreateReportResSchema = ReportWithRelationsSchema
+const BaseReportSchema = z.object({
+  isAnonymous: z.boolean().optional().default(false)
+})
 
-export const CancelReportParamsSchema = z
-  .object({
-    id: z.string().uuid()
-  })
-  .strict()
+const AssessmentApprovalSchema = BaseReportSchema.extend({
+  requestType: z.literal(RequestType.ASSESSMENT_APPROVAL_REQUEST),
+  assessmentId: z.uuid(),
+  // Những fields sau KHÔNG ĐƯỢC PHÉP xuất hiện trong approval request
+  severity: z.never().optional(),
+  title: z.never().optional(),
+  description: z.never().optional(),
+  actionsTaken: z.never().optional()
+})
 
-export const CancelReportResSchema = ReportWithRelationsSchema
+const ReportTypeSchema = BaseReportSchema.extend({
+  requestType: z.enum([
+    RequestType.SAFETY_REPORT,
+    RequestType.INSTRUCTOR_REPORT,
+    RequestType.FATIGUE_REPORT,
+    RequestType.TRAINING_PROGRAM_REPORT,
+    RequestType.FACILITIES_REPORT,
+    RequestType.COURSE_ORGANIZATION_REPORT,
+    RequestType.OTHER
+  ]),
+  severity: z.enum(RequestSeverity).optional(),
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().min(1).max(4000).optional(),
+  actionsTaken: z.string().trim().min(1).max(2000).optional(),
+  // assessmentId is không được phép cho các loại report này
+  assessmentId: z.never().optional()
+})
 
-export const AcknowledgeReportParamsSchema = z
-  .object({
-    id: z.string().uuid()
-  })
-  .strict()
+// Discriminated Union dựa theo requestType
+export const CreateReportBodySchema = z.discriminatedUnion('requestType', [AssessmentApprovalSchema, ReportTypeSchema])
 
-export const AcknowledgeReportResSchema = ReportWithRelationsSchema
+export const CreateReportResSchema = ReportSchema
 
-export const RespondReportParamsSchema = z
-  .object({
-    id: z.string().uuid()
-  })
-  .strict()
+export const CancelReportParamsSchema = GetReportParamsSchema
+
+export const CancelReportResSchema = ReportSchema
+
+export const AcknowledgeReportParamsSchema = CancelReportParamsSchema
+
+export const AcknowledgeReportResSchema = ReportSchema
+
+export const RespondReportParamsSchema = CancelReportParamsSchema
 
 export const RespondReportBodySchema = z
   .object({
-    response: optionalBoundedString(4000)
+    response: z.string().trim().min(1).max(4000)
   })
   .strict()
 
-export const RespondReportResSchema = ReportWithRelationsSchema
-
-export const GetReportResSchema = ReportWithRelationsSchema
+export const RespondReportResSchema = ReportSchema
 
 export type ReportTypeModel = z.infer<typeof ReportSchema>
-export type ReportListItemType = z.infer<typeof ReportListItemSchema>
-export type ReportWithRelationsType = z.infer<typeof ReportWithRelationsSchema>
 export type GetReportsQueryType = z.infer<typeof GetReportsQuerySchema>
 export type GetReportsResType = z.infer<typeof GetReportsResSchema>
-export type GetMyReportsQueryType = z.infer<typeof GetMyReportsQuerySchema>
 export type GetMyReportsResType = z.infer<typeof GetMyReportsResSchema>
 export type CreateReportBodyType = z.infer<typeof CreateReportBodySchema>
 export type CreateReportResType = z.infer<typeof CreateReportResSchema>
