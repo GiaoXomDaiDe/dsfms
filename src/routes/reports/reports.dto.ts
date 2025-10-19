@@ -4,9 +4,7 @@ import {
   AcknowledgeReportResSchema,
   CancelReportParamsSchema,
   CancelReportResSchema,
-  CreateReportBodySchema,
   CreateReportResSchema,
-  GetMyReportsQuerySchema,
   GetMyReportsResSchema,
   GetReportParamsSchema,
   GetReportResSchema,
@@ -21,15 +19,15 @@ export class GetReportsQueryDTO extends createZodDto(GetReportsQuerySchema) {}
 
 export class GetReportsResDTO extends createZodDto(GetReportsResSchema) {}
 
-export class GetMyReportsQueryDTO extends createZodDto(GetMyReportsQuerySchema) {}
-
 export class GetMyReportsResDTO extends createZodDto(GetMyReportsResSchema) {}
 
 export class GetReportParamsDTO extends createZodDto(GetReportParamsSchema) {}
 
 export class GetReportResDTO extends createZodDto(GetReportResSchema) {}
 
-export class CreateReportBodyDTO extends createZodDto(CreateReportBodySchema) {}
+// Không thể dùng createZodDto với discriminated union
+// Dùng ZodValidationPipe trực tiếp trong controller
+// export class CreateReportBodyDTO extends createZodDto(CreateReportBodySchema) {}
 
 export class CreateReportResDTO extends createZodDto(CreateReportResSchema) {}
 

@@ -29,6 +29,7 @@ import {
   OnlyAcademicDepartmentCanRestoreSubjectsException,
   OnlyAcademicDepartmentCanUpdateSubjectsException,
   SubjectCodeAlreadyExistsException,
+  SubjectDateOutsideCourseDateRangeException,
   SubjectIsNotDeletedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
@@ -106,8 +107,9 @@ export class SubjectService {
       this.validateCreatePermissions(createdByRoleName)
 
       // Kiểm tra course tồn tại (nếu có courseId)
+      let course = null
       if (data.courseId) {
-        const course = await this.sharedCourseRepository.findById(data.courseId)
+        course = await this.sharedCourseRepository.findById(data.courseId)
         if (!course) {
           throw CourseNotFoundException
         }
@@ -125,7 +127,18 @@ export class SubjectService {
       // Validate date range
       this.validateDateRange(data.startDate, data.endDate)
 
-      return await this.subjectRepo.createSimple({ data, createdById })
+      // Nếu có course, validate subject dates phải nằm trong course dates
+      if (course) {
+        this.validateSubjectDatesWithinCourse(data.startDate, data.endDate, course.startDate, course.endDate)
+      }
+
+      // Tính duration tự động: (endDate - startDate) / 30 ngày
+      const durationInMonths = this.calculateDuration(data.startDate, data.endDate)
+
+      return await this.subjectRepo.createSimple({
+        data: { ...data, duration: durationInMonths },
+        createdById
+      })
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw CourseNotFoundException
@@ -186,16 +199,22 @@ export class SubjectService {
           if (!isValidRange) {
             throw BulkInvalidDateRangeAtIndexException(i)
           }
+
+          // Validate subject dates nằm trong course dates
+          this.validateSubjectDatesWithinCourse(subject.startDate, subject.endDate, course.startDate, course.endDate)
         }
 
-        // Tạo subject data với courseId
+        // Tính duration tự động
+        const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
+
+        // Tạo subject data với courseId và duration
         const createData: CreateSubjectBodyType = {
           ...subject,
           courseId
         }
 
         const createdSubject = await this.subjectRepo.create({
-          data: createData,
+          data: { ...createData, duration: durationInMonths },
           createdById
         })
 
@@ -254,10 +273,17 @@ export class SubjectService {
       // Không cần kiểm tra department access
 
       // Validate course mới nếu thay đổi
+      let course = null
+      const finalCourseId = data.courseId || existingSubject.courseId
       if (data.courseId && data.courseId !== existingSubject.courseId) {
-        const course = await this.sharedCourseRepository.findById(data.courseId)
+        course = await this.sharedCourseRepository.findById(data.courseId)
         if (!course) {
           throw CourseNotFoundException
+        }
+      } else {
+        // Lấy course hiện tại nếu không thay đổi nhưng có thay đổi dates
+        if ((data.startDate || data.endDate) && finalCourseId) {
+          course = await this.sharedCourseRepository.findById(finalCourseId)
         }
       }
 
@@ -274,7 +300,19 @@ export class SubjectService {
       const endDate = data.endDate || existingSubject.endDate
       this.validateDateRange(startDate, endDate)
 
-      return await this.subjectRepo.updateSimple({ id, data, updatedById })
+      // Validate subject dates nằm trong course dates (nếu có course)
+      if (course) {
+        this.validateSubjectDatesWithinCourse(startDate, endDate, course.startDate, course.endDate)
+      }
+
+      // Tính lại duration nếu dates thay đổi
+      const updatedData: UpdateSubjectBodyType & { duration?: number } = { ...data }
+      if (data.startDate || data.endDate) {
+        const durationInMonths = this.calculateDuration(startDate, endDate)
+        updatedData.duration = durationInMonths
+      }
+
+      return await this.subjectRepo.updateSimple({ id, data: updatedData, updatedById })
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw SubjectNotFoundException
@@ -521,6 +559,39 @@ export class SubjectService {
         throw InvalidDateRangeException
       }
     }
+  }
+
+  /**
+   * Validate subject dates phải nằm trong khoảng course dates
+   */
+  private validateSubjectDatesWithinCourse(
+    subjectStartDate: Date,
+    subjectEndDate: Date,
+    courseStartDate: Date,
+    courseEndDate: Date
+  ): void {
+    const subStart = new Date(subjectStartDate)
+    const subEnd = new Date(subjectEndDate)
+    const courStart = new Date(courseStartDate)
+    const courEnd = new Date(courseEndDate)
+
+    if (subStart < courStart || subEnd > courEnd) {
+      throw SubjectDateOutsideCourseDateRangeException
+    }
+  }
+
+  /**
+   * Tính duration (số tháng) dựa trên (endDate - startDate) / 30 ngày
+   * Trả về số thập phân với 2 chữ số
+   */
+  private calculateDuration(startDate: Date, endDate: Date): number {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffInMs = end.getTime() - start.getTime()
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
+    const durationInMonths = diffInDays / 30
+    // Làm tròn 2 chữ số thập phân
+    return Math.round(durationInMonths * 100) / 100
   }
 
   /**

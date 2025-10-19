@@ -1,150 +1,85 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma, RequestSeverity, RequestStatus, RequestType } from '@prisma/client'
 import {
+  AcknowledgeReportResType,
+  CancelReportResType,
   CreateReportBodyType,
   CreateReportResType,
-  GetMyReportsQueryType,
   GetMyReportsResType,
+  GetReportResType,
   GetReportsQueryType,
   GetReportsResType,
-  ReportWithRelationsType,
   RespondReportBodyType,
   RespondReportResType
 } from '~/routes/reports/reports.model'
+import { RequestTypeValue } from '~/shared/constants/report.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class ReportsRepo {
-  private readonly reportInclude = {
-    createdBy: {
-      select: {
-        id: true,
-        eid: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: {
-          select: {
-            name: true
-          }
-        }
-      }
-    },
-    managedBy: {
-      select: {
-        id: true,
-        eid: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: {
-          select: {
-            name: true
-          }
-        }
-      }
-    },
-    updatedBy: {
-      select: {
-        id: true,
-        eid: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: {
-          select: {
-            name: true
-          }
-        }
-      }
-    },
-    assessment: {
-      select: {
-        id: true,
-        name: true
-      }
-    }
-  } satisfies Prisma.RequestInclude
-
-  // Report types only (exclude ASSESSMENT_APPROVAL_REQUEST)
-  private readonly reportTypes: RequestType[] = [
+  private readonly reportTypes: RequestTypeValue[] = [
     RequestType.SAFETY_REPORT,
-    RequestType.INCIDENT_REPORT,
-    RequestType.FEEDBACK_REPORT
+    RequestType.INSTRUCTOR_REPORT,
+    RequestType.FATIGUE_REPORT,
+    RequestType.TRAINING_PROGRAM_REPORT,
+    RequestType.FACILITIES_REPORT,
+    RequestType.COURSE_ORGANIZATION_REPORT,
+    RequestType.OTHER,
+    RequestType.ASSESSMENT_APPROVAL_REQUEST
   ]
 
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: GetReportsQueryType): Promise<GetReportsResType> {
-    const { severity, status, isAnonymous, requestType } = query
-
-    const where: Prisma.RequestWhereInput = {
-      requestType: { in: requestType ? [requestType as RequestType] : this.reportTypes },
-      ...(severity && { severity: severity as RequestSeverity }),
-      ...(status && { status: status as RequestStatus }),
-      ...(isAnonymous !== undefined && { isAnonymous })
-    }
-
-    const [totalItems, reports] = await this.prisma.$transaction([
-      this.prisma.request.count({ where }),
-      this.prisma.request.findMany({
-        where,
-        include: this.reportInclude
-      })
-    ])
-
-    const formattedReports = reports.map((report) => this.mapReport(report))
-
-    return {
-      reports: formattedReports,
-      totalItems
-    }
+    return this.getReports(query)
   }
 
-  async listMine(userId: string, query: GetMyReportsQueryType): Promise<GetMyReportsResType> {
-    const { page = 1, limit = 10, reportType, status } = query
-    const skip = (page - 1) * limit
-
-    const where: Prisma.RequestWhereInput = {
-      createdById: userId,
-      requestType: { in: reportType ? [reportType as RequestType] : this.reportTypes },
-      ...(status && { status: status as RequestStatus })
-    }
-
-    const [totalItems, reports] = await this.prisma.$transaction([
-      this.prisma.request.count({ where }),
-      this.prisma.request.findMany({
-        where,
-        include: this.reportInclude,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit
-      })
-    ])
-
-    const formattedReports = reports.map((report) => this.mapReport(report))
-    const totalPages = limit === 0 ? 0 : Math.ceil(totalItems / limit)
-
-    return {
-      reports: formattedReports,
-      totalItems
-    }
+  async listMe(userId: string, query: GetReportsQueryType): Promise<GetMyReportsResType> {
+    return this.getReports(query, userId)
   }
 
-  async findById(id: string): Promise<ReportWithRelationsType | null> {
+  async findById(id: string): Promise<GetReportResType | null> {
     const report = await this.prisma.request.findUnique({
       where: {
         id,
         requestType: { in: this.reportTypes }
-      },
-      include: this.reportInclude
+      }
     })
 
     if (!report) {
       return null
     }
 
-    return this.mapReport(report)
+    return report
+  }
+
+  private async getReports(
+    query: GetReportsQueryType,
+    userId?: string
+  ): Promise<{ reports: any[]; totalItems: number }> {
+    const { severity, status, isAnonymous, requestType } = query
+
+    const where: Prisma.RequestWhereInput = {
+      requestType: { in: requestType ? [requestType as RequestTypeValue] : this.reportTypes },
+      ...(severity && { severity: severity as RequestSeverity }),
+      ...(status && { status: status as RequestStatus }),
+      ...(isAnonymous !== undefined && { isAnonymous }),
+      ...(userId && { createdById: userId })
+    }
+
+    const [totalItems, reports] = await this.prisma.$transaction([
+      this.prisma.request.count({ where }),
+      this.prisma.request.findMany({
+        where
+      })
+    ])
+
+    return {
+      reports,
+      totalItems
+    }
   }
 
   async create({
@@ -154,25 +89,42 @@ export class ReportsRepo {
     data: CreateReportBodyType
     createdById: string
   }): Promise<CreateReportResType> {
+    const baseData = {
+      requestType: data.requestType as RequestType,
+      createdById,
+      isAnonymous: data.isAnonymous ?? false,
+      status: RequestStatus.CREATED
+    }
+
+    if (data.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST) {
+      const report = await this.prisma.request.create({
+        data: {
+          ...baseData,
+          assessmentId: data.assessmentId,
+          severity: null,
+          title: null,
+          description: null,
+          actionsTaken: null
+        }
+      })
+      return report
+    }
+
     const report = await this.prisma.request.create({
       data: {
-        requestType: data.reportType as RequestType,
-        createdById,
+        ...baseData,
         severity: data.severity as RequestSeverity,
         title: data.title,
         description: data.description ?? null,
         actionsTaken: data.actionsTaken ?? null,
-        isAnonymous: data.isAnonymous ?? false,
-        assessmentId: data.assessmentId ?? null,
-        status: RequestStatus.CREATED
-      },
-      include: this.reportInclude
+        assessmentId: null
+      }
     })
 
-    return this.mapReport(report)
+    return report
   }
 
-  async cancel({ id, updatedById }: { id: string; updatedById: string }): Promise<ReportWithRelationsType> {
+  async cancel({ id, updatedById }: { id: string; updatedById: string }): Promise<CancelReportResType> {
     const report = await this.prisma.request.update({
       where: {
         id,
@@ -181,14 +133,13 @@ export class ReportsRepo {
       data: {
         status: RequestStatus.CANCELLED,
         updatedById
-      },
-      include: this.reportInclude
+      }
     })
 
-    return this.mapReport(report)
+    return report
   }
 
-  async acknowledge({ id, managedById }: { id: string; managedById: string }): Promise<ReportWithRelationsType> {
+  async acknowledge({ id, managedById }: { id: string; managedById: string }): Promise<AcknowledgeReportResType> {
     const report = await this.prisma.request.update({
       where: {
         id,
@@ -198,11 +149,10 @@ export class ReportsRepo {
         status: RequestStatus.ACKNOWLEDGED,
         managedById,
         updatedById: managedById
-      },
-      include: this.reportInclude
+      }
     })
 
-    return this.mapReport(report)
+    return report
   }
 
   async respond({
@@ -224,53 +174,9 @@ export class ReportsRepo {
         response: data.response,
         managedById,
         updatedById: managedById
-      },
-      include: this.reportInclude
+      }
     })
 
-    return this.mapReport(report)
-  }
-
-  private mapReport(report: any): ReportWithRelationsType {
-    const { createdBy, managedBy, updatedBy, assessment, ...rest } = report
-
-    return {
-      ...rest,
-      createdBy: {
-        id: createdBy.id,
-        eid: createdBy.eid,
-        firstName: createdBy.firstName,
-        lastName: createdBy.lastName,
-        email: createdBy.email,
-        roleName: createdBy.role?.name ?? null
-      },
-      managedBy: managedBy
-        ? {
-            id: managedBy.id,
-            eid: managedBy.eid,
-            firstName: managedBy.firstName,
-            lastName: managedBy.lastName,
-            email: managedBy.email,
-            roleName: managedBy.role?.name ?? null
-          }
-        : null,
-      updatedBy: updatedBy
-        ? {
-            id: updatedBy.id,
-            eid: updatedBy.eid,
-            firstName: updatedBy.firstName,
-            lastName: updatedBy.lastName,
-            email: updatedBy.email,
-            roleName: updatedBy.role?.name ?? null
-          }
-        : null,
-      assessment: assessment
-        ? {
-            id: assessment.id,
-            name: assessment.name,
-            description: null // AssessmentForm doesn't have description
-          }
-        : null
-    } as ReportWithRelationsType
+    return report
   }
 }

@@ -1,14 +1,12 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common'
+import { ZodSerializerDto, ZodValidationPipe } from 'nestjs-zod'
 import {
   AcknowledgeReportParamsDTO,
   AcknowledgeReportResDTO,
   CancelReportParamsDTO,
   CancelReportResDTO,
-  CreateReportBodyDTO,
   CreateReportResDTO,
-  GetMyReportsQueryDTO,
   GetMyReportsResDTO,
-  GetReportParamsDTO,
   GetReportResDTO,
   GetReportsQueryDTO,
   GetReportsResDTO,
@@ -16,6 +14,8 @@ import {
   RespondReportParamsDTO,
   RespondReportResDTO
 } from '~/routes/reports/reports.dto'
+import type { CreateReportBodyType } from '~/routes/reports/reports.model'
+import { CreateReportBodySchema } from '~/routes/reports/reports.model'
 import { ReportsService } from '~/routes/reports/reports.service'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 
@@ -24,32 +24,36 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get()
-  async getReports(@Query() query: GetReportsQueryDTO): Promise<GetReportsResDTO> {
+  @ZodSerializerDto(GetReportsResDTO)
+  async getReports(@Query() query: GetReportsQueryDTO) {
     return this.reportsService.getReports(query)
   }
 
   @Get('my-reports')
+  @ZodSerializerDto(GetMyReportsResDTO)
   async getMyReports(
     @ActiveUser('userId') userId: string,
-    @Query() query: GetMyReportsQueryDTO
+    @Query() query: GetReportsQueryDTO
   ): Promise<GetMyReportsResDTO> {
     return this.reportsService.getMyReports(userId, query)
   }
 
-  @Get(':id')
-  async getReportById(@Param() params: GetReportParamsDTO): Promise<GetReportResDTO> {
-    return this.reportsService.getReportById(params.id)
+  @Get(':reportId')
+  @ZodSerializerDto(GetReportResDTO)
+  async getReportById(@Param('reportId') reportId: string) {
+    return this.reportsService.getReportById(reportId)
   }
 
   @Post()
+  @ZodSerializerDto(CreateReportResDTO)
   async createReport(
-    @Body() body: CreateReportBodyDTO,
+    @Body(new ZodValidationPipe(CreateReportBodySchema)) body: CreateReportBodyType,
     @ActiveUser('userId') userId: string
   ): Promise<CreateReportResDTO> {
     return this.reportsService.createReport(body, userId)
   }
 
-  @Put(':id/cancel')
+  @Put(':reportId/cancel')
   async cancelReport(
     @Param() params: CancelReportParamsDTO,
     @ActiveUser('userId') userId: string
@@ -57,7 +61,7 @@ export class ReportsController {
     return this.reportsService.cancelReport(params.id, userId)
   }
 
-  @Put(':id/acknowledge')
+  @Put(':reportId/acknowledge')
   async acknowledgeReport(
     @Param() params: AcknowledgeReportParamsDTO,
     @ActiveUser('userId') userId: string

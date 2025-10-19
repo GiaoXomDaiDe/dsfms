@@ -8,6 +8,9 @@ export const CourseNotFoundException = new NotFoundException('Course not found')
 export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists')
 export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
 export const SubjectIsNotDeletedException = new BadRequestException('Subject is not deleted')
+export const SubjectDateOutsideCourseDateRangeException = new BadRequestException(
+  'Subject start date and end date must be within the course date range'
+)
 
 // Permission Errors
 export const OnlyAcademicDepartmentCanCreateSubjectsException = new ForbiddenException(
