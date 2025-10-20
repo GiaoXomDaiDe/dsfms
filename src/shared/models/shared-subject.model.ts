@@ -1,5 +1,5 @@
-import { Prisma, SubjectMethod, SubjectStatus, SubjectType } from '@prisma/client'
 import z from 'zod'
+import { SubjectMethod, SubjectStatus, SubjectType } from '~/shared/constants/subject.constant'
 
 export const SubjectSchema = z.object({
   id: z.uuid(),
@@ -7,18 +7,16 @@ export const SubjectSchema = z.object({
   name: z.string().min(1).max(255),
   code: z.string().min(1).max(50),
   description: z.string().optional().nullable(),
-  method: z.enum(SubjectMethod),
-  // duration can be fractional (hours), store as decimal with 2dp in DB
-  // accept numbers or numeric strings; coerce to number and validate positive
-  duration: z.instanceof(Prisma.Decimal).optional().nullable(),
-  type: z.nativeEnum(SubjectType),
+  method: z.enum([SubjectMethod.CLASSROOM, SubjectMethod.ERO, SubjectMethod.E_LEARNING]),
+  duration: z.number().optional().nullable(),
+  type: z.enum([SubjectType.RECURRENT, SubjectType.UNLIMIT]),
   roomName: z.string().optional().nullable(),
   remarkNote: z.string().optional().nullable(),
   timeSlot: z.string().optional().nullable(),
   isSIM: z.boolean(),
   passScore: z.number().min(0).max(100).optional().nullable(),
   startDate: z.iso.datetime().transform((value) => new Date(value)),
-  status: z.nativeEnum(SubjectStatus),
+  status: z.enum([SubjectStatus.ARCHIVED, SubjectStatus.PLANNED, SubjectStatus.ON_GOING, SubjectStatus.COMPLETED]),
   endDate: z.iso.datetime().transform((value) => new Date(value)),
   createdAt: z.iso.datetime().transform((d) => new Date(d)),
   updatedAt: z.iso.datetime().transform((d) => new Date(d)),
@@ -27,3 +25,5 @@ export const SubjectSchema = z.object({
     .transform((d) => new Date(d))
     .nullable()
 })
+
+export type SubjectType = z.infer<typeof SubjectSchema>

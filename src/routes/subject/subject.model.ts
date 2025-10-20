@@ -5,9 +5,36 @@ import {
   SubjectStatus,
   SubjectType
 } from '@prisma/client'
-import { createZodDto } from 'nestjs-zod'
 import { z } from 'zod'
 import { SubjectSchema } from '~/shared/models/shared-subject.model'
+
+export const GetSubjectsQuerySchema = SubjectSchema.pick({
+  courseId: true,
+  method: true,
+  type: true,
+  status: true,
+  isSIM: true
+})
+  .extend({
+    includeDeleted: z.coerce.boolean().default(false).optional()
+  })
+  .partial()
+
+export const GetSubjectsSchema = SubjectSchema.extend({
+  instructorCount: z.number().int().default(0),
+  enrollmentCount: z.number().int().default(0)
+})
+
+export const GetSubjectsResSchema = z.object({
+  subjects: z.array(GetSubjectsSchema),
+  totalItems: z.number().int()
+})
+
+export const SubjectResSchema = SubjectSchema
+
+export type GetSubjectsQueryType = z.infer<typeof GetSubjectsQuerySchema>
+export type GetSubjectsType = z.infer<typeof GetSubjectsSchema>
+export type GetSubjectsResType = z.infer<typeof GetSubjectsResSchema>
 
 // Course info schema for nested relations
 export const SubjectCourseSchema = z.object({
@@ -49,15 +76,6 @@ export const SubjectEnrollmentSchema = z.object({
   enrollmentDate: z.iso.datetime().transform((value) => new Date(value)),
   batchCode: z.string(),
   status: z.nativeEnum(SubjectEnrollmentStatus)
-})
-
-// Subject with relations (for response - no createdBy/updatedBy)
-export const SubjectWithInfoSchema = SubjectSchema.extend({
-  course: SubjectCourseSchema.optional(),
-  instructors: z.array(SubjectInstructorSchema).optional().default([]),
-  enrollments: z.array(SubjectEnrollmentSchema).optional().default([]),
-  instructorCount: z.number().int().default(0),
-  enrollmentCount: z.number().int().default(0)
 })
 
 // Subject with relations including user info (for internal use)
@@ -116,40 +134,8 @@ export const BulkCreateSubjectsResSchema = z.object({
   })
 })
 
-// Subject Query Schema
-export const GetSubjectsQuerySchema = z.object({
-  page: z.string().regex(/^\d+$/).transform(Number).optional().default(1),
-  limit: z.string().regex(/^\d+$/).transform(Number).optional().default(10),
-  search: z.string().optional(),
-  courseId: z.string().uuid().optional(),
-  method: z.nativeEnum(SubjectMethod).optional(),
-  type: z.nativeEnum(SubjectType).optional(),
-  isSIM: z
-    .string()
-    .regex(/^(true|false)$/)
-    .transform((val) => val === 'true')
-    .optional(),
-  includeDeleted: z
-    .string()
-    .regex(/^(true|false)$/)
-    .transform((val) => val === 'true')
-    .optional()
-    .default(false)
-})
-
-// Get Subjects Response Schema
-export const GetSubjectsResSchema = z.object({
-  subjects: z.array(SubjectWithInfoSchema),
-  totalItems: z.number().int(),
-  totalPages: z.number().int(),
-  currentPage: z.number().int()
-})
-
-// Simple Subject Response Schema - Just basic subject entity
-export const SubjectResSchema = SubjectSchema
-
 // Subject Detail Response Schema (for complex operations)
-export const SubjectDetailResSchema = SubjectWithInfoSchema
+export const SubjectDetailResSchema = SubjectSchema
 
 // Add Instructors Body Schema
 export const AddInstructorsBodySchema = z.object({
@@ -385,14 +371,12 @@ export const TraineeSubjectsOverviewResSchema = z.object({
 })
 
 // Type exports
+
 export type SubjectEntityType = z.infer<typeof SubjectSchema>
 export type SubjectResType = z.infer<typeof SubjectResSchema>
-export type SubjectWithInfoType = z.infer<typeof SubjectWithInfoSchema>
 export type SubjectWithUserInfoType = z.infer<typeof SubjectWithUserInfoSchema>
 export type CreateSubjectBodyType = z.infer<typeof CreateSubjectBodySchema>
 export type UpdateSubjectBodyType = z.infer<typeof UpdateSubjectBodySchema>
-export type GetSubjectsQueryType = z.infer<typeof GetSubjectsQuerySchema>
-export type GetSubjectsResType = z.infer<typeof GetSubjectsResSchema>
 export type SubjectDetailResType = z.infer<typeof SubjectDetailResSchema>
 export type AddInstructorsBodyType = z.infer<typeof AddInstructorsBodySchema>
 export type RemoveInstructorsBodyType = z.infer<typeof RemoveInstructorsBodySchema>
@@ -420,32 +404,6 @@ export type TraineeSubjectOverviewType = z.infer<typeof TraineeSubjectOverviewSc
 export type TraineeSubjectsOverviewResType = z.infer<typeof TraineeSubjectsOverviewResSchema>
 
 // DTO exports
-export class CreateSubjectBodyDto extends createZodDto(CreateSubjectBodySchema) {}
-export class UpdateSubjectBodyDto extends createZodDto(UpdateSubjectBodySchema) {}
-export class GetSubjectsQueryDto extends createZodDto(GetSubjectsQuerySchema) {}
-export class GetSubjectsResDto extends createZodDto(GetSubjectsResSchema) {}
-export class SubjectResDto extends createZodDto(SubjectResSchema) {}
-export class SubjectDetailResDto extends createZodDto(SubjectDetailResSchema) {}
-export class AddInstructorsBodyDto extends createZodDto(AddInstructorsBodySchema) {}
-export class RemoveInstructorsBodyDto extends createZodDto(RemoveInstructorsBodySchema) {}
-export class EnrollTraineesBodyDto extends createZodDto(EnrollTraineesBodySchema) {}
-export class RemoveEnrollmentsBodyDto extends createZodDto(RemoveEnrollmentsBodySchema) {}
-export class BatchAddTraineesToCourseBodyDto extends createZodDto(BatchAddTraineesToCourseBodySchema) {}
-export class BatchAddTraineesToSubjectBodyDto extends createZodDto(BatchAddTraineesToSubjectBodySchema) {}
-export class BulkCreateSubjectsBodyDto extends createZodDto(BulkCreateSubjectsBodySchema) {}
-export class BulkCreateSubjectsResDto extends createZodDto(BulkCreateSubjectsResSchema) {}
-export class UpdateEnrollmentStatusBodyDto extends createZodDto(UpdateEnrollmentStatusBodySchema) {}
-export class SubjectStatsDto extends createZodDto(SubjectStatsSchema) {}
-export class AddInstructorsResDto extends createZodDto(AddInstructorsResSchema) {}
-export class RemoveInstructorsResDto extends createZodDto(RemoveInstructorsResSchema) {}
-export class EnrollTraineesResDto extends createZodDto(EnrollTraineesResSchema) {}
-export class RemoveEnrollmentsResDto extends createZodDto(RemoveEnrollmentsResSchema) {}
-export class BatchAddTraineesToCourseResDto extends createZodDto(BatchAddTraineesToCourseResSchema) {}
-export class BatchAddTraineesToSubjectResDto extends createZodDto(BatchAddTraineesToSubjectResSchema) {}
-export class BulkMultiSubjectEnrollmentBodyDto extends createZodDto(BulkMultiSubjectEnrollmentBodySchema) {}
-export class BulkMultiSubjectEnrollmentResDto extends createZodDto(BulkMultiSubjectEnrollmentResSchema) {}
-export class CourseTraineesOverviewResDto extends createZodDto(CourseTraineesOverviewResSchema) {}
-export class TraineeSubjectsOverviewResDto extends createZodDto(TraineeSubjectsOverviewResSchema) {}
 
 // ========================================
 // TRAINER ASSIGNMENT SCHEMAS & DTOs

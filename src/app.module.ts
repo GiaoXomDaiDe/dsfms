@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
+import { ScheduleModule } from '@nestjs/schedule'
 import { ZodSerializerInterceptor } from 'nestjs-zod'
 import { CourseModule } from '~/routes/course/course.module'
 import { DepartmentModule } from '~/routes/department/department.module'
@@ -12,6 +13,7 @@ import { SubjectModule } from '~/routes/subject/subject.module'
 import { UserModule } from '~/routes/user/user.module'
 import { HttpExceptionFilter } from '~/shared/filters/http-exception.filter'
 import CustomZodValidationPipe from '~/shared/pipes/custom-zod-vaidation.pipe'
+import { StatusUpdaterService } from '~/shared/services/status-updater.service'
 import { SharedModule } from '~/shared/shared.module'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
@@ -24,6 +26,7 @@ import { TemplateModule } from './routes/template/template.module'
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env'
@@ -47,6 +50,7 @@ import { TemplateModule } from './routes/template/template.module'
   controllers: [AppController],
   providers: [
     AppService,
+    StatusUpdaterService,
     {
       provide: APP_PIPE,
       useClass: CustomZodValidationPipe

@@ -18,7 +18,6 @@ import {
   CannotHardDeleteSubjectWithEnrollmentsException,
   CannotHardDeleteSubjectWithInstructorsException,
   CannotRestoreSubjectCodeConflictException,
-  CourseAtCapacityException,
   CourseNotFoundException,
   DuplicateInstructorException,
   DuplicateTraineeEnrollmentException,
@@ -57,11 +56,6 @@ export class SubjectService {
     private readonly sharedRoleRepository: SharedRoleRepository
   ) {}
 
-  /**
-   * Lấy danh sách subjects với phân trang và filter.
-   * Chỉ ACADEMIC_DEPARTMENT mới được phép xem subject đã bị xóa mềm.
-   * @param query - Query parameters bao gồm page, limit, search, filters
-   */
   async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
     return await this.subjectRepo.list(query)
   }
@@ -789,14 +783,14 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
-    // Validation 1: Check course max trainee limit
-    if (subject.course?.id) {
-      const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.course.id)
+    // // Validation 1: Check course max trainee limit
+    // if (subject.course?.id) {
+    //   const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.course.id)
 
-      if (max !== null && current + data.traineeUserIds.length > max) {
-        throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
-      }
-    }
+    //   if (max !== null && current + data.traineeUserIds.length > max) {
+    //     throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
+    //   }
+    // }
 
     // Validation 2: Check recurrent subject constraints
     if (subject.type === 'RECURRENT') {

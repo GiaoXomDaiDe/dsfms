@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma, RequestSeverity, RequestStatus, RequestType } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import {
   AcknowledgeReportResType,
   CancelReportResType,
@@ -12,8 +12,15 @@ import {
   RespondReportBodyType,
   RespondReportResType
 } from '~/routes/reports/reports.model'
-import { RequestTypeValue } from '~/shared/constants/report.constant'
+import {
+  RequestSeverityValue,
+  RequestStatus,
+  RequestStatusValue,
+  RequestType,
+  RequestTypeValue
+} from '~/shared/constants/report.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { ReportType } from '~/shared/models/shared-report.model'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -58,13 +65,13 @@ export class ReportsRepo {
   private async getReports(
     query: GetReportsQueryType,
     userId?: string
-  ): Promise<{ reports: any[]; totalItems: number }> {
+  ): Promise<{ reports: ReportType[]; totalItems: number }> {
     const { severity, status, isAnonymous, requestType } = query
 
     const where: Prisma.RequestWhereInput = {
       requestType: { in: requestType ? [requestType as RequestTypeValue] : this.reportTypes },
-      ...(severity && { severity: severity as RequestSeverity }),
-      ...(status && { status: status as RequestStatus }),
+      ...(severity && { severity: severity as RequestSeverityValue }),
+      ...(status && { status: status as RequestStatusValue }),
       ...(isAnonymous !== undefined && { isAnonymous }),
       ...(userId && { createdById: userId })
     }
@@ -90,7 +97,7 @@ export class ReportsRepo {
     createdById: string
   }): Promise<CreateReportResType> {
     const baseData = {
-      requestType: data.requestType as RequestType,
+      requestType: data.requestType as RequestTypeValue,
       createdById,
       isAnonymous: data.isAnonymous ?? false,
       status: RequestStatus.CREATED
@@ -113,7 +120,7 @@ export class ReportsRepo {
     const report = await this.prisma.request.create({
       data: {
         ...baseData,
-        severity: data.severity as RequestSeverity,
+        severity: data.severity as RequestSeverityValue,
         title: data.title,
         description: data.description ?? null,
         actionsTaken: data.actionsTaken ?? null,

@@ -5,38 +5,43 @@ import {
   AssignTraineesResDto,
   AssignTrainerBodyDto,
   AssignTrainerResDto,
+  BulkCreateSubjectsBodyDto,
+  BulkCreateSubjectsResDto,
   CancelSubjectEnrollmentBodyDto,
   CancelSubjectEnrollmentResDto,
+  CreateSubjectBodyDto,
+  EnrollTraineesBodyDto,
+  EnrollTraineesResDto,
   GetAvailableTrainersQueryDto,
   GetAvailableTrainersResDto,
+  GetSubjectsQueryDto,
+  GetSubjectsResDto,
   LookupTraineesBodyDto,
   LookupTraineesResDto,
+  RemoveEnrollmentsBodyDto,
+  RemoveEnrollmentsResDto,
   RemoveTrainerResDto,
+  SubjectDetailResDto,
+  SubjectResDto,
+  UpdateSubjectBodyDto,
   UpdateTrainerAssignmentBodyDto,
   UpdateTrainerAssignmentResDto
 } from '~/routes/subject/subject.dto'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
-import {
-  BulkCreateSubjectsBodyDto,
-  BulkCreateSubjectsResDto,
-  CreateSubjectBodyDto,
-  EnrollTraineesBodyDto,
-  EnrollTraineesResDto,
-  GetSubjectsQueryDto,
-  GetSubjectsResDto,
-  RemoveEnrollmentsBodyDto,
-  RemoveEnrollmentsResDto,
-  SubjectDetailResDto,
-  SubjectResDto,
-  UpdateSubjectBodyDto
-} from './subject.model'
+
 import { SubjectService } from './subject.service'
 
 @Controller('subjects')
 export class SubjectController {
   constructor(private readonly subjectService: SubjectService) {}
+
+  @Get()
+  @ZodSerializerDto(GetSubjectsResDto)
+  async getAllSubjects(@Query() query: GetSubjectsQueryDto) {
+    return await this.subjectService.list(query)
+  }
 
   @Post()
   @ZodSerializerDto(SubjectResDto)
@@ -145,17 +150,6 @@ export class SubjectController {
       archivedById: userId,
       archivedByRoleName: roleName
     })
-  }
-
-  /**
-   * API: Get All Subjects (with filters and pagination)
-   * GET /subjects
-   * Lấy danh sách subjects với filter và phân trang
-   */
-  @Get()
-  @ZodSerializerDto(GetSubjectsResDto)
-  async getAllSubjects(@Query() query: GetSubjectsQueryDto, @ActiveRolePermissions('name') roleName: string) {
-    return await this.subjectService.list(query)
   }
 
   /**

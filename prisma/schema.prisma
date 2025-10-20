@@ -235,7 +235,7 @@ model Subject {
   code            String              @unique
   description     String?
   method          SubjectMethod
-  duration        Decimal?           @db.Decimal(10, 2)
+  duration        Float?
   type            SubjectType
   roomName        String?
   remarkNote      String?
