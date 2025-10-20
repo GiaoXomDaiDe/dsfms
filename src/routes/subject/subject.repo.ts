@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { SubjectMethodValue, SubjectStatusValue, SubjectTypeValue } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { TraineeNotFoundException, TraineeResolutionFailureException } from './subject.error'
@@ -8,10 +10,10 @@ import {
   EnrollTraineesBodyType,
   GetSubjectsQueryType,
   GetSubjectsResType,
+  GetSubjectsType,
   SubjectDetailResType,
   SubjectEntityType,
   SubjectResType,
-  SubjectWithInfoType,
   UpdateSubjectBodyType
 } from './subject.model'
 
@@ -21,71 +23,48 @@ export class SubjectRepo {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
-    const { page = 1, limit = 10, search, method, type, isSIM, courseId, includeDeleted = false } = query
+    const { method, type, isSIM, courseId, status, includeDeleted } = query
 
-    const skip = (page - 1) * limit
-
-    // Build where condition
-    const where: any = {
+    const where: Prisma.SubjectWhereInput = {
       ...(includeDeleted ? {} : { deletedAt: null }),
-      ...(search && {
-        OR: [{ name: { contains: search, mode: 'insensitive' } }, { code: { contains: search, mode: 'insensitive' } }]
-      }),
-      ...(method && { method }),
-      ...(type && { type }),
-      ...(isSIM !== undefined && { isSIM }),
-      ...(courseId && { courseId })
+      ...(courseId && { courseId: courseId }),
+      ...(method && { method: method as SubjectMethodValue }),
+      ...(isSIM !== undefined && { isSIM: isSIM }),
+      ...(status && { status: status as SubjectStatusValue }),
+      ...(type && { type: type as SubjectTypeValue })
     }
 
-    // Get subjects with relations (exclude createdBy/updatedBy)
-    const subjects = await this.prisma.subject.findMany({
-      where,
-      include: {
-        course: {
-          include: {
-            department: {
-              select: {
-                id: true,
-                name: true,
-                code: true
+    const [subjects, totalItems] = await Promise.all([
+      this.prisma.subject.findMany({
+        where,
+        include: {
+          _count: {
+            select: {
+              instructors: true,
+              enrollments: {
+                where: {
+                  status: { not: 'CANCELLED' }
+                }
               }
             }
           }
-        },
-        _count: {
-          select: {
-            instructors: true,
-            enrollments: true
-          }
         }
-      },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit
-    })
+      }),
+      this.prisma.subject.count({ where })
+    ])
 
-    // Get total count
-    const totalItems = await this.prisma.subject.count({ where })
-
-    // Transform data
     const transformedSubjects = subjects.map((subject) => {
       const { _count, ...subjectWithoutCount } = subject
       return {
         ...subjectWithoutCount,
-        instructors: [],
-        enrollments: [],
         instructorCount: _count.instructors,
         enrollmentCount: _count.enrollments
       }
-    }) as unknown as SubjectWithInfoType[]
-
-    const totalPages = Math.ceil(totalItems / limit)
+    }) as GetSubjectsType[]
 
     return {
       subjects: transformedSubjects,
-      totalItems,
-      totalPages,
-      currentPage: page
+      totalItems
     }
   }
 

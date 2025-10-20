@@ -27,3 +27,5 @@ export const ReportSchema = z.object({
   updatedAt: z.iso.datetime().transform((d) => new Date(d)),
   updatedById: z.uuid().nullable()
 })
+
+export type ReportType = z.infer<typeof ReportSchema>
