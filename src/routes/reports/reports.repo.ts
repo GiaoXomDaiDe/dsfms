@@ -100,7 +100,7 @@ export class ReportsRepo {
       requestType: data.requestType as RequestTypeValue,
       createdById,
       isAnonymous: data.isAnonymous ?? false,
-      status: RequestStatus.CREATED
+      status: RequestStatus.SUBMITTED
     }
 
     if (data.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST) {

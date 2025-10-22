@@ -17,7 +17,7 @@ export const RequestSeverity = {
 } as const
 
 export const RequestStatus = {
-  CREATED: 'CREATED',
+  SUBMITTED: 'SUBMITTED',
   ACKNOWLEDGED: 'ACKNOWLEDGED',
   RESOLVED: 'RESOLVED',
   APPROVED: 'APPROVED',
