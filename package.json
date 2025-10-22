@@ -43,6 +43,7 @@
     "class-validator": "^0.14.2",
     "docxtemplater": "^3.66.4",
     "dotenv": "^17.2.2",
+    "lodash": "^4.17.21",
     "nestjs-zod": "^5.0.1",
     "nodemailer": "^7.0.6",
     "passport-jwt": "^4.0.1",

@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common'
-import { RequestStatus } from '@prisma/client'
 import {
-  CanOnlyAcknowledgeCreatedReportException,
-  CanOnlyCancelCreatedReportException,
+  CanOnlyAcknowledgeSubmittedReportException,
   CanOnlyCancelOwnReportException,
+  CanOnlyCancelSubmittedReportException,
   CanOnlyRespondAcknowledgedReportException,
   ReportNotFoundException
 } from '~/routes/reports/reports.error'
@@ -18,6 +17,7 @@ import {
   RespondReportResType
 } from '~/routes/reports/reports.model'
 import { ReportsRepo } from '~/routes/reports/reports.repo'
+import { RequestStatus } from '~/shared/constants/report.constant'
 
 @Injectable()
 export class ReportsService {
@@ -57,8 +57,8 @@ export class ReportsService {
     }
 
     // Chỉ có thể cancel report đang không được acknowledge hoặc resolved
-    if (existingReport.status !== RequestStatus.CREATED) {
-      throw CanOnlyCancelCreatedReportException
+    if (existingReport.status !== RequestStatus.SUBMITTED) {
+      throw CanOnlyCancelSubmittedReportException
     }
 
     return this.reportsRepo.cancel({ id, updatedById: userId })
@@ -71,9 +71,9 @@ export class ReportsService {
       throw ReportNotFoundException
     }
 
-    // Chỉ có thể acknowledge report đang ở trạng thái CREATED
-    if (existingReport.status !== RequestStatus.CREATED) {
-      throw CanOnlyAcknowledgeCreatedReportException
+    // Chỉ có thể acknowledge report đang ở trạng thái SUBMITTED
+    if (existingReport.status !== RequestStatus.SUBMITTED) {
+      throw CanOnlyAcknowledgeSubmittedReportException
     }
 
     return this.reportsRepo.acknowledge({ id, managedById })

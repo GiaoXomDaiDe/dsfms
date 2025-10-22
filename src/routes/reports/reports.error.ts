@@ -11,17 +11,17 @@ export const ReportNotFoundException = new NotFoundException('Report not found')
 export const CanOnlyCancelOwnReportException = new ForbiddenException('You can only cancel your own reports')
 
 /**
- * Lỗi khi cố gắng hủy báo cáo không ở trạng thái CREATED
+ * Lỗi khi cố gắng hủy báo cáo không ở trạng thái SUBMITTED
  */
-export const CanOnlyCancelCreatedReportException = new BadRequestException(
-  'Can only cancel reports with CREATED status'
+export const CanOnlyCancelSubmittedReportException = new BadRequestException(
+  'Can only cancel reports with SUBMITTED status'
 )
 
 /**
- * Lỗi khi cố gắng xác nhận báo cáo không ở trạng thái CREATED
+ * Lỗi khi cố gắng xác nhận báo cáo không ở trạng thái SUBMITTED
  */
-export const CanOnlyAcknowledgeCreatedReportException = new BadRequestException(
-  'Can only acknowledge reports with CREATED status'
+export const CanOnlyAcknowledgeSubmittedReportException = new BadRequestException(
+  'Can only acknowledge reports with SUBMITTED status'
 )
 
 /**
