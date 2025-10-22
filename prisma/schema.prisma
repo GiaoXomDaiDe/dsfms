@@ -364,7 +364,7 @@ model Request {
   description     String?
   actionsTaken    String?
   isAnonymous     Boolean          @default(false)
-  status          RequestStatus    @default(CREATED)
+  status          RequestStatus    @default(SUBMITTED)
   managedById     String?          @db.Uuid
   response        String?
   assessmentId    String?          @db.Uuid
@@ -499,7 +499,6 @@ model AssessmentValue {
 enum UserStatus {
   ACTIVE
   DISABLED
-  SUSPENDED
 }
 
 enum RequestType {
@@ -521,7 +520,7 @@ enum RequestSeverity {
 }
 
 enum RequestStatus {
-  CREATED
+  SUBMITTED
   ACKNOWLEDGED
   RESOLVED
   APPROVED

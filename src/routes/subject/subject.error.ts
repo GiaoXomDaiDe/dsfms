@@ -7,7 +7,6 @@ export const CourseNotFoundException = new NotFoundException('Course not found')
 // Subject Validation Errors
 export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists')
 export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
-export const SubjectIsNotDeletedException = new BadRequestException('Subject is not deleted')
 export const SubjectDateOutsideCourseDateRangeException = new BadRequestException(
   'Subject start date and end date must be within the course date range'
 )
@@ -21,9 +20,6 @@ export const OnlyAcademicDepartmentCanUpdateSubjectsException = new ForbiddenExc
 )
 export const OnlyAcademicDepartmentCanDeleteSubjectsException = new ForbiddenException(
   'Only ACADEMIC_DEPARTMENT can delete subjects'
-)
-export const OnlyAcademicDepartmentCanRestoreSubjectsException = new ForbiddenException(
-  'Only ACADEMIC_DEPARTMENT can restore subjects'
 )
 export const DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException = new ForbiddenException(
   'Department heads can only manage subjects in courses of their own department'
@@ -100,11 +96,6 @@ export const CannotHardDeleteSubjectWithEnrollmentsException = new BadRequestExc
 )
 export const CannotHardDeleteSubjectWithInstructorsException = new BadRequestException(
   'Cannot permanently delete subject with existing instructors'
-)
-
-// Restore Errors
-export const CannotRestoreSubjectCodeConflictException = new BadRequestException(
-  'Cannot restore subject: code conflicts with existing active subject'
 )
 
 // Bulk Operation Errors

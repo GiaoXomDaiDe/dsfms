@@ -10,7 +10,7 @@ export const UserSchema = z.object({
   address: z.string().max(255).nullable(),
   email: z.email(),
   passwordHash: z.string().min(6).max(100),
-  status: z.enum([UserStatus.ACTIVE, UserStatus.DISABLED, UserStatus.SUSPENDED]),
+  status: z.enum([UserStatus.ACTIVE, UserStatus.DISABLED]),
   signatureImageUrl: z.string().nullable(),
   roleId: z.uuid(),
   gender: z.enum([GenderStatus.MALE, GenderStatus.FEMALE]),

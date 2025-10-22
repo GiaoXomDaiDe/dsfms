@@ -17,7 +17,6 @@ import {
   CannotEnrollInRecurrentSubjectException,
   CannotHardDeleteSubjectWithEnrollmentsException,
   CannotHardDeleteSubjectWithInstructorsException,
-  CannotRestoreSubjectCodeConflictException,
   CourseNotFoundException,
   DuplicateInstructorException,
   DuplicateTraineeEnrollmentException,
@@ -25,11 +24,9 @@ import {
   InvalidTraineeSubmissionException,
   OnlyAcademicDepartmentCanCreateSubjectsException,
   OnlyAcademicDepartmentCanDeleteSubjectsException,
-  OnlyAcademicDepartmentCanRestoreSubjectsException,
   OnlyAcademicDepartmentCanUpdateSubjectsException,
   SubjectCodeAlreadyExistsException,
   SubjectDateOutsideCourseDateRangeException,
-  SubjectIsNotDeletedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
 } from './subject.error'
@@ -37,11 +34,10 @@ import {
   BulkCreateSubjectsBodyType,
   BulkCreateSubjectsResType,
   CreateSubjectBodyType,
+  GetSubjectDetailResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
-  SubjectDetailResType,
   SubjectEntityType,
-  SubjectResType,
   UpdateSubjectBodyType
 } from './subject.model'
 import { SubjectRepo } from './subject.repo'
@@ -56,30 +52,25 @@ export class SubjectService {
     private readonly sharedRoleRepository: SharedRoleRepository
   ) {}
 
-  async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
-    return await this.subjectRepo.list(query)
+  async list(query: GetSubjectsQueryType, userRoleName: string): Promise<GetSubjectsResType> {
+    const includeDeleted = userRoleName === RoleName.ACADEMIC_DEPARTMENT
+
+    return await this.subjectRepo.list({
+      ...query,
+      includeDeleted
+    })
   }
 
-  /**
-   * Lấy thông tin chi tiết một subject kèm theo instructors và enrollments.
-   * Chỉ ACADEMIC_DEPARTMENT mới được phép xem subject đã bị xóa mềm.
-   * @param id - ID của subject
-   * @param options - Tùy chọn includeDeleted
-   */
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<SubjectDetailResType> {
-    const subject = await this.subjectRepo.findById(id, { includeDeleted })
+  async findById(id: string, { roleName }: { roleName: string }): Promise<GetSubjectDetailResType> {
+    const includeDeleted = roleName === RoleName.ACADEMIC_DEPARTMENT
 
+    const subject = await this.subjectRepo.findById(id, { includeDeleted })
     if (!subject) {
       throw SubjectNotFoundException
     }
 
     return subject
-  }
-
-  /**
+  } /**
    * Tạo mới một subject cho course.
    * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
    * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
@@ -95,7 +86,7 @@ export class SubjectService {
     data: CreateSubjectBodyType
     createdById: string
     createdByRoleName: string
-  }): Promise<SubjectResType> {
+  }): Promise<GetSubjectDetailResType> {
     try {
       // Kiểm tra quyền tạo subject
       this.validateCreatePermissions(createdByRoleName)
@@ -129,10 +120,18 @@ export class SubjectService {
       // Tính duration tự động: (endDate - startDate) / 30 ngày
       const durationInMonths = this.calculateDuration(data.startDate, data.endDate)
 
-      return await this.subjectRepo.createSimple({
+      const createdSubject = await this.subjectRepo.createSimple({
         data: { ...data, duration: durationInMonths },
         createdById
       })
+
+      // Fetch full subject detail with relations
+      const subjectDetail = await this.subjectRepo.findById(createdSubject.id, { includeDeleted: true })
+      if (!subjectDetail) {
+        throw SubjectNotFoundException
+      }
+
+      return subjectDetail
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw CourseNotFoundException
@@ -173,7 +172,7 @@ export class SubjectService {
     // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
     // Không cần kiểm tra department access
 
-    const createdSubjects: SubjectEntityType[] = []
+    const createdSubjects: GetSubjectDetailResType[] = []
     const failedSubjects: { subject: any; error: string }[] = []
 
     // Xử lý từng subject
@@ -252,7 +251,7 @@ export class SubjectService {
     data: UpdateSubjectBodyType
     updatedById: string
     updatedByRoleName: string
-  }): Promise<SubjectResType> {
+  }): Promise<GetSubjectDetailResType> {
     try {
       // Kiểm tra quyền update
       this.validateUpdatePermissions(updatedByRoleName)
@@ -268,8 +267,9 @@ export class SubjectService {
 
       // Validate course mới nếu thay đổi
       let course = null
-      const finalCourseId = data.courseId || existingSubject.courseId
-      if (data.courseId && data.courseId !== existingSubject.courseId) {
+      const existingCourseId = existingSubject.course?.id
+      const finalCourseId = data.courseId || existingCourseId
+      if (data.courseId && data.courseId !== existingCourseId) {
         course = await this.sharedCourseRepository.findById(data.courseId)
         if (!course) {
           throw CourseNotFoundException
@@ -306,7 +306,12 @@ export class SubjectService {
         updatedData.duration = durationInMonths
       }
 
-      return await this.subjectRepo.updateSimple({ id, data: updatedData, updatedById })
+      const updatedSubject = await this.subjectRepo.updateSimple({ id, data: updatedData, updatedById })
+      const result = await this.subjectRepo.findById(updatedSubject.id, { includeDeleted: true })
+      if (!result) {
+        throw SubjectNotFoundException
+      }
+      return result
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw SubjectNotFoundException
@@ -371,7 +376,7 @@ export class SubjectService {
     id: string
     archivedById: string
     archivedByRoleName: string
-  }): Promise<SubjectResType> {
+  }): Promise<GetSubjectDetailResType> {
     // Kiểm tra quyền archive
     this.validateDeletePermissions(archivedByRoleName) // Sử dụng delete permission vì tương tự
 
@@ -385,52 +390,17 @@ export class SubjectService {
     // Không cần kiểm tra department access
 
     // Archive by changing status to ARCHIVED
-    return await this.subjectRepo.updateSimple({
+    const archivedSubject = await this.subjectRepo.updateSimple({
       id,
       data: {},
       updatedById: archivedById
     })
-  }
 
-  /**
-   * Khôi phục subject đã bị xóa mềm.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền restore
-   * - ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
-   * - Kiểm tra subject code không conflict
-   */
-  async restore({
-    id,
-    restoredById,
-    restoredByRoleName
-  }: {
-    id: string
-    restoredById: string
-    restoredByRoleName: string
-  }): Promise<SubjectEntityType> {
-    // Kiểm tra quyền restore
-    this.validateRestorePermissions(restoredByRoleName)
-
-    // Lấy subject (bao gồm deleted)
-    const existingSubject = await this.subjectRepo.findById(id, { includeDeleted: true })
-    if (!existingSubject) {
+    const result = await this.subjectRepo.findById(archivedSubject.id, { includeDeleted: true })
+    if (!result) {
       throw SubjectNotFoundException
     }
-
-    // Kiểm tra subject có thực sự bị xóa không
-    if (!existingSubject.deletedAt) {
-      throw SubjectIsNotDeletedException
-    }
-
-    // ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
-    // Không cần kiểm tra department access
-
-    // Kiểm tra subject code conflict
-    const codeExists = await this.subjectRepo.checkCodeExists(existingSubject.code, id)
-    if (codeExists) {
-      throw CannotRestoreSubjectCodeConflictException
-    }
-
-    return await this.subjectRepo.restore({ id, restoredById })
+    return result
   }
 
   /**
@@ -536,15 +506,6 @@ export class SubjectService {
   }
 
   /**
-   * Kiểm tra quyền restore subject - chỉ ACADEMIC_DEPARTMENT được phép
-   */
-  private validateRestorePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanRestoreSubjectsException
-    }
-  }
-
-  /**
    * Validate date range (end date phải sau start date)
    */
   private validateDateRange(startDate?: Date | null, endDate?: Date | null): void {
@@ -621,8 +582,6 @@ export class SubjectService {
     courseId: string
     roleName: string
   }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
     const trainers = await this.subjectRepo.getAvailableTrainersInDepartment({
       departmentId,
       courseId

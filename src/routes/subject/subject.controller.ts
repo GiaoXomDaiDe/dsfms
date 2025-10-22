@@ -14,6 +14,7 @@ import {
   EnrollTraineesResDto,
   GetAvailableTrainersQueryDto,
   GetAvailableTrainersResDto,
+  GetSubjectDetailResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
   LookupTraineesBodyDto,
@@ -21,8 +22,7 @@ import {
   RemoveEnrollmentsBodyDto,
   RemoveEnrollmentsResDto,
   RemoveTrainerResDto,
-  SubjectDetailResDto,
-  SubjectResDto,
+  SubjectSchemaDto,
   UpdateSubjectBodyDto,
   UpdateTrainerAssignmentBodyDto,
   UpdateTrainerAssignmentResDto
@@ -39,12 +39,37 @@ export class SubjectController {
 
   @Get()
   @ZodSerializerDto(GetSubjectsResDto)
-  async getAllSubjects(@Query() query: GetSubjectsQueryDto) {
-    return await this.subjectService.list(query)
+  async getAllSubjects(@Query() query: GetSubjectsQueryDto, @ActiveRolePermissions('name') roleName: string) {
+    return await this.subjectService.list(query, roleName)
+  }
+
+  @Get(':subjectId')
+  @ZodSerializerDto(GetSubjectDetailResDto)
+  async getSubjectDetails(@Param('subjectId') subjectId: string, @ActiveRolePermissions('name') roleName: string) {
+    return await this.subjectService.findById(subjectId, { roleName })
+  }
+
+  /**
+   * API: Get Available Trainers for Course
+   * GET /courses/:courseId/available-trainers
+   * Lấy danh sách trainers có sẵn trong department chưa được assign vào bất kỳ subject nào của course
+   */
+  @Get('courses/:courseId/available-trainers')
+  @ZodSerializerDto(GetAvailableTrainersResDto)
+  async getAvailableTrainers(
+    @Param('courseId') courseId: string,
+    @Query() query: GetAvailableTrainersQueryDto,
+    @ActiveRolePermissions('name') roleName: string
+  ) {
+    return await this.subjectService.getAvailableTrainers({
+      departmentId: query.departmentId,
+      courseId,
+      roleName
+    })
   }
 
   @Post()
-  @ZodSerializerDto(SubjectResDto)
+  @ZodSerializerDto(SubjectSchemaDto)
   async createSubject(
     @Body() createSubjectDto: CreateSubjectBodyDto,
     @ActiveUser('userId') userId: string,
@@ -77,29 +102,12 @@ export class SubjectController {
   }
 
   /**
-   * API: Get Subject Details + List Trainers with role
-   * GET /subjects/:subjectId
-   * Lấy thông tin chi tiết subject kèm danh sách trainers và role của họ
-   */
-  @Get(':subjectId')
-  @ZodSerializerDto(SubjectDetailResDto)
-  async getSubjectDetailsWithTrainers(
-    @Param('subjectId') subjectId: string,
-    @ActiveRolePermissions('name') roleName: string,
-    @Query('includeDeleted') includeDeleted?: string
-  ) {
-    return await this.subjectService.findById(subjectId, {
-      includeDeleted: includeDeleted === 'true'
-    })
-  }
-
-  /**
    * API: Update a Subject
    * PUT /subjects/:subjectId
    * Cập nhật thông tin subject
    */
   @Put(':subjectId')
-  @ZodSerializerDto(SubjectResDto)
+  @ZodSerializerDto(SubjectSchemaDto)
   async updateSubject(
     @Param('subjectId') subjectId: string,
     @Body() updateSubjectDto: UpdateSubjectBodyDto,
@@ -139,7 +147,7 @@ export class SubjectController {
    * Archive subject bằng cách đổi status sang ARCHIVED
    */
   @Post(':subjectId/archive')
-  @ZodSerializerDto(SubjectResDto)
+  @ZodSerializerDto(SubjectSchemaDto)
   async archiveSubject(
     @Param('subjectId') subjectId: string,
     @ActiveUser('userId') userId: string,
@@ -149,25 +157,6 @@ export class SubjectController {
       id: subjectId,
       archivedById: userId,
       archivedByRoleName: roleName
-    })
-  }
-
-  /**
-   * API: Restore a Subject
-   * PUT /subjects/:subjectId/restore
-   * Khôi phục subject đã bị xóa mềm
-   */
-  @Put(':subjectId/restore')
-  @ZodSerializerDto(MessageResDTO)
-  async restoreSubject(
-    @Param('subjectId') subjectId: string,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    return await this.subjectService.restore({
-      id: subjectId,
-      restoredById: userId,
-      restoredByRoleName: roleName
     })
   }
 
@@ -212,25 +201,6 @@ export class SubjectController {
   // ========================================
   // TRAINER ASSIGNMENT ENDPOINTS
   // ========================================
-
-  /**
-   * API: Get Available Trainers for Course
-   * GET /courses/:courseId/available-trainers
-   * Lấy danh sách trainers có sẵn trong department chưa được assign vào bất kỳ subject nào của course
-   */
-  @Get('courses/:courseId/available-trainers')
-  @ZodSerializerDto(GetAvailableTrainersResDto)
-  async getAvailableTrainers(
-    @Param('courseId') courseId: string,
-    @Query() query: GetAvailableTrainersQueryDto,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    return await this.subjectService.getAvailableTrainers({
-      departmentId: query.departmentId,
-      courseId,
-      roleName
-    })
-  }
 
   /**
    * API: Assign Trainer to Subject

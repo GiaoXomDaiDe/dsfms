@@ -1,12 +1,14 @@
+import { z } from 'zod'
+import { CourseStatus } from '~/shared/constants/course.constant'
 import {
   SubjectEnrollmentStatus,
   SubjectInstructorRole,
   SubjectMethod,
   SubjectStatus,
   SubjectType
-} from '@prisma/client'
-import { z } from 'zod'
+} from '~/shared/constants/subject.constant'
 import { SubjectSchema } from '~/shared/models/shared-subject.model'
+import { UserSchema } from '~/shared/models/shared-user.model'
 
 export const GetSubjectsQuerySchema = SubjectSchema.pick({
   courseId: true,
@@ -14,11 +16,7 @@ export const GetSubjectsQuerySchema = SubjectSchema.pick({
   type: true,
   status: true,
   isSIM: true
-})
-  .extend({
-    includeDeleted: z.coerce.boolean().default(false).optional()
-  })
-  .partial()
+}).partial()
 
 export const GetSubjectsSchema = SubjectSchema.extend({
   instructorCount: z.number().int().default(0),
@@ -30,11 +28,75 @@ export const GetSubjectsResSchema = z.object({
   totalItems: z.number().int()
 })
 
-export const SubjectResSchema = SubjectSchema
+export const SubjectDetailInstructorSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  status: true
+}).extend({
+  roleInSubject: z.enum([SubjectInstructorRole.PRIMARY_INSTRUCTOR, SubjectInstructorRole.EXAMINER]),
+  assignedAt: z.iso.datetime().transform((value) => new Date(value))
+})
+
+export const SubjectDetailTraineeSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  status: true
+}).extend({
+  enrollmentDate: z.coerce.date(),
+  enrollmentStatus: z.enum([
+    SubjectEnrollmentStatus.ENROLLED,
+    SubjectEnrollmentStatus.ON_GOING,
+    SubjectEnrollmentStatus.CANCELLED,
+    SubjectEnrollmentStatus.FINISHED
+  ])
+})
+
+// Schema cho batch enrollments
+export const SubjectDetailEnrollmentsByBatchSchema = z.object({
+  batchCode: z.string(),
+  trainees: z.array(SubjectDetailTraineeSchema)
+})
+
+// Schema cho course trong subject detail
+export const SubjectDetailCourseSchema = z
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    code: z.string(),
+    status: z.enum([CourseStatus.PLANNED, CourseStatus.ON_GOING, CourseStatus.COMPLETED, CourseStatus.ARCHIVED]),
+    department: z.object({
+      id: z.uuid(),
+      name: z.string(),
+      code: z.string(),
+      isActive: z.boolean()
+    })
+  })
+  .nullable()
+
+export const GetSubjectDetailResSchema = SubjectSchema.omit({
+  courseId: true
+}).extend({
+  course: SubjectDetailCourseSchema,
+  instructors: z.array(SubjectDetailInstructorSchema).default([]),
+  enrollmentsByBatch: z.array(SubjectDetailEnrollmentsByBatchSchema).default([])
+})
 
 export type GetSubjectsQueryType = z.infer<typeof GetSubjectsQuerySchema>
 export type GetSubjectsType = z.infer<typeof GetSubjectsSchema>
 export type GetSubjectsResType = z.infer<typeof GetSubjectsResSchema>
+export type GetSubjectDetailResType = z.infer<typeof GetSubjectDetailResSchema>
+
+// Export types cho các schema con
+export type SubjectDetailInstructorType = z.infer<typeof SubjectDetailInstructorSchema>
+export type SubjectDetailTraineeType = z.infer<typeof SubjectDetailTraineeSchema>
+export type SubjectDetailEnrollmentsByBatchType = z.infer<typeof SubjectDetailEnrollmentsByBatchSchema>
+export type SubjectDetailCourseType = z.infer<typeof SubjectDetailCourseSchema>
 
 // Course info schema for nested relations
 export const SubjectCourseSchema = z.object({
@@ -81,8 +143,6 @@ export const SubjectEnrollmentSchema = z.object({
 // Subject with relations including user info (for internal use)
 export const SubjectWithUserInfoSchema = SubjectSchema.extend({
   course: SubjectCourseSchema.optional(),
-  createdBy: SubjectUserSchema.optional().nullable(),
-  updatedBy: SubjectUserSchema.optional().nullable(),
   instructors: z.array(SubjectInstructorSchema).optional().default([]),
   enrollments: z.array(SubjectEnrollmentSchema).optional().default([]),
   instructorCount: z.number().int().default(0),
@@ -120,7 +180,7 @@ export const BulkCreateSubjectsBodySchema = z.object({
 
 // Bulk Create Subjects Response Schema
 export const BulkCreateSubjectsResSchema = z.object({
-  createdSubjects: z.array(SubjectSchema),
+  createdSubjects: z.array(GetSubjectDetailResSchema),
   failedSubjects: z.array(
     z.object({
       subject: CreateSubjectBodySchema.omit({ courseId: true }),
@@ -133,9 +193,6 @@ export const BulkCreateSubjectsResSchema = z.object({
     totalFailed: z.number().int()
   })
 })
-
-// Subject Detail Response Schema (for complex operations)
-export const SubjectDetailResSchema = SubjectSchema
 
 // Add Instructors Body Schema
 export const AddInstructorsBodySchema = z.object({
@@ -373,11 +430,10 @@ export const TraineeSubjectsOverviewResSchema = z.object({
 // Type exports
 
 export type SubjectEntityType = z.infer<typeof SubjectSchema>
-export type SubjectResType = z.infer<typeof SubjectResSchema>
+
 export type SubjectWithUserInfoType = z.infer<typeof SubjectWithUserInfoSchema>
 export type CreateSubjectBodyType = z.infer<typeof CreateSubjectBodySchema>
 export type UpdateSubjectBodyType = z.infer<typeof UpdateSubjectBodySchema>
-export type SubjectDetailResType = z.infer<typeof SubjectDetailResSchema>
 export type AddInstructorsBodyType = z.infer<typeof AddInstructorsBodySchema>
 export type RemoveInstructorsBodyType = z.infer<typeof RemoveInstructorsBodySchema>
 export type EnrollTraineesBodyType = z.infer<typeof EnrollTraineesBodySchema>
