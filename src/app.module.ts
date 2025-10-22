@@ -23,6 +23,7 @@ import { GlobalFieldModule } from './routes/global-field/global-field.module'
 import { PermissionModule } from './routes/permission/permission.module'
 import { ProfileModule } from './routes/profile/profile.module'
 import { TemplateModule } from './routes/template/template.module'
+import { AssessmentModule } from './routes/assessment/assessment.module'
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { TemplateModule } from './routes/template/template.module'
     CourseModule,
     SubjectModule,
     TemplateModule,
+    AssessmentModule,
     ReportsModule,
     PublicModule,
     MediaModule
