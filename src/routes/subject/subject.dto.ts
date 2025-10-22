@@ -23,6 +23,7 @@ import {
   EnrollTraineesResSchema,
   GetAvailableTrainersQuerySchema,
   GetAvailableTrainersResSchema,
+  GetSubjectDetailResSchema,
   GetSubjectsQuerySchema,
   GetSubjectsResSchema,
   GetSubjectsSchema,
@@ -33,8 +34,6 @@ import {
   RemoveInstructorsBodySchema,
   RemoveInstructorsResSchema,
   RemoveTrainerResSchema,
-  SubjectDetailResSchema,
-  SubjectResSchema,
   SubjectStatsSchema,
   TraineeSubjectsOverviewResSchema,
   UpdateEnrollmentStatusBodySchema,
@@ -42,12 +41,14 @@ import {
   UpdateTrainerAssignmentBodySchema,
   UpdateTrainerAssignmentResSchema
 } from '~/routes/subject/subject.model'
+import { SubjectSchema } from '~/shared/models/shared-subject.model'
 import { UserLookupResSchema } from '~/shared/models/shared-user-list.model'
 
+export class SubjectSchemaDto extends createZodDto(SubjectSchema) {}
 export class GetSubjectsQueryDto extends createZodDto(GetSubjectsQuerySchema) {}
 export class GetSubjectsDto extends createZodDto(GetSubjectsSchema) {}
 export class GetSubjectsResDto extends createZodDto(GetSubjectsResSchema) {}
-export class SubjectResDto extends createZodDto(SubjectResSchema) {}
+export class GetSubjectDetailResDto extends createZodDto(GetSubjectDetailResSchema) {}
 
 export class GetAvailableTrainersQueryDto extends createZodDto(GetAvailableTrainersQuerySchema) {}
 export class GetAvailableTrainersResDto extends createZodDto(GetAvailableTrainersResSchema) {}
@@ -69,7 +70,6 @@ export class CancelSubjectEnrollmentResDto extends createZodDto(CancelSubjectEnr
 export class CreateSubjectBodyDto extends createZodDto(CreateSubjectBodySchema) {}
 export class UpdateSubjectBodyDto extends createZodDto(UpdateSubjectBodySchema) {}
 
-export class SubjectDetailResDto extends createZodDto(SubjectDetailResSchema) {}
 export class AddInstructorsBodyDto extends createZodDto(AddInstructorsBodySchema) {}
 export class RemoveInstructorsBodyDto extends createZodDto(RemoveInstructorsBodySchema) {}
 export class EnrollTraineesBodyDto extends createZodDto(EnrollTraineesBodySchema) {}

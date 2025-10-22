@@ -67,11 +67,6 @@ export class UserController {
     })
   }
 
-  /**
-   * API: Bulk Trainee Lookup
-   * POST /users/lookup/trainees
-   * Tìm kiếm trainees theo EID và full name
-   */
   @Post('lookup/trainees')
   @ZodSerializerDto(BulkTraineeLookupResDTO)
   bulkTraineeLookup(@Body() body: BulkTraineeLookupBodyDTO) {
@@ -104,6 +99,7 @@ export class UserController {
       deletedById: userId
     })
   }
+
   @Patch(':userId/enable')
   @ZodSerializerDto(MessageResDTO)
   enable(@Param() param: GetUserParamsDTO, @ActiveUser('userId') userId: string) {

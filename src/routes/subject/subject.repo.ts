@@ -8,12 +8,15 @@ import { TraineeNotFoundException, TraineeResolutionFailureException } from './s
 import {
   CreateSubjectBodyType,
   EnrollTraineesBodyType,
+  GetSubjectDetailResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetSubjectsType,
-  SubjectDetailResType,
+  SubjectDetailCourseType,
+  SubjectDetailEnrollmentsByBatchType,
+  SubjectDetailInstructorType,
+  SubjectDetailTraineeType,
   SubjectEntityType,
-  SubjectResType,
   UpdateSubjectBodyType
 } from './subject.model'
 
@@ -22,16 +25,26 @@ import {
 export class SubjectRepo {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
+  async list(query: GetSubjectsQueryType & { includeDeleted?: boolean }): Promise<GetSubjectsResType> {
     const { method, type, isSIM, courseId, status, includeDeleted } = query
 
     const where: Prisma.SubjectWhereInput = {
+      // Lọc soft delete - chỉ hiện bản ghi chưa xóa trừ khi includeDeleted = true
       ...(includeDeleted ? {} : { deletedAt: null }),
+
+      // Các bộ lọc nghiệp vụ
       ...(courseId && { courseId: courseId }),
       ...(method && { method: method as SubjectMethodValue }),
       ...(isSIM !== undefined && { isSIM: isSIM }),
-      ...(status && { status: status as SubjectStatusValue }),
-      ...(type && { type: type as SubjectTypeValue })
+      ...(type && { type: type as SubjectTypeValue }),
+
+      // Lọc status - nếu user chọn ARCHIVED thì hiện ARCHIVED
+      // Nếu không truyền status và includeDeleted = false thì mặc định ẩn ARCHIVED
+      ...(status
+        ? { status: status as SubjectStatusValue }
+        : includeDeleted
+          ? {}
+          : { status: { not: 'ARCHIVED' as SubjectStatusValue } })
     }
 
     const [subjects, totalItems] = await Promise.all([
@@ -71,7 +84,7 @@ export class SubjectRepo {
   async findById(
     id: string,
     { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<SubjectDetailResType | null> {
+  ): Promise<GetSubjectDetailResType | null> {
     const subject = await this.prisma.subject.findFirst({
       where: {
         id,
@@ -79,12 +92,17 @@ export class SubjectRepo {
       },
       include: {
         course: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            status: true,
             department: {
               select: {
                 id: true,
                 name: true,
-                code: true
+                code: true,
+                isActive: true
               }
             }
           }
@@ -96,10 +114,20 @@ export class SubjectRepo {
                 id: true,
                 eid: true,
                 firstName: true,
-                lastName: true
+                middleName: true,
+                lastName: true,
+                status: true
               }
             }
-          }
+          },
+          where: includeDeleted
+            ? {}
+            : {
+                trainer: {
+                  deletedAt: null,
+                  status: 'ACTIVE'
+                }
+              }
         },
         enrollments: {
           include: {
@@ -108,44 +136,85 @@ export class SubjectRepo {
                 id: true,
                 eid: true,
                 firstName: true,
-                lastName: true
+                middleName: true,
+                lastName: true,
+                status: true
               }
             }
-          }
+          },
+          where: includeDeleted
+            ? {}
+            : {
+                trainee: {
+                  deletedAt: null
+                }
+              }
         }
       }
     })
 
     if (!subject) return null
 
-    // Transform instructors - flatten structure
-    const transformedInstructors = subject.instructors.map((instructor) => ({
+    const transformedInstructors: SubjectDetailInstructorType[] = subject.instructors.map((instructor) => ({
       id: instructor.trainer.id,
       eid: instructor.trainer.eid,
       firstName: instructor.trainer.firstName,
+      middleName: instructor.trainer.middleName === null ? '' : instructor.trainer.middleName,
       lastName: instructor.trainer.lastName,
-      assignedAt: instructor.createdAt,
-      roleInSubject: instructor.roleInSubject
+      status: instructor.trainer.status,
+      roleInSubject: instructor.roleInSubject,
+      assignedAt: instructor.createdAt
     }))
 
-    // Transform enrollments - flatten structure
-    const transformedEnrollments = subject.enrollments.map((enrollment) => ({
-      id: enrollment.trainee.id,
-      eid: enrollment.trainee.eid,
-      firstName: enrollment.trainee.firstName,
-      lastName: enrollment.trainee.lastName,
-      batchCode: enrollment.batchCode,
-      enrollmentDate: enrollment.enrollmentDate,
-      status: enrollment.status
-    }))
+    const enrollmentsByBatch: SubjectDetailEnrollmentsByBatchType[] = subject.enrollments.reduce((acc, enrollment) => {
+      const existingBatch = acc.find((batch) => batch.batchCode === enrollment.batchCode)
+
+      const traineeData: SubjectDetailTraineeType = {
+        id: enrollment.trainee.id,
+        eid: enrollment.trainee.eid,
+        firstName: enrollment.trainee.firstName,
+        middleName: enrollment.trainee.middleName,
+        lastName: enrollment.trainee.lastName,
+        status: enrollment.trainee.status,
+        enrollmentDate: enrollment.enrollmentDate,
+        enrollmentStatus: enrollment.status
+      }
+
+      if (existingBatch) {
+        existingBatch.trainees.push(traineeData)
+      } else {
+        acc.push({
+          batchCode: enrollment.batchCode,
+          trainees: [traineeData]
+        })
+      }
+
+      return acc
+    }, [] as SubjectDetailEnrollmentsByBatchType[])
+
+    const transformedCourse: SubjectDetailCourseType = subject.course
+      ? {
+          id: subject.course.id,
+          name: subject.course.name,
+          code: subject.course.code,
+          status: subject.course.status,
+          department: {
+            id: subject.course.department.id,
+            name: subject.course.department.name,
+            code: subject.course.department.code,
+            isActive: subject.course.department.isActive
+          }
+        }
+      : null
+
+    const { courseId, createdById, updatedById, enrollments, ...subjectWithoutRedundant } = subject
 
     return {
-      ...subject,
+      ...subjectWithoutRedundant,
+      course: transformedCourse,
       instructors: transformedInstructors,
-      enrollments: transformedEnrollments,
-      instructorCount: subject.instructors.length,
-      enrollmentCount: subject.enrollments.length
-    } as unknown as SubjectDetailResType
+      enrollmentsByBatch
+    } as GetSubjectDetailResType
   }
 
   async createSimple({
@@ -154,7 +223,7 @@ export class SubjectRepo {
   }: {
     data: CreateSubjectBodyType & { duration?: number }
     createdById: string
-  }): Promise<SubjectResType> {
+  }): Promise<GetSubjectDetailResType> {
     const subject = await this.prisma.subject.create({
       data: {
         ...data,
@@ -163,7 +232,7 @@ export class SubjectRepo {
       }
     })
 
-    return subject as unknown as SubjectResType
+    return subject as unknown as GetSubjectDetailResType
   }
 
   async create({
@@ -172,7 +241,7 @@ export class SubjectRepo {
   }: {
     data: CreateSubjectBodyType & { duration?: number }
     createdById: string
-  }): Promise<SubjectDetailResType> {
+  }): Promise<GetSubjectDetailResType> {
     const subject = await this.prisma.subject.create({
       data: {
         ...data,
@@ -255,7 +324,7 @@ export class SubjectRepo {
       })),
       instructorCount: subject.instructors.length,
       enrollmentCount: subject.enrollments.length
-    } as unknown as SubjectDetailResType
+    } as unknown as GetSubjectDetailResType
   }
 
   async updateSimple({
@@ -266,7 +335,7 @@ export class SubjectRepo {
     id: string
     data: UpdateSubjectBodyType & { duration?: number }
     updatedById: string
-  }): Promise<SubjectResType> {
+  }): Promise<GetSubjectDetailResType> {
     const subject = await this.prisma.subject.update({
       where: { id },
       data: {
@@ -276,7 +345,7 @@ export class SubjectRepo {
       }
     })
 
-    return subject as unknown as SubjectResType
+    return subject as unknown as GetSubjectDetailResType
   }
 
   async update({
@@ -287,7 +356,7 @@ export class SubjectRepo {
     id: string
     data: UpdateSubjectBodyType & { duration?: number }
     updatedById: string
-  }): Promise<SubjectDetailResType> {
+  }): Promise<GetSubjectDetailResType> {
     const subject = await this.prisma.subject.update({
       where: { id },
       data: {
@@ -371,7 +440,7 @@ export class SubjectRepo {
       })),
       instructorCount: subject.instructors.length,
       enrollmentCount: subject.enrollments.length
-    } as unknown as SubjectDetailResType
+    } as unknown as GetSubjectDetailResType
   }
 
   async delete({
@@ -394,18 +463,6 @@ export class SubjectRepo {
       data: {
         deletedAt: new Date(),
         deletedById,
-        updatedAt: new Date()
-      }
-    })) as unknown as SubjectEntityType
-  }
-
-  async restore({ id, restoredById }: { id: string; restoredById: string }): Promise<SubjectEntityType> {
-    return (await this.prisma.subject.update({
-      where: { id },
-      data: {
-        deletedAt: null,
-        deletedById: null,
-        updatedById: restoredById,
         updatedAt: new Date()
       }
     })) as unknown as SubjectEntityType

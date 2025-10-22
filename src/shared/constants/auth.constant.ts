@@ -17,8 +17,7 @@ export const GenderStatus = {
 
 export const UserStatus = {
   ACTIVE: 'ACTIVE',
-  DISABLED: 'DISABLED',
-  SUSPENDED: 'SUSPENDED'
+  DISABLED: 'DISABLED'
 } as const
 
 export const HTTPMethod = {
