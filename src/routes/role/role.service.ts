@@ -128,7 +128,7 @@ export class RoleService {
       }
 
       return {
-        message: `Successfully added ${result.addedPermissions.length} permission(s) to role "${role.name}"`,
+        message: `Successfully added ${result.addedPermissions.length} permission(s) to role '${role.name}'`,
         addedPermissions: result.addedPermissions
       }
     } catch (error) {

@@ -1,19 +1,16 @@
 import { createZodDto } from 'nestjs-zod'
 import {
   BulkCreateResultSchema,
-  BulkTraineeLookupBodySchema,
-  BulkTraineeLookupResSchema,
   CreateBulkUsersBodySchema,
   CreateUserBodySchema,
   CreateUserBodyWithProfileSchema,
   GetUserParamsSchema,
   GetUserResSchema,
   GetUsersQuerySchema,
-  GetUsersResSchema,
   UpdateUserBodyWithProfileSchema,
   UpdateUserResSchema
 } from '~/routes/user/user.model'
-
+import { GetUsersResSchema } from '~/shared/models/shared-user.model'
 export class GetUsersQueryDTO extends createZodDto(GetUsersQuerySchema) {}
 
 export class GetUsersResDTO extends createZodDto(GetUsersResSchema) {}
@@ -41,7 +38,3 @@ export class BulkCreateResultDTO extends createZodDto(BulkCreateResultSchema) {}
 export class UpdateUserResDTO extends createZodDto(UpdateUserResSchema) {}
 
 export class CreateUserResDTO extends UpdateUserResDTO {}
-
-export class BulkTraineeLookupBodyDTO extends createZodDto(BulkTraineeLookupBodySchema) {}
-
-export class BulkTraineeLookupResDTO extends createZodDto(BulkTraineeLookupResSchema) {}

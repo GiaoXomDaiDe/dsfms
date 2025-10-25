@@ -2,8 +2,6 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   BulkCreateResultDTO,
-  BulkTraineeLookupBodyDTO,
-  BulkTraineeLookupResDTO,
   CreateBulkUsersBodyDTO,
   CreateUserBodyWithProfileDTO,
   CreateUserResDTO,
@@ -65,12 +63,6 @@ export class UserController {
       data: body,
       createdById: userId
     })
-  }
-
-  @Post('lookup/trainees')
-  @ZodSerializerDto(BulkTraineeLookupResDTO)
-  bulkTraineeLookup(@Body() body: BulkTraineeLookupBodyDTO) {
-    return this.userService.bulkTraineeLookup(body)
   }
 
   @Put(':userId')

@@ -13,7 +13,6 @@ export class MediaService {
   }
 
   async uploadFile(files: Array<Express.Multer.File>, type: string, userId: string) {
-    console.log('type', type)
     const result = await Promise.all(
       files.map((file, index) => {
         const extension = path.extname(file.originalname)

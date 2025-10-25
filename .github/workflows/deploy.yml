@@ -62,14 +62,38 @@ jobs:
 
             # DEBUG: Check current .env file
             echo "DEBUG: Current directory: $(pwd)"
-            echo "DEBUG: .env file exists: $(ls -la .env 2>/dev/null || echo 'NOT FOUND')"
-            echo "DEBUG: .env file content:"
-            cat .env 2>/dev/null || echo "Cannot read .env file"
-            echo "DEBUG: Number of lines in .env: $(wc -l < .env 2>/dev/null || echo '0')"
-            echo "DEBUG: Checking for ACADEMIC_DEPARTMENT_MIDDLE_NAME:"
-            grep "ACADEMIC_DEPARTMENT_MIDDLE_NAME" .env 2>/dev/null || echo "Variable NOT FOUND in .env"
-            echo "DEBUG: All ACADEMIC variables in .env:"
-            grep "ACADEMIC" .env 2>/dev/null || echo "No ACADEMIC variables found"
+            if [ ! -f .env ]; then
+              echo "WARNING: .env file not found"
+            else
+              echo "DEBUG: .env file detected with $(wc -l < .env) lines"
+            fi
+
+            # Ensure maintenance script is executable and run pre-deploy cleanup
+            MAINTENANCE_SCRIPT="$(pwd)/scripts/maintenance/disk-maintenance.sh"
+            if [ -f "${MAINTENANCE_SCRIPT}" ]; then
+              chmod +x "${MAINTENANCE_SCRIPT}"
+              echo "Running disk maintenance prior to deployment..."
+              sudo APP_LOG_ROOT="$(pwd)/logs" "${MAINTENANCE_SCRIPT}" --once || echo "Maintenance script completed with warnings"
+
+              echo "Configuring cron job for ongoing maintenance..."
+              CRON_COMMENT="# dsfms-disk-maintenance"
+              CRON_JOB="0 2 * * * APP_LOG_ROOT=$(pwd)/logs ${MAINTENANCE_SCRIPT} --cron >> /var/log/dsfms-disk-maintenance.log 2>&1 ${CRON_COMMENT}"
+              sudo bash -c 'crontab -l 2>/dev/null | grep -v "# dsfms-disk-maintenance" > /tmp/current_cron || true'
+              sudo bash -c "cat /tmp/current_cron > /tmp/updated_cron"
+              sudo bash -c "echo \"${CRON_JOB}\" >> /tmp/updated_cron"
+              sudo bash -c "crontab /tmp/updated_cron"
+              sudo rm -f /tmp/current_cron /tmp/updated_cron
+            else
+              echo "WARNING: Maintenance script not found at ${MAINTENANCE_SCRIPT}"
+            fi
+
+            echo "Checking available disk space before pulling Docker image..."
+            AVAILABLE_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+            if [ "${AVAILABLE_GB}" -lt 2 ]; then
+              echo "WARNING: Less than 2GB free on root filesystem (${AVAILABLE_GB}G available)."
+            else
+              echo "Available disk space: ${AVAILABLE_GB}G"
+            fi
 
             # Login to Docker Hub on server
             echo "Logging into Docker Hub..."
@@ -94,10 +118,8 @@ jobs:
             # DEBUG: Final check before starting container
             echo "DEBUG: Final .env file check:"
             echo "File path: $(pwd)/.env"
-            echo "File permissions: $(ls -la .env)"
-            echo "Last 5 lines of .env:"
-            tail -5 .env
-            
+            ls -la .env 2>/dev/null || echo "WARNING: .env missing"
+
             # Start new container with explicit .env file
             echo "Starting new container..."
             docker run -d \
