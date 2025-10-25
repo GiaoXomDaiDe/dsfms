@@ -10,7 +10,12 @@ import {
   GetAssessmentDetailResSchema,
   AssessmentFormResSchema,
   AssessmentSectionResSchema,
-  AssessmentValueResSchema
+  AssessmentValueResSchema,
+  GetSubjectAssessmentsQuerySchema,
+  GetCourseAssessmentsQuerySchema,
+  GetSubjectAssessmentsResSchema,
+  GetCourseAssessmentsResSchema,
+  TrainerAssessmentListItemSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -39,6 +44,18 @@ export class AssessmentSectionResDTO extends createZodDto(AssessmentSectionResSc
 
 export class AssessmentValueResDTO extends createZodDto(AssessmentValueResSchema) {}
 
+// ===== TRAINER ASSESSMENT DTOs =====
+
+export class GetSubjectAssessmentsQueryDTO extends createZodDto(GetSubjectAssessmentsQuerySchema) {}
+
+export class GetCourseAssessmentsQueryDTO extends createZodDto(GetCourseAssessmentsQuerySchema) {}
+
+export class GetSubjectAssessmentsResDTO extends createZodDto(GetSubjectAssessmentsResSchema) {}
+
+export class GetCourseAssessmentsResDTO extends createZodDto(GetCourseAssessmentsResSchema) {}
+
+export class TrainerAssessmentListItemDTO extends createZodDto(TrainerAssessmentListItemSchema) {}
+
 // ===== TYPE EXPORTS =====
 
 export type {
@@ -55,5 +72,10 @@ export type {
   AssessmentValueResType,
   AssessmentFormType,
   AssessmentSectionType,
-  AssessmentValueType
+  AssessmentValueType,
+  GetSubjectAssessmentsQueryType,
+  GetCourseAssessmentsQueryType,
+  GetSubjectAssessmentsResType,
+  GetCourseAssessmentsResType,
+  TrainerAssessmentListItemType
 } from './assessment.model'

@@ -135,6 +135,16 @@ export const AssessmentAlreadyExistsException = (duplicates: Array<{traineeId: s
     duplicates
   })
 
+export const TraineeAssessmentExistsException = (
+  duplicates: Array<{traineeId: string, traineeName: string, assessmentId: string}>,
+  entityType: 'subject' | 'course'
+) =>
+  new ConflictException({
+    message: `Assessment form already exists for one or more trainees with the same template and occurrence date. Duplicate assessments are not allowed.`,
+    duplicates,
+    entityType
+  })
+
 // ===== PERMISSION ERRORS =====
 
 export const InsufficientPermissionException = new ForbiddenException(

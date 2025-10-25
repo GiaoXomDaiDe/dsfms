@@ -273,3 +273,84 @@ export const GetAssessmentDetailResSchema = AssessmentFormResSchema.extend({
 })
 
 export type GetAssessmentDetailResType = z.infer<typeof GetAssessmentDetailResSchema>
+
+// ===== TRAINER ASSESSMENT SCHEMAS =====
+
+// Request schemas for trainer assessment lists
+export const GetSubjectAssessmentsQuerySchema = z.object({
+  subjectId: z.string().uuid('Subject ID must be a valid UUID'),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  search: z.string().max(255).optional()
+}).strict()
+
+export type GetSubjectAssessmentsQueryType = z.infer<typeof GetSubjectAssessmentsQuerySchema>
+
+export const GetCourseAssessmentsQuerySchema = z.object({
+  courseId: z.string().uuid('Course ID must be a valid UUID'),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  search: z.string().max(255).optional()
+}).strict()
+
+export type GetCourseAssessmentsQueryType = z.infer<typeof GetCourseAssessmentsQuerySchema>
+
+// Assessment list item schema for trainers (basic info only)
+export const TrainerAssessmentListItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  subjectId: z.string().uuid().nullable(),
+  courseId: z.string().uuid().nullable(),
+  occuranceDate: z.coerce.date(),
+  status: z.nativeEnum(AssessmentStatus),
+  resultScore: z.number().nullable(),
+  resultText: z.nativeEnum(AssessmentResult).nullable(),
+  pdfUrl: z.string().nullable(),
+  comment: z.string().nullable(),
+  trainee: z.object({
+    id: z.string().uuid(),
+    eid: z.string(),
+    fullName: z.string(),
+    email: z.string()
+  })
+})
+
+export type TrainerAssessmentListItemType = z.infer<typeof TrainerAssessmentListItemSchema>
+
+// Response schemas for trainer assessment lists
+export const GetSubjectAssessmentsResSchema = z.object({
+  assessments: z.array(TrainerAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  subjectInfo: z.object({
+    id: z.string(),
+    name: z.string(),
+    code: z.string(),
+    course: z.object({
+      id: z.string(),
+      name: z.string(),
+      code: z.string()
+    })
+  })
+})
+
+export type GetSubjectAssessmentsResType = z.infer<typeof GetSubjectAssessmentsResSchema>
+
+export const GetCourseAssessmentsResSchema = z.object({
+  assessments: z.array(TrainerAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  courseInfo: z.object({
+    id: z.string(),
+    name: z.string(),
+    code: z.string()
+  })
+})
+
+export type GetCourseAssessmentsResType = z.infer<typeof GetCourseAssessmentsResSchema>

@@ -8,7 +8,11 @@ import {
   GetAssessmentsQueryDTO,
   GetAssessmentParamsDTO,
   GetAssessmentsResDTO,
-  GetAssessmentDetailResDTO
+  GetAssessmentDetailResDTO,
+  GetSubjectAssessmentsQueryDTO,
+  GetSubjectAssessmentsResDTO,
+  GetCourseAssessmentsQueryDTO,
+  GetCourseAssessmentsResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -58,6 +62,48 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.createBulkAssessments(body, userContext)
+  }
+
+  /**
+   * GET /assessments/subject
+   * List all assessments for a specific subject (for trainers)
+   */
+  @Get('subject')
+  @ZodSerializerDto(GetSubjectAssessmentsResDTO)
+  async getSubjectAssessments(
+    @Query() query: GetSubjectAssessmentsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getSubjectAssessments(query, userContext)
+  }
+
+  /**
+   * GET /assessments/course
+   * List all assessments for a specific course (for trainers)
+   */
+  @Get('course')
+  @ZodSerializerDto(GetCourseAssessmentsResDTO)
+  async getCourseAssessments(
+    @Query() query: GetCourseAssessmentsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getCourseAssessments(query, userContext)
   }
 
   /**
