@@ -11,16 +11,33 @@ log() {
   echo "[$(date --iso-8601=seconds)] $1"
 }
 
-ensure_root() {
-  if [[ "${EUID}" -ne 0 ]]; then
-    log "Elevating privileges for maintenance (sudo required)."
-    exec sudo LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS}" JOURNAL_MAX_SIZE="${JOURNAL_MAX_SIZE}" DOCKER_PRUNE_AGE_HOURS="${DOCKER_PRUNE_AGE_HOURS}" APT_AUTOREMOVE="${APT_AUTOREMOVE}" "$0" "$@"
+run_sudo() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    "$@"
+    return $?
   fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    if [[ -n "${SUDO_PASS:-}" ]]; then
+      if printf '%s\n' "${SUDO_PASS}" | sudo -S "$@"; then
+        return 0
+      fi
+      log "sudo command failed: $*"
+      return 1
+    fi
+
+    sudo "$@" && return 0
+    log "sudo command failed: $*"
+    return 1
+  fi
+
+  log "sudo not available; skipping command: $*"
+  return 0
 }
 
 cleanup_journal() {
   log "Vacuuming systemd journal to ${JOURNAL_MAX_SIZE}."
-  journalctl --vacuum-size="${JOURNAL_MAX_SIZE}" >/dev/null 2>&1 || log "Journal vacuum skipped (journalctl not available)."
+  run_sudo journalctl --vacuum-size="${JOURNAL_MAX_SIZE}" || log "Journal vacuum skipped (journalctl not available)."
 }
 
 cleanup_logs() {
@@ -31,8 +48,8 @@ cleanup_logs() {
   fi
 
   log "Cleaning log files older than ${retention} days in /var/log and application logs."
-  find /var/log -type f -name "*.log" -mtime +"${retention}" -print -delete 2>/dev/null || true
-  find /var/log -type f -name "*.gz" -mtime +"${retention}" -print -delete 2>/dev/null || true
+  run_sudo find /var/log -type f -name "*.log" -mtime +"${retention}" -print -delete || true
+  run_sudo find /var/log -type f -name "*.gz" -mtime +"${retention}" -print -delete || true
 
   local app_log_root="${APP_LOG_ROOT:-${HOME}/dsfms/logs}"
   if [[ -d "${app_log_root}" ]]; then
@@ -56,8 +73,8 @@ cleanup_apt_cache() {
 
   if command -v apt-get >/dev/null 2>&1; then
     log "Cleaning apt caches and removing unused packages."
-    apt-get clean >/dev/null 2>&1 || true
-    apt-get autoremove -y >/dev/null 2>&1 || true
+    run_sudo apt-get clean || true
+    run_sudo apt-get autoremove -y || true
   fi
 }
 
@@ -67,8 +84,6 @@ report_disk_usage() {
 }
 
 main() {
-  ensure_root "$@"
-
   local mode=${1:-"run"}
 
   case "${mode}" in

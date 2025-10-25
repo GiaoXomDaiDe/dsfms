@@ -53,6 +53,22 @@ jobs:
           script: |
             echo "Starting Docker deployment..."
 
+            SUDO_PASS="${{ secrets.SUDO_PASSWORD }}"
+            run_with_sudo() {
+              if [ -n "${SUDO_PASS}" ]; then
+                printf '%s\n' "${SUDO_PASS}" | sudo -S "$@"
+              else
+                sudo "$@"
+              fi
+            }
+
+            if [ -z "${SUDO_PASS}" ]; then
+              if ! sudo -n true 2>/dev/null; then
+                echo "ERROR: SUDO_PASSWORD secret not set and remote sudo requires a password."
+                exit 1
+              fi
+            fi
+
             # Navigate to project directory and pull latest code
             echo "Updating source code..."
             cd ~/dsfms || { echo "Project directory not found, cloning..."; git clone https://github.com/GiaoXomDaiDe/dsfms.git ~/dsfms; cd ~/dsfms; }
@@ -71,18 +87,18 @@ jobs:
             # Ensure maintenance script is executable and run pre-deploy cleanup
             MAINTENANCE_SCRIPT="$(pwd)/scripts/maintenance/disk-maintenance.sh"
             if [ -f "${MAINTENANCE_SCRIPT}" ]; then
-              chmod +x "${MAINTENANCE_SCRIPT}"
+              run_with_sudo chmod +x "${MAINTENANCE_SCRIPT}"
               echo "Running disk maintenance prior to deployment..."
-              sudo APP_LOG_ROOT="$(pwd)/logs" "${MAINTENANCE_SCRIPT}" --once || echo "Maintenance script completed with warnings"
+              run_with_sudo env APP_LOG_ROOT="$(pwd)/logs" "${MAINTENANCE_SCRIPT}" --once || echo "Maintenance script completed with warnings"
 
               echo "Configuring cron job for ongoing maintenance..."
               CRON_COMMENT="# dsfms-disk-maintenance"
               CRON_JOB="0 2 * * * APP_LOG_ROOT=$(pwd)/logs ${MAINTENANCE_SCRIPT} --cron >> /var/log/dsfms-disk-maintenance.log 2>&1 ${CRON_COMMENT}"
-              sudo bash -c 'crontab -l 2>/dev/null | grep -v "# dsfms-disk-maintenance" > /tmp/current_cron || true'
-              sudo bash -c "cat /tmp/current_cron > /tmp/updated_cron"
-              sudo bash -c "echo \"${CRON_JOB}\" >> /tmp/updated_cron"
-              sudo bash -c "crontab /tmp/updated_cron"
-              sudo rm -f /tmp/current_cron /tmp/updated_cron
+              TMP_CRON=$(mktemp)
+              run_with_sudo bash -c "crontab -l 2>/dev/null | grep -v '${CRON_COMMENT}' > ${TMP_CRON} || true"
+              echo "${CRON_JOB}" | run_with_sudo tee -a "${TMP_CRON}" >/dev/null
+              run_with_sudo crontab "${TMP_CRON}"
+              run_with_sudo rm -f "${TMP_CRON}"
             else
               echo "WARNING: Maintenance script not found at ${MAINTENANCE_SCRIPT}"
             fi
@@ -110,7 +126,7 @@ jobs:
 
             # Kill any process using port 4000 (just in case)
             echo "Ensuring port 4000 is free..."
-            sudo fuser -k 4000/tcp 2>/dev/null || true
+            run_with_sudo fuser -k 4000/tcp 2>/dev/null || true
 
             # Wait a moment for cleanup
             sleep 3
