@@ -8,66 +8,75 @@ datasource db {
 }
 
 model User {
-  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  eid                    String              @db.VarChar(8)
-  firstName              String
-  middleName             String?
-  lastName               String
-  address                String?
-  email                  String              @db.Citext
-  passwordHash           String
-  status                 UserStatus          @default(ACTIVE)
-  signatureImageUrl      String?
-  roleId                 String              @db.Uuid
-  gender                 GenderStatus
-  avatarUrl              String?
-  phoneNumber            String?             @db.VarChar(20)
-  departmentId           String?             @db.Uuid
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @default(now()) @updatedAt
-  deletedAt              DateTime?
-  createdById            String?             @db.Uuid
-  updatedById            String?             @db.Uuid
-  deletedById            String?             @db.Uuid
-  createdCourses         Course[]            @relation("CourseCreatedBy")
-  deletedCourses         Course[]            @relation("CourseDeletedBy")
-  updatedCourses         Course[]            @relation("CourseUpdatedBy")
-  createdDepartments     Department[]        @relation("DeptCreatedBy")
-  deletedDepartments     Department[]        @relation("DeptDeletedBy")
-  headOfDepartments      Department[]        @relation("DepartmentHead")
-  updatedDepartments     Department[]        @relation("DeptUpdatedBy")
-  createdGlobalFields    GlobalField[]       @relation("GlobalFieldCreatedBy")
-  updatedGlobalFields    GlobalField[]       @relation("GlobalFieldUpdatedBy")
-  createdPermissions     Permission[]        @relation("PermissionCreatedBy")
-  deletedPermissions     Permission[]        @relation("PermissionDeletedBy")
-  updatedPermissions     Permission[]        @relation("PermissionUpdatedBy")
-  createdRoles           Role[]              @relation("RoleCreatedBy")
-  deletedRoles           Role[]              @relation("RoleDeletedBy")
-  updatedRoles           Role[]              @relation("RoleUpdatedBy")
-  createdSubjects        Subject[]           @relation("SubjectCreatedBy")
-  deletedSubjects        Subject[]           @relation("SubjectDeletedBy")
-  updatedSubjects        Subject[]           @relation("SubjectUpdatedBy")
-  subjectEnrollments     SubjectEnrollment[]
-  subjectInstructions    SubjectInstructor[]
-  createdTemplateFields  TemplateField[]     @relation("TemplateFieldCreatedBy")
-  updatedTemplateFields  TemplateField[]     @relation("TemplateFieldUpdatedBy")
-  createdTemplateForms   TemplateForm[]      @relation("TemplateFormCreatedBy")
-  createdTraineeProfiles TraineeProfile[]    @relation("TraineeCreatedBy")
-  deletedTraineeProfiles TraineeProfile[]    @relation("TraineeDeletedBy")
-  updatedTraineeProfiles TraineeProfile[]    @relation("TraineeUpdatedBy")
-  traineeProfile         TraineeProfile?
-  createdTrainerProfiles TrainerProfile[]    @relation("TrainerCreatedBy")
-  deletedTrainerProfiles TrainerProfile[]    @relation("TrainerDeletedBy")
-  updatedTrainerProfiles TrainerProfile[]    @relation("TrainerUpdatedBy")
-  trainerProfile         TrainerProfile?
-  createdBy              User?               @relation("UserCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
-  createdUsers           User[]              @relation("UserCreatedBy")
-  deletedBy              User?               @relation("UserDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
-  deletedUsers           User[]              @relation("UserDeletedBy")
-  department             Department?         @relation("DepartmentMembers", fields: [departmentId], references: [id], onUpdate: NoAction)
-  role                   Role                @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  updatedBy              User?               @relation("UserUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
-  updatedUsers           User[]              @relation("UserUpdatedBy")
+  id                         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eid                        String              @unique @db.VarChar(8)
+  firstName                  String
+  middleName                 String?
+  lastName                   String
+  address                    String?
+  email                      String              @unique @db.Citext
+  passwordHash               String
+  status                     UserStatus          @default(ACTIVE)
+  signatureImageUrl          String?
+  roleId                     String              @db.Uuid
+  gender                     GenderStatus
+  avatarUrl                  String?
+  phoneNumber                String?             @db.VarChar(20)
+  departmentId               String?             @db.Uuid
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @default(now()) @updatedAt
+  deletedAt                  DateTime?
+  createdById                String?             @db.Uuid
+  updatedById                String?             @db.Uuid
+  deletedById                String?             @db.Uuid
+  createdCourses             Course[]            @relation("CourseCreatedBy")
+  deletedCourses             Course[]            @relation("CourseDeletedBy")
+  updatedCourses             Course[]            @relation("CourseUpdatedBy")
+  createdDepartments         Department[]        @relation("DeptCreatedBy")
+  deletedDepartments         Department[]        @relation("DeptDeletedBy")
+  headOfDepartments          Department[]        @relation("DepartmentHead")
+  updatedDepartments         Department[]        @relation("DeptUpdatedBy")
+  createdGlobalFields        GlobalField[]       @relation("GlobalFieldCreatedBy")
+  updatedGlobalFields        GlobalField[]       @relation("GlobalFieldUpdatedBy")
+  createdPermissions         Permission[]        @relation("PermissionCreatedBy")
+  deletedPermissions         Permission[]        @relation("PermissionDeletedBy")
+  updatedPermissions         Permission[]        @relation("PermissionUpdatedBy")
+  createdRoles               Role[]              @relation("RoleCreatedBy")
+  deletedRoles               Role[]              @relation("RoleDeletedBy")
+  updatedRoles               Role[]              @relation("RoleUpdatedBy")
+  createdSubjects            Subject[]           @relation("SubjectCreatedBy")
+  deletedSubjects            Subject[]           @relation("SubjectDeletedBy")
+  updatedSubjects            Subject[]           @relation("SubjectUpdatedBy")
+  subjectEnrollments         SubjectEnrollment[]
+  subjectInstructions        SubjectInstructor[]
+  createdTemplateFields      TemplateField[]     @relation("TemplateFieldCreatedBy")
+  updatedTemplateFields      TemplateField[]     @relation("TemplateFieldUpdatedBy")
+  createdTemplateForms       TemplateForm[]      @relation("TemplateFormCreatedBy")
+  createdTraineeProfiles     TraineeProfile[]    @relation("TraineeCreatedBy")
+  deletedTraineeProfiles     TraineeProfile[]    @relation("TraineeDeletedBy")
+  updatedTraineeProfiles     TraineeProfile[]    @relation("TraineeUpdatedBy")
+  traineeProfile             TraineeProfile?
+  createdTrainerProfiles     TrainerProfile[]    @relation("TrainerCreatedBy")
+  deletedTrainerProfiles     TrainerProfile[]    @relation("TrainerDeletedBy")
+  updatedTrainerProfiles     TrainerProfile[]    @relation("TrainerUpdatedBy")
+  trainerProfile             TrainerProfile?
+  createdBy                  User?               @relation("UserCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  createdUsers               User[]              @relation("UserCreatedBy")
+  deletedBy                  User?               @relation("UserDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  deletedUsers               User[]              @relation("UserDeletedBy")
+  department                 Department?         @relation("DepartmentMembers", fields: [departmentId], references: [id], onUpdate: NoAction)
+  role                       Role                @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedBy                  User?               @relation("UserUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  updatedUsers               User[]              @relation("UserUpdatedBy")
+  createdRequests            Request[]           @relation("RequestCreatedBy")
+  managedRequests            Request[]           @relation("RequestManagedBy")
+  updatedRequests            Request[]           @relation("RequestUpdatedBy")
+  createdAssessmentForms     AssessmentForm[]    @relation("AssessmentFormCreatedBy")
+  updatedAssessmentForms     AssessmentForm[]    @relation("AssessmentFormUpdatedBy")
+  traineeAssessmentForms     AssessmentForm[]    @relation("AssessmentFormTrainee")
+  approvedAssessmentForms    AssessmentForm[]    @relation("AssessmentFormApprovedBy")
+  assessedAssessmentSections AssessmentSection[] @relation("AssessmentSectionAssessedBy")
+  createdAssessmentValues    AssessmentValue[]   @relation("AssessmentValueCreatedBy")
 
   @@index([deletedAt])
   @@map("User")
@@ -75,7 +84,7 @@ model User {
 
 model Role {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
+  name        String       @unique
   description String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @default(now()) @updatedAt
@@ -83,7 +92,7 @@ model Role {
   createdById String?      @db.Uuid
   updatedById String?      @db.Uuid
   deletedById String?      @db.Uuid
-  isActive    ActiveStatus @default(ACTIVE)
+  isActive    Boolean      @default(true)
   createdBy   User?        @relation("RoleCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy   User?        @relation("RoleDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?        @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
@@ -97,8 +106,8 @@ model Role {
 model Permission {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   method      HttpMethod
-  path        String
-  name        String
+  path        String       
+  name        String       
   module      String
   description String?
   createdById String?      @db.Uuid
@@ -107,9 +116,9 @@ model Permission {
   updatedAt   DateTime     @default(now()) @updatedAt
   deletedAt   DateTime?
   deletedById String?      @db.Uuid
-  viewModule  String?      @default("")
-  viewName    String?      @default("")
-  isActive    ActiveStatus @default(ACTIVE)
+  viewModule  String?
+  viewName    String?
+  isActive    Boolean      @default(true)
   createdBy   User?        @relation("PermissionCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy   User?        @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?        @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
@@ -122,8 +131,8 @@ model Permission {
 model TrainerProfile {
   userId              String    @id @db.Uuid
   specialization      String
-  certificationNumber String?
-  yearsOfExp          Int       @default(0)
+  certificationNumber String
+  yearsOfExp          Int?
   bio                 String?
   createdById         String?   @db.Uuid
   updatedById         String?   @db.Uuid
@@ -142,11 +151,11 @@ model TrainerProfile {
 
 model TraineeProfile {
   userId         String    @id @db.Uuid
-  dob            DateTime
-  enrollmentDate DateTime
+  dob            DateTime  @db.Date
+  enrollmentDate DateTime? @db.Date
   trainingBatch  String
-  passportNo     String?
-  nation         String
+  passportNo     String
+  nation         String?
   createdById    String?   @db.Uuid
   updatedById    String?   @db.Uuid
   createdAt      DateTime  @default(now())
@@ -164,7 +173,7 @@ model TraineeProfile {
 
 model Department {
   id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String
+  name          String         @unique
   description   String?
   headUserId    String?        @db.Uuid
   createdById   String?        @db.Uuid
@@ -173,7 +182,7 @@ model Department {
   updatedAt     DateTime       @default(now()) @updatedAt
   deletedAt     DateTime?
   deletedById   String?        @db.Uuid
-  isActive      ActiveStatus   @default(ACTIVE)
+  isActive      Boolean        @default(true)
   code          String         @unique
   courses       Course[]
   createdBy     User?          @relation("DeptCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
@@ -188,30 +197,31 @@ model Department {
 }
 
 model Course {
-  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  departmentId  String?      @db.Uuid
-  name          String
-  description   String?
-  code          String       @unique
-  maxNumTrainee Int?
-  venue         String?
-  note          String?
-  passScore     Float?
-  startDate     DateTime?
-  endDate       DateTime?
-  level         CourseLevel
-  status        CourseStatus @default(PLANNED)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @default(now()) @updatedAt
-  deletedAt     DateTime?
-  createdById   String?      @db.Uuid
-  updatedById   String?      @db.Uuid
-  deletedById   String?      @db.Uuid
-  createdBy     User?        @relation("CourseCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
-  deletedBy     User?        @relation("CourseDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
-  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  updatedBy     User?        @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
-  subjects      Subject[]
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  departmentId    String           @db.Uuid
+  name            String
+  description     String?
+  code            String           @unique
+  maxNumTrainee   Int
+  venue           String?
+  note            String?
+  passScore       Float?
+  startDate       DateTime         @db.Date
+  endDate         DateTime         @db.Date
+  level           CourseLevel
+  status          CourseStatus     @default(PLANNED)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
+  deletedAt       DateTime?
+  createdById     String?          @db.Uuid
+  updatedById     String?          @db.Uuid
+  deletedById     String?          @db.Uuid
+  createdBy       User?            @relation("CourseCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy       User?            @relation("CourseDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedBy       User?            @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  subjects        Subject[]
+  assessmentForms AssessmentForm[]
 
   @@index([departmentId])
   @@index([deletedAt])
@@ -219,33 +229,35 @@ model Course {
 }
 
 model Subject {
-  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  courseId    String?             @db.Uuid
-  name        String
-  code        String              @unique
-  description String?
-  method      SubjectMethod
-  duration    Int?
-  type        SubjectType
-  roomName    String?
-  remarkNote  String?
-  timeSlot    String?
-  isSIM       Boolean             @default(false)
-  passScore   Float?
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @default(now()) @updatedAt
-  deletedAt   DateTime?
-  createdById String?             @db.Uuid
-  updatedById String?             @db.Uuid
-  deletedById String?             @db.Uuid
-  course      Course?             @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  createdBy   User?               @relation("SubjectCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
-  deletedBy   User?               @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
-  updatedBy   User?               @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
-  enrollments SubjectEnrollment[]
-  instructors SubjectInstructor[]
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId        String              @db.Uuid
+  name            String
+  code            String              @unique
+  description     String?
+  method          SubjectMethod
+  duration        Float?
+  type            SubjectType
+  roomName        String?
+  remarkNote      String?
+  timeSlot        String?
+  isSIM           Boolean             @default(false)
+  passScore       Float?
+  startDate       DateTime            @db.Date
+  status          SubjectStatus       @default(PLANNED)
+  endDate         DateTime            @db.Date
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now()) @updatedAt
+  deletedAt       DateTime?
+  createdById     String?             @db.Uuid
+  updatedById     String?             @db.Uuid
+  deletedById     String?             @db.Uuid
+  course          Course              @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  createdBy       User?               @relation("SubjectCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  deletedBy       User?               @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
+  updatedBy       User?               @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  enrollments     SubjectEnrollment[]
+  instructors     SubjectInstructor[]
+  assessmentForms AssessmentForm[]
 
   @@index([courseId])
   @@index([deletedAt])
@@ -268,7 +280,7 @@ model SubjectInstructor {
 model SubjectEnrollment {
   traineeUserId  String                  @db.Uuid
   subjectId      String                  @db.Uuid
-  enrollmentDate DateTime
+  enrollmentDate DateTime                @db.Date
   batchCode      String
   status         SubjectEnrollmentStatus @default(ENROLLED)
   createdAt      DateTime                @default(now())
@@ -279,6 +291,97 @@ model SubjectEnrollment {
   @@id([traineeUserId, subjectId])
   @@index([subjectId])
   @@map("Subject_Enrollment")
+}
+
+model AssessmentForm {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId      String              @db.Uuid
+  name            String              @db.VarChar(255)
+  subjectId       String?             @db.Uuid
+  courseId        String?             @db.Uuid
+  occuranceDate   DateTime            @db.Date
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now()) @updatedAt
+  createdById     String              @db.Uuid
+  updatedById     String              @db.Uuid
+  traineeId       String              @db.Uuid
+  status          AssessmentStatus    @default(NOT_STARTED)
+  submittedAt     DateTime?
+  comment         String?             @db.VarChar(1000)
+  approvedById    String?             @db.Uuid
+  approvedAt      DateTime?
+  isTraineeLocked Boolean             @default(true)
+  resultScore     Float?
+  resultText      AssessmentResult?
+  pdfUrl          String?             @db.VarChar(500)
+  createdBy       User                @relation("AssessmentFormCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  updatedBy       User                @relation("AssessmentFormUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  trainee         User                @relation("AssessmentFormTrainee", fields: [traineeId], references: [id], onUpdate: NoAction)
+  approvedBy      User?               @relation("AssessmentFormApprovedBy", fields: [approvedById], references: [id], onUpdate: NoAction)
+  template        TemplateForm        @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subject         Subject?            @relation(fields: [subjectId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  course          Course?             @relation(fields: [courseId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  requests        Request[]
+  sections        AssessmentSection[]
+
+  @@index([createdById])
+  @@index([updatedById])
+  @@index([templateId])
+  @@index([subjectId])
+  @@index([courseId])
+  @@index([traineeId])
+  @@index([approvedById])
+  @@index([status])
+  @@index([occuranceDate])
+  @@map("Assessment_Form")
+}
+
+model AssessmentSection {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentFormId  String                  @db.Uuid
+  assessedById      String?                 @db.Uuid
+  templateSectionId String                  @db.Uuid
+  createdAt         DateTime                @default(now())
+  status            AssessmentSectionStatus @default(REQUIRED_ASSESSMENT)
+  assessmentForm    AssessmentForm          @relation(fields: [assessmentFormId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assessedBy        User?                   @relation("AssessmentSectionAssessedBy", fields: [assessedById], references: [id], onUpdate: NoAction)
+  templateSection   TemplateSection         @relation(fields: [templateSectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  values            AssessmentValue[]
+
+  @@index([assessmentFormId])
+  @@index([assessedById])
+  @@index([templateSectionId])
+  @@index([status])
+  @@map("Assessment_Section")
+}
+
+model Request {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestType     RequestType
+  createdById     String           @db.Uuid
+  severity        RequestSeverity?
+  title           String?
+  description     String?
+  actionsTaken    String?
+  isAnonymous     Boolean          @default(false)
+  status          RequestStatus    @default(SUBMITTED)
+  managedById     String?          @db.Uuid
+  response        String?
+  assessmentId    String?          @db.Uuid
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
+  updatedById     String?          @db.Uuid
+  createdBy       User             @relation("RequestCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  managedBy       User?            @relation("RequestManagedBy", fields: [managedById], references: [id], onUpdate: NoAction)
+  updatedBy       User?            @relation("RequestUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  assessment      AssessmentForm?  @relation(fields: [assessmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([requestType])
+  @@index([status])
+  @@index([createdById])
+  @@index([managedById])
+  @@index([createdAt])
+  @@map("Request")
 }
 
 model GlobalField {
@@ -320,6 +423,7 @@ model TemplateForm {
   createdByUser   User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   department      Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   sections        TemplateSection[]
+  assessmentForms AssessmentForm[]
 
   @@index([departmentId])
   @@index([createdByUserId])
@@ -328,16 +432,17 @@ model TemplateForm {
 }
 
 model TemplateSection {
-  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  templateId        String          @db.Uuid
-  label             String          @db.VarChar(255)
-  displayOrder      Int
-  editBy            EditByRole
-  roleInSubject     RoleInSubject?
-  isSubmittable     Boolean         @default(false)
-  isToggleDependent Boolean         @default(false)
-  fields            TemplateField[]
-  template          TemplateForm    @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId         String              @db.Uuid
+  label              String              @db.VarChar(255)
+  displayOrder       Int
+  editBy             EditByRole
+  roleInSubject      RoleInSubject?
+  isSubmittable      Boolean             @default(false)
+  isToggleDependent  Boolean             @default(false)
+  fields             TemplateField[]
+  assessmentSections AssessmentSection[]
+  template           TemplateForm        @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([templateId])
   @@index([displayOrder])
@@ -345,24 +450,25 @@ model TemplateSection {
 }
 
 model TemplateField {
-  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sectionId    String          @db.Uuid
-  label        String          @db.VarChar(255)
-  fieldName    String          @db.VarChar(255)
-  fieldType    FieldType
-  roleRequired RoleRequired?
-  options      Json?
-  displayOrder Int
-  parentId     String?         @db.Uuid
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @default(now()) @updatedAt
-  createdById  String?         @db.Uuid
-  updatedById  String?         @db.Uuid
-  createdBy    User?           @relation("TemplateFieldCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
-  parent       TemplateField?  @relation("TemplateFieldHierarchy", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  children     TemplateField[] @relation("TemplateFieldHierarchy")
-  section      TemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  updatedBy    User?           @relation("TemplateFieldUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sectionId        String            @db.Uuid
+  label            String            @db.VarChar(255)
+  fieldName        String            @db.VarChar(255)
+  fieldType        FieldType
+  roleRequired     RoleRequired?
+  options          Json?
+  displayOrder     Int
+  parentId         String?           @db.Uuid
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+  createdById      String?           @db.Uuid
+  updatedById      String?           @db.Uuid
+  createdBy        User?             @relation("TemplateFieldCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  parent           TemplateField?    @relation("TemplateFieldHierarchy", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  children         TemplateField[]   @relation("TemplateFieldHierarchy")
+  section          TemplateSection   @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  updatedBy        User?             @relation("TemplateFieldUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  assessmentValues AssessmentValue[]
 
   @@unique([sectionId, fieldName])
   @@index([sectionId])
@@ -373,20 +479,58 @@ model TemplateField {
   @@map("Template_Field")
 }
 
+model AssessmentValue {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentSectionId String            @db.Uuid
+  templateFieldId     String            @db.Uuid
+  answerValue         String?           @db.VarChar(2000)
+  createdAt           DateTime          @default(now())
+  createdById         String            @db.Uuid
+  assessmentSection   AssessmentSection @relation(fields: [assessmentSectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  templateField       TemplateField     @relation(fields: [templateFieldId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  createdBy           User              @relation("AssessmentValueCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+
+  @@index([assessmentSectionId])
+  @@index([templateFieldId])
+  @@index([createdById])
+  @@map("Assessment_Value")
+}
+
 enum UserStatus {
   ACTIVE
   DISABLED
-  SUSPENDED
+}
+
+enum RequestType {
+  SAFETY_REPORT
+  INSTRUCTOR_REPORT
+  FATIGUE_REPORT
+  TRAINING_PROGRAM_REPORT
+  FACILITIES_REPORT
+  COURSE_ORGANIZATION_REPORT
+  ASSESSMENT_APPROVAL_REQUEST
+  OTHER
+}
+
+enum RequestSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RequestStatus {
+  SUBMITTED
+  ACKNOWLEDGED
+  RESOLVED
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 enum GenderStatus {
   MALE
   FEMALE
-}
-
-enum ActiveStatus {
-  ACTIVE
-  INACTIVE
 }
 
 enum SubjectInstructorRole {
@@ -403,6 +547,13 @@ enum CourseLevel {
 }
 
 enum CourseStatus {
+  PLANNED
+  ON_GOING
+  COMPLETED
+  ARCHIVED
+}
+
+enum SubjectStatus {
   PLANNED
   ON_GOING
   COMPLETED
@@ -427,6 +578,29 @@ enum SubjectEnrollmentStatus {
   FINISHED
 }
 
+enum AssessmentStatus {
+  NOT_STARTED
+  ON_GOING
+  SIGNATURE_PENDING
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum AssessmentResult {
+  PASS
+  FAIL
+  NOT_APPLICABLE
+}
+
+enum AssessmentSectionStatus {
+  REQUIRED_ASSESSMENT
+  DRAFT
+  REJECTED
+  APPROVED
+}
+
 enum HttpMethod {
   GET
   POST
@@ -449,6 +623,7 @@ enum FieldType {
   FINAL_SCORE_TEXT
   FINAL_SCORE_NUM
   CHECK_BOX
+  PARENT
 }
 
 enum RoleRequired {

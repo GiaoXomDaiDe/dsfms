@@ -39,9 +39,10 @@ export class PermissionController {
   }
 
   @Post()
-  create(@Body() Body: CreatePermissionBodyDTO, @ActiveUser('userId') userId: string) {
+  @ZodSerializerDto(GetPermissionDetailResDTO)
+  create(@Body() body: CreatePermissionBodyDTO, @ActiveUser('userId') userId: string) {
     return this.permissionService.create({
-      data: Body,
+      data: body,
       createdById: userId
     })
   }
@@ -70,16 +71,11 @@ export class PermissionController {
   }
 
   @Patch(':permissionId/enable')
-  @ZodSerializerDto(GetPermissionDetailResDTO)
-  enable(
-    @Param() params: GetPermissionParamsDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  @ZodSerializerDto(MessageResDTO)
+  enable(@Param() params: GetPermissionParamsDTO, @ActiveUser('userId') userId: string) {
     return this.permissionService.enable({
       id: params.permissionId,
-      enabledById: userId,
-      enablerRole: roleName
+      enabledById: userId
     })
   }
 }

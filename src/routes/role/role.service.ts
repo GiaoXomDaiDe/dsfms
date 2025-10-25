@@ -1,17 +1,26 @@
 import { Injectable } from '@nestjs/common'
 import {
+  createRoleAlreadyActiveError,
+  NoNewPermissionsToAddException,
   NotFoundRoleException,
-  ProhibitedActionOnBaseRoleException,
-  RoleAlreadyExistsException
+  RoleAlreadyExistsException,
+  UnexpectedEnableErrorException
 } from '~/routes/role/role.error'
 import { CreateRoleBodyType, UpdateRoleBodyType } from '~/routes/role/role.model'
 import { RoleRepo } from '~/routes/role/role.repo'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
+import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
+import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
+import { preventAdminDeletion } from '~/shared/validation/entity-operation.validation'
 
 @Injectable()
 export class RoleService {
-  constructor(private roleRepo: RoleRepo) {}
+  constructor(
+    private readonly roleRepo: RoleRepo,
+    private readonly sharedPermissionRepo: SharedPermissionRepository,
+    private readonly sharedRoleRepo: SharedRoleRepository
+  ) {}
 
   async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
     const data = await this.roleRepo.list({
@@ -27,129 +36,103 @@ export class RoleService {
     const role = await this.roleRepo.findById(id, {
       includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
     })
-    if (!role) {
-      throw NotFoundRoleException
-    }
+    if (!role) throw NotFoundRoleException
     return role
   }
 
   async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }) {
+    if (data.permissionIds && data.permissionIds.length > 0) {
+      await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
+    }
+
     try {
-      const role = await this.roleRepo.create({
-        createdById,
-        data
-      })
-      return role
+      return await this.roleRepo.create({ createdById, data })
     } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw RoleAlreadyExistsException
-      }
+      if (isUniqueConstraintPrismaError(error)) throw RoleAlreadyExistsException
       throw error
     }
   }
 
-  /**
-   * Kiểm tra xem role có phải là 1 trong 3 role cơ bản không
-   */
-  private async verifyRole(roleId: string) {
-    const role = await this.roleRepo.findById(roleId)
-    if (!role) {
-      throw NotFoundRoleException
-    }
-    const baseRoles: string[] = [
-      RoleName.ADMINISTRATOR,
-      RoleName.DEPARTMENT_HEAD,
-      RoleName.SQA_AUDITOR,
-      RoleName.TRAINEE,
-      RoleName.TRAINER,
-      RoleName.ACADEMIC_DEPARTMENT
-    ]
-
-    if (baseRoles.includes(role.name)) {
-      throw ProhibitedActionOnBaseRoleException
-    }
-  }
-
   async update({ id, data, updatedById }: { id: string; data: UpdateRoleBodyType; updatedById: string }) {
-    try {
-      await this.verifyRole(id)
+    if (data.permissionIds && data.permissionIds.length > 0) {
+      await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
+    }
 
-      const updatedRole = await this.roleRepo.update({
-        id,
-        updatedById,
-        data
-      })
-      return updatedRole
+    const role = await this.sharedRoleRepo.findRolebyId(id)
+    if (!role) throw NotFoundRoleException
+
+    try {
+      return await this.roleRepo.update({ id, updatedById, data })
     } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundRoleException
-      }
-      if (isUniqueConstraintPrismaError(error)) {
-        throw RoleAlreadyExistsException
-      }
+      if (isNotFoundPrismaError(error)) throw NotFoundRoleException
+      if (isUniqueConstraintPrismaError(error)) throw RoleAlreadyExistsException
       throw error
     }
   }
 
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
-    try {
-      const role = await this.roleRepo.findById(id)
-      if (!role) {
-        throw NotFoundRoleException
-      }
-      // Không cho phép xóa role ADMINISTRATOR
-      if (role.name === RoleName.ADMINISTRATOR) {
-        throw ProhibitedActionOnBaseRoleException
-      }
+    const role = await this.roleRepo.findById(id)
+    if (!role) throw NotFoundRoleException
 
-      // Không cho phép bất kỳ ai có thể xóa các role cơ bản khác
-      const baseRoles: string[] = [RoleName.DEPARTMENT_HEAD, RoleName.SQA_AUDITOR, RoleName.TRAINEE, RoleName.TRAINER]
-      if (baseRoles.includes(role.name)) {
-        throw ProhibitedActionOnBaseRoleException
-      }
-      await this.roleRepo.delete({
-        id,
-        deletedById
-      })
-      return {
-        message: 'Delete successfully'
-      }
+    preventAdminDeletion(role.name)
+
+    try {
+      await this.roleRepo.delete({ id, deletedById })
+      return { message: 'Disable successfully' }
     } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundRoleException
-      }
+      if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       throw error
     }
   }
 
-  async enable({ id, enabledById, enablerRole }: { id: string; enabledById: string; enablerRole: string }) {
-    // Chỉ admin mới có thể enable role
-    if (enablerRole !== RoleName.ADMINISTRATOR) {
-      throw ProhibitedActionOnBaseRoleException
-    }
+  async enable({ id, enabledById }: { id: string; enabledById: string }) {
+    const role = await this.roleRepo.findById(id, { includeDeleted: true })
+    if (!role) throw NotFoundRoleException
+
+    // Business rule: Check if already active
+    if (!role.deletedAt) throw createRoleAlreadyActiveError(role.name)
 
     try {
-      const role = await this.roleRepo.findById(id, { includeDeleted: true })
-      if (!role) {
-        throw NotFoundRoleException
-      }
-
-      if (!role.deletedAt) {
-        throw new Error('Role is not disabled')
-      }
-
       await this.roleRepo.enable({ id, enabledById })
+      return { message: 'Enable role successfully' }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) throw NotFoundRoleException
+      if (isUniqueConstraintPrismaError(error)) throw UnexpectedEnableErrorException
+      throw error
+    }
+  }
+
+  async addPermissions({
+    roleId,
+    permissionIds,
+    updatedById
+  }: {
+    roleId: string
+    permissionIds: string[]
+    updatedById: string
+  }) {
+    const role = await this.roleRepo.findById(roleId)
+    if (!role) throw NotFoundRoleException
+
+    await this.sharedPermissionRepo.validatePermissionIds(permissionIds)
+
+    try {
+      const result = await this.roleRepo.addPermissions({
+        roleId,
+        permissionIds,
+        updatedById
+      })
+
+      if (result.addedPermissions.length === 0) {
+        throw NoNewPermissionsToAddException
+      }
 
       return {
-        message: 'Enable role successfully'
+        message: `Successfully added ${result.addedPermissions.length} permission(s) to role '${role.name}'`,
+        addedPermissions: result.addedPermissions
       }
     } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundRoleException
-      }
-      if (isUniqueConstraintPrismaError(error)) {
-        throw new Error('Unexpected unique constraint violation during enable')
-      }
+      if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       throw error
     }
   }

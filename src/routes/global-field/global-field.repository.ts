@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { GlobalField, FieldType, Prisma } from '@prisma/client';
-import { PrismaService } from '~/shared/services/prisma.service';
-import { CreateGlobalFieldDto, UpdateGlobalFieldDto } from '~/routes/global-field/global-field.dto';
+import { Injectable } from '@nestjs/common'
+import { GlobalField, FieldType, Prisma } from '@prisma/client'
+import { PrismaService } from '~/shared/services/prisma.service'
+import { CreateGlobalFieldDto, UpdateGlobalFieldDto } from '~/routes/global-field/global-field.dto'
 
 @Injectable()
 export class GlobalFieldRepository {
@@ -13,12 +13,12 @@ export class GlobalFieldRepository {
         id: true,
         label: true,
         fieldName: true,
-        roleRequired: true,
+        roleRequired: true
       },
       orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        createdAt: 'desc'
+      }
+    })
   }
 
   async findAllDetailed() {
@@ -28,35 +28,35 @@ export class GlobalFieldRepository {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         children: {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         createdBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         updatedBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
-        },
+            lastName: true
+          }
+        }
       },
       orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        createdAt: 'desc'
+      }
+    })
   }
 
   async findById(id: string) {
@@ -68,9 +68,9 @@ export class GlobalFieldRepository {
         fieldName: true,
         fieldType: true,
         roleRequired: true,
-        options: true,
-      },
-    });
+        options: true
+      }
+    })
   }
 
   async findByIdDetailed(id: string) {
@@ -81,71 +81,71 @@ export class GlobalFieldRepository {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         children: {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         createdBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         updatedBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
+            lastName: true
+          }
+        }
+      }
+    })
   }
 
   async create(data: CreateGlobalFieldDto, createdById?: string) {
     return this.prismaService.globalField.create({
       data: {
         ...data,
-        createdById,
+        createdById
       },
       include: {
         parent: {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         children: {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         createdBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         updatedBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
+            lastName: true
+          }
+        }
+      }
+    })
   }
 
   async update(id: string, data: UpdateGlobalFieldDto, updatedById?: string) {
@@ -153,45 +153,45 @@ export class GlobalFieldRepository {
       where: { id },
       data: {
         ...data,
-        updatedById,
+        updatedById
       },
       include: {
         parent: {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         children: {
           select: {
             id: true,
             label: true,
-            fieldName: true,
-          },
+            fieldName: true
+          }
         },
         createdBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
+            lastName: true
+          }
         },
         updatedBy: {
           select: {
             id: true,
             firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
+            lastName: true
+          }
+        }
+      }
+    })
   }
 
   async delete(id: string) {
     return this.prismaService.globalField.delete({
-      where: { id },
-    });
+      where: { id }
+    })
   }
 
   async findByFieldName(fieldName: string) {
@@ -199,57 +199,57 @@ export class GlobalFieldRepository {
       where: { fieldName },
       select: {
         id: true,
-        fieldName: true,
-      },
-    });
+        fieldName: true
+      }
+    })
   }
 
   async fieldNameExists(fieldName: string, excludeId?: string): Promise<boolean> {
     const where: Prisma.GlobalFieldWhereInput = {
-      fieldName,
-    };
+      fieldName
+    }
 
     if (excludeId) {
       where.id = {
-        not: excludeId,
-      };
+        not: excludeId
+      }
     }
 
     const field = await this.prismaService.globalField.findFirst({
       where,
-      select: { id: true },
-    });
-    return !!field;
+      select: { id: true }
+    })
+    return !!field
   }
 
   async exists(id: string): Promise<boolean> {
     const field = await this.prismaService.globalField.findUnique({
       where: { id },
-      select: { id: true },
-    });
-    return !!field;
+      select: { id: true }
+    })
+    return !!field
   }
 
   async checkCircularReference(id: string, parentId: string): Promise<boolean> {
     // Check if parentId is a descendant of id
     const checkDescendant = async (currentId: string, targetId: string): Promise<boolean> => {
       if (currentId === targetId) {
-        return true;
+        return true
       }
 
       const children = await this.prismaService.globalField.findMany({
         where: { parentId: currentId },
-        select: { id: true },
-      });
+        select: { id: true }
+      })
 
       for (const child of children) {
         if (await checkDescendant(child.id, targetId)) {
-          return true;
+          return true
         }
       }
-      return false;
-    };
+      return false
+    }
 
-    return checkDescendant(id, parentId);
+    return checkDescendant(id, parentId)
   }
 }

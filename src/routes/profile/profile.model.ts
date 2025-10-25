@@ -3,29 +3,38 @@ import { UserSchema } from '~/shared/models/shared-user.model'
 
 export const TrainerProfileSchema = z.object({
   specialization: z.string().max(100),
-  certificationNumber: z.string().max(50).nullable(),
-  yearsOfExp: z.number().min(0).max(50).default(0),
+  certificationNumber: z.string().max(50),
+  yearsOfExp: z.number().min(0).max(50).nullable().default(0),
   bio: z.string().max(1000).nullable(),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  deletedAt: z.iso
+    .datetime()
+    .transform((d) => new Date(d))
+    .nullable(),
+  createdAt: z.iso.datetime().transform((d) => new Date(d)),
+  updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
 
 export const TraineeProfileSchema = z.object({
-  dob: z.coerce.date(),
-  enrollmentDate: z.coerce.date(),
+  dob: z.iso.datetime().transform((value) => new Date(value)),
+  enrollmentDate: z.iso
+    .datetime()
+    .transform((value) => new Date(value))
+    .nullable(),
   trainingBatch: z.string().max(100),
-  passportNo: z.string().max(100).nullable(),
-  nation: z.string().max(100),
+  passportNo: z.string().max(100),
+  nation: z.string().max(100).nullable(),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  deletedAt: z.iso
+    .datetime()
+    .transform((d) => new Date(d))
+    .nullable(),
+  createdAt: z.iso.datetime().transform((d) => new Date(d)),
+  updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
 
 export const CreateTraineeProfileSchema = TraineeProfileSchema.pick({
@@ -111,23 +120,27 @@ export const ChangePasswordBodySchema = UserSchema.pick({
     if (newPassword !== confirmNewPassword) {
       ctx.addIssue({
         code: 'custom',
-        message: 'New password and confirm new password do not match',
+        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp',
         path: ['confirmNewPassword']
       })
     }
   })
 
+// Schema để reset mật khẩu - yêu cầu mật khẩu cũ, mật khẩu mới và xác nhận mật khẩu mới
+// Validation: confirmNewPassword phải khớp với newPassword
 export const ResetPasswordBodySchema = z
   .object({
-    newPassword: z.string().min(6).max(100),
-    confirmNewPassword: z.string().min(6).max(100)
+    oldPassword: z.string().min(6).max(100), // Mật khẩu cũ để xác thực
+    newPassword: z.string().min(6).max(100), // Mật khẩu mới
+    confirmNewPassword: z.string().min(6).max(100) // Xác nhận mật khẩu mới
   })
   .strict()
   .superRefine(({ confirmNewPassword, newPassword }, ctx) => {
+    // Kiểm tra confirmNewPassword có khớp với newPassword không
     if (newPassword !== confirmNewPassword) {
       ctx.addIssue({
         code: 'custom',
-        message: 'New password and confirm new password do not match',
+        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp',
         path: ['confirmNewPassword']
       })
     }

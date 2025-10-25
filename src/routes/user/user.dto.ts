@@ -7,11 +7,10 @@ import {
   GetUserParamsSchema,
   GetUserResSchema,
   GetUsersQuerySchema,
-  GetUsersResSchema,
   UpdateUserBodyWithProfileSchema,
   UpdateUserResSchema
 } from '~/routes/user/user.model'
-
+import { GetUsersResSchema } from '~/shared/models/shared-user.model'
 export class GetUsersQueryDTO extends createZodDto(GetUsersQuerySchema) {}
 
 export class GetUsersResDTO extends createZodDto(GetUsersResSchema) {}

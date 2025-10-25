@@ -1,6 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import {
+  CannotUpdateTraineeProfileException,
+  CannotUpdateTrainerProfileException,
+  EmailAlreadyExistsException,
+  OldPasswordIncorrectException,
+  PasswordResetSuccessException,
+  TraineeCannotHaveTrainerProfileException,
+  TrainerCannotHaveTraineeProfileException,
+  UserNotFoundException
+} from '~/routes/profile/profile.error'
 import { ResetPasswordBodyType, UpdateProfileBodyType } from '~/routes/profile/profile.model'
-import { UserNotFoundException } from '~/routes/user/user.error'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -33,20 +42,20 @@ export class ProfileService {
 
       // Validate profile data based on current user role
       if (trainerProfile && currentUser.role.name !== RoleName.TRAINER) {
-        throw new BadRequestException('Cannot update trainer profile: user is not a trainer')
+        throw CannotUpdateTrainerProfileException
       }
 
       if (traineeProfile && currentUser.role.name !== RoleName.TRAINEE) {
-        throw new BadRequestException('Cannot update trainee profile: user is not a trainee')
+        throw CannotUpdateTraineeProfileException
       }
 
       // Ensure only the correct profile type is provided
       if (currentUser.role.name === RoleName.TRAINER && traineeProfile) {
-        throw new BadRequestException('Trainer cannot have trainee profile data')
+        throw TrainerCannotHaveTraineeProfileException
       }
 
       if (currentUser.role.name === RoleName.TRAINEE && trainerProfile) {
-        throw new BadRequestException('Trainee cannot have trainer profile data')
+        throw TraineeCannotHaveTrainerProfileException
       }
 
       return await this.sharedUserRepository.updateWithProfile(
@@ -61,39 +70,40 @@ export class ProfileService {
       )
     } catch (error) {
       if (isUniqueConstraintPrismaError(error)) {
-        throw new BadRequestException('Email already exists')
+        throw EmailAlreadyExistsException
       }
       throw error
     }
   }
 
   async resetPassword({ userId, body }: { userId: string; body: Omit<ResetPasswordBodyType, 'confirmNewPassword'> }) {
-    try {
-      const { newPassword } = body
-      const user = await this.sharedUserRepository.findUnique({
-        id: userId
-      })
-      if (!user) {
-        throw UserNotFoundException
-      }
+    const { oldPassword, newPassword } = body
 
-      const hashedPassword = await this.hashingService.hashPassword(newPassword)
-
-      await this.sharedUserRepository.update(
-        { id: userId },
-        {
-          passwordHash: hashedPassword,
-          updatedById: userId
-        }
-      )
-      return {
-        message: 'Password reset successfully'
-      }
-    } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw UserNotFoundException
-      }
-      throw error
+    // Tìm user hiện tại
+    const user = await this.sharedUserRepository.findUnique({
+      id: userId
+    })
+    if (!user) {
+      throw UserNotFoundException
     }
+
+    // Validate mật khẩu cũ có đúng không
+    const isOldPasswordValid = await this.hashingService.comparePassword(oldPassword, user.passwordHash)
+    if (!isOldPasswordValid) {
+      throw OldPasswordIncorrectException
+    }
+
+    // Hash mật khẩu mới và cập nhật
+    const hashedPassword = await this.hashingService.hashPassword(newPassword)
+
+    await this.sharedUserRepository.update(
+      { id: userId },
+      {
+        passwordHash: hashedPassword,
+        updatedById: userId
+      }
+    )
+
+    return PasswordResetSuccessException
   }
 }

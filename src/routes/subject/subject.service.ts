@@ -1,41 +1,50 @@
 import { Injectable } from '@nestjs/common'
+import { round } from 'lodash'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
+import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
   isForeignKeyConstraintPrismaError,
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
+import { CourseIdParamsType } from '~/shared/models/shared-course.model'
+import { SubjectIdParamsType, SubjectType } from '~/shared/models/shared-subject.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
+import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import {
-  BulkInvalidDateRangeAtIndexException,
   BulkSubjectCodeAlreadyExistsAtIndexException,
   BulkSubjectCreationFailedException,
-  CannotHardDeleteSubjectWithEnrollmentsException,
-  CannotHardDeleteSubjectWithInstructorsException,
-  CannotRestoreSubjectCodeConflictException,
+  CannotCancelSubjectEnrollmentException,
+  CourseAtCapacityException,
   CourseNotFoundException,
-  InvalidDateRangeException,
-  OnlyAdminAndDepartmentHeadCanCreateSubjectsException,
-  OnlyAdminAndDepartmentHeadCanDeleteSubjectsException,
-  OnlyAdminAndDepartmentHeadCanRestoreSubjectsException,
-  OnlyAdminAndDepartmentHeadCanUpdateSubjectsException,
+  DuplicateInstructorException,
+  DuplicateTraineeEnrollmentException,
+  InvalidTraineeSubmissionException,
   SubjectCodeAlreadyExistsException,
-  SubjectIsNotDeletedException,
-  SubjectNotFoundException
+  SubjectDateOutsideCourseDateRangeException,
+  SubjectNotFoundException,
+  TrainerAssignmentNotFoundException
 } from './subject.error'
 import {
+  AssignTraineesBodyType,
+  AssignTraineesResType,
+  AssignTrainerBodyType,
+  AssignTrainerResType,
   BulkCreateSubjectsBodyType,
   BulkCreateSubjectsResType,
   CreateSubjectBodyType,
+  GetAvailableTrainersResType,
+  GetSubjectDetailResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
-  SubjectDetailResType,
-  SubjectEntityType,
-  SubjectWithInfoType,
-  UpdateSubjectBodyType
+  LookupTraineesBodyType,
+  LookupTraineesResType,
+  UpdateSubjectBodyType,
+  UpdateTrainerAssignmentResType
 } from './subject.model'
 import { SubjectRepo } from './subject.repo'
 
@@ -43,33 +52,26 @@ import { SubjectRepo } from './subject.repo'
 export class SubjectService {
   constructor(
     private readonly subjectRepo: SubjectRepo,
+    private readonly sharedSubjectRepository: SharedSubjectRepository,
     private readonly sharedDepartmentRepository: SharedDepartmentRepository,
     private readonly sharedCourseRepository: SharedCourseRepository,
     private readonly sharedUserRepository: SharedUserRepository,
     private readonly sharedRoleRepository: SharedRoleRepository
   ) {}
 
-  /**
-   * Lấy danh sách subjects với phân trang và filter.
-   * Chỉ ACADEMIC_DEPARTMENT mới được phép xem subject đã bị xóa mềm.
-   * @param query - Query parameters bao gồm page, limit, search, filters
-   */
-  async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
-    return await this.subjectRepo.list(query)
+  async list(query: GetSubjectsQueryType, userRoleName: string): Promise<GetSubjectsResType> {
+    const includeDeleted = userRoleName === RoleName.ACADEMIC_DEPARTMENT
+
+    return await this.subjectRepo.list({
+      ...query,
+      includeDeleted
+    })
   }
 
-  /**
-   * Lấy thông tin chi tiết một subject kèm theo instructors và enrollments.
-   * Chỉ ACADEMIC_DEPARTMENT mới được phép xem subject đã bị xóa mềm.
-   * @param id - ID của subject
-   * @param options - Tùy chọn includeDeleted
-   */
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<SubjectDetailResType> {
-    const subject = await this.subjectRepo.findById(id, { includeDeleted })
+  async findById(subjectId: SubjectIdParamsType, { roleName }: { roleName: string }): Promise<GetSubjectDetailResType> {
+    const includeDeleted = roleName === RoleName.ACADEMIC_DEPARTMENT
 
+    const subject = await this.subjectRepo.findById(subjectId, { includeDeleted })
     if (!subject) {
       throw SubjectNotFoundException
     }
@@ -77,48 +79,35 @@ export class SubjectService {
     return subject
   }
 
-  /**
-   * Tạo mới một subject cho course.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
-   * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-   * - Kiểm tra course tồn tại và không bị xóa
-   * - Kiểm tra subject code duy nhất
-   * - Validate date range
-   */
+  async getAvailableTrainers(courseId: CourseIdParamsType): Promise<GetAvailableTrainersResType> {
+    const trainers = await this.subjectRepo.getAvailableTrainers(courseId)
+
+    return trainers
+  }
+
   async create({
-    data,
-    createdById,
-    createdByRoleName
+    data: subject,
+    createdById
   }: {
     data: CreateSubjectBodyType
     createdById: string
-    createdByRoleName: string
-  }): Promise<SubjectEntityType> {
+  }): Promise<SubjectType> {
     try {
-      // Kiểm tra quyền tạo subject
-      this.validateCreatePermissions(createdByRoleName)
-
-      // Kiểm tra course tồn tại (nếu có courseId)
-      if (data.courseId) {
-        const course = await this.sharedCourseRepository.findById(data.courseId)
-        if (!course) {
-          throw CourseNotFoundException
-        }
+      const course = await this.sharedCourseRepository.findById(subject.courseId)
+      if (!course) {
+        throw CourseNotFoundException
       }
 
-      // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-      // Không cần kiểm tra department access
+      this.validateSubjectDatesWithinCourse(subject.startDate, subject.endDate, course.startDate, course.endDate)
 
-      // Kiểm tra subject code unique
-      const codeExists = await this.subjectRepo.checkCodeExists(data.code)
-      if (codeExists) {
-        throw SubjectCodeAlreadyExistsException
-      }
+      const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
 
-      // Validate date range
-      this.validateDateRange(data.startDate, data.endDate)
+      const createdSubject = await this.subjectRepo.create({
+        data: { ...subject, duration: durationInMonths },
+        createdById
+      })
 
-      return await this.subjectRepo.create({ data, createdById })
+      return createdSubject
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw CourseNotFoundException
@@ -130,65 +119,40 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Tạo nhiều subjects cùng lúc cho một course.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
-   * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-   * - Validate từng subject riêng biệt và trả về kết quả chi tiết
-   */
+  @Serialize()
   async bulkCreate({
     data,
-    createdById,
-    createdByRoleName
+    createdById
   }: {
     data: BulkCreateSubjectsBodyType
     createdById: string
-    createdByRoleName: string
   }): Promise<BulkCreateSubjectsResType> {
     const { courseId, subjects } = data
 
-    // Kiểm tra quyền tạo subject
-    this.validateCreatePermissions(createdByRoleName)
-
-    // Kiểm tra course tồn tại
     const course = await this.sharedCourseRepository.findById(courseId)
     if (!course) {
       throw CourseNotFoundException
     }
 
-    // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-    // Không cần kiểm tra department access
-
-    const createdSubjects: SubjectEntityType[] = []
-    const failedSubjects: { subject: any; error: string }[] = []
+    const createdSubjects: SubjectType[] = []
+    const failedSubjects: { subject: Omit<CreateSubjectBodyType, 'courseId'>; error: string }[] = []
 
     // Xử lý từng subject
     for (let i = 0; i < subjects.length; i++) {
       const subject = subjects[i]
 
       try {
-        // Kiểm tra subject code unique
-        const codeExists = await this.subjectRepo.checkCodeExists(subject.code)
+        const codeExists = await this.sharedSubjectRepository.checkCodeExists(subject.code)
         if (codeExists) {
-          throw new Error(BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code))
+          throw BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code)
         }
 
-        // Validate date range
-        if (subject.startDate && subject.endDate) {
-          const isValidRange = new Date(subject.startDate) < new Date(subject.endDate)
-          if (!isValidRange) {
-            throw new Error(BulkInvalidDateRangeAtIndexException(i))
-          }
-        }
+        this.validateSubjectDatesWithinCourse(subject.startDate, subject.endDate, course.startDate, course.endDate)
 
-        // Tạo subject data với courseId
-        const createData: CreateSubjectBodyType = {
-          ...subject,
-          courseId
-        }
+        const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
 
         const createdSubject = await this.subjectRepo.create({
-          data: createData,
+          data: { ...subject, courseId, duration: durationInMonths },
           createdById
         })
 
@@ -215,48 +179,38 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Cập nhật thông tin subject.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền update
-   * - ACADEMIC_DEPARTMENT có thể update bất kỳ subject nào
-   * - Kiểm tra subject code unique (nếu thay đổi)
-   * - Validate date range
-   */
   async update({
     id,
     data,
-    updatedById,
-    updatedByRoleName
+    updatedById
   }: {
     id: string
     data: UpdateSubjectBodyType
     updatedById: string
-    updatedByRoleName: string
-  }): Promise<SubjectEntityType> {
+  }): Promise<GetSubjectDetailResType> {
     try {
-      // Kiểm tra quyền update
-      this.validateUpdatePermissions(updatedByRoleName)
-
-      // Lấy subject hiện tại
-      const existingSubject = await this.subjectRepo.findById(id)
+      const existingSubject = await this.sharedSubjectRepository.findById(id)
       if (!existingSubject) {
         throw SubjectNotFoundException
       }
-
-      // ACADEMIC_DEPARTMENT có thể update bất kỳ subject nào
-      // Không cần kiểm tra department access
-
-      // Validate course mới nếu thay đổi
-      if (data.courseId && data.courseId !== existingSubject.courseId) {
-        const course = await this.sharedCourseRepository.findById(data.courseId)
+      let course = null
+      const existingCourseId = existingSubject.courseId
+      const finalCourseId = data.courseId || existingCourseId
+      if (data.courseId && data.courseId !== existingCourseId) {
+        course = await this.sharedCourseRepository.findById(data.courseId)
         if (!course) {
           throw CourseNotFoundException
+        }
+      } else {
+        // Lấy course hiện tại nếu không thay đổi nhưng có thay đổi dates
+        if ((data.startDate || data.endDate) && finalCourseId) {
+          course = await this.sharedCourseRepository.findById(finalCourseId)
         }
       }
 
       // Validate subject code unique nếu thay đổi
       if (data.code && data.code !== existingSubject.code) {
-        const codeExists = await this.subjectRepo.checkCodeExists(data.code, id)
+        const codeExists = await this.sharedSubjectRepository.checkCodeExists(data.code, id)
         if (codeExists) {
           throw SubjectCodeAlreadyExistsException
         }
@@ -265,9 +219,25 @@ export class SubjectService {
       // Validate date range
       const startDate = data.startDate || existingSubject.startDate
       const endDate = data.endDate || existingSubject.endDate
-      this.validateDateRange(startDate, endDate)
 
-      return await this.subjectRepo.update({ id, data, updatedById })
+      // Validate subject dates nằm trong course dates (nếu có course)
+      if (course) {
+        this.validateSubjectDatesWithinCourse(startDate, endDate, course.startDate, course.endDate)
+      }
+
+      // Tính lại duration nếu dates thay đổi
+      const updatedData: UpdateSubjectBodyType & { duration?: number } = { ...data }
+      if (data.startDate || data.endDate) {
+        const durationInMonths = this.calculateDuration(startDate, endDate)
+        updatedData.duration = durationInMonths
+      }
+
+      const updatedSubject = await this.subjectRepo.update({ id, data: updatedData, updatedById })
+      const result = await this.subjectRepo.findById(updatedSubject.id, { includeDeleted: true })
+      if (!result) {
+        throw SubjectNotFoundException
+      }
+      return result
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw SubjectNotFoundException
@@ -282,169 +252,259 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Xóa subject (soft delete hoặc hard delete).
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền xóa
-   * - ACADEMIC_DEPARTMENT có thể xóa bất kỳ subject nào
-   * - Hard delete chỉ được phép nếu không có instructors và enrollments
-   */
-  async delete({
-    id,
-    deletedById,
-    deletedByRoleName,
-    isHard = false
-  }: {
-    id: string
-    deletedById: string
-    deletedByRoleName: string
-    isHard?: boolean
-  }): Promise<SubjectEntityType> {
-    // Kiểm tra quyền xóa
-    this.validateDeletePermissions(deletedByRoleName)
-
-    // Lấy subject hiện tại
-    const existingSubject = await this.subjectRepo.findById(id)
+  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<string> {
+    const existingSubject = await this.sharedSubjectRepository.findById(id)
     if (!existingSubject) {
       throw SubjectNotFoundException
     }
 
-    // ACADEMIC_DEPARTMENT có thể xóa bất kỳ subject nào
-    // Không cần kiểm tra department access
-
-    // Kiểm tra hard delete
-    if (isHard) {
-      await this.validateHardDeleteSafety(id)
-    }
-
-    return await this.subjectRepo.delete({ id, deletedById, isHard })
-  }
-
-  /**
-   * Khôi phục subject đã bị xóa mềm.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền restore
-   * - ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
-   * - Kiểm tra subject code không conflict
-   */
-  async restore({
-    id,
-    restoredById,
-    restoredByRoleName
-  }: {
-    id: string
-    restoredById: string
-    restoredByRoleName: string
-  }): Promise<SubjectEntityType> {
-    // Kiểm tra quyền restore
-    this.validateRestorePermissions(restoredByRoleName)
-
-    // Lấy subject (bao gồm deleted)
-    const existingSubject = await this.subjectRepo.findById(id, { includeDeleted: true })
-    if (!existingSubject) {
-      throw SubjectNotFoundException
-    }
-
-    // Kiểm tra subject có thực sự bị xóa không
-    if (!existingSubject.deletedAt) {
-      throw SubjectIsNotDeletedException
-    }
-
-    // ACADEMIC_DEPARTMENT có thể restore bất kỳ subject nào
-    // Không cần kiểm tra department access
-
-    // Kiểm tra subject code conflict
-    const codeExists = await this.subjectRepo.checkCodeExists(existingSubject.code, id)
-    if (codeExists) {
-      throw CannotRestoreSubjectCodeConflictException
-    }
-
-    return await this.subjectRepo.restore({ id, restoredById })
-  }
-
-  /**
-   * Lấy danh sách subjects theo course.
-   * @param courseId - ID của course
-   * @param includeDeleted - Có lấy subjects đã bị xóa không (chỉ ADMIN)
-   */
-  async getSubjectsByCourse({
-    courseId,
-    includeDeleted = false
-  }: {
-    courseId: string
-    includeDeleted?: boolean
-  }): Promise<SubjectWithInfoType[]> {
-    const result = await this.subjectRepo.list({
-      page: 1,
-      limit: 1000,
-      courseId,
-      includeDeleted
+    await this.subjectRepo.archive({
+      id,
+      archivedById
     })
 
-    return result.subjects
+    return 'Archived subject successfully'
+  }
+
+  async assignTrainer({
+    subjectId,
+    data
+  }: {
+    subjectId: string
+    data: AssignTrainerBodyType
+  }): Promise<AssignTrainerResType> {
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    const exists = await this.subjectRepo.isTrainerAssignedToSubject({
+      subjectId,
+      trainerUserId: data.trainerUserId
+    })
+
+    if (exists) {
+      throw DuplicateInstructorException
+    }
+
+    const assignment = await this.subjectRepo.assignTrainerToSubject({
+      subjectId,
+      trainerUserId: data.trainerUserId,
+      roleInSubject: data.roleInSubject
+    })
+
+    return assignment
+  }
+
+  async updateTrainerAssignment({
+    currentSubjectId,
+    currentTrainerId,
+    data
+  }: {
+    currentSubjectId: string
+    currentTrainerId: string
+    data: { roleInSubject: SubjectInstructorRoleValue }
+  }): Promise<UpdateTrainerAssignmentResType> {
+    const exists = await this.subjectRepo.isTrainerAssignedToSubject({
+      subjectId: currentSubjectId,
+      trainerUserId: currentTrainerId
+    })
+
+    if (!exists) {
+      throw TrainerAssignmentNotFoundException
+    }
+
+    const updated = await this.subjectRepo.updateTrainerAssignment({
+      currentSubjectId,
+      currentTrainerId,
+      newRoleInSubject: data.roleInSubject
+    })
+
+    return updated
+  }
+
+  async removeTrainer({ subjectId, trainerId }: { subjectId: string; trainerId: string }): Promise<string> {
+    const exists = await this.subjectRepo.isTrainerAssignedToSubject({
+      subjectId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw TrainerAssignmentNotFoundException
+    }
+
+    await this.subjectRepo.removeTrainerFromSubject({
+      subjectId,
+      trainerUserId: trainerId
+    })
+
+    return 'Trainer removed successfully'
+  }
+  async lookupTrainees({ data }: { data: LookupTraineesBodyType }): Promise<LookupTraineesResType> {
+    const result = await this.subjectRepo.lookupTrainees({
+      trainees: data.traineesList
+    })
+
+    return {
+      foundUsers: result.foundUsers,
+      notFoundIdentifiers: result.notFoundIdentifiers
+    }
+  }
+
+  async assignTraineesToSubject({
+    subjectId,
+    data
+  }: {
+    subjectId: string
+    data: AssignTraineesBodyType
+  }): Promise<AssignTraineesResType> {
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+    // Validation 1: Check course max trainee limit
+    if (subject.courseId) {
+      const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.courseId)
+
+      if (max !== null && current + data.traineeUserIds.length > max) {
+        throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
+      }
+    }
+
+    const result = await this.subjectRepo.assignTraineesToSubject({
+      subjectId,
+      traineeUserIds: data.traineeUserIds,
+      batchCode: data.batchCode
+    })
+
+    if (result.duplicates.length > 0) {
+      const duplicateDetails = result.duplicates.map((item) => ({
+        eid: item.eid,
+        email: item.email,
+        batchCode: item.batchCode,
+        enrolledAt: item.enrolledAt
+      }))
+
+      throw DuplicateTraineeEnrollmentException(duplicateDetails)
+    }
+
+    if (result.invalid.length > 0) {
+      throw InvalidTraineeSubmissionException(result.invalid)
+    }
+
+    return {
+      enrolledCount: result.enrolled.length,
+      enrolled: result.enrolled
+    }
+  }
+
+  /**
+   * Xóa enrollments từ subject.
+   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
+   */
+  async removeEnrollments({ subjectId, data }: { subjectId: string; data: any }): Promise<any> {
+    // Kiểm tra quyền
+
+    // Kiểm tra subject tồn tại
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    // Xóa enrollments
+    const result = await this.subjectRepo.removeEnrollments({
+      subjectId,
+      traineeEids: data.traineeEids
+    })
+
+    return {
+      success: true,
+      removedTrainees: result.removedTrainees,
+      notFoundTrainees: result.notFoundTrainees,
+      message: `Successfully removed ${result.removedTrainees.length} trainees. ${result.notFoundTrainees.length} not found.`
+    }
   }
 
   // =============== PRIVATE HELPER METHODS ===============
 
   /**
-   * Kiểm tra quyền tạo subject - chỉ ACADEMIC_DEPARTMENT được phép
+   * Validate subject dates phải nằm trong khoảng course dates
    */
-  private validateCreatePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanCreateSubjectsException
+  private validateSubjectDatesWithinCourse(
+    subjectStartDate: Date,
+    subjectEndDate: Date,
+    courseStartDate: Date,
+    courseEndDate: Date
+  ): void {
+    const subStart = new Date(subjectStartDate)
+    const subEnd = new Date(subjectEndDate)
+    const courStart = new Date(courseStartDate)
+    const courEnd = new Date(courseEndDate)
+
+    if (subStart < courStart || subEnd > courEnd) {
+      throw SubjectDateOutsideCourseDateRangeException
     }
   }
 
   /**
-   * Kiểm tra quyền update subject - chỉ ACADEMIC_DEPARTMENT được phép
+   * Tính duration (số tháng) dựa trên (endDate - startDate) / 30 ngày
+   * Trả về số thập phân với 2 chữ số
    */
-  private validateUpdatePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanUpdateSubjectsException
+  private calculateDuration(startDate: Date, endDate: Date): number {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffInMs = end.getTime() - start.getTime()
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
+    return round(diffInDays / 30, 2)
+  }
+
+  /**
+   * Cancel all course enrollments for a trainee in a batch
+   */
+
+  /**
+   * Get trainee enrollments
+   */
+  async getTraineeEnrollments({ traineeId, query }: { traineeId: string; query: any }): Promise<any> {
+    const result = await this.subjectRepo.getTraineeEnrollments({
+      traineeUserId: traineeId,
+      batchCode: query.batchCode,
+      status: query.status
+    })
+
+    return {
+      trainee: result.trainee,
+      enrollments: result.enrollments,
+      totalCount: result.enrollments.length
     }
   }
 
   /**
-   * Kiểm tra quyền xóa subject - chỉ ACADEMIC_DEPARTMENT được phép
+   * Cancel specific subject enrollment
    */
-  private validateDeletePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanDeleteSubjectsException
-    }
-  }
+  async cancelSubjectEnrollment({
+    subjectId,
+    traineeId,
+    data,
+    roleName
+  }: {
+    subjectId: string
+    traineeId: string
+    data: any
+    roleName: string
+  }): Promise<any> {
+    const success = await this.subjectRepo.cancelSubjectEnrollment({
+      subjectId,
+      traineeUserId: traineeId,
+      batchCode: data.batchCode
+    })
 
-  /**
-   * Kiểm tra quyền restore subject - chỉ ACADEMIC_DEPARTMENT được phép
-   */
-  private validateRestorePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAdminAndDepartmentHeadCanRestoreSubjectsException
-    }
-  }
-
-  /**
-   * Validate date range (end date phải sau start date)
-   */
-  private validateDateRange(startDate?: string | null, endDate?: string | null): void {
-    if (startDate && endDate) {
-      if (new Date(startDate) >= new Date(endDate)) {
-        throw InvalidDateRangeException
-      }
-    }
-  }
-
-  /**
-   * Kiểm tra an toàn khi hard delete (không có instructors và enrollments)
-   */
-  private async validateHardDeleteSafety(subjectId: string): Promise<void> {
-    // Kiểm tra enrollments
-    const enrollmentCount = await this.subjectRepo.countEnrollments(subjectId)
-    if (enrollmentCount > 0) {
-      throw CannotHardDeleteSubjectWithEnrollmentsException
+    if (!success) {
+      throw CannotCancelSubjectEnrollmentException
     }
 
-    // Kiểm tra instructors
-    const instructorCount = await this.subjectRepo.countInstructors(subjectId)
-    if (instructorCount > 0) {
-      throw CannotHardDeleteSubjectWithInstructorsException
+    return {
+      message: 'Enrollment cancelled successfully'
     }
   }
 }

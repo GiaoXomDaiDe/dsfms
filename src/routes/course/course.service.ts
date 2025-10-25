@@ -1,93 +1,49 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { isUniqueConstraintPrismaError } from '~/shared/helper'
+import { MessageResType } from '~/shared/models/response.model'
+import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
-  AddSubjectToCourseBodyType,
-  AddSubjectToCourseResType,
-  CourseDetailResType,
-  CourseType,
-  CourseWithInfoType,
+  CourseCodeAlreadyExistsException,
+  CourseNotFoundException,
+  DepartmentNotFoundException,
+  OnlyAcademicDepartmentCanCreateCourseException,
+  OnlyAcademicDepartmentCanDeleteCourseException,
+  OnlyAcademicDepartmentCanUpdateCourseException
+} from './course.error'
+import {
   CreateCourseBodyType,
-  DepartmentWithCoursesType,
+  CreateCourseResType,
+  GetCourseParamsType,
+  GetCourseResType,
   GetCoursesQueryType,
   GetCoursesResType,
-  RemoveSubjectFromCourseBodyType,
-  RemoveSubjectFromCourseResType,
-  UpdateCourseBodyType
+  GetCourseTraineesQueryType,
+  GetCourseTraineesResType,
+  UpdateCourseBodyType,
+  UpdateCourseResType
 } from './course.model'
 import { CourseRepo } from './course.repo'
-
-// Custom exceptions
-export const CourseNotFoundException = new NotFoundException('Course not found')
-export const CourseCodeAlreadyExistsException = new BadRequestException('Course code already exists')
-export const DepartmentNotFoundException = new NotFoundException('Department not found')
-export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
 
 @Injectable()
 export class CourseService {
   constructor(
     private readonly courseRepo: CourseRepo,
+    private readonly sharedDepartmentRepo: SharedDepartmentRepository,
     private readonly prisma: PrismaService
   ) {}
 
-  async list(
-    query: GetCoursesQueryType,
-    userContext?: { userId: string; userRole: string; departmentId?: string }
-  ): Promise<GetCoursesResType> {
-    // Apply role-based filtering
-    const enhancedQuery = { ...query }
-
-    if (userContext) {
-      // No special filtering for department heads - they have general access
-
-      // Trainers can see courses where they are instructors (if no department filter)
-      if (userContext.userRole === RoleName.TRAINER && !query.departmentId) {
-        const instructedCourses = await this.prisma.subjectInstructor.findMany({
-          where: {
-            trainerUserId: userContext.userId,
-            subject: { deletedAt: null }
-          },
-          select: {
-            subject: {
-              select: { courseId: true }
-            }
-          }
-        })
-
-        const courseIds = [
-          ...new Set(instructedCourses.map((i) => i.subject.courseId).filter((id): id is string => id !== null))
-        ]
-        enhancedQuery.courseIds = courseIds
-      }
-
-      // Trainees can see courses where they are enrolled (if no department filter)
-      if (userContext.userRole === RoleName.TRAINEE && !query.departmentId) {
-        const enrolledCourses = await this.prisma.subjectEnrollment.findMany({
-          where: {
-            traineeUserId: userContext.userId,
-            subject: { deletedAt: null }
-          },
-          select: {
-            subject: {
-              select: { courseId: true }
-            }
-          }
-        })
-
-        const courseIds = [
-          ...new Set(enrolledCourses.map((e) => e.subject.courseId).filter((id): id is string => id !== null))
-        ]
-        enhancedQuery.courseIds = courseIds
-      }
-    }
-
-    return await this.courseRepo.list(enhancedQuery)
+  async list({
+    includeDeleted = false,
+    activeUserRoleName
+  }: GetCoursesQueryType & { activeUserRoleName?: string } = {}): Promise<GetCoursesResType> {
+    return await this.courseRepo.list({
+      includeDeleted: activeUserRoleName === RoleName.ACADEMIC_DEPARTMENT ? includeDeleted : false
+    })
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<CourseDetailResType> {
+  async findById(id: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetCourseResType> {
     const course = await this.courseRepo.findById(id, { includeDeleted })
     if (!course) {
       throw CourseNotFoundException
@@ -98,72 +54,78 @@ export class CourseService {
   async create({
     data,
     createdById,
-    createdByRoleName,
-    userDepartmentId
+    createdByRoleName
   }: {
     data: CreateCourseBodyType
     createdById: string
     createdByRoleName: string
-    userDepartmentId?: string
-  }): Promise<CourseType> {
-    // Validate permissions - only ACADEMIC_DEPARTMENT can create courses
+  }): Promise<CreateCourseResType> {
     if (createdByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can create courses')
+      throw OnlyAcademicDepartmentCanCreateCourseException
     }
 
-    // Validate department exists
-    const department = await this.prisma.department.findUnique({
-      where: { id: data.departmentId, deletedAt: null }
+    const department = await this.sharedDepartmentRepo.findById(data.departmentId, {
+      includeDeleted: false
     })
 
     if (!department) {
       throw DepartmentNotFoundException
     }
 
-    // Validate course code is unique
-    const codeExists = await this.courseRepo.checkCodeExists(data.code)
-    if (codeExists) {
-      throw CourseCodeAlreadyExistsException
-    }
-
-    // Validate date range if both dates are provided
-    if (data.startDate && data.endDate) {
-      if (new Date(data.startDate) >= new Date(data.endDate)) {
-        throw InvalidDateRangeException
+    try {
+      return await this.courseRepo.create({ data, createdById })
+    } catch (error) {
+      if (isUniqueConstraintPrismaError(error)) {
+        throw CourseCodeAlreadyExistsException
       }
+
+      throw error
+    }
+  }
+
+  async getCourseTrainees({
+    params,
+    query
+  }: {
+    params: GetCourseParamsType
+    query: GetCourseTraineesQueryType
+  }): Promise<GetCourseTraineesResType> {
+    const { courseId } = params
+
+    const course = await this.courseRepo.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
     }
 
-    return await this.courseRepo.create({ data, createdById })
+    return await this.courseRepo.getCourseTrainees({
+      courseId,
+      batchCode: query.batchCode
+    })
   }
 
   async update({
     id,
     data,
     updatedById,
-    updatedByRoleName,
-    userDepartmentId
+    updatedByRoleName
   }: {
     id: string
     data: UpdateCourseBodyType
     updatedById: string
     updatedByRoleName: string
-    userDepartmentId?: string
-  }): Promise<CourseType> {
-    // Check if course exists
+  }): Promise<UpdateCourseResType> {
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
       throw CourseNotFoundException
     }
 
-    // Validate permissions - only ACADEMIC_DEPARTMENT can update courses
     if (updatedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can update courses')
+      throw OnlyAcademicDepartmentCanUpdateCourseException
     }
 
-    // Validate new department exists if changing department
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
-      const department = await this.prisma.department.findUnique({
-        where: { id: data.departmentId, deletedAt: null }
+      const department = await this.sharedDepartmentRepo.findById(data.departmentId, {
+        includeDeleted: false
       })
 
       if (!department) {
@@ -171,415 +133,63 @@ export class CourseService {
       }
     }
 
-    // Validate course code is unique if changing code
-    if (data.code && data.code !== existingCourse.code) {
-      const codeExists = await this.courseRepo.checkCodeExists(data.code, id)
-      if (codeExists) {
+    try {
+      return await this.courseRepo.update({ id, data, updatedById })
+    } catch (error) {
+      if (isUniqueConstraintPrismaError(error)) {
         throw CourseCodeAlreadyExistsException
       }
+
+      throw error
     }
-
-    // Validate date range if updating dates
-    const startDate = data.startDate || existingCourse.startDate
-    const endDate = data.endDate || existingCourse.endDate
-
-    if (startDate && endDate) {
-      if (new Date(startDate) >= new Date(endDate)) {
-        throw InvalidDateRangeException
-      }
-    }
-
-    return await this.courseRepo.update({ id, data, updatedById })
-  }
-
-  async delete({
-    id,
-    deletedById,
-    deletedByRoleName,
-    userDepartmentId,
-    isHard = false
-  }: {
-    id: string
-    deletedById: string
-    deletedByRoleName: string
-    userDepartmentId?: string
-    isHard?: boolean
-  }): Promise<CourseType> {
-    // Check if course exists
-    const existingCourse = await this.courseRepo.findById(id)
-    if (!existingCourse) {
-      throw CourseNotFoundException
-    }
-
-    // Validate permissions - only ACADEMIC_DEPARTMENT can delete courses
-    if (deletedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can delete courses')
-    }
-
-    // Check if course has subjects before deletion
-    if (isHard) {
-      const subjectCount = await this.prisma.subject.count({
-        where: { courseId: id, deletedAt: null }
-      })
-
-      if (subjectCount > 0) {
-        throw new BadRequestException('Cannot permanently delete course with active subjects')
-      }
-    }
-
-    return await this.courseRepo.delete({ id, deletedById, isHard })
   }
 
   async archive({
     id,
-    archivedById,
-    archivedByRoleName,
-    userDepartmentId
+    deletedById,
+    deletedByRoleName
   }: {
     id: string
-    archivedById: string
-    archivedByRoleName: string
-    userDepartmentId?: string
-  }): Promise<CourseType> {
-    // Check if course exists
+    deletedById: string
+    deletedByRoleName: string
+  }): Promise<MessageResType> {
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
       throw CourseNotFoundException
     }
 
-    // Validate permissions - only ACADEMIC_DEPARTMENT can archive courses
-    if (archivedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can archive courses')
+    if (deletedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
+      throw OnlyAcademicDepartmentCanDeleteCourseException
     }
 
-    // Archive by changing status to ARCHIVED instead of soft delete
-    return await this.courseRepo.update({
-      id,
-      data: { status: 'ARCHIVED' as any },
-      updatedById: archivedById
-    })
+    await this.courseRepo.archive({ id, deletedById })
+
+    return { message: 'Course archived successfully' }
   }
 
-  async restore({
-    id,
-    restoredById,
-    restoredByRoleName
+  async cancelCourseEnrollments({
+    params,
+    traineeId,
+    data
   }: {
-    id: string
-    restoredById: string
-    restoredByRoleName: string
-  }): Promise<CourseType> {
-    // Check if course exists (including deleted)
-    const existingCourse = await this.courseRepo.findById(id, { includeDeleted: true })
-    if (!existingCourse) {
-      throw CourseNotFoundException
-    }
+    params: GetCourseParamsType
+    traineeId: string
+    data: any
+  }): Promise<any> {
+    const { courseId } = params
 
-    // Check if course is actually deleted
-    if (!existingCourse.deletedAt) {
-      throw new BadRequestException('Course is not deleted')
-    }
-
-    // Validate permissions - only ACADEMIC_DEPARTMENT can restore courses
-    if (restoredByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only academic department can restore courses')
-    }
-
-    // Check if course code conflicts with existing active courses
-    const codeExists = await this.courseRepo.checkCodeExists(existingCourse.code, id)
-    if (codeExists) {
-      throw new BadRequestException('Cannot restore course: code conflicts with existing active course')
-    }
-
-    return await this.courseRepo.restore({ id, restoredById })
-  }
-
-  async getCoursesByDepartment({
-    departmentId,
-    includeDeleted = false
-  }: {
-    departmentId: string
-    includeDeleted?: boolean
-  }): Promise<CourseWithInfoType[]> {
-    const result = await this.courseRepo.list({
-      page: 1,
-      limit: 1000, // Large limit to get all courses
-      departmentId,
-      includeDeleted
+    const result = await this.courseRepo.cancelCourseEnrollments({
+      courseId,
+      traineeUserId: traineeId,
+      batchCode: data.batchCode
     })
 
-    return result.courses
-  }
-
-  async getDepartmentWithCourses({
-    departmentId,
-    includeDeleted = false,
-    query,
-    userId,
-    userRole
-  }: {
-    departmentId: string
-    includeDeleted?: boolean
-    query: GetCoursesQueryType
-    userId: string
-    userRole: string
-  }): Promise<DepartmentWithCoursesType> {
-    // No special access validation needed - all roles can view department courses
-
-    // Get department details
-    const department = await this.prisma.department.findUnique({
-      where: {
-        id: departmentId,
-        ...(includeDeleted ? {} : { deletedAt: null })
-      },
-      include: {
-        headUser: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
-    })
-
-    if (!department) {
-      throw DepartmentNotFoundException
-    }
-
-    // Get courses for this department (without pagination)
-    const coursesQuery = {
-      ...query,
-      departmentId,
-      includeDeleted,
-      // Use large page size to get all courses
-      page: 1,
-      limit: 1000
-    }
-
-    const coursesResult = await this.courseRepo.list(coursesQuery)
-
     return {
-      id: department.id,
-      name: department.name,
-      code: department.code,
-      description: department.description,
-      headUser: department.headUser,
-      isActive: department.isActive === 'ACTIVE',
-      createdAt: department.createdAt.toISOString(),
-      updatedAt: department.updatedAt.toISOString(),
-      courses: coursesResult.courses
-    }
-  }
-
-  async validateCourseAccess({
-    courseId,
-    userId,
-    userRole
-  }: {
-    courseId: string
-    userId: string
-    userRole: string
-  }): Promise<boolean> {
-    // Admins have read access to all courses (but not management rights)
-    if (userRole === RoleName.ADMINISTRATOR) {
-      return true
-    }
-
-    // Academic department has full access to all courses
-    if (userRole === RoleName.ACADEMIC_DEPARTMENT) {
-      return true
-    }
-
-    // Get course details
-    const course = await this.courseRepo.findById(courseId)
-    if (!course) {
-      return false
-    }
-
-    // Department heads have general read access to all courses
-    if (userRole === RoleName.DEPARTMENT_HEAD) {
-      return true
-    }
-
-    // Trainers have access to courses where they are assigned as instructors
-    if (userRole === RoleName.TRAINER) {
-      const instructorCount = await this.prisma.subjectInstructor.count({
-        where: {
-          trainerUserId: userId,
-          subject: {
-            courseId,
-            deletedAt: null
-          }
-        }
-      })
-
-      return instructorCount > 0
-    }
-
-    // Trainees have access to courses where they are enrolled
-    if (userRole === RoleName.TRAINEE) {
-      const enrollmentCount = await this.prisma.subjectEnrollment.count({
-        where: {
-          traineeUserId: userId,
-          subject: {
-            courseId,
-            deletedAt: null
-          }
-        }
-      })
-
-      return enrollmentCount > 0
-    }
-
-    return false
-  }
-
-  /**
-   * Thêm subjects vào course
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
-   * - Kiểm tra course tồn tại
-   * - Kiểm tra subjects tồn tại và chưa được assign vào course khác
-   */
-  async addSubjectsToCourse({
-    courseId,
-    data,
-    userRole
-  }: {
-    courseId: string
-    data: AddSubjectToCourseBodyType
-    userRole: string
-  }): Promise<AddSubjectToCourseResType> {
-    // Chỉ ACADEMIC_DEPARTMENT mới có quyền
-    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can add subjects to courses')
-    }
-
-    // Kiểm tra course tồn tại
-    const course = await this.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    const { subjectIds } = data
-    const addedSubjects: string[] = []
-    const notFoundSubjects: string[] = []
-    const alreadyAssignedSubjects: string[] = []
-
-    // Kiểm tra từng subject
-    for (const subjectId of subjectIds) {
-      // Kiểm tra subject tồn tại
-      const subject = await this.prisma.subject.findUnique({
-        where: { id: subjectId, deletedAt: null },
-        select: { id: true, courseId: true }
-      })
-
-      if (!subject) {
-        notFoundSubjects.push(subjectId)
-        continue
+      message: `Cancelled ${result.cancelledCount} enrollments. ${result.notCancelledCount} could not be cancelled (already in progress or finished).`,
+      data: {
+        cancelledCount: result.cancelledCount,
+        notCancelledCount: result.notCancelledCount
       }
-
-      // Kiểm tra subject đã được assign vào course khác chưa
-      if (subject.courseId && subject.courseId !== courseId) {
-        alreadyAssignedSubjects.push(subjectId)
-        continue
-      }
-
-      // Nếu subject chưa có courseId hoặc đã thuộc course này
-      if (!subject.courseId) {
-        // Assign subject vào course
-        await this.prisma.subject.update({
-          where: { id: subjectId },
-          data: { courseId }
-        })
-        addedSubjects.push(subjectId)
-      }
-    }
-
-    const totalRequested = subjectIds.length
-    const totalAdded = addedSubjects.length
-    const totalNotFound = notFoundSubjects.length
-    const totalAlreadyAssigned = alreadyAssignedSubjects.length
-
-    return {
-      success: totalAdded > 0,
-      addedSubjects,
-      notFoundSubjects,
-      alreadyAssignedSubjects,
-      message: `Successfully added ${totalAdded}/${totalRequested} subjects to course. ${totalNotFound} not found, ${totalAlreadyAssigned} already assigned to other courses.`
-    }
-  }
-
-  /**
-   * Remove subjects khỏi course
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
-   * - Kiểm tra course tồn tại
-   * - Set courseId = null cho subjects
-   */
-  async removeSubjectsFromCourse({
-    courseId,
-    data,
-    userRole
-  }: {
-    courseId: string
-    data: RemoveSubjectFromCourseBodyType
-    userRole: string
-  }): Promise<RemoveSubjectFromCourseResType> {
-    // Chỉ ACADEMIC_DEPARTMENT mới có quyền
-    if (userRole !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw new ForbiddenException('Only ACADEMIC_DEPARTMENT can remove subjects from courses')
-    }
-
-    // Kiểm tra course tồn tại
-    const course = await this.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    const { subjectIds } = data
-    const removedSubjects: string[] = []
-    const notFoundSubjects: string[] = []
-    const notAssignedSubjects: string[] = []
-
-    // Kiểm tra từng subject
-    for (const subjectId of subjectIds) {
-      // Kiểm tra subject tồn tại
-      const subject = await this.prisma.subject.findUnique({
-        where: { id: subjectId, deletedAt: null },
-        select: { id: true, courseId: true }
-      })
-
-      if (!subject) {
-        notFoundSubjects.push(subjectId)
-        continue
-      }
-
-      // Kiểm tra subject có thuộc course này không
-      if (subject.courseId !== courseId) {
-        notAssignedSubjects.push(subjectId)
-        continue
-      }
-
-      // Remove subject khỏi course
-      await this.prisma.subject.update({
-        where: { id: subjectId },
-        data: { courseId: null }
-      })
-      removedSubjects.push(subjectId)
-    }
-
-    const totalRequested = subjectIds.length
-    const totalRemoved = removedSubjects.length
-    const totalNotFound = notFoundSubjects.length
-    const totalNotAssigned = notAssignedSubjects.length
-
-    return {
-      success: totalRemoved > 0,
-      removedSubjects,
-      notFoundSubjects,
-      notAssignedSubjects,
-      message: `Successfully removed ${totalRemoved}/${totalRequested} subjects from course. ${totalNotFound} not found, ${totalNotAssigned} not assigned to this course.`
     }
   }
 }

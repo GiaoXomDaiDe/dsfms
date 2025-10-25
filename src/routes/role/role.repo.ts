@@ -6,15 +6,20 @@ import {
   RoleWithPermissionsType,
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
-import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class RoleRepo {
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
 
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetRolesResType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
+    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
     const [totalItems, rolesWithCount] = await Promise.all([
       this.prismaService.role.count({
@@ -119,7 +124,7 @@ export class RoleRepo {
         name: data.name,
         description: data.description,
         permissions: {
-          set: data.permissionIds.map((id) => ({ id }))
+          set: data.permissionIds?.map((id) => ({ id }))
         },
         updatedById
       },
@@ -157,7 +162,7 @@ export class RoleRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: STATUS_CONST.INACTIVE
+            isActive: false
           }
         })
   }
@@ -171,9 +176,59 @@ export class RoleRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: STATUS_CONST.ACTIVE,
+        isActive: true,
         updatedById: enabledById
       }
     })
+  }
+
+  async addPermissions({
+    roleId,
+    permissionIds,
+    updatedById
+  }: {
+    roleId: string
+    permissionIds: string[]
+    updatedById: string
+  }) {
+    const currentRole = await this.prismaService.role.findUnique({
+      where: { id: roleId, deletedAt: null },
+      include: {
+        permissions: {
+          where: { deletedAt: null },
+          select: { id: true }
+        }
+      }
+    })
+
+    if (!currentRole) {
+      throw new Error('Role not found')
+    }
+
+    const existingPermissionIds = currentRole.permissions.map((p) => p.id)
+    const newPermissionIds = permissionIds.filter((id) => !existingPermissionIds.includes(id))
+
+    if (newPermissionIds.length === 0) {
+      return { addedPermissions: [] }
+    }
+
+    await this.prismaService.role.update({
+      where: { id: roleId, deletedAt: null },
+      data: {
+        permissions: {
+          connect: newPermissionIds.map((id) => ({ id }))
+        },
+        updatedById
+      }
+    })
+
+    const addedPermissions = await this.prismaService.permission.findMany({
+      where: {
+        id: { in: newPermissionIds },
+        deletedAt: null
+      }
+    })
+
+    return { addedPermissions }
   }
 }

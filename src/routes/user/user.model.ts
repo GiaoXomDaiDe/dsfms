@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { DepartmentSchema } from '~/routes/department/department.model'
 import {
   CreateTraineeProfileSchema,
   CreateTrainerProfileSchema,
@@ -25,30 +24,12 @@ import {
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { validateRoleProfile } from '~/shared/helper'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
+import { DepartmentSchema } from '~/shared/models/shared-department.model'
 import { UserSchema } from '~/shared/models/shared-user.model'
 
-export const GetUsersQuerySchema = IncludeDeletedQuerySchema.strict()
-
-export const GetUsersResSchema = z.object({
-  data: z.array(
-    UserSchema.omit({
-      passwordHash: true,
-      signatureImageUrl: true,
-      roleId: true,
-      departmentId: true
-    }).extend({
-      role: RoleSchema.pick({
-        id: true,
-        name: true
-      }),
-      department: DepartmentSchema.pick({
-        id: true,
-        name: true
-      }).nullable()
-    })
-  ),
-  totalItems: z.number()
-})
+export const GetUsersQuerySchema = IncludeDeletedQuerySchema.extend({
+  roleName: z.string().optional()
+}).strict()
 
 export const GetUserParamsSchema = z
   .object({
@@ -335,4 +316,3 @@ export type BulkCreateResultType = z.infer<typeof BulkCreateResultSchema>
 export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
-export type GetUsersResType = z.infer<typeof GetUsersResSchema>

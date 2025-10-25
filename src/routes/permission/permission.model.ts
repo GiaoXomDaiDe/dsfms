@@ -17,19 +17,34 @@ export const PermissionSchema = z.object({
     HTTPMethod.OPTIONS,
     HTTPMethod.HEAD
   ]),
-  isActive: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
+  isActive: z.boolean().default(true),
   viewName: z.string().max(500).nullable().default(''),
   viewModule: z.string().max(500).nullable().default(''),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date()
+  deletedAt: z.iso
+    .datetime()
+    .transform((d) => new Date(d))
+    .nullable(),
+  createdAt: z.iso.datetime().transform((d) => new Date(d)),
+  updatedAt: z.iso.datetime().transform((d) => new Date(d))
+})
+
+export const PermissionListItemSchema = z.object({
+  permissionId: z.uuid(),
+  name: z.string().max(500)
+})
+
+export const PermissionModuleSchema = z.object({
+  module: z.object({
+    name: z.string().min(1),
+    listPermissions: z.array(PermissionListItemSchema)
+  })
 })
 
 export const GetPermissionsResSchema = z.object({
-  data: z.array(PermissionSchema),
+  data: z.array(PermissionModuleSchema),
   totalItems: z.number()
 })
 
@@ -57,6 +72,8 @@ export const UpdatePermissionBodySchema = CreatePermissionBodySchema.partial()
 
 export type PermissionType = z.infer<typeof PermissionSchema>
 export type GetPermissionsResType = z.infer<typeof GetPermissionsResSchema>
+export type PermissionModuleType = z.infer<typeof PermissionModuleSchema>
+export type PermissionListItemType = z.infer<typeof PermissionListItemSchema>
 export type GetPermissionsQueryType = z.infer<typeof GetPermissionsQuerySchema>
 export type GetPermissionParamsType = z.infer<typeof GetPermissionParamsSchema>
 export type GetPermissionDetailResType = z.infer<typeof GetPermissionDetailResSchema>

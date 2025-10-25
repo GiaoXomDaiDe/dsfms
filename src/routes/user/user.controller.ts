@@ -23,10 +23,14 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  list(@Query() { includeDeleted }: GetUsersQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+  list(
+    @Query() { includeDeleted, roleName }: GetUsersQueryDTO,
+    @ActiveRolePermissions('name') activeUserRoleName: string
+  ) {
     return this.userService.list({
       includeDeleted,
-      userRole: roleName
+      roleName,
+      activeUserRoleName
     })
   }
 
@@ -45,29 +49,19 @@ export class UserController {
 
   @Post()
   @ZodSerializerDto(CreateUserResDTO)
-  create(
-    @Body() body: CreateUserBodyWithProfileDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  create(@Body() body: CreateUserBodyWithProfileDTO, @ActiveUser('userId') userId: string) {
     return this.userService.create({
       data: body,
-      createdById: userId,
-      createdByRoleName: roleName
+      createdById: userId
     })
   }
 
   @Post('bulk')
   @ZodSerializerDto(BulkCreateResultDTO)
-  createBulk(
-    @Body() body: CreateBulkUsersBodyDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  createBulk(@Body() body: CreateBulkUsersBodyDTO, @ActiveUser('userId') userId: string) {
     return this.userService.createBulk({
       data: body,
-      createdById: userId,
-      createdByRoleName: roleName
+      createdById: userId
     })
   }
 
@@ -91,28 +85,19 @@ export class UserController {
 
   @Delete(':userId')
   @ZodSerializerDto(MessageResDTO)
-  delete(
-    @Param() params: GetUserParamsDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  delete(@Param() params: GetUserParamsDTO, @ActiveUser('userId') userId: string) {
     return this.userService.delete({
       id: params.userId,
-      deletedById: userId,
-      deletedByRoleName: roleName
+      deletedById: userId
     })
   }
+
   @Patch(':userId/enable')
   @ZodSerializerDto(MessageResDTO)
-  enable(
-    @Param() param: GetUserParamsDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  enable(@Param() param: GetUserParamsDTO, @ActiveUser('userId') userId: string) {
     return this.userService.enable({
       id: param.userId,
-      enabledById: userId,
-      enabledByRoleName: roleName
+      enabledById: userId
     })
   }
 }

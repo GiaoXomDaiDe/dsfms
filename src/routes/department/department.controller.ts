@@ -4,6 +4,7 @@ import {
   AddTrainersToDepartmentBodyDTO,
   CreateDepartmentBodyDTO,
   CreateDepartmentResDTO,
+  GetDepartmentDetailQueryDTO,
   GetDepartmentDetailResDTO,
   GetDepartmentHeadsResDTO,
   GetDepartmentParamsDTO,
@@ -34,7 +35,7 @@ export class DepartmentController {
   @ZodSerializerDto(GetDepartmentDetailResDTO)
   findById(
     @Param() params: GetDepartmentParamsDTO,
-    @Query() query: GetDepartmentsQueryDTO,
+    @Query() query: GetDepartmentDetailQueryDTO,
     @ActiveRolePermissions('name') roleName: string
   ) {
     return this.departmentService.findById(params.departmentId, {

@@ -1,15 +1,21 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from 'src/shared/services/prisma.service'
-import { RoleType } from '~/routes/role/role.model'
+import { CreateRoleBodyType, RoleType } from '~/routes/role/role.model'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 
 @Injectable()
+@SerializeAll()
 export class SharedRoleRepository {
   private traineeRoleId: string | null = null
   private adminRoleId: string | null = null
   private academicRoleId: string | null = null
 
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly sharedPermissionRepo: SharedPermissionRepository
+  ) {}
 
   async findRolebyId(roleId: string): Promise<RoleType | null> {
     return this.prismaService.role.findUnique({
@@ -60,5 +66,11 @@ export class SharedRoleRepository {
 
     this.academicRoleId = role.id
     return role.id
+  }
+
+  async validateRoleData(data: CreateRoleBodyType): Promise<void> {
+    if (data.permissionIds) {
+      await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
+    }
   }
 }

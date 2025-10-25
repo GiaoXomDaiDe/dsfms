@@ -1,19 +1,25 @@
 import { Injectable } from '@nestjs/common'
 import {
   CreatePermissionBodyType,
+  PermissionModuleType,
   PermissionType,
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
-import { STATUS_CONST } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
+@SerializeAll()
 export class PermissionRepo {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}) {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
+    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
-    const [totalItems, data] = await Promise.all([
+    const [totalItems, permissions] = await Promise.all([
       this.prisma.permission.count({
         where: whereClause
       }),
@@ -21,8 +27,34 @@ export class PermissionRepo {
         where: whereClause
       })
     ])
+
+    const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
+      const rawModuleName = permission.viewModule ?? permission.module ?? ''
+      const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
+      const rawPermissionName = permission.viewName ?? permission.name ?? ''
+      const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : permission.name
+
+      let moduleEntry = acc.find((entry) => entry.module.name === moduleName)
+      if (!moduleEntry) {
+        moduleEntry = {
+          module: {
+            name: moduleName,
+            listPermissions: []
+          }
+        }
+        acc.push(moduleEntry)
+      }
+
+      moduleEntry.module.listPermissions.push({
+        permissionId: permission.id,
+        name: permissionName
+      })
+
+      return acc
+    }, [])
+
     return {
-      data,
+      data: grouped,
       totalItems
     }
   }
@@ -89,7 +121,7 @@ export class PermissionRepo {
           data: {
             deletedAt: new Date(),
             deletedById,
-            isActive: STATUS_CONST.INACTIVE
+            isActive: false
           }
         })
   }
@@ -103,7 +135,7 @@ export class PermissionRepo {
       data: {
         deletedAt: null,
         deletedById: null,
-        isActive: STATUS_CONST.ACTIVE,
+        isActive: true,
         updatedById: enabledById
       }
     })

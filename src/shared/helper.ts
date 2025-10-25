@@ -1,5 +1,7 @@
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import { createZodDto } from 'nestjs-zod'
+import path from 'path'
+import { v4 as uuidv4 } from 'uuid'
 import z from 'zod'
 import { CreateUserBodyWithProfileType } from '~/routes/user/user.model'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
@@ -14,6 +16,10 @@ export function isNotFoundPrismaError(error: any): error is PrismaClientKnownReq
 
 export function isForeignKeyConstraintPrismaError(error: any): error is PrismaClientKnownRequestError {
   return error instanceof PrismaClientKnownRequestError && error.code === 'P2003'
+}
+
+export function isCannotReachDatabasePrismaError(error: any): error is PrismaClientKnownRequestError {
+  return error instanceof PrismaClientKnownRequestError && error.code === 'P1001'
 }
 
 // Factory function to create ResponseDTO
@@ -64,4 +70,9 @@ export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithPr
 
     return { isValid: true }
   }
+}
+
+export const generateRandomFilename = (filename: string) => {
+  const ext = path.extname(filename)
+  return `${uuidv4()}${ext}`
 }

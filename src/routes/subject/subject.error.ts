@@ -6,21 +6,19 @@ export const CourseNotFoundException = new NotFoundException('Course not found')
 
 // Subject Validation Errors
 export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists')
-export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
-export const SubjectIsNotDeletedException = new BadRequestException('Subject is not deleted')
+export const SubjectDateOutsideCourseDateRangeException = new BadRequestException(
+  'Subject start date and end date must be within the course date range'
+)
 
 // Permission Errors
-export const OnlyAdminAndDepartmentHeadCanCreateSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can create subjects'
+export const OnlyAcademicDepartmentCanCreateSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can create subjects'
 )
-export const OnlyAdminAndDepartmentHeadCanUpdateSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can update subjects'
+export const OnlyAcademicDepartmentCanUpdateSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can update subjects'
 )
-export const OnlyAdminAndDepartmentHeadCanDeleteSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can delete subjects'
-)
-export const OnlyAdminAndDepartmentHeadCanRestoreSubjectsException = new ForbiddenException(
-  'Only administrators and department heads can restore subjects'
+export const OnlyAcademicDepartmentCanDeleteSubjectsException = new ForbiddenException(
+  'Only ACADEMIC_DEPARTMENT can delete subjects'
 )
 export const DepartmentHeadCanOnlyManageOwnDepartmentSubjectsException = new ForbiddenException(
   'Department heads can only manage subjects in courses of their own department'
@@ -49,17 +47,54 @@ export const DuplicateEnrollmentException = new BadRequestException(
 )
 export const EnrollmentNotFoundException = new BadRequestException('Trainee enrollment not found')
 
+export const TrainerAssignmentNotFoundException = new NotFoundException('Trainer assignment not found')
+
+export const CourseAtCapacityException = (current: number, max: number, attempting: number) =>
+  new BadRequestException(`Course is at capacity. Current: ${current}, Max: ${max}, Attempting to add: ${attempting}`)
+
+export const CannotEnrollInRecurrentSubjectException = (reason?: string) =>
+  new BadRequestException(reason ?? 'Cannot enroll in recurrent subject')
+
+export const DuplicateTraineeEnrollmentException = (
+  duplicates: Array<{
+    eid: string
+    email: string
+    batchCode: string
+    enrolledAt: string
+  }>
+) =>
+  new BadRequestException({
+    message: 'Duplicate trainee enrollments detected',
+    duplicates
+  })
+
+export const InvalidTraineeSubmissionException = (
+  invalid: Array<{
+    submittedId: string
+    eid?: string
+    email?: string
+    reason: string
+    note?: string
+  }>
+) =>
+  new BadRequestException({
+    message: 'Invalid trainee submissions',
+    invalid
+  })
+
+export const CannotCancelSubjectEnrollmentException = new BadRequestException(
+  'Cannot cancel enrollment. Either it does not exist, batch code mismatch, or status is not ENROLLED.'
+)
+
+export const TraineeResolutionFailureException = (traineeId: string) =>
+  new BadRequestException(`Unable to resolve trainee user ${traineeId}`)
+
 // Hard Delete Prevention Errors
 export const CannotHardDeleteSubjectWithEnrollmentsException = new BadRequestException(
   'Cannot permanently delete subject with existing enrollments'
 )
 export const CannotHardDeleteSubjectWithInstructorsException = new BadRequestException(
   'Cannot permanently delete subject with existing instructors'
-)
-
-// Restore Errors
-export const CannotRestoreSubjectCodeConflictException = new BadRequestException(
-  'Cannot restore subject: code conflicts with existing active subject'
 )
 
 // Bulk Operation Errors

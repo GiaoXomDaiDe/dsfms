@@ -6,11 +6,15 @@ import { APIKeyGuard } from '~/shared/guards/api-key.guard'
 import { AuthenticationGuard } from '~/shared/guards/authentication.guard'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
+import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
+import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
+import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
 import { PrismaService } from '~/shared/services/prisma.service'
+import { S3Service } from '~/shared/services/s3.service'
 import { TokenService } from '~/shared/services/token.service'
 
 const sharedServices = [
@@ -20,10 +24,14 @@ const sharedServices = [
   SharedRoleRepository,
   SharedDepartmentRepository,
   SharedCourseRepository,
+  SharedPermissionRepository,
+  SharedSubjectRepository,
+  SharedSubjectEnrollmentRepository,
   TokenService,
   AccessTokenGuard,
   APIKeyGuard,
-  EidService
+  EidService,
+  S3Service
 ]
 @Global()
 @Module({

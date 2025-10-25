@@ -6,9 +6,12 @@ import {
   BulkUnknownErrorMessage,
   UserNotFoundException
 } from '~/routes/user/user.error'
-import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
+import { BulkCreateResultType, CreateUserInternalType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
+import { GetUsersResType } from '~/shared/models/shared-user.model'
+import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 type BulkUserData = CreateUserInternalType & {
@@ -18,11 +21,29 @@ type BulkUserData = CreateUserInternalType & {
 }
 
 @Injectable()
+@SerializeAll()
 export class UserRepo {
-  constructor(private prismaService: PrismaService) {}
+  constructor(
+    private prismaService: PrismaService,
+    private readonly sharedUserRepository: SharedUserRepository
+  ) {}
 
-  async list({ includeDeleted = false }: IncludeDeletedQueryType = {}): Promise<GetUsersResType> {
-    const whereClause = includeDeleted ? {} : { deletedAt: null }
+  async list({
+    includeDeleted = false,
+    roleName
+  }: IncludeDeletedQueryType & { roleName?: string } = {}): Promise<GetUsersResType> {
+    const whereClause = this.sharedUserRepository.buildListFilters({
+      includeDeleted,
+      extend: ({ includeDeleted: includeDeletedContext }) =>
+        roleName
+          ? {
+              role: {
+                name: roleName,
+                ...(includeDeletedContext ? {} : { deletedAt: null })
+              }
+            }
+          : {}
+    })
 
     const [totalItems, data] = await Promise.all([
       this.prismaService.user.count({
@@ -30,9 +51,22 @@ export class UserRepo {
       }),
       this.prismaService.user.findMany({
         where: whereClause,
+        omit: {
+          passwordHash: true,
+          signatureImageUrl: true,
+          roleId: true,
+          departmentId: true
+        },
         include: {
-          role: true,
-          department: true
+          role: {
+            select: { id: true, name: true }
+          },
+          department: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
         }
       })
     ])
@@ -91,10 +125,10 @@ export class UserRepo {
           data: {
             userId: newUser.id,
             dob: traineeProfile.dob,
-            enrollmentDate: new Date(traineeProfile.enrollmentDate),
+            enrollmentDate: new Date(traineeProfile.enrollmentDate || ''),
             trainingBatch: traineeProfile.trainingBatch,
-            passportNo: traineeProfile.passportNo || null,
-            nation: traineeProfile.nation,
+            passportNo: traineeProfile.passportNo,
+            nation: traineeProfile.nation || null,
             createdById
           }
         })
@@ -393,10 +427,10 @@ export class UserRepo {
                 traineeProfiles.push({
                   userId,
                   dob: userData.traineeProfile.dob,
-                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate),
+                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
                   trainingBatch: userData.traineeProfile.trainingBatch,
                   passportNo: userData.traineeProfile.passportNo || null,
-                  nation: userData.traineeProfile.nation,
+                  nation: userData.traineeProfile.nation || null,
                   createdById
                 })
               }

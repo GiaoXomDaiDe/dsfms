@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common'
-import { NotFoundPermissionException, PermissionAlreadyExistsException } from '~/routes/permission/permission.error'
+import {
+  createPermissionAlreadyActiveError,
+  NotFoundPermissionException,
+  PermissionAlreadyExistsException
+} from '~/routes/permission/permission.error'
 import { CreatePermissionBodyType, UpdatePermissionBodyType } from '~/routes/permission/permission.model'
 import { PermissionRepo } from '~/routes/permission/permission.repo'
 import { RoleName } from '~/shared/constants/auth.constant'
@@ -21,16 +25,12 @@ export class PermissionService {
     id: string,
     { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
   ) {
-    try {
-      // Chỉ admin mới có thể xem detail của permission đã bị xóa mềm
-      const canViewDeleted = userRole === RoleName.ADMINISTRATOR
-      const permission = await this.permissionRepo.findById(id, {
-        includeDeleted: canViewDeleted ? includeDeleted : false
-      })
-      return permission
-    } catch (error) {
-      throw NotFoundPermissionException
-    }
+    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+    const permission = await this.permissionRepo.findById(id, {
+      includeDeleted: canViewDeleted ? includeDeleted : false
+    })
+    if (!permission) throw NotFoundPermissionException
+    return permission
   }
 
   async create({ data, createdById }: { data: CreatePermissionBodyType; createdById: string }) {
@@ -40,28 +40,21 @@ export class PermissionService {
         data
       })
     } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw PermissionAlreadyExistsException
-      }
+      if (isUniqueConstraintPrismaError(error)) throw PermissionAlreadyExistsException
       throw error
     }
   }
 
   async update({ id, data, updatedById }: { id: string; data: UpdatePermissionBodyType; updatedById: string }) {
     try {
-      const permission = await this.permissionRepo.update({
+      return await this.permissionRepo.update({
         id,
         updatedById,
         data
       })
-      return permission
     } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundPermissionException
-      }
-      if (isUniqueConstraintPrismaError(error)) {
-        throw PermissionAlreadyExistsException
-      }
+      if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
+      if (isUniqueConstraintPrismaError(error)) throw PermissionAlreadyExistsException
       throw error
     }
   }
@@ -72,38 +65,25 @@ export class PermissionService {
         id,
         deletedById
       })
-      return {
-        message: 'Delete successfully'
-      }
+      return { message: 'Disable successfully' }
     } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundPermissionException
-      }
+      if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
       throw error
     }
   }
 
-  async enable({ id, enabledById, enablerRole }: { id: string; enabledById: string; enablerRole: string }) {
-    // Chỉ admin mới có thể enable permission
-    if (enablerRole !== RoleName.ADMINISTRATOR) {
-      throw new Error('Only administrators can enable permissions')
-    }
+  async enable({ id, enabledById }: { id: string; enabledById: string }) {
+    const permission = await this.permissionRepo.findById(id, { includeDeleted: true })
+    if (!permission) throw NotFoundPermissionException
+
+    // Business rule: Check if already active
+    if (!permission.deletedAt) throw createPermissionAlreadyActiveError(permission.name)
 
     try {
-      const permission = await this.permissionRepo.findById(id, { includeDeleted: true })
-      if (!permission) {
-        throw NotFoundPermissionException
-      }
-
-      if (!permission.deletedAt) {
-        throw new Error('Permission is not disabled')
-      }
-
-      return this.permissionRepo.enable({ id, enabledById })
+      await this.permissionRepo.enable({ id, enabledById })
+      return { message: 'Enable permission successfully' }
     } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundPermissionException
-      }
+      if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
       throw error
     }
   }
