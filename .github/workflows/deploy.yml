@@ -86,7 +86,7 @@ jobs:
 
             # Kill any process using port 4000 (just in case)
             echo "Ensuring port 4000 is free..."
-            sudo fuser -k 4000/tcp 2>/dev/null || true
+            run_with_sudo fuser -k 4000/tcp 2>/dev/null || true
 
             # Wait a moment for cleanup
             sleep 3
@@ -97,7 +97,7 @@ jobs:
             echo "File permissions: $(ls -la .env)"
             echo "Last 5 lines of .env:"
             tail -5 .env
-            
+
             # Start new container with explicit .env file
             echo "Starting new container..."
             docker run -d \
