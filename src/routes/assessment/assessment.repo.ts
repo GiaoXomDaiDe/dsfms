@@ -154,6 +154,18 @@ export class AssessmentRepo {
     return await this.prisma.$transaction(async (tx) => {
       const createdAssessments: AssessmentFormResType[] = []
 
+      // If creating for subject, get the courseId from that subject
+      let courseId = assessmentData.courseId
+      if (assessmentData.subjectId && !courseId) {
+        const subject = await tx.subject.findUnique({
+          where: { id: assessmentData.subjectId },
+          select: { courseId: true }
+        })
+        if (subject) {
+          courseId = subject.courseId
+        }
+      }
+
       for (const traineeId of assessmentData.traineeIds) {
         // Create the main assessment form
         const assessmentForm = await tx.assessmentForm.create({
@@ -161,7 +173,7 @@ export class AssessmentRepo {
             templateId: assessmentData.templateId,
             name: assessmentData.name,
             subjectId: assessmentData.subjectId || null,
-            courseId: assessmentData.courseId || null,
+            courseId: courseId || null,
             occuranceDate: assessmentData.occuranceDate,
             createdById,
             updatedById: createdById,
@@ -322,6 +334,42 @@ export class AssessmentRepo {
     return existingAssessments.map(assessment => ({
       traineeId: assessment.traineeId,
       traineeName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
+    }))
+  }
+
+  /**
+   * Check if any assessment form already exists for trainee with the same template and occurrence date
+   */
+  async checkTraineeAssessmentExists(
+    traineeIds: string[],
+    templateId: string,
+    occuranceDate: Date
+  ): Promise<Array<{ traineeId: string; traineeName: string; assessmentId: string }>> {
+    const whereClause: Prisma.AssessmentFormWhereInput = {
+      traineeId: { in: traineeIds },
+      templateId,
+      occuranceDate
+    }
+
+    const existingAssessments = await this.prisma.assessmentForm.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        traineeId: true,
+        trainee: {
+          select: {
+            firstName: true,
+            lastName: true,
+            middleName: true
+          }
+        }
+      }
+    })
+
+    return existingAssessments.map(assessment => ({
+      traineeId: assessment.traineeId,
+      traineeName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim(),
+      assessmentId: assessment.id
     }))
   }
 
@@ -796,5 +844,254 @@ export class AssessmentRepo {
     }
 
     return false
+  }
+
+  /**
+   * Get assessments for a specific subject with trainer access check and pagination
+   */
+  async getSubjectAssessments(
+    subjectId: string,
+    trainerId: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: AssessmentStatus,
+    search?: string
+  ) {
+    // First verify that the trainer is assigned to this subject
+    const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
+      where: {
+        subjectId,
+        trainerUserId: trainerId
+      }
+    })
+
+    if (!trainerAssignment) {
+      throw new Error('Trainer is not assigned to this subject')
+    }
+
+    const skip = (page - 1) * limit
+
+    // Build where clause
+    const whereClause: Prisma.AssessmentFormWhereInput = {
+      subjectId,
+      ...(status && { status }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { 
+            trainee: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { eid: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          }
+        ]
+      })
+    }
+
+    // Get total count
+    const totalItems = await this.prisma.assessmentForm.count({
+      where: whereClause
+    })
+
+    // Get assessments with trainee info
+    const assessments = await this.prisma.assessmentForm.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        subjectId: true,
+        courseId: true,
+        occuranceDate: true,
+        status: true,
+        resultScore: true,
+        resultText: true,
+        pdfUrl: true,
+        comment: true,
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      },
+      skip,
+      take: limit
+    })
+
+    // Get subject info
+    const subject = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        course: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        }
+      }
+    })
+
+    if (!subject) {
+      throw new Error('Subject not found')
+    }
+
+    const totalPages = Math.ceil(totalItems / limit)
+
+    // Transform data to match the expected format
+    const transformedAssessments = assessments.map(assessment => ({
+      ...assessment,
+      trainee: {
+        id: assessment.trainee.id,
+        eid: assessment.trainee.eid,
+        fullName: `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
+        email: assessment.trainee.email
+      }
+    }))
+
+    return {
+      assessments: transformedAssessments,
+      totalItems,
+      page,
+      limit,
+      totalPages,
+      subjectInfo: subject
+    }
+  }
+
+  /**
+   * Get assessments for a specific course with trainer access check and pagination
+   */
+  async getCourseAssessments(
+    courseId: string,
+    trainerId: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: AssessmentStatus,
+    search?: string
+  ) {
+    // First verify that the trainer is assigned to this course (through subjects)
+    const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
+      where: {
+        trainerUserId: trainerId,
+        subject: {
+          courseId
+        }
+      }
+    })
+
+    if (!trainerAssignment) {
+      throw new Error('Trainer is not assigned to any subjects in this course')
+    }
+
+    const skip = (page - 1) * limit
+
+    // Build where clause
+    const whereClause: Prisma.AssessmentFormWhereInput = {
+      courseId,
+      ...(status && { status }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { 
+            trainee: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { eid: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          }
+        ]
+      })
+    }
+
+    // Get total count
+    const totalItems = await this.prisma.assessmentForm.count({
+      where: whereClause
+    })
+
+    // Get assessments with trainee info
+    const assessments = await this.prisma.assessmentForm.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        subjectId: true,
+        courseId: true,
+        occuranceDate: true,
+        status: true,
+        resultScore: true,
+        resultText: true,
+        pdfUrl: true,
+        comment: true,
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      },
+      skip,
+      take: limit
+    })
+
+    // Get course info
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: {
+        id: true,
+        name: true,
+        code: true
+      }
+    })
+
+    if (!course) {
+      throw new Error('Course not found')
+    }
+
+    const totalPages = Math.ceil(totalItems / limit)
+
+    // Transform data to match the expected format
+    const transformedAssessments = assessments.map(assessment => ({
+      ...assessment,
+      trainee: {
+        id: assessment.trainee.id,
+        eid: assessment.trainee.eid,
+        fullName: `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
+        email: assessment.trainee.email
+      }
+    }))
+
+    return {
+      assessments: transformedAssessments,
+      totalItems,
+      page,
+      limit,
+      totalPages,
+      courseInfo: course
+    }
   }
 }

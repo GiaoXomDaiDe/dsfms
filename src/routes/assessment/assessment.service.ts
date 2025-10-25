@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, ForbiddenException } from '@nestjs/common'
 import { CourseStatus, SubjectStatus } from '@prisma/client'
 import { AssessmentRepo } from './assessment.repo'
 import {
@@ -8,7 +8,11 @@ import {
   CreateBulkAssessmentResType,
   GetAssessmentsQueryType,
   GetAssessmentsResType,
-  GetAssessmentDetailResType
+  GetAssessmentDetailResType,
+  GetSubjectAssessmentsQueryType,
+  GetSubjectAssessmentsResType,
+  GetCourseAssessmentsQueryType,
+  GetCourseAssessmentsResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -32,7 +36,8 @@ import {
   AssessmentNotFoundException,
   AssessmentNotAccessibleException,
   NoEnrolledTraineesFoundException,
-  AllTraineesExcludedException
+  AllTraineesExcludedException,
+  TraineeAssessmentExistsException
 } from './assessment.error'
 import { isNotFoundPrismaError } from '~/shared/helper'
 
@@ -151,17 +156,18 @@ export class AssessmentService {
         }
       }
 
-      // Step 7: Check for duplicate assessments
-      const duplicateAssessments = await this.assessmentRepo.checkDuplicateAssessments(
+      // Step 7: Check if any assessment form already exists for trainees with same template and occurrence date
+      const existingAssessments = await this.assessmentRepo.checkTraineeAssessmentExists(
         data.traineeIds,
         data.templateId,
-        occurrenceDate,
-        data.subjectId,
-        data.courseId
+        data.occuranceDate
       )
 
-      if (duplicateAssessments.length > 0) {
-        throw AssessmentAlreadyExistsException(duplicateAssessments)
+      if (existingAssessments.length > 0) {
+        throw TraineeAssessmentExistsException(
+          existingAssessments,
+          data.subjectId ? 'subject' : 'course'
+        )
       }
 
       // Step 8: Validate template structure
@@ -318,12 +324,12 @@ export class AssessmentService {
       const occurrenceDate = new Date(data.occuranceDate)
       
       // Debug logging to check date values
-      console.log('Bulk Assessment Date validation check:')
-      console.log('- Occurrence Date:', occurrenceDate.toISOString(), '(parsed from:', data.occuranceDate, ')')
-      console.log('- Start Date:', startDate.toISOString())
-      console.log('- End Date:', endDate.toISOString())
-      console.log('- Is occurrence < start?', occurrenceDate < startDate)
-      console.log('- Is occurrence > end?', occurrenceDate > endDate)
+    //   console.log('Bulk Assessment Date validation check:')
+    //   console.log('- Occurrence Date:', occurrenceDate.toISOString(), '(parsed from:', data.occuranceDate, ')')
+    //   console.log('- Start Date:', startDate.toISOString())
+    //   console.log('- End Date:', endDate.toISOString())
+    //   console.log('- Is occurrence < start?', occurrenceDate < startDate)
+    //   console.log('- Is occurrence > end?', occurrenceDate > endDate)
       
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
@@ -332,19 +338,17 @@ export class AssessmentService {
         throw OccurrenceDateAfterEndException(endDate, data.subjectId ? 'subject' : 'course')
       }
 
-      // Step 7: Check for existing assessments and filter out duplicates
+      // Step 7: Check for existing assessments and filter out trainees who already have assessments
       const traineeIds = eligibleTrainees.map(t => t.id)
-      const duplicateAssessments = await this.assessmentRepo.checkDuplicateAssessments(
+      const existingAssessments = await this.assessmentRepo.checkTraineeAssessmentExists(
         traineeIds,
         data.templateId,
-        occurrenceDate,
-        data.subjectId,
-        data.courseId
+        data.occuranceDate
       )
 
       // Filter out trainees who already have assessments
-      const duplicateTraineeIds = duplicateAssessments.map(d => d.traineeId)
-      const finalTraineeIds = traineeIds.filter(id => !duplicateTraineeIds.includes(id))
+      const existingTraineeIds = existingAssessments.map(d => d.traineeId)
+      const finalTraineeIds = traineeIds.filter(id => !existingTraineeIds.includes(id))
       const finalTrainees = eligibleTrainees.filter(t => finalTraineeIds.includes(t.id))
 
       // Track skipped trainees for response
@@ -357,11 +361,11 @@ export class AssessmentService {
             traineeName: `${t.firstName} ${t.lastName}`.trim(),
             reason: 'Manually excluded from assessment creation'
           })),
-        // Duplicate assessments
-        ...duplicateAssessments.map(d => ({
+        // Existing assessments
+        ...existingAssessments.map(d => ({
           traineeId: d.traineeId,
           traineeName: d.traineeName,
-          reason: 'Assessment already exists for this template and date'
+          reason: `Assessment form already exists for this ${data.subjectId ? 'subject' : 'course'}`
         }))
       ]
 
@@ -478,6 +482,72 @@ export class AssessmentService {
     }
 
     return assessment
+  }
+
+  /**
+   * Get assessments for a specific subject (for trainers)
+   */
+  async getSubjectAssessments(
+    query: GetSubjectAssessmentsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetSubjectAssessmentsResType> {
+    try {
+      const result = await this.assessmentRepo.getSubjectAssessments(
+        query.subjectId,
+        currentUser.userId,
+        query.page,
+        query.limit,
+        query.status,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get subject assessments failed:', error)
+      
+      if (error.message === 'Trainer is not assigned to this subject') {
+        throw new ForbiddenException('You are not assigned to this subject')
+      }
+      
+      if (error.message === 'Subject not found') {
+        throw SubjectNotFoundException
+      }
+
+      throw new Error('Failed to get subject assessments')
+    }
+  }
+
+  /**
+   * Get assessments for a specific course (for trainers)
+   */
+  async getCourseAssessments(
+    query: GetCourseAssessmentsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetCourseAssessmentsResType> {
+    try {
+      const result = await this.assessmentRepo.getCourseAssessments(
+        query.courseId,
+        currentUser.userId,
+        query.page,
+        query.limit,
+        query.status,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get course assessments failed:', error)
+      
+      if (error.message === 'Trainer is not assigned to any subjects in this course') {
+        throw new ForbiddenException('You are not assigned to any subjects in this course')
+      }
+      
+      if (error.message === 'Course not found') {
+        throw CourseNotFoundException
+      }
+
+      throw new Error('Failed to get course assessments')
+    }
   }
 
   /**
