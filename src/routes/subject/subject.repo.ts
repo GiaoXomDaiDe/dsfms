@@ -1,29 +1,62 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { RoleName } from '~/shared/constants/auth.constant'
-import { SubjectMethodValue, SubjectStatusValue, SubjectTypeValue } from '~/shared/constants/subject.constant'
+import { map } from 'lodash'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import {
+  SubjectEnrollmentStatus,
+  SubjectInstructorRoleValue,
+  SubjectMethodValue,
+  SubjectStatus,
+  SubjectStatusValue,
+  SubjectTypeValue
+} from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { CourseIdParamsType } from '~/shared/models/shared-course.model'
+import { SubjectType } from '~/shared/models/shared-subject.model'
+import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
+import { AssignmentUserForSubject, SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { TraineeNotFoundException, TraineeResolutionFailureException } from './subject.error'
 import {
+  AssignTrainerResType,
   CreateSubjectBodyType,
-  EnrollTraineesBodyType,
+  GetAvailableTrainersResType,
   GetSubjectDetailResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetSubjectsType,
+  LookupTraineesBodyType,
+  LookupTraineesResType,
   SubjectDetailCourseType,
   SubjectDetailEnrollmentsByBatchType,
   SubjectDetailInstructorType,
   SubjectDetailTraineeType,
-  SubjectEntityType,
-  UpdateSubjectBodyType
+  TraineeAssignmentDuplicateType,
+  TraineeAssignmentIssueType,
+  TraineeAssignmentUserType,
+  UpdateSubjectBodyType,
+  UpdateTrainerAssignmentResType
 } from './subject.model'
+
+type AssignTraineesResult = {
+  enrolled: TraineeAssignmentUserType[]
+  duplicates: TraineeAssignmentDuplicateType[]
+  invalid: TraineeAssignmentIssueType[]
+}
+
+type AssignmentUserSummary = Pick<
+  AssignmentUserForSubject,
+  'id' | 'eid' | 'firstName' | 'lastName' | 'email' | 'department'
+>
 
 @Injectable()
 @SerializeAll()
 export class SubjectRepo {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sharedCourseRepo: SharedCourseRepository,
+    private readonly sharedUserRepo: SharedUserRepository
+  ) {}
 
   async list(query: GetSubjectsQueryType & { includeDeleted?: boolean }): Promise<GetSubjectsResType> {
     const { method, type, isSIM, courseId, status, includeDeleted } = query
@@ -217,22 +250,42 @@ export class SubjectRepo {
     } as GetSubjectDetailResType
   }
 
-  async createSimple({
-    data,
-    createdById
-  }: {
-    data: CreateSubjectBodyType & { duration?: number }
-    createdById: string
-  }): Promise<GetSubjectDetailResType> {
-    const subject = await this.prisma.subject.create({
-      data: {
-        ...data,
-        createdById,
-        updatedById: createdById
+  async getAvailableTrainers(courseId: CourseIdParamsType): Promise<GetAvailableTrainersResType> {
+    const [subjectIds, departmentId] = await Promise.all([
+      this.prisma.subject.findMany({
+        where: {
+          courseId,
+          deletedAt: null,
+          status: { not: 'ARCHIVED' }
+        },
+        select: { id: true },
+        distinct: ['id']
+      }),
+      this.sharedCourseRepo.findActiveDepartmentId(courseId)
+    ])
+
+    if (!departmentId) {
+      return {
+        trainers: [],
+        totalCount: 0
       }
+    }
+
+    const subjectIdsList = map(subjectIds, 'id')
+
+    const assignedTrainerIds = await this.prisma.subjectInstructor.findMany({
+      where: {
+        subjectId: { in: subjectIdsList }
+      },
+      select: { trainerUserId: true },
+      distinct: ['trainerUserId']
     })
 
-    return subject as unknown as GetSubjectDetailResType
+    const assignedIds = map(assignedTrainerIds, 'trainerUserId')
+
+    const availableTrainers = await this.sharedUserRepo.findAvailableTrainersByDepartment(departmentId, assignedIds)
+
+    return { trainers: availableTrainers, totalCount: availableTrainers.length }
   }
 
   async create({
@@ -241,111 +294,16 @@ export class SubjectRepo {
   }: {
     data: CreateSubjectBodyType & { duration?: number }
     createdById: string
-  }): Promise<GetSubjectDetailResType> {
+  }): Promise<SubjectType> {
     const subject = await this.prisma.subject.create({
       data: {
         ...data,
         createdById,
         updatedById: createdById
-      },
-      include: {
-        course: {
-          include: {
-            department: {
-              select: {
-                id: true,
-                name: true,
-                code: true
-              }
-            }
-          }
-        },
-        createdBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        updatedBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        instructors: {
-          include: {
-            trainer: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
-        },
-        enrollments: {
-          include: {
-            trainee: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
-        }
       }
     })
 
-    return {
-      ...subject,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString(),
-      deletedAt: subject.deletedAt?.toISOString() || null,
-      instructors: subject.instructors.map((instructor) => ({
-        ...instructor,
-        createdAt: instructor.createdAt.toISOString(),
-        trainer: instructor.trainer
-      })),
-      enrollments: subject.enrollments.map((enrollment) => ({
-        ...enrollment,
-        enrollmentDate: enrollment.enrollmentDate.toISOString(),
-        createdAt: enrollment.createdAt.toISOString(),
-        updatedAt: enrollment.updatedAt.toISOString(),
-        trainee: enrollment.trainee
-      })),
-      instructorCount: subject.instructors.length,
-      enrollmentCount: subject.enrollments.length
-    } as unknown as GetSubjectDetailResType
-  }
-
-  async updateSimple({
-    id,
-    data,
-    updatedById
-  }: {
-    id: string
-    data: UpdateSubjectBodyType & { duration?: number }
-    updatedById: string
-  }): Promise<GetSubjectDetailResType> {
-    const subject = await this.prisma.subject.update({
-      where: { id },
-      data: {
-        ...data,
-        updatedById,
-        updatedAt: new Date()
-      }
-    })
-
-    return subject as unknown as GetSubjectDetailResType
+    return subject
   }
 
   async update({
@@ -356,340 +314,32 @@ export class SubjectRepo {
     id: string
     data: UpdateSubjectBodyType & { duration?: number }
     updatedById: string
-  }): Promise<GetSubjectDetailResType> {
+  }): Promise<SubjectType> {
     const subject = await this.prisma.subject.update({
       where: { id },
       data: {
         ...data,
         updatedById,
         updatedAt: new Date()
-      },
-      include: {
-        course: {
-          include: {
-            department: {
-              select: {
-                id: true,
-                name: true,
-                code: true
-              }
-            }
-          }
-        },
-        createdBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        updatedBy: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        instructors: {
-          include: {
-            trainer: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
-        },
-        enrollments: {
-          include: {
-            trainee: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
-        }
       }
     })
 
-    return {
-      ...subject,
-      startDate: subject.startDate?.toISOString() || null,
-      endDate: subject.endDate?.toISOString() || null,
-      createdAt: subject.createdAt.toISOString(),
-      updatedAt: subject.updatedAt.toISOString(),
-      deletedAt: subject.deletedAt?.toISOString() || null,
-      instructors: subject.instructors.map((instructor) => ({
-        ...instructor,
-        createdAt: instructor.createdAt.toISOString(),
-        trainer: instructor.trainer
-      })),
-      enrollments: subject.enrollments.map((enrollment) => ({
-        ...enrollment,
-        enrollmentDate: enrollment.enrollmentDate.toISOString(),
-        createdAt: enrollment.createdAt.toISOString(),
-        updatedAt: enrollment.updatedAt.toISOString(),
-        trainee: enrollment.trainee
-      })),
-      instructorCount: subject.instructors.length,
-      enrollmentCount: subject.enrollments.length
-    } as unknown as GetSubjectDetailResType
+    return subject
   }
 
-  async delete({
-    id,
-    deletedById,
-    isHard = false
-  }: {
-    id: string
-    deletedById: string
-    isHard?: boolean
-  }): Promise<SubjectEntityType> {
-    if (isHard) {
-      return (await this.prisma.subject.delete({
-        where: { id }
-      })) as unknown as SubjectEntityType
-    }
-
-    return (await this.prisma.subject.update({
+  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<SubjectType> {
+    const subject = await this.prisma.subject.update({
       where: { id },
       data: {
+        status: SubjectStatus.ARCHIVED,
         deletedAt: new Date(),
-        deletedById,
-        updatedAt: new Date()
-      }
-    })) as unknown as SubjectEntityType
-  }
-
-  async checkCodeExists(code: string, excludeId?: string): Promise<boolean> {
-    const where: any = {
-      code,
-      deletedAt: null
-    }
-
-    if (excludeId) {
-      where.id = { not: excludeId }
-    }
-
-    const count = await this.prisma.subject.count({ where })
-    return count > 0
-  }
-
-  async countEnrollments(subjectId: string): Promise<number> {
-    return await this.prisma.subjectEnrollment.count({
-      where: { subjectId }
-    })
-  }
-
-  async countInstructors(subjectId: string): Promise<number> {
-    return await this.prisma.subjectInstructor.count({
-      where: { subjectId }
-    })
-  }
-
-  async enrollTrainees({
-    subjectId,
-    trainees
-  }: {
-    subjectId: string
-    trainees: EnrollTraineesBodyType['trainees']
-  }): Promise<{ enrolledTrainees: string[]; duplicateTrainees: string[] }> {
-    // Get trainee EIDs
-    const traineeEids = trainees.map((trainee) => trainee.traineeEid)
-
-    // Validate trainees exist and have TRAINEE role
-    const traineeUsers = await this.prisma.user.findMany({
-      where: {
-        eid: { in: traineeEids },
-        role: {
-          name: RoleName.TRAINEE
-        },
-        deletedAt: null
-      },
-      select: {
-        id: true,
-        eid: true
+        deletedById: archivedById
       }
     })
 
-    const traineeMap = new Map(traineeUsers.map((trainee) => [trainee.eid, trainee.id]))
-
-    // Check for existing enrollments
-    const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
-      where: {
-        subjectId,
-        traineeUserId: { in: traineeUsers.map((t) => t.id) }
-      },
-      select: {
-        traineeUserId: true,
-        trainee: {
-          select: { eid: true }
-        }
-      }
-    })
-
-    const existingTraineeIds = new Set(existingEnrollments.map((enr) => enr.traineeUserId))
-    const duplicateTrainees = existingEnrollments.map((enr) => enr.trainee.eid)
-
-    // Prepare data for new enrollments
-    const newEnrollmentData = []
-    const enrolledTrainees: string[] = []
-
-    for (const trainee of trainees) {
-      const traineeId = traineeMap.get(trainee.traineeEid)
-      if (traineeId && !existingTraineeIds.has(traineeId)) {
-        newEnrollmentData.push({
-          subjectId,
-          traineeUserId: traineeId,
-          enrollmentDate: new Date(),
-          batchCode: trainee.batchCode
-        })
-        enrolledTrainees.push(trainee.traineeEid)
-      }
-    }
-
-    // Create new enrollments
-    if (newEnrollmentData.length > 0) {
-      await this.prisma.subjectEnrollment.createMany({
-        data: newEnrollmentData
-      })
-    }
-
-    return {
-      enrolledTrainees,
-      duplicateTrainees
-    }
+    return subject
   }
 
-  async removeEnrollments({
-    subjectId,
-    traineeEids
-  }: {
-    subjectId: string
-    traineeEids: string[]
-  }): Promise<{ removedTrainees: string[]; notFoundTrainees: string[] }> {
-    // Get trainee IDs from EIDs
-    const trainees = await this.prisma.user.findMany({
-      where: {
-        eid: { in: traineeEids },
-        deletedAt: null
-      },
-      select: {
-        id: true,
-        eid: true
-      }
-    })
-
-    const traineeMap = new Map(trainees.map((trainee) => [trainee.eid, trainee.id]))
-    const traineeIds = trainees.map((t) => t.id)
-
-    // Find existing enrollments
-    const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
-      where: {
-        subjectId,
-        traineeUserId: { in: traineeIds }
-      },
-      select: {
-        traineeUserId: true,
-        trainee: {
-          select: { eid: true }
-        }
-      }
-    })
-
-    const existingTraineeIds = existingEnrollments.map((enr) => enr.traineeUserId)
-    const removedTrainees = existingEnrollments.map((enr) => enr.trainee.eid)
-
-    // Find not found trainees
-    const notFoundTrainees = traineeEids.filter(
-      (eid) => !traineeMap.has(eid) || !existingTraineeIds.includes(traineeMap.get(eid)!)
-    )
-
-    // Remove enrollments
-    if (existingTraineeIds.length > 0) {
-      await this.prisma.subjectEnrollment.deleteMany({
-        where: {
-          subjectId,
-          traineeUserId: { in: existingTraineeIds }
-        }
-      })
-    }
-
-    return {
-      removedTrainees,
-      notFoundTrainees
-    }
-  }
-
-  // ========================================
-  // TRAINER ASSIGNMENT METHODS
-  // ========================================
-
-  /**
-   * Get available trainers in a department who are not assigned to any subject in a course
-   */
-  async getAvailableTrainersInDepartment({
-    departmentId,
-    courseId
-  }: {
-    departmentId: string
-    courseId: string
-  }): Promise<any[]> {
-    // Get all subject IDs in the course
-    const subjectIds = await this.prisma.subject.findMany({
-      where: {
-        courseId,
-        deletedAt: null
-      },
-      select: { id: true }
-    })
-
-    const subjectIdsList = subjectIds.map((s) => s.id)
-
-    // Get trainers already assigned to subjects in this course
-    const assignedTrainerIds = await this.prisma.subjectInstructor.findMany({
-      where: {
-        subjectId: { in: subjectIdsList }
-      },
-      select: { trainerUserId: true },
-      distinct: ['trainerUserId']
-    })
-
-    const assignedIds = assignedTrainerIds.map((t) => t.trainerUserId)
-
-    // Get available trainers from department
-    const availableTrainers = await this.prisma.user.findMany({
-      where: {
-        departmentId,
-        deletedAt: null,
-        role: {
-          name: RoleName.TRAINER
-        },
-        id: { notIn: assignedIds }
-      },
-      select: {
-        id: true,
-        eid: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        departmentId: true
-      }
-    })
-
-    return availableTrainers
-  }
-
-  /**
-   * Assign a trainer to a subject
-   */
   async assignTrainerToSubject({
     subjectId,
     trainerUserId,
@@ -697,56 +347,102 @@ export class SubjectRepo {
   }: {
     subjectId: string
     trainerUserId: string
-    roleInSubject: any
-  }): Promise<any> {
-    return await this.prisma.subjectInstructor.create({
+    roleInSubject: SubjectInstructorRoleValue
+  }): Promise<AssignTrainerResType> {
+    const assignment = await this.prisma.subjectInstructor.create({
       data: {
         subjectId,
         trainerUserId,
         roleInSubject
+      },
+      include: {
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            courseId: true,
+            startDate: true,
+            endDate: true,
+            course: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
+        trainer: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true,
+            phoneNumber: true,
+            status: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
       }
     })
+
+    return {
+      trainer: {
+        id: assignment.trainer.id,
+        eid: assignment.trainer.eid,
+        firstName: assignment.trainer.firstName,
+        middleName: assignment.trainer.middleName,
+        lastName: assignment.trainer.lastName,
+        email: assignment.trainer.email,
+        phoneNumber: assignment.trainer.phoneNumber,
+        status: assignment.trainer.status
+      },
+      subject: {
+        id: assignment.subject.id,
+        code: assignment.subject.code,
+        name: assignment.subject.name,
+        status: assignment.subject.status,
+        startDate: assignment.subject.startDate,
+        endDate: assignment.subject.endDate
+      },
+      role: assignment.roleInSubject,
+      assignedAt: assignment.createdAt
+    }
   }
 
-  /**
-   * Update trainer assignment (change trainer, subject, or role)
-   */
   async updateTrainerAssignment({
     currentSubjectId,
-    currentTrainerUserId,
-    newSubjectId,
-    newTrainerUserId,
+    currentTrainerId,
     newRoleInSubject
   }: {
     currentSubjectId: string
-    currentTrainerUserId: string
-    newSubjectId?: string
-    newTrainerUserId?: string
-    newRoleInSubject?: any
-  }): Promise<any> {
-    // Delete current assignment
+    currentTrainerId: string
+    newRoleInSubject: SubjectInstructorRoleValue
+  }): Promise<UpdateTrainerAssignmentResType> {
     await this.prisma.subjectInstructor.delete({
       where: {
         trainerUserId_subjectId: {
-          trainerUserId: currentTrainerUserId,
+          trainerUserId: currentTrainerId,
           subjectId: currentSubjectId
         }
       }
     })
 
-    // Create new assignment
-    return await this.prisma.subjectInstructor.create({
-      data: {
-        subjectId: newSubjectId || currentSubjectId,
-        trainerUserId: newTrainerUserId || currentTrainerUserId,
-        roleInSubject: newRoleInSubject
-      }
+    return await this.assignTrainerToSubject({
+      subjectId: currentSubjectId,
+      trainerUserId: currentTrainerId,
+      roleInSubject: newRoleInSubject
     })
   }
 
-  /**
-   * Remove trainer from subject
-   */
   async removeTrainerFromSubject({
     subjectId,
     trainerUserId
@@ -764,82 +460,30 @@ export class SubjectRepo {
     })
   }
 
-  /**
-   * Check if trainer is assigned to subject
-   */
-  async isTrainerAssignedToSubject({
-    subjectId,
-    trainerUserId
-  }: {
-    subjectId: string
-    trainerUserId: string
-  }): Promise<boolean> {
-    const assignment = await this.prisma.subjectInstructor.findUnique({
-      where: {
-        trainerUserId_subjectId: {
-          trainerUserId,
-          subjectId
-        }
-      }
-    })
-    return !!assignment
-  }
-
-  // ========================================
-  // TRAINEE ASSIGNMENT METHODS
-  // ========================================
-
-  /**
-   * Lookup trainees by EID or email
-   */
   async lookupTrainees({
     trainees
   }: {
-    trainees: Array<{ eid?: string; email?: string }>
-  }): Promise<{ foundUsers: any[]; notFoundIdentifiers: any[] }> {
-    const foundUsers: any[] = []
-    const notFoundIdentifiers: any[] = []
+    trainees: LookupTraineesBodyType['traineesList']
+  }): Promise<LookupTraineesResType> {
+    const foundUsers: LookupTraineesResType['foundUsers'] = []
+    const notFoundIdentifiers: LookupTraineesResType['notFoundIdentifiers'] = []
 
     for (const trainee of trainees) {
-      const where: any = {
+      const where: Prisma.UserWhereInput = {
         deletedAt: null,
+        status: { not: UserStatus.DISABLED },
         role: {
           name: RoleName.TRAINEE
         }
       }
 
-      if (trainee.eid) {
-        where.eid = trainee.eid
-      } else if (trainee.email) {
-        where.email = trainee.email
-      }
+      where.eid = trainee.eid
+      where.email = trainee.email
 
-      const found = await this.prisma.user.findFirst({
-        where,
-        include: {
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          department: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      })
+      const found = await this.sharedUserRepo.findFirstWithRoleAndDepartment(where)
 
       if (found) {
-        // Transform to match user list format
-        const { passwordHash, signatureImageUrl, roleId, departmentId, ...userWithoutSensitive } = found
-        foundUsers.push({
-          ...userWithoutSensitive,
-          role: found.role,
-          department: found.department
-        })
+        foundUsers.push(found)
       } else {
         notFoundIdentifiers.push(trainee)
       }
@@ -847,10 +491,6 @@ export class SubjectRepo {
 
     return { foundUsers, notFoundIdentifiers }
   }
-
-  /**
-   * Assign trainees to subject with validations
-   */
   async assignTraineesToSubject({
     subjectId,
     traineeUserIds,
@@ -859,66 +499,12 @@ export class SubjectRepo {
     subjectId: string
     traineeUserIds: string[]
     batchCode: string
-  }): Promise<{
-    enrolled: Array<{
-      userId: string
-      eid: string
-      fullName: string
-      email: string
-      department: { id: string; name: string } | null
-    }>
-    duplicates: Array<{
-      userId: string
-      eid: string
-      fullName: string
-      email: string
-      department: { id: string; name: string } | null
-      enrolledAt: string
-      batchCode: string
-    }>
-    invalid: Array<{
-      submittedId: string
-      eid?: string
-      email?: string
-      reason: 'USER_NOT_FOUND' | 'ROLE_NOT_TRAINEE' | 'USER_INACTIVE'
-      note?: string
-    }>
-  }> {
-    const requestedUsers = await this.prisma.user.findMany({
-      where: {
-        id: { in: traineeUserIds }
-      },
-      select: {
-        id: true,
-        eid: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        deletedAt: true,
-        role: {
-          select: { name: true }
-        },
-        department: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    })
+  }): Promise<AssignTraineesResult> {
+    const requestedUsers = await this.sharedUserRepo.findUsersForAssignment(traineeUserIds)
 
-    const requestedUserMap = new Map(requestedUsers.map((user) => [user.id, user]))
+    const requestedUserMap = new Map<string, AssignmentUserForSubject>(requestedUsers.map((user) => [user.id, user]))
 
-    const invalidMap = new Map<
-      string,
-      {
-        submittedId: string
-        eid?: string
-        email?: string
-        reason: 'USER_NOT_FOUND' | 'ROLE_NOT_TRAINEE' | 'USER_INACTIVE'
-        note?: string
-      }
-    >()
+    const invalidMap = new Map<string, TraineeAssignmentIssueType>()
 
     const missingIds = traineeUserIds.filter((id) => !requestedUserMap.has(id))
     missingIds.forEach((id) => {
@@ -988,7 +574,7 @@ export class SubjectRepo {
       traineeUserId: id,
       enrollmentDate: new Date(),
       batchCode,
-      status: 'ENROLLED' as any
+      status: SubjectEnrollmentStatus.ENROLLED
     }))
 
     if (newEnrollments.length > 0) {
@@ -997,16 +583,7 @@ export class SubjectRepo {
       })
     }
 
-    type AssignmentUserRecord = {
-      id: string
-      eid: string
-      firstName: string | null
-      lastName: string | null
-      email: string
-      department: { id: string; name: string } | null
-    }
-
-    const resolveUserPayload = (user: AssignmentUserRecord) => {
+    const resolveUserPayload = (user: AssignmentUserSummary): TraineeAssignmentUserType => {
       const nameParts = [user.firstName ?? '', user.lastName ?? ''].filter((part) => part.trim().length > 0)
       const fullName = nameParts.join(' ').trim()
 
@@ -1020,16 +597,16 @@ export class SubjectRepo {
     }
 
     const enrolled = newIds.map((id) => {
-      const user = requestedUserMap.get(id) as AssignmentUserRecord | undefined
+      const user = requestedUserMap.get(id)
       if (!user) {
         throw TraineeResolutionFailureException(id)
       }
       return resolveUserPayload(user)
     })
 
-    const duplicates = existingEnrollments.map((enrollment) => {
-      const fallbackUser = enrollment.trainee as AssignmentUserRecord
-      const user = (requestedUserMap.get(enrollment.traineeUserId) as AssignmentUserRecord | undefined) ?? fallbackUser
+    const duplicates: TraineeAssignmentDuplicateType[] = existingEnrollments.map((enrollment) => {
+      const fallbackUser = enrollment.trainee as AssignmentUserSummary
+      const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
 
       const payload = resolveUserPayload(user)
 
@@ -1047,6 +624,82 @@ export class SubjectRepo {
       duplicates,
       invalid
     }
+  }
+
+  async removeEnrollments({
+    subjectId,
+    traineeEids
+  }: {
+    subjectId: string
+    traineeEids: string[]
+  }): Promise<{ removedTrainees: string[]; notFoundTrainees: string[] }> {
+    // Get trainee IDs from EIDs
+    const trainees = await this.sharedUserRepo.findActiveUsersByEids(traineeEids)
+
+    const traineeMap = new Map(trainees.map((trainee) => [trainee.eid, trainee.id]))
+    const traineeIds = trainees.map((t) => t.id)
+
+    // Find existing enrollments
+    const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        subjectId,
+        traineeUserId: { in: traineeIds }
+      },
+      select: {
+        traineeUserId: true,
+        trainee: {
+          select: { eid: true }
+        }
+      }
+    })
+
+    const existingTraineeIds = existingEnrollments.map((enr) => enr.traineeUserId)
+    const removedTrainees = existingEnrollments.map((enr) => enr.trainee.eid)
+
+    // Find not found trainees
+    const notFoundTrainees = traineeEids.filter(
+      (eid) => !traineeMap.has(eid) || !existingTraineeIds.includes(traineeMap.get(eid)!)
+    )
+
+    // Remove enrollments
+    if (existingTraineeIds.length > 0) {
+      await this.prisma.subjectEnrollment.deleteMany({
+        where: {
+          subjectId,
+          traineeUserId: { in: existingTraineeIds }
+        }
+      })
+    }
+
+    return {
+      removedTrainees,
+      notFoundTrainees
+    }
+  }
+
+  // ========================================
+  // TRAINER ASSIGNMENT METHODS
+  // ========================================
+
+  /**
+   * Check if trainer is assigned to subject
+   */
+  async isTrainerAssignedToSubject({
+    subjectId,
+    trainerUserId
+  }: {
+    subjectId: string
+    trainerUserId: string
+  }): Promise<boolean> {
+    const assignment = await this.prisma.subjectInstructor.findUnique({
+      where: {
+        trainerUserId_subjectId: {
+          trainerUserId,
+          subjectId
+        }
+      }
+    })
+    return !!assignment
   }
 
   /**
@@ -1226,24 +879,19 @@ export class SubjectRepo {
     return true
   }
 
-  /**
-   * Get course max trainees and current count
-   */
   async getCourseTraineeCount(courseId: string): Promise<{ current: number; max: number | null }> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
       select: { maxNumTrainee: true }
     })
 
-    // Get all subject IDs
     const subjectIds = await this.prisma.subject.findMany({
       where: { courseId, deletedAt: null },
       select: { id: true }
     })
 
-    const subjectIdsList = subjectIds.map((s) => s.id)
+    const subjectIdsList = map(subjectIds, 'id')
 
-    // Count distinct trainees
     const distinctTrainees = await this.prisma.subjectEnrollment.findMany({
       where: {
         subjectId: { in: subjectIdsList }
@@ -1258,60 +906,5 @@ export class SubjectRepo {
       current: distinctTrainees.length,
       max: course?.maxNumTrainee || null
     }
-  }
-
-  /**
-   * Check if trainee can enroll in recurrent subject
-   */
-  async canEnrollInRecurrentSubject({
-    traineeUserId,
-    subjectId
-  }: {
-    traineeUserId: string
-    subjectId: string
-  }): Promise<{ canEnroll: boolean; reason?: string }> {
-    const subject = await this.prisma.subject.findUnique({
-      where: { id: subjectId },
-      select: {
-        type: true,
-        startDate: true,
-        endDate: true
-      }
-    })
-
-    if (!subject || subject.type !== 'RECURRENT') {
-      return { canEnroll: true }
-    }
-
-    if (!subject.startDate || !subject.endDate) {
-      return { canEnroll: true }
-    }
-
-    // Check if trainee has previous enrollment
-    const previousEnrollment = await this.prisma.subjectEnrollment.findUnique({
-      where: {
-        traineeUserId_subjectId: {
-          traineeUserId,
-          subjectId
-        }
-      }
-    })
-
-    if (!previousEnrollment) {
-      return { canEnroll: true }
-    }
-
-    // Check if current time is after end date
-    const now = new Date()
-    const endDate = new Date(subject.endDate)
-
-    if (now < endDate) {
-      return {
-        canEnroll: false,
-        reason: `Cannot re-enroll in recurrent subject until after ${endDate.toISOString()}`
-      }
-    }
-
-    return { canEnroll: true }
   }
 }

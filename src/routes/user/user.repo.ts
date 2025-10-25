@@ -6,10 +6,11 @@ import {
   BulkUnknownErrorMessage,
   UserNotFoundException
 } from '~/routes/user/user.error'
-import { BulkCreateResultType, CreateUserInternalType, GetUsersResType, UserType } from '~/routes/user/user.model'
+import { BulkCreateResultType, CreateUserInternalType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
+import { GetUsersResType } from '~/shared/models/shared-user.model'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
@@ -50,9 +51,22 @@ export class UserRepo {
       }),
       this.prismaService.user.findMany({
         where: whereClause,
+        omit: {
+          passwordHash: true,
+          signatureImageUrl: true,
+          roleId: true,
+          departmentId: true
+        },
         include: {
-          role: true,
-          department: true
+          role: {
+            select: { id: true, name: true }
+          },
+          department: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
         }
       })
     ])
@@ -525,61 +539,6 @@ export class UserRepo {
         console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
       }
     }
-
-    return results
-  }
-
-  async bulkTraineeLookup(trainees: { eid: string; fullName: string }[]): Promise<any[]> {
-    const eids = trainees.map((t) => t.eid)
-
-    // Get all users with TRAINEE role matching the EIDs
-    const foundUsers = await this.prismaService.user.findMany({
-      where: {
-        eid: { in: eids },
-        role: {
-          name: RoleName.TRAINEE,
-          deletedAt: null
-        },
-        deletedAt: null
-      },
-      include: {
-        role: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        department: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        traineeProfile: true
-      }
-    })
-
-    // Create a map for quick lookup
-    const userMap = new Map(foundUsers.map((user) => [user.eid, user]))
-
-    // Build results for each requested trainee
-    const results = trainees.map((trainee) => {
-      const foundUser = userMap.get(trainee.eid)
-      return {
-        eid: trainee.eid,
-        fullName: trainee.fullName,
-        found: !!foundUser,
-        user: foundUser
-          ? {
-              ...foundUser,
-              passwordHash: undefined,
-              signatureImageUrl: undefined,
-              roleId: undefined,
-              departmentId: undefined
-            }
-          : null
-      }
-    })
 
     return results
   }

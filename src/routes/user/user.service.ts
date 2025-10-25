@@ -880,20 +880,4 @@ export class UserService {
       throw DepartmentHeadAlreadyExistsException(departmentName, existingHeadFullName, existingHead.eid)
     }
   }
-
-  async bulkTraineeLookup(data: { trainees: { eid: string; fullName: string }[] }): Promise<any> {
-    const results = await this.userRepo.bulkTraineeLookup(data.trainees)
-
-    const foundCount = results.filter((r) => r.found).length
-    const notFoundCount = results.length - foundCount
-
-    return {
-      results,
-      summary: {
-        total: results.length,
-        found: foundCount,
-        notFound: notFoundCount
-      }
-    }
-  }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CancelCourseEnrollmentsBodyDto,
@@ -76,7 +76,7 @@ export class CourseController {
     })
   }
 
-  @Patch(':courseId/archive')
+  @Delete(':courseId/archive')
   @ZodSerializerDto(MessageResDTO)
   async archiveCourse(
     @Param() params: GetCourseParamsDto,
