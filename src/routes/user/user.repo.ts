@@ -8,6 +8,7 @@ import {
 } from '~/routes/user/user.error'
 import { BulkCreateResultType, CreateUserInternalType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { GetUsersResType } from '~/shared/models/shared-user.model'
@@ -219,6 +220,25 @@ export class UserRepo {
           traineeProfile: roleName === RoleName.TRAINEE
         }
       })
+    })
+  }
+
+  async findOngoingSubjectsForTrainer(trainerId: string): Promise<Array<{ id: string; code: string; name: string }>> {
+    return this.prismaService.subject.findMany({
+      where: {
+        deletedAt: null,
+        status: SubjectStatus.ON_GOING,
+        instructors: {
+          some: {
+            trainerUserId: trainerId
+          }
+        }
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true
+      }
     })
   }
 

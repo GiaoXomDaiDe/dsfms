@@ -39,3 +39,34 @@ export const CourseIsNotDeletedException = new BadRequestException('Course is no
 export const CannotRestoreCourseCodeConflictException = new BadRequestException(
   'Cannot restore course: code conflicts with existing active course'
 )
+export const CannotArchiveCourseWithActiveSubjectsException = new BadRequestException(
+  'Cannot archive course while it still has active subjects'
+)
+export const CannotArchiveCourseWithActiveEnrollmentsException = new BadRequestException(
+  'Cannot archive course while it still has active enrollments'
+)
+export const CannotArchiveCourseWithNonCancelledEnrollmentsException = new BadRequestException(
+  'Cannot archive course unless all enrollments are cancelled'
+)
+export const CourseAlreadyArchivedException = new BadRequestException('Course is already archived')
+export const CourseCannotBeArchivedFromCurrentStatusException = new BadRequestException(
+  'Course can only be archived when status is PLANNED or ON_GOING'
+)
+
+export const CourseDateRangeViolationException = (
+  violations: Array<{
+    subjectId: string
+    subjectName: string
+    subjectStart: Date
+    subjectEnd: Date
+  }>
+) =>
+  new BadRequestException({
+    message: 'Course date range cannot exclude existing subjects',
+    subjects: violations.map((item) => ({
+      id: item.subjectId,
+      name: item.subjectName,
+      startDate: item.subjectStart,
+      endDate: item.subjectEnd
+    }))
+  })

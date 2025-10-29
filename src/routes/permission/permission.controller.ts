@@ -11,17 +11,27 @@ import {
 import { PermissionService } from '~/routes/permission/permission.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import {
+  ExcludePermissionModules,
+  ExcludedPermissionModules
+} from '~/shared/decorators/exclude-permission-modules.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('permissions')
 export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
   @Get()
+  @ExcludePermissionModules('Authentication Management', 'System Services')
   @ZodSerializerDto(GetPermissionsResDTO)
-  list(@Query() { includeDeleted }: GetPermissionsQueryDTO, @ActiveRolePermissions('name') roleName: string) {
+  list(
+    @Query() { includeDeleted }: GetPermissionsQueryDTO,
+    @ActiveRolePermissions('name') roleName: string,
+    @ExcludedPermissionModules() excludedModules: string[]
+  ) {
     return this.permissionService.list({
       includeDeleted,
-      userRole: roleName
+      userRole: roleName,
+      excludeModules: excludedModules
     })
   }
 

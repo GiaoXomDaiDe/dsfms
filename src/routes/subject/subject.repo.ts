@@ -4,6 +4,7 @@ import { map } from 'lodash'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import {
   SubjectEnrollmentStatus,
+  SubjectEnrollmentStatusValue,
   SubjectInstructorRoleValue,
   SubjectMethodValue,
   SubjectStatus,
@@ -16,7 +17,15 @@ import { SubjectType } from '~/shared/models/shared-subject.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { AssignmentUserForSubject, SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
-import { TraineeNotFoundException, TraineeResolutionFailureException } from './subject.error'
+import {
+  CannotArchiveSubjectWithNonCancelledEnrollmentsException,
+  CourseNotFoundException,
+  SubjectNotFoundException,
+  TraineeNotFoundException,
+  TraineeResolutionFailureException,
+  TrainerBelongsToAnotherDepartmentException,
+  TrainerNotFoundException
+} from './subject.error'
 import {
   AssignTrainerResType,
   CreateSubjectBodyType,
@@ -34,6 +43,8 @@ import {
   TraineeAssignmentDuplicateType,
   TraineeAssignmentIssueType,
   TraineeAssignmentUserType,
+  TraineeEnrollmentRecordType,
+  TraineeEnrollmentUserType,
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
 } from './subject.model'
@@ -264,13 +275,6 @@ export class SubjectRepo {
       this.sharedCourseRepo.findActiveDepartmentId(courseId)
     ])
 
-    if (!departmentId) {
-      return {
-        trainers: [],
-        totalCount: 0
-      }
-    }
-
     const subjectIdsList = map(subjectIds, 'id')
 
     const assignedTrainerIds = await this.prisma.subjectInstructor.findMany({
@@ -282,10 +286,14 @@ export class SubjectRepo {
     })
 
     const assignedIds = map(assignedTrainerIds, 'trainerUserId')
+    const availableTrainers = await this.sharedUserRepo.findActiveTrainers({ excludeUserIds: assignedIds })
 
-    const availableTrainers = await this.sharedUserRepo.findAvailableTrainersByDepartment(departmentId, assignedIds)
+    const trainersWithFlag = availableTrainers.map((trainer) => ({
+      ...trainer,
+      belongsToDepartment: departmentId ? trainer.departmentId === departmentId : false
+    }))
 
-    return { trainers: availableTrainers, totalCount: availableTrainers.length }
+    return { trainers: trainersWithFlag, totalCount: trainersWithFlag.length }
   }
 
   async create({
@@ -327,17 +335,83 @@ export class SubjectRepo {
     return subject
   }
 
-  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<SubjectType> {
-    const subject = await this.prisma.subject.update({
+  async archive({
+    id,
+    archivedById,
+    status
+  }: {
+    id: string
+    archivedById: string
+    status: string
+  }): Promise<SubjectType> {
+    const now = new Date()
+
+    if (status === SubjectStatus.PLANNED) {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.subjectEnrollment.updateMany({
+          where: {
+            subjectId: id,
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          },
+          data: {
+            status: SubjectEnrollmentStatus.CANCELLED,
+            updatedAt: now
+          }
+        })
+
+        return tx.subject.update({
+          where: { id },
+          data: {
+            status: SubjectStatus.ARCHIVED,
+            deletedAt: now,
+            deletedById: archivedById,
+            updatedAt: now,
+            updatedById: archivedById
+          }
+        })
+      })
+    }
+
+    if (status === SubjectStatus.ON_GOING) {
+      return await this.prisma.$transaction(async (tx) => {
+        const activeEnrollmentCount = await tx.subjectEnrollment.count({
+          where: {
+            subjectId: id,
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          }
+        })
+
+        if (activeEnrollmentCount > 0) {
+          throw CannotArchiveSubjectWithNonCancelledEnrollmentsException
+        }
+
+        return tx.subject.update({
+          where: { id },
+          data: {
+            status: SubjectStatus.ARCHIVED,
+            deletedAt: now,
+            deletedById: archivedById,
+            updatedAt: now,
+            updatedById: archivedById
+          }
+        })
+      })
+    }
+
+    return this.prisma.subject.update({
       where: { id },
       data: {
         status: SubjectStatus.ARCHIVED,
-        deletedAt: new Date(),
-        deletedById: archivedById
+        deletedAt: now,
+        deletedById: archivedById,
+        updatedAt: now,
+        updatedById: archivedById
       }
     })
-
-    return subject
   }
 
   async assignTrainerToSubject({
@@ -349,73 +423,130 @@ export class SubjectRepo {
     trainerUserId: string
     roleInSubject: SubjectInstructorRoleValue
   }): Promise<AssignTrainerResType> {
-    const assignment = await this.prisma.subjectInstructor.create({
-      data: {
-        subjectId,
-        trainerUserId,
-        roleInSubject
-      },
-      include: {
-        subject: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            status: true,
-            courseId: true,
-            startDate: true,
-            endDate: true,
-            course: {
-              select: {
-                id: true,
-                name: true
-              }
+    return await this.prisma.$transaction(async (tx) => {
+      const subject = await tx.subject.findFirst({
+        where: {
+          id: subjectId,
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          course: {
+            select: {
+              id: true,
+              departmentId: true
             }
           }
+        }
+      })
+
+      if (!subject) {
+        throw SubjectNotFoundException
+      }
+
+      if (!subject.course || !subject.course.departmentId) {
+        throw CourseNotFoundException
+      }
+
+      const trainer = await tx.user.findUnique({
+        where: { id: trainerUserId, deletedAt: null, role: { name: RoleName.TRAINER } },
+        select: {
+          id: true,
+          departmentId: true,
+          deletedAt: true,
+          role: {
+            select: {
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!trainer || trainer.deletedAt !== null || trainer.role?.name !== RoleName.TRAINER) {
+        throw TrainerNotFoundException
+      }
+
+      if (trainer.departmentId && trainer.departmentId !== subject.course.departmentId) {
+        throw TrainerBelongsToAnotherDepartmentException
+      }
+
+      if (!trainer.departmentId) {
+        await tx.user.update({
+          where: { id: trainerUserId },
+          data: {
+            departmentId: subject.course.departmentId
+          }
+        })
+      }
+
+      const assignment = await tx.subjectInstructor.create({
+        data: {
+          subjectId,
+          trainerUserId,
+          roleInSubject
         },
-        trainer: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            email: true,
-            phoneNumber: true,
-            status: true,
-            department: {
-              select: {
-                id: true,
-                name: true
+        include: {
+          subject: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              status: true,
+              courseId: true,
+              startDate: true,
+              endDate: true,
+              course: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          },
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true
+                }
               }
             }
           }
         }
+      })
+
+      return {
+        trainer: {
+          id: assignment.trainer.id,
+          eid: assignment.trainer.eid,
+          firstName: assignment.trainer.firstName,
+          middleName: assignment.trainer.middleName,
+          lastName: assignment.trainer.lastName,
+          email: assignment.trainer.email,
+          phoneNumber: assignment.trainer.phoneNumber,
+          status: assignment.trainer.status
+        },
+        subject: {
+          id: assignment.subject.id,
+          code: assignment.subject.code,
+          name: assignment.subject.name,
+          status: assignment.subject.status,
+          startDate: assignment.subject.startDate,
+          endDate: assignment.subject.endDate
+        },
+        role: assignment.roleInSubject,
+        assignedAt: assignment.createdAt
       }
     })
-
-    return {
-      trainer: {
-        id: assignment.trainer.id,
-        eid: assignment.trainer.eid,
-        firstName: assignment.trainer.firstName,
-        middleName: assignment.trainer.middleName,
-        lastName: assignment.trainer.lastName,
-        email: assignment.trainer.email,
-        phoneNumber: assignment.trainer.phoneNumber,
-        status: assignment.trainer.status
-      },
-      subject: {
-        id: assignment.subject.id,
-        code: assignment.subject.code,
-        name: assignment.subject.name,
-        status: assignment.subject.status,
-        startDate: assignment.subject.startDate,
-        endDate: assignment.subject.endDate
-      },
-      role: assignment.roleInSubject,
-      assignedAt: assignment.createdAt
-    }
   }
 
   async updateTrainerAssignment({
@@ -677,13 +808,6 @@ export class SubjectRepo {
     }
   }
 
-  // ========================================
-  // TRAINER ASSIGNMENT METHODS
-  // ========================================
-
-  /**
-   * Check if trainer is assigned to subject
-   */
   async isTrainerAssignedToSubject({
     subjectId,
     trainerUserId
@@ -702,13 +826,6 @@ export class SubjectRepo {
     return !!assignment
   }
 
-  /**
-   * Cancel all course enrollments for a trainee in a specific batch
-   */
-
-  /**
-   * Get trainee enrollments across all subjects
-   */
   async getTraineeEnrollments({
     traineeUserId,
     batchCode,
@@ -716,34 +833,10 @@ export class SubjectRepo {
   }: {
     traineeUserId: string
     batchCode?: string
-    status?: any
+    status?: SubjectEnrollmentStatusValue
   }): Promise<{
-    trainee: {
-      userId: string
-      eid: string
-      fullName: string
-      email: string
-      department: { id: string; name: string } | null
-    }
-    enrollments: Array<{
-      subject: {
-        id: string
-        code: string
-        name: string
-        status: string
-        type: string
-        method: string
-        startDate: string | null
-        endDate: string | null
-        course: { id: string; name: string } | null
-      }
-      enrollment: {
-        batchCode: string
-        status: string
-        enrollmentDate: string
-        updatedAt: string
-      }
-    }>
+    trainee: TraineeEnrollmentUserType
+    enrollments: TraineeEnrollmentRecordType[]
   }> {
     const trainee = await this.prisma.user.findUnique({
       where: { id: traineeUserId },
@@ -766,7 +859,7 @@ export class SubjectRepo {
       throw TraineeNotFoundException
     }
 
-    const where: any = {
+    const where: Prisma.SubjectEnrollmentWhereInput = {
       traineeUserId
     }
 
@@ -803,7 +896,7 @@ export class SubjectRepo {
     })
 
     const nameParts = [trainee.firstName ?? '', trainee.lastName ?? ''].filter((part) => part.trim().length > 0)
-    const traineeInfo = {
+    const traineeInfo: TraineeEnrollmentUserType = {
       userId: trainee.id,
       eid: trainee.eid,
       fullName: nameParts.length > 0 ? nameParts.join(' ') : trainee.eid,
@@ -811,23 +904,23 @@ export class SubjectRepo {
       department: trainee.department ? { id: trainee.department.id, name: trainee.department.name } : null
     }
 
-    const enrollmentDetails = enrollments.map((e) => ({
+    const enrollmentDetails: TraineeEnrollmentRecordType[] = enrollments.map((e) => ({
       subject: {
         id: e.subject.id,
         code: e.subject.code,
         name: e.subject.name,
-        status: e.subject.status,
-        type: e.subject.type,
-        method: e.subject.method,
+        status: e.subject.status as SubjectStatusValue,
+        type: e.subject.type as SubjectTypeValue,
+        method: e.subject.method as SubjectMethodValue,
         startDate: e.subject.startDate ? e.subject.startDate.toISOString() : null,
         endDate: e.subject.endDate ? e.subject.endDate.toISOString() : null,
         course: e.subject.course ? { id: e.subject.course.id, name: e.subject.course.name } : null
       },
       enrollment: {
         batchCode: e.batchCode,
-        status: e.status,
-        enrollmentDate: e.enrollmentDate.toISOString(),
-        updatedAt: e.updatedAt.toISOString()
+        status: e.status as SubjectEnrollmentStatusValue,
+        enrollmentDate: e.enrollmentDate,
+        updatedAt: e.updatedAt
       }
     }))
 

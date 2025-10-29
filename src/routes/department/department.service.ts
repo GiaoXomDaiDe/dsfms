@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import {
   DepartmentAlreadyActiveException,
   DepartmentAlreadyExistsException,
+  DepartmentHeadBelongsToAnotherDepartmentException,
   DepartmentHeadMustHaveRoleException,
   DepartmentHeadRoleInactiveException,
   DepartmentHeadUserNotFoundException,
+  DepartmentHasActiveCoursesException,
   NotFoundDepartmentException,
   NoTrainersFoundInDepartmentException,
   OnlyAdministratorCanEnableDepartmentException,
@@ -54,36 +57,97 @@ export class DepartmentService {
   }
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
-    if (data.headUserId) {
-      await this.validateDepartmentHead(data.headUserId)
-    }
+    return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      let validatedHead: { id: string; departmentId: string | null } | null = null
 
-    try {
-      return await this.departmentRepo.create({
-        createdById,
-        data
-      })
-    } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw DepartmentAlreadyExistsException
+      if (data.headUserId) {
+        validatedHead = await this.validateDepartmentHead(data.headUserId)
+        if (validatedHead.departmentId) {
+          throw DepartmentHeadBelongsToAnotherDepartmentException
+        }
       }
+      try {
+        const department = await this.departmentRepo.create(
+          {
+            createdById,
+            data
+          },
+          tx
+        )
 
-      throw error
-    }
+        if (validatedHead && validatedHead.departmentId === null) {
+          await tx.user.update({
+            where: { id: validatedHead.id },
+            data: {
+              departmentId: department.id,
+              updatedById: createdById
+            }
+          })
+        }
+
+        return department
+      } catch (error) {
+        if (isUniqueConstraintPrismaError(error)) {
+          throw DepartmentAlreadyExistsException
+        }
+
+        throw error
+      }
+    })
   }
 
   async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
-    if (data.headUserId) {
-      await this.validateDepartmentHead(data.headUserId)
-    }
-
     try {
-      const department = await this.departmentRepo.update({
-        id,
-        updatedById,
-        data
+      return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const existingDepartment = await tx.department.findUnique({
+          where: {
+            id,
+            deletedAt: null
+          },
+          select: {
+            headUserId: true
+          }
+        })
+
+        if (!existingDepartment) throw NotFoundDepartmentException
+
+        let validatedHead: { id: string; departmentId: string | null } | null = null
+
+        if (data.headUserId) {
+          validatedHead = await this.validateDepartmentHead(data.headUserId, id)
+        }
+
+        const department = await this.departmentRepo.update(
+          {
+            id,
+            updatedById,
+            data
+          },
+          tx
+        )
+
+        if (validatedHead && validatedHead.departmentId === null) {
+          await tx.user.update({
+            where: { id: validatedHead.id },
+            data: {
+              departmentId: null,
+              updatedById
+            }
+          })
+        }
+
+        if (validatedHead && validatedHead.departmentId !== id) {
+          await tx.user.update({
+            where: { id: validatedHead.id },
+            data: {
+              departmentId: id,
+              updatedById
+            }
+          })
+        }
+
+        return department
       })
-      return department
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
@@ -99,6 +163,28 @@ export class DepartmentService {
 
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
     try {
+      const [activeCourseCount, activeSubjectCount] = await Promise.all([
+        this.prisma.course.count({
+          where: {
+            departmentId: id,
+            deletedAt: null
+          }
+        }),
+        this.prisma.subject.count({
+          where: {
+            deletedAt: null,
+            course: {
+              departmentId: id,
+              deletedAt: null
+            }
+          }
+        })
+      ])
+
+      if (activeCourseCount > 0 || activeSubjectCount > 0) {
+        throw DepartmentHasActiveCoursesException
+      }
+
       await this.departmentRepo.delete({
         id,
         deletedById
@@ -322,19 +408,19 @@ export class DepartmentService {
     }
   }
 
-  private async validateDepartmentHead(headUserId: string) {
+  private async validateDepartmentHead(headUserId: string, targetDepartmentId?: string) {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile({ id: headUserId })
 
-    if (!user) {
-      throw DepartmentHeadUserNotFoundException
+    if (!user) throw DepartmentHeadUserNotFoundException
+    if (user.role.name !== RoleName.DEPARTMENT_HEAD) throw DepartmentHeadMustHaveRoleException
+    if (user.role.isActive === false) throw DepartmentHeadRoleInactiveException
+    if (user.department?.id && user.department?.id !== targetDepartmentId) {
+      throw DepartmentHeadBelongsToAnotherDepartmentException
     }
 
-    if (user.role.name !== RoleName.DEPARTMENT_HEAD) {
-      throw DepartmentHeadMustHaveRoleException
-    }
-
-    if (user.role.isActive === false) {
-      throw DepartmentHeadRoleInactiveException
+    return {
+      id: user.id,
+      departmentId: user.department?.id ?? null
     }
   }
 }

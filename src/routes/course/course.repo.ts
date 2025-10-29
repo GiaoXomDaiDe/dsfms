@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common'
-import { SubjectEnrollmentStatus } from '@prisma/client'
+import { SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
+import {
+  CannotArchiveCourseWithActiveSubjectsException,
+  CannotArchiveCourseWithNonCancelledEnrollmentsException
+} from './course.error'
 import {
   CourseTraineeInfoType,
   CourseType,
@@ -255,15 +259,108 @@ export class CourseRepo {
     })
   }
 
-  async archive({ id, deletedById }: { id: string; deletedById: string }): Promise<CourseType> {
+  async archive({ id, deletedById, status }: { id: string; deletedById: string; status: string }): Promise<CourseType> {
+    const now = new Date()
+
+    if (status === CourseStatus.PLANNED) {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.subjectEnrollment.updateMany({
+          where: {
+            subject: {
+              courseId: id
+            },
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          },
+          data: {
+            status: SubjectEnrollmentStatus.CANCELLED,
+            updatedAt: now
+          }
+        })
+
+        await tx.subject.updateMany({
+          where: {
+            courseId: id,
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
+          },
+          data: {
+            status: SubjectStatus.ARCHIVED,
+            deletedAt: now,
+            deletedById,
+            updatedAt: now,
+            updatedById: deletedById
+          }
+        })
+
+        return tx.course.update({
+          where: { id },
+          data: {
+            deletedAt: now,
+            deletedById,
+            status: CourseStatus.ARCHIVED,
+            updatedById: deletedById,
+            updatedAt: now
+          }
+        })
+      })
+    }
+
+    if (status === CourseStatus.ON_GOING) {
+      return await this.prisma.$transaction(async (tx) => {
+        const activeSubjectCount = await tx.subject.count({
+          where: {
+            courseId: id,
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
+          }
+        })
+
+        if (activeSubjectCount > 0) {
+          throw CannotArchiveCourseWithActiveSubjectsException
+        }
+
+        const activeEnrollmentCount = await tx.subjectEnrollment.count({
+          where: {
+            subject: {
+              courseId: id
+            },
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          }
+        })
+
+        if (activeEnrollmentCount > 0) {
+          throw CannotArchiveCourseWithNonCancelledEnrollmentsException
+        }
+
+        return tx.course.update({
+          where: { id },
+          data: {
+            deletedAt: now,
+            deletedById,
+            status: CourseStatus.ARCHIVED,
+            updatedById: deletedById,
+            updatedAt: now
+          }
+        })
+      })
+    }
+
     return this.prisma.course.update({
       where: { id },
       data: {
-        deletedAt: new Date(),
+        deletedAt: now,
         deletedById,
         status: CourseStatus.ARCHIVED,
         updatedById: deletedById,
-        updatedAt: new Date()
+        updatedAt: now
       }
     })
   }

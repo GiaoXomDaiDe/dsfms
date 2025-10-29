@@ -25,6 +25,7 @@ export const PresignedUploadDocBodySchema = z
 export const UploadFilesResSchema = z.object({
   data: z.array(
     z.object({
+      id: z.string(),
       url: z.string()
     })
   )
@@ -32,8 +33,16 @@ export const UploadFilesResSchema = z.object({
 
 export const PresignedUploadFileResSchema = z.object({
   presignedUrl: z.string(),
-  url: z.string()
+  url: z.string(),
+  id: z.string()
 })
+
+export const DeleteMediaObjectBodySchema = z
+  .object({
+    key: z.string().min(1)
+  })
+  .strict()
 
 export type PresignedUploadFileBodyType = z.infer<typeof PresignedUploadFileBodySchema>
 export type PresignedUploadDocBodyType = z.infer<typeof PresignedUploadDocBodySchema>
+export type DeleteMediaObjectBodyType = z.infer<typeof DeleteMediaObjectBodySchema>
