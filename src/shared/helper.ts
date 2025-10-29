@@ -22,7 +22,6 @@ export function isCannotReachDatabasePrismaError(error: any): error is PrismaCli
   return error instanceof PrismaClientKnownRequestError && error.code === 'P1001'
 }
 
-// Factory function to create ResponseDTO
 export function createResponseDto<T extends z.ZodTypeAny>(dataSchema: T, defaultMessage?: string) {
   const schema = z.object({
     message: z.string().default(defaultMessage || 'Operation successful'),
