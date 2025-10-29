@@ -6,10 +6,6 @@ export const CourseNotFoundException = new NotFoundException('Course not found')
 
 // Subject Validation Errors
 export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists')
-export const SubjectDateOutsideCourseDateRangeException = new BadRequestException(
-  'Subject start date and end date must be within the course date range'
-)
-
 // Permission Errors
 export const OnlyAcademicDepartmentCanCreateSubjectsException = new ForbiddenException(
   'Only ACADEMIC_DEPARTMENT can create subjects'
@@ -33,6 +29,10 @@ export const TrainerNotFoundAtIndexException = (index: number, trainerEid: strin
 
 export const DuplicateInstructorException = new BadRequestException(
   'One or more trainers are already instructors of this subject'
+)
+
+export const TrainerBelongsToAnotherDepartmentException = new BadRequestException(
+  'This trainer belongs to another department, choose a trainer within this department'
 )
 
 // Enrollment Management Errors
@@ -85,6 +85,18 @@ export const InvalidTraineeSubmissionException = (
 export const CannotCancelSubjectEnrollmentException = new BadRequestException(
   'Cannot cancel enrollment. Either it does not exist, batch code mismatch, or status is not ENROLLED.'
 )
+export const CannotArchiveSubjectWithActiveEnrollmentsException = new BadRequestException(
+  'Cannot archive subject while it still has active enrollments'
+)
+export const CannotArchiveSubjectWithNonCancelledEnrollmentsException = new BadRequestException(
+  'Cannot archive subject unless all enrollments are cancelled'
+)
+export const SubjectAlreadyArchivedException = new BadRequestException('Subject is already archived')
+export const SubjectCannotBeArchivedFromCurrentStatusException = new BadRequestException(
+  'Subject can only be archived when status is PLANNED or ON_GOING'
+)
+export const SubjectEnrollmentWindowClosedException = (startDate: Date | string) =>
+  new BadRequestException(`Cannot enroll trainees after subject start date ${new Date(startDate).toISOString()}`)
 
 export const TraineeResolutionFailureException = (traineeId: string) =>
   new BadRequestException(`Unable to resolve trainee user ${traineeId}`)
@@ -112,3 +124,29 @@ export const DefaultSubjectValidationException = new BadRequestException('Subjec
 export const DefaultSubjectCreationException = new BadRequestException('Failed to create subject')
 export const DefaultSubjectUpdateException = new BadRequestException('Failed to update subject')
 export const DefaultSubjectDeletionException = new BadRequestException('Failed to delete subject')
+
+export const SubjectDatesOutsideCourseRangeException = ({
+  courseId,
+  courseStart,
+  courseEnd,
+  subjectStart,
+  subjectEnd
+}: {
+  courseId: string
+  courseStart: Date
+  courseEnd: Date
+  subjectStart: Date
+  subjectEnd: Date
+}) =>
+  new BadRequestException({
+    message: 'Subject dates must stay within the course date range',
+    course: {
+      id: courseId,
+      startDate: courseStart,
+      endDate: courseEnd
+    },
+    subject: {
+      startDate: subjectStart,
+      endDate: subjectEnd
+    }
+  })

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import z from 'zod'
 import {
   CreateTraineeProfileSchema,
   CreateTrainerProfileSchema,
@@ -316,3 +316,4 @@ export type BulkCreateResultType = z.infer<typeof BulkCreateResultSchema>
 export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
+export type ExcludeUserResType = z.infer<typeof UpdateUserResSchema>

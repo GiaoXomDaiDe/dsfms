@@ -18,7 +18,7 @@ export const NotFoundDepartmentException = new NotFoundException('Department not
 
 // Lỗi khi cố gắng xóa phòng ban đang có course hoạt động
 export const DepartmentHasActiveCoursesException = new ForbiddenException(
-  'Cannot delete department with active courses'
+  'Cannot delete department while courses or subjects are still active'
 )
 
 // Lỗi liên quan đến department head
@@ -68,3 +68,7 @@ export const TrainersNotInDepartmentException = (trainerEids: string[]) =>
     message: 'Trainers not found in this department',
     trainerEids
   })
+
+export const DepartmentHeadBelongsToAnotherDepartmentException = new BadRequestException(
+  'This department head belongs to another department, choose a head within this department'
+)

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import {
   CreateDepartmentBodyType,
   DepartmentDetailResType,
@@ -15,11 +16,11 @@ import { PrismaService } from '~/shared/services/prisma.service'
 export class DepartmentRepo {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sharedUserRepository: SharedUserRepository
+    private readonly sharedUserRepo: SharedUserRepository
   ) {}
 
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetDepartmentsResType> {
-    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
+    const whereClause = this.sharedUserRepo.buildListFilters({ includeDeleted })
 
     const [totalItems, departments] = await Promise.all([
       this.prisma.department.count({
@@ -154,14 +155,23 @@ export class DepartmentRepo {
     }
   }
 
-  async create({
-    data,
-    createdById
-  }: {
-    data: CreateDepartmentBodyType
-    createdById: string | null
-  }): Promise<DepartmentType> {
-    return await this.prisma.department.create({
+  private getClient(tx?: Prisma.TransactionClient) {
+    return tx ?? this.prisma
+  }
+
+  async create(
+    {
+      data,
+      createdById
+    }: {
+      data: CreateDepartmentBodyType
+      createdById: string | null
+    },
+    tx?: Prisma.TransactionClient
+  ): Promise<DepartmentType> {
+    const client = this.getClient(tx)
+
+    return client.department.create({
       data: {
         ...data,
         createdById
@@ -169,20 +179,22 @@ export class DepartmentRepo {
     })
   }
 
-  async update({
-    id,
-    updatedById,
-    data
-  }: {
-    id: string
-    updatedById: string
-    data: UpdateDepartmentBodyType
-  }): Promise<DepartmentType> {
-    return await this.prisma.department.update({
-      where: {
-        id,
-        deletedAt: null
-      },
+  async update(
+    {
+      id,
+      data,
+      updatedById
+    }: {
+      id: string
+      data: UpdateDepartmentBodyType
+      updatedById: string
+    },
+    tx?: Prisma.TransactionClient
+  ) {
+    const client = this.getClient(tx)
+
+    return client.department.update({
+      where: { id },
       data: {
         ...data,
         updatedById

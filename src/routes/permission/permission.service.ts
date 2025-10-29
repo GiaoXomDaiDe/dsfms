@@ -13,11 +13,13 @@ import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/h
 export class PermissionService {
   constructor(private readonly permissionRepo: PermissionRepo) {}
 
-  async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
+  async list(options: { includeDeleted?: boolean; userRole?: string; excludeModules?: string[] } = {}) {
+    const { includeDeleted = false, userRole, excludeModules = [] } = options
     // Chỉ admin mới có thể xem các permission đã bị xóa mềm
     const canViewDeleted = userRole === RoleName.ADMINISTRATOR
     return await this.permissionRepo.list({
-      includeDeleted: canViewDeleted ? includeDeleted : false
+      includeDeleted: canViewDeleted ? includeDeleted : false,
+      excludeModules
     })
   }
 

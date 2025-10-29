@@ -73,7 +73,8 @@ export const RespondReportParamsSchema = CancelReportParamsSchema
 
 export const RespondReportBodySchema = z
   .object({
-    response: z.string().trim().min(1).max(4000)
+    response: z.string().trim().min(1).max(4000),
+    status: z.enum([RequestStatus.RESOLVED, RequestStatus.APPROVED, RequestStatus.REJECTED]).optional()
   })
   .strict()
 

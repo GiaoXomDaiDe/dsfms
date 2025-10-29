@@ -3,6 +3,7 @@ import {
   PresignedUploadDocBodySchema,
   PresignedUploadFileBodySchema,
   PresignedUploadFileResSchema,
+  DeleteMediaObjectBodySchema,
   UploadFilesResSchema
 } from 'src/routes/media/media.model'
 
@@ -13,3 +14,5 @@ export class PresignedUploadDocBodyDTO extends createZodDto(PresignedUploadDocBo
 export class UploadFilesResDTO extends createZodDto(UploadFilesResSchema) {}
 
 export class PresignedUploadFileResDTO extends createZodDto(PresignedUploadFileResSchema) {}
+
+export class DeleteMediaObjectBodyDTO extends createZodDto(DeleteMediaObjectBodySchema) {}

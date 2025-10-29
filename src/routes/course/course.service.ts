@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { CourseStatus } from '~/shared/constants/course.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
-import { PrismaService } from '~/shared/services/prisma.service'
 import {
+  CourseAlreadyArchivedException,
+  CourseCannotBeArchivedFromCurrentStatusException,
   CourseCodeAlreadyExistsException,
+  CourseDateRangeViolationException,
   CourseNotFoundException,
   DepartmentNotFoundException,
   OnlyAcademicDepartmentCanCreateCourseException,
@@ -30,8 +33,7 @@ import { CourseRepo } from './course.repo'
 export class CourseService {
   constructor(
     private readonly courseRepo: CourseRepo,
-    private readonly sharedDepartmentRepo: SharedDepartmentRepository,
-    private readonly prisma: PrismaService
+    private readonly sharedDepartmentRepo: SharedDepartmentRepository
   ) {}
 
   async list({
@@ -133,6 +135,28 @@ export class CourseService {
       }
     }
 
+    if (existingCourse.subjects && existingCourse.subjects.length > 0) {
+      const newCourseStart = data.startDate ?? existingCourse.startDate
+      const newCourseEnd = data.endDate ?? existingCourse.endDate
+
+      const violations = existingCourse.subjects.filter((subject) => {
+        const outsideStartDate = newCourseStart && subject.startDate < newCourseStart
+        const outsideEndDate = newCourseEnd && subject.endDate > newCourseEnd
+        return outsideStartDate || outsideEndDate
+      })
+
+      if (violations.length > 0) {
+        throw CourseDateRangeViolationException(
+          violations.map((item) => ({
+            subjectId: item.id,
+            subjectName: item.name,
+            subjectStart: item.startDate,
+            subjectEnd: item.endDate
+          }))
+        )
+      }
+    }
+
     try {
       return await this.courseRepo.update({ id, data, updatedById })
     } catch (error) {
@@ -162,7 +186,17 @@ export class CourseService {
       throw OnlyAcademicDepartmentCanDeleteCourseException
     }
 
-    await this.courseRepo.archive({ id, deletedById })
+    const courseStatus = existingCourse.status as string
+
+    if (courseStatus === CourseStatus.ARCHIVED) {
+      throw CourseAlreadyArchivedException
+    }
+
+    if (courseStatus !== CourseStatus.PLANNED && courseStatus !== CourseStatus.ON_GOING) {
+      throw CourseCannotBeArchivedFromCurrentStatusException
+    }
+
+    await this.courseRepo.archive({ id, deletedById, status: courseStatus })
 
     return { message: 'Course archived successfully' }
   }
