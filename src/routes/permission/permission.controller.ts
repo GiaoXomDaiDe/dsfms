@@ -8,6 +8,7 @@ import {
   GetPermissionsResDTO,
   UpdatePermissionBodyDTO
 } from '~/routes/permission/permission.dto'
+import { PermissionMes } from '~/routes/permission/permission.message'
 import { PermissionService } from '~/routes/permission/permission.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
@@ -23,16 +24,21 @@ export class PermissionController {
   @Get()
   @ExcludePermissionModules('Authentication Management', 'System Services')
   @ZodSerializerDto(GetPermissionsResDTO)
-  list(
+  async list(
     @Query() { includeDeleted }: GetPermissionsQueryDTO,
     @ActiveRolePermissions('name') roleName: string,
     @ExcludedPermissionModules() excludedModules: string[]
   ) {
-    return this.permissionService.list({
+    const result = await this.permissionService.list({
       includeDeleted,
       userRole: roleName,
       excludeModules: excludedModules
     })
+
+    return {
+      message: PermissionMes.LIST_SUCCESS,
+      data: result
+    }
   }
 
   @Get(':permissionId')

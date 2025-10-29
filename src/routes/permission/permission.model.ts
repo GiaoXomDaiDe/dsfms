@@ -1,5 +1,5 @@
+import { HttpMethod } from '@prisma/client'
 import z from 'zod'
-import { HTTPMethod } from '~/shared/constants/auth.constant'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 
 export const PermissionSchema = z.object({
@@ -8,15 +8,7 @@ export const PermissionSchema = z.object({
   description: z.string().nullable(),
   path: z.string().max(1000),
   module: z.string().max(500),
-  method: z.enum([
-    HTTPMethod.GET,
-    HTTPMethod.POST,
-    HTTPMethod.PUT,
-    HTTPMethod.DELETE,
-    HTTPMethod.PATCH,
-    HTTPMethod.OPTIONS,
-    HTTPMethod.HEAD
-  ]),
+  method: z.enum(HttpMethod),
   isActive: z.boolean().default(true),
   viewName: z.string().max(500).nullable().default(''),
   viewModule: z.string().max(500).nullable().default(''),
@@ -44,7 +36,7 @@ export const PermissionModuleSchema = z.object({
 })
 
 export const GetPermissionsResSchema = z.object({
-  data: z.array(PermissionModuleSchema),
+  modules: z.array(PermissionModuleSchema),
   totalItems: z.number()
 })
 

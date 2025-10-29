@@ -70,7 +70,7 @@ export class PermissionRepo {
     const totalItems = grouped.reduce((sum, item) => sum + item.module.listPermissions.length, 0)
 
     return {
-      data: grouped,
+      modules: grouped,
       totalItems
     }
   }
