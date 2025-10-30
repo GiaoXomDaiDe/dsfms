@@ -165,16 +165,139 @@ export class TemplateService {
   }
 
   /**
-   * Parse DOCX and extract only field names (placeholders)
-   * Returns a flat list of fields without template or section structure
-   * This is useful for users to see what fields are in the document before organizing them
+   * Helper method to parse placeholders into structured fields
+   */
+  private parseStructuredFields(tags: string[]): Array<{
+    fieldName: string
+    fieldType: string
+    displayOrder: number
+    parentTempId: string | null
+    tempId?: string
+  }> {
+    // tags parameter is already passed to this method
+    const fields: Array<{
+      fieldName: string
+      fieldType: string
+      displayOrder: number
+      parentTempId: string | null
+      tempId?: string
+    }> = []
+    
+    let displayOrder = 1
+    let currentParent: string | null = null
+    const processedSections = new Set<string>()
+    const processedToggles = new Set<string>()
+    // Track processed fields per section context to allow same field names in different sections
+    const processedFieldsByContext = new Map<string, Set<string>>()
+    
+    // First pass: identify which # tags are conditions (have corresponding ^ tags)
+    const conditionNames = new Set<string>()
+    for (const tag of tags) {
+      const cleaned = tag.replace(/[{}]/g, '')
+      if (cleaned.startsWith('^')) {
+        const conditionName = cleaned.substring(1)
+        conditionNames.add(conditionName)
+      }
+    }
+    
+    // Second pass: process tags in order as they appear in the document
+    for (const tag of tags) {
+      const cleaned = tag.replace(/[{}]/g, '')
+      
+      // Skip operators
+      if (this.hasOperator(cleaned)) {
+        continue
+      }
+      
+      // Handle section start tags (#sectionName)
+      if (cleaned.startsWith('#')) {
+        const sectionName = cleaned.substring(1)
+        
+        // Check if this is a condition (has corresponding ^ tag)
+        if (conditionNames.has(sectionName)) {
+          // This is a condition, skip it - we'll handle it when we encounter the ^ tag
+          continue
+        } else {
+          // This is a regular PART section
+          if (!processedSections.has(sectionName)) {
+            const tempId = `${sectionName}-parent`
+            fields.push({
+              fieldName: sectionName,
+              fieldType: 'PART',
+              displayOrder: displayOrder++,
+              parentTempId: null,
+              tempId: tempId
+            })
+            currentParent = tempId
+            processedSections.add(sectionName)
+            // Initialize field tracking for this section
+            processedFieldsByContext.set(tempId, new Set<string>())
+          } else {
+            // If section already exists, just set current parent
+            currentParent = `${sectionName}-parent`
+          }
+        }
+        continue
+      }
+      
+      // Handle section end tags {/sectionName}
+      if (cleaned.startsWith('/')) {
+        const endingSectionName = cleaned.substring(1)
+        // Only reset currentParent if we're ending the current section
+        if (currentParent && currentParent === `${endingSectionName}-parent`) {
+          currentParent = null
+        }
+        continue
+      }
+      
+      // Handle inverted sections {^sectionName} - indicates toggle/condition
+      if (cleaned.startsWith('^')) {
+        const sectionName = cleaned.substring(1)
+        
+        if (!processedToggles.has(sectionName)) {
+          fields.push({
+            fieldName: sectionName,
+            fieldType: 'TOGGLE',
+            displayOrder: displayOrder++,
+            parentTempId: currentParent
+          })
+          processedToggles.add(sectionName)
+        }
+        continue
+      }
+      
+      // Regular fields - allow same field names in different sections
+      const contextKey = currentParent || 'global'
+      const contextFields = processedFieldsByContext.get(contextKey) || new Set<string>()
+      
+      if (!contextFields.has(cleaned)) {
+        fields.push({
+          fieldName: cleaned,
+          fieldType: 'TEXT',
+          displayOrder: displayOrder++,
+          parentTempId: currentParent
+        })
+        contextFields.add(cleaned)
+        processedFieldsByContext.set(contextKey, contextFields)
+      }
+    }
+    
+    return fields
+  }
+
+  /**
+   * Parse DOCX and extract structured fields for create template format
+   * Returns fields in the same structure as create template API
    */
   async extractFieldsFromDocx(file: any): Promise<{
     success: boolean
     message: string
     fields: Array<{
       fieldName: string
-      placeholder: string
+      fieldType: string
+      displayOrder: number
+      parentTempId: string | null
+      tempId?: string
     }>
     totalFields: number
   }> {
@@ -199,64 +322,14 @@ export class TemplateService {
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
       
-      // Process placeholders to get unique field names and detect parent sections
-      const fieldSet = new Set<string>()
-      const parentSections = new Set<string>()
-      const fields: Array<{ fieldName: string; placeholder: string }> = []
-
-      // First pass: identify section start tags (parent PART fields)
-      for (const tag of tags) {
-        const cleaned = tag.replace(/[{}]/g, '')
-        
-        // Detect section start tags (#sectionName)
-        if (cleaned.startsWith('#')) {
-          const sectionName = cleaned.substring(1)
-          parentSections.add(sectionName)
-        }
-      }
-
-      // Second pass: process all fields and include parent sections
-      for (const tag of tags) {
-        const cleaned = tag.replace(/[{}]/g, '')
-        
-        // Skip section control tags (^, /) but NOT start tags (#)
-        if (cleaned.startsWith('^') || cleaned.startsWith('/')) {
-          continue
-        }
-
-        // Handle section start tags (#sectionName) - these become PART fields
-        if (cleaned.startsWith('#')) {
-          const sectionName = cleaned.substring(1)
-          if (!fieldSet.has(sectionName)) {
-            fieldSet.add(sectionName)
-            fields.push({
-              fieldName: sectionName,
-              placeholder: `{${sectionName}}` // Convert to standard placeholder format
-            })
-          }
-          continue
-        }
-
-        // Skip fields with operators (calculated fields)
-        if (this.hasOperator(cleaned)) {
-          continue
-        }
-
-        // Add unique regular fields only
-        if (!fieldSet.has(cleaned)) {
-          fieldSet.add(cleaned)
-          fields.push({
-            fieldName: cleaned,
-            placeholder: tag
-          })
-        }
-      }
+      // Use the structured field parser
+      const structuredFields = this.parseStructuredFields(tags)
 
       return {
         success: true,
-        message: `Extracted ${fields.length} unique fields from document`,
-        fields,
-        totalFields: fields.length
+        message: `Extracted ${structuredFields.length} unique fields from document`,
+        fields: structuredFields,
+        totalFields: structuredFields.length
       }
     } catch (error) {
       // Handle docxtemplater errors
@@ -283,7 +356,10 @@ export class TemplateService {
     message: string
     fields: Array<{
       fieldName: string
-      placeholder: string
+      fieldType: string
+      displayOrder: number
+      parentTempId: string | null
+      tempId?: string
     }>
     totalFields: number
   }> {
@@ -314,64 +390,14 @@ export class TemplateService {
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
       
-      // Process placeholders to get unique field names and detect parent sections
-      const fieldSet = new Set<string>()
-      const parentSections = new Set<string>()
-      const fields: Array<{ fieldName: string; placeholder: string }> = []
-
-      // First pass: identify section start tags (parent PART fields)
-      for (const tag of tags) {
-        const cleaned = tag.replace(/[{}]/g, '')
-        
-        // Detect section start tags (#sectionName)
-        if (cleaned.startsWith('#')) {
-          const sectionName = cleaned.substring(1)
-          parentSections.add(sectionName)
-        }
-      }
-
-      // Second pass: process all fields and include parent sections
-      for (const tag of tags) {
-        const cleaned = tag.replace(/[{}]/g, '')
-        
-        // Skip section control tags (^, /) but NOT start tags (#)
-        if (cleaned.startsWith('^') || cleaned.startsWith('/')) {
-          continue
-        }
-
-        // Handle section start tags (#sectionName) - these become PART fields
-        if (cleaned.startsWith('#')) {
-          const sectionName = cleaned.substring(1)
-          if (!fieldSet.has(sectionName)) {
-            fieldSet.add(sectionName)
-            fields.push({
-              fieldName: sectionName,
-              placeholder: `{${sectionName}}` // Convert to standard placeholder format
-            })
-          }
-          continue
-        }
-
-        // Skip fields with operators (calculated fields)
-        if (this.hasOperator(cleaned)) {
-          continue
-        }
-
-        // Add unique regular fields only
-        if (!fieldSet.has(cleaned)) {
-          fieldSet.add(cleaned)
-          fields.push({
-            fieldName: cleaned,
-            placeholder: tag
-          })
-        }
-      }
+      // Use the structured field parser
+      const structuredFields = this.parseStructuredFields(tags)
 
       return {
         success: true,
-        message: `Extracted ${fields.length} unique fields from S3 document`,
-        fields,
-        totalFields: fields.length
+        message: `Extracted ${structuredFields.length} unique fields from S3 document`,
+        fields: structuredFields,
+        totalFields: structuredFields.length
       }
     } catch (error) {
       // Handle fetch errors

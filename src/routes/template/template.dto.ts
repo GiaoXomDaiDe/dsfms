@@ -33,7 +33,10 @@ export const ExtractFieldsResponseSchema = z.object({
   fields: z.array(
     z.object({
       fieldName: z.string(),
-      placeholder: z.string()
+      fieldType: z.string(),
+      displayOrder: z.number(),
+      parentTempId: z.string().nullable(),
+      tempId: z.string().optional()
     })
   ),
   totalFields: z.number()
