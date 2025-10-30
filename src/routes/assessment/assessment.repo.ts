@@ -379,8 +379,7 @@ export class AssessmentRepo {
   async getTemplateWithStructure(templateId: string) {
     return await this.prisma.templateForm.findUnique({
       where: {
-        id: templateId,
-        isActive: true
+        id: templateId
       },
       include: {
         department: {
@@ -865,7 +864,7 @@ export class AssessmentRepo {
         select: { departmentId: true }
       })
 
-      return userDept?.departmentId === assessment.template.department.id
+      return userDept?.departmentId === assessment.template.department?.id
     }
 
     return false

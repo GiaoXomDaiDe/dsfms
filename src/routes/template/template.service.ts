@@ -393,7 +393,7 @@ export class TemplateService {
       metadata: {
         templateId: template.id,
         version: template.version,
-        isActive: template.isActive,
+        status: template.status,
         createdAt: template.createdAt,
         updatedAt: template.updatedAt,
         department: template.department,
