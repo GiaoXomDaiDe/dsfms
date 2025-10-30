@@ -409,25 +409,29 @@ model GlobalField {
 }
 
 model TemplateForm {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String            @db.VarChar(255)
-  description     String?
-  version         Int               @default(1)
-  departmentId    String            @db.Uuid
-  createdByUserId String            @db.Uuid
-  isActive        Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @default(now()) @updatedAt
-  templateContent String?           @db.VarChar(500)
-  templateSchema  Json?
-  createdByUser   User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  department      Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  sections        TemplateSection[]
-  assessmentForms AssessmentForm[]
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String            @unique @db.VarChar(255)
+  description          String?
+  version              Int               @default(1)
+  departmentId         String?           @db.Uuid
+  createdByUserId      String            @db.Uuid
+  status               TemplateStatus    @default(PENDING)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @default(now()) @updatedAt
+  templateContent      String            @db.VarChar(500)
+  referFirstVersionId  String?           @db.Uuid
+  templateSchema       Json?
+  createdByUser        User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department           Department?       @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  firstVersion         TemplateForm?     @relation("TemplateVersions", fields: [referFirstVersionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  templateVersions     TemplateForm[]    @relation("TemplateVersions")
+  sections             TemplateSection[]
+  assessmentForms      AssessmentForm[]
 
   @@index([departmentId])
   @@index([createdByUserId])
-  @@index([isActive])
+  @@index([status])
+  @@index([referFirstVersionId])
   @@map("Template_Form")
 }
 
@@ -639,4 +643,11 @@ enum EditByRole {
 enum RoleInSubject {
   ASSESSMENT_REVIEWER
   EXAMINER
+}
+
+enum TemplateStatus {
+  PENDING
+  PUBLISHED
+  DISABLED
+  REJECTED
 }
