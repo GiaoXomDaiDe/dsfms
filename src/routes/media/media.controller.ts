@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   FileTypeValidator,
   Get,
   MaxFileSizeValidator,
@@ -19,6 +20,7 @@ import {
   PresignedUploadDocBodyDTO,
   PresignedUploadFileBodyDTO,
   PresignedUploadFileResDTO,
+  DeleteMediaObjectBodyDTO,
   UploadFilesResDTO
 } from '~/routes/media/media.dto'
 import { MediaService } from '~/routes/media/media.service'
@@ -26,6 +28,7 @@ import { ParseFilePipeWithUnlink } from '~/routes/media/parse-file-with-unlink.p
 import { UPLOAD_DIR } from '~/shared/constants/default.constant'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
+import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('media')
 export class MediaController {
@@ -106,5 +109,12 @@ export class MediaController {
     files: Express.Multer.File[]
   ) {
     return this.mediaService.uploadDocFile(files, type, userId)
+  }
+
+  @Delete('objects')
+  @ZodSerializerDto(MessageResDTO)
+  async deleteObject(@Body() { key }: DeleteMediaObjectBodyDTO) {
+    await this.mediaService.deleteObject({ key })
+    return { message: 'Deleted successfully' }
   }
 }

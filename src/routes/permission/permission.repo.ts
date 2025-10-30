@@ -16,25 +16,39 @@ export class PermissionRepo {
     private readonly prisma: PrismaService,
     private readonly sharedUserRepository: SharedUserRepository
   ) {}
-  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}) {
+  async list(options: { includeDeleted?: boolean; excludeModules?: string[] } = {}) {
+    const { includeDeleted = false, excludeModules = [] } = options
     const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
 
-    const [totalItems, permissions] = await Promise.all([
-      this.prisma.permission.count({
-        where: whereClause
-      }),
-      this.prisma.permission.findMany({
-        where: whereClause
-      })
-    ])
+    const permissions = await this.prisma.permission.findMany({
+      where: whereClause
+    })
+
+    const normalizeModuleName = (value: string) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+
+    const excludedModuleNames = new Set(
+      excludeModules
+        .filter((moduleName) => typeof moduleName === 'string')
+        .map((moduleName) => normalizeModuleName(moduleName))
+        .filter((moduleName) => moduleName.length > 0)
+    )
 
     const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
       const rawModuleName = permission.viewModule ?? permission.module ?? ''
       const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
+      const normalizedModuleName = normalizeModuleName(moduleName)
+
+      if (excludedModuleNames.has(normalizedModuleName)) return acc
+
       const rawPermissionName = permission.viewName ?? permission.name ?? ''
       const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : permission.name
 
-      let moduleEntry = acc.find((entry) => entry.module.name === moduleName)
+      let moduleEntry = acc.find((entry) => normalizeModuleName(entry.module.name) === normalizedModuleName)
       if (!moduleEntry) {
         moduleEntry = {
           module: {
@@ -53,8 +67,10 @@ export class PermissionRepo {
       return acc
     }, [])
 
+    const totalItems = grouped.reduce((sum, item) => sum + item.module.listPermissions.length, 0)
+
     return {
-      data: grouped,
+      modules: grouped,
       totalItems
     }
   }

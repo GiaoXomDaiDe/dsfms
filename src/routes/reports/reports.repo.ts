@@ -165,11 +165,13 @@ export class ReportsRepo {
   async respond({
     id,
     data,
-    managedById
+    managedById,
+    status
   }: {
     id: string
     data: RespondReportBodyType
     managedById: string
+    status: RequestStatusValue
   }): Promise<RespondReportResType> {
     const report = await this.prisma.request.update({
       where: {
@@ -177,7 +179,7 @@ export class ReportsRepo {
         requestType: { in: this.reportTypes }
       },
       data: {
-        status: RequestStatus.RESOLVED,
+        status,
         response: data.response,
         managedById,
         updatedById: managedById

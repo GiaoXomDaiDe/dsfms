@@ -8,12 +8,13 @@ import {
   BulkCreateSubjectsBodyDto,
   BulkCreateSubjectsResDto,
   CancelSubjectEnrollmentBodyDto,
-  CancelSubjectEnrollmentResDto,
   CreateSubjectBodyDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
+  GetTraineeEnrollmentsQueryDto,
+  GetTraineeEnrollmentsResDto,
   LookupTraineesBodyDto,
   LookupTraineesResDto,
   RemoveEnrollmentsBodyDto,
@@ -22,6 +23,7 @@ import {
   SubjectSchemaDto,
   SubjectTraineeParamsDto,
   SubjectTrainerParamsDto,
+  TraineeIdParamsDto,
   UpdateSubjectBodyDto,
   UpdateTrainerAssignmentBodyDto,
   UpdateTrainerAssignmentResDto
@@ -131,11 +133,6 @@ export class SubjectController {
     })
   }
 
-  /**
-   * API: Remove Enrollments from Subject
-   * DELETE /subjects/:subjectId/enrollments
-   * Xóa trainees khỏi subject
-   */
   @Delete(':subjectId/enrollments')
   @ZodSerializerDto(RemoveEnrollmentsResDto)
   async removeEnrollments(
@@ -145,6 +142,18 @@ export class SubjectController {
     return await this.subjectService.removeEnrollments({
       subjectId,
       data: body
+    })
+  }
+
+  @Get('trainees/:traineeId/enrollments')
+  @ZodSerializerDto(GetTraineeEnrollmentsResDto)
+  async getTraineeEnrollments(
+    @Param('traineeId') { traineeId }: TraineeIdParamsDto,
+    @Query() query: GetTraineeEnrollmentsQueryDto
+  ) {
+    return await this.subjectService.getTraineeEnrollments({
+      traineeId,
+      query
     })
   }
 
@@ -165,23 +174,16 @@ export class SubjectController {
     })
   }
 
-  /**
-   * API: Cancel Specific Subject Enrollment
-   * DELETE /subjects/:subjectId/trainees/:traineeId
-   * Hủy enrollment của trainee trong subject cụ thể
-   */
   @Delete(':subjectId/trainees/:traineeId')
-  @ZodSerializerDto(CancelSubjectEnrollmentResDto)
+  @ZodSerializerDto(MessageResDTO)
   async cancelSubjectEnrollment(
     @Param() { subjectId, traineeId }: SubjectTraineeParamsDto,
-    @Body() body: CancelSubjectEnrollmentBodyDto,
-    @ActiveRolePermissions('name') roleName: string
+    @Body() body: CancelSubjectEnrollmentBodyDto
   ) {
     return await this.subjectService.cancelSubjectEnrollment({
       subjectId,
       traineeId,
-      data: body,
-      roleName
+      data: body
     })
   }
 }

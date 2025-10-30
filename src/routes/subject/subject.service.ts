@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { round } from 'lodash'
 import { RoleName } from '~/shared/constants/auth.constant'
-import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
+import { SubjectInstructorRoleValue, SubjectStatus } from '~/shared/constants/subject.constant'
 import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
   isForeignKeyConstraintPrismaError,
@@ -11,10 +11,7 @@ import {
 import { CourseIdParamsType } from '~/shared/models/shared-course.model'
 import { SubjectIdParamsType, SubjectType } from '~/shared/models/shared-subject.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
-import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
-import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import {
   BulkSubjectCodeAlreadyExistsAtIndexException,
   BulkSubjectCreationFailedException,
@@ -24,8 +21,11 @@ import {
   DuplicateInstructorException,
   DuplicateTraineeEnrollmentException,
   InvalidTraineeSubmissionException,
+  SubjectAlreadyArchivedException,
+  SubjectCannotBeArchivedFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
-  SubjectDateOutsideCourseDateRangeException,
+  SubjectDatesOutsideCourseRangeException,
+  SubjectEnrollmentWindowClosedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
 } from './subject.error'
@@ -36,13 +36,18 @@ import {
   AssignTrainerResType,
   BulkCreateSubjectsBodyType,
   BulkCreateSubjectsResType,
+  CancelSubjectEnrollmentBodyType,
   CreateSubjectBodyType,
   GetAvailableTrainersResType,
   GetSubjectDetailResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
+  GetTraineeEnrollmentsQueryType,
+  GetTraineeEnrollmentsResType,
   LookupTraineesBodyType,
   LookupTraineesResType,
+  RemoveEnrollmentsBodyType,
+  RemoveEnrollmentsResType,
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
 } from './subject.model'
@@ -53,10 +58,7 @@ export class SubjectService {
   constructor(
     private readonly subjectRepo: SubjectRepo,
     private readonly sharedSubjectRepository: SharedSubjectRepository,
-    private readonly sharedDepartmentRepository: SharedDepartmentRepository,
-    private readonly sharedCourseRepository: SharedCourseRepository,
-    private readonly sharedUserRepository: SharedUserRepository,
-    private readonly sharedRoleRepository: SharedRoleRepository
+    private readonly sharedCourseRepository: SharedCourseRepository
   ) {}
 
   async list(query: GetSubjectsQueryType, userRoleName: string): Promise<GetSubjectsResType> {
@@ -98,7 +100,13 @@ export class SubjectService {
         throw CourseNotFoundException
       }
 
-      this.validateSubjectDatesWithinCourse(subject.startDate, subject.endDate, course.startDate, course.endDate)
+      this.ensureSubjectWithinCourseRange({
+        courseId: course.id,
+        courseStartDate: course.startDate,
+        courseEndDate: course.endDate,
+        subjectStartDate: subject.startDate,
+        subjectEndDate: subject.endDate
+      })
 
       const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
 
@@ -147,7 +155,13 @@ export class SubjectService {
           throw BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code)
         }
 
-        this.validateSubjectDatesWithinCourse(subject.startDate, subject.endDate, course.startDate, course.endDate)
+        this.ensureSubjectWithinCourseRange({
+          courseId: course.id,
+          courseStartDate: course.startDate,
+          courseEndDate: course.endDate,
+          subjectStartDate: subject.startDate,
+          subjectEndDate: subject.endDate
+        })
 
         const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
 
@@ -220,16 +234,21 @@ export class SubjectService {
       const startDate = data.startDate || existingSubject.startDate
       const endDate = data.endDate || existingSubject.endDate
 
-      // Validate subject dates nằm trong course dates (nếu có course)
-      if (course) {
-        this.validateSubjectDatesWithinCourse(startDate, endDate, course.startDate, course.endDate)
-      }
-
       // Tính lại duration nếu dates thay đổi
       const updatedData: UpdateSubjectBodyType & { duration?: number } = { ...data }
       if (data.startDate || data.endDate) {
         const durationInMonths = this.calculateDuration(startDate, endDate)
         updatedData.duration = durationInMonths
+      }
+
+      if (course) {
+        this.ensureSubjectWithinCourseRange({
+          courseId: course.id,
+          courseStartDate: course.startDate,
+          courseEndDate: course.endDate,
+          subjectStartDate: startDate,
+          subjectEndDate: endDate
+        })
       }
 
       const updatedSubject = await this.subjectRepo.update({ id, data: updatedData, updatedById })
@@ -258,9 +277,20 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
+    const subjectStatus = existingSubject.status as string
+
+    if (subjectStatus === SubjectStatus.ARCHIVED) {
+      throw SubjectAlreadyArchivedException
+    }
+
+    if (subjectStatus !== SubjectStatus.PLANNED && subjectStatus !== SubjectStatus.ON_GOING) {
+      throw SubjectCannotBeArchivedFromCurrentStatusException
+    }
+
     await this.subjectRepo.archive({
       id,
-      archivedById
+      archivedById,
+      status: subjectStatus
     })
 
     return 'Archived subject successfully'
@@ -362,6 +392,15 @@ export class SubjectService {
     if (!subject) {
       throw SubjectNotFoundException
     }
+
+    if (subject.startDate) {
+      const now = new Date()
+      const startDate = new Date(subject.startDate)
+
+      if (now >= startDate) {
+        throw SubjectEnrollmentWindowClosedException(subject.startDate)
+      }
+    }
     // Validation 1: Check course max trainee limit
     if (subject.courseId) {
       const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.courseId)
@@ -398,20 +437,40 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Xóa enrollments từ subject.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
-   */
-  async removeEnrollments({ subjectId, data }: { subjectId: string; data: any }): Promise<any> {
-    // Kiểm tra quyền
+  async getTraineeEnrollments({
+    traineeId,
+    query
+  }: {
+    traineeId: string
+    query: GetTraineeEnrollmentsQueryType
+  }): Promise<GetTraineeEnrollmentsResType> {
+    const { batchCode, status } = query
 
+    const result = await this.subjectRepo.getTraineeEnrollments({
+      traineeUserId: traineeId,
+      batchCode,
+      status
+    })
+
+    return {
+      trainee: result.trainee,
+      enrollments: result.enrollments,
+      totalCount: result.enrollments.length
+    }
+  }
+  async removeEnrollments({
+    subjectId,
+    data
+  }: {
+    subjectId: string
+    data: RemoveEnrollmentsBodyType
+  }): Promise<RemoveEnrollmentsResType> {
     // Kiểm tra subject tồn tại
     const subject = await this.sharedSubjectRepository.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
 
-    // Xóa enrollments
     const result = await this.subjectRepo.removeEnrollments({
       subjectId,
       traineeEids: data.traineeEids
@@ -425,74 +484,15 @@ export class SubjectService {
     }
   }
 
-  // =============== PRIVATE HELPER METHODS ===============
-
-  /**
-   * Validate subject dates phải nằm trong khoảng course dates
-   */
-  private validateSubjectDatesWithinCourse(
-    subjectStartDate: Date,
-    subjectEndDate: Date,
-    courseStartDate: Date,
-    courseEndDate: Date
-  ): void {
-    const subStart = new Date(subjectStartDate)
-    const subEnd = new Date(subjectEndDate)
-    const courStart = new Date(courseStartDate)
-    const courEnd = new Date(courseEndDate)
-
-    if (subStart < courStart || subEnd > courEnd) {
-      throw SubjectDateOutsideCourseDateRangeException
-    }
-  }
-
-  /**
-   * Tính duration (số tháng) dựa trên (endDate - startDate) / 30 ngày
-   * Trả về số thập phân với 2 chữ số
-   */
-  private calculateDuration(startDate: Date, endDate: Date): number {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const diffInMs = end.getTime() - start.getTime()
-    const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-    return round(diffInDays / 30, 2)
-  }
-
-  /**
-   * Cancel all course enrollments for a trainee in a batch
-   */
-
-  /**
-   * Get trainee enrollments
-   */
-  async getTraineeEnrollments({ traineeId, query }: { traineeId: string; query: any }): Promise<any> {
-    const result = await this.subjectRepo.getTraineeEnrollments({
-      traineeUserId: traineeId,
-      batchCode: query.batchCode,
-      status: query.status
-    })
-
-    return {
-      trainee: result.trainee,
-      enrollments: result.enrollments,
-      totalCount: result.enrollments.length
-    }
-  }
-
-  /**
-   * Cancel specific subject enrollment
-   */
   async cancelSubjectEnrollment({
     subjectId,
     traineeId,
-    data,
-    roleName
+    data
   }: {
     subjectId: string
     traineeId: string
-    data: any
-    roleName: string
-  }): Promise<any> {
+    data: CancelSubjectEnrollmentBodyType
+  }): Promise<string> {
     const success = await this.subjectRepo.cancelSubjectEnrollment({
       subjectId,
       traineeUserId: traineeId,
@@ -503,8 +503,43 @@ export class SubjectService {
       throw CannotCancelSubjectEnrollmentException
     }
 
-    return {
-      message: 'Enrollment cancelled successfully'
+    return 'Enrollment cancelled successfully'
+  }
+
+  private ensureSubjectWithinCourseRange({
+    courseId,
+    courseStartDate,
+    courseEndDate,
+    subjectStartDate,
+    subjectEndDate
+  }: {
+    courseId: string
+    courseStartDate: Date
+    courseEndDate: Date
+    subjectStartDate: Date
+    subjectEndDate: Date
+  }): void {
+    const subjectStart = new Date(subjectStartDate)
+    const subjectEnd = new Date(subjectEndDate)
+    const courseStart = new Date(courseStartDate)
+    const courseEnd = new Date(courseEndDate)
+
+    if (subjectStart < courseStart || subjectEnd > courseEnd) {
+      throw SubjectDatesOutsideCourseRangeException({
+        courseId,
+        courseStart,
+        courseEnd,
+        subjectStart,
+        subjectEnd
+      })
     }
+  }
+
+  private calculateDuration(startDate: Date, endDate: Date): number {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffInMs = end.getTime() - start.getTime()
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
+    return round(diffInDays / 30, 2)
   }
 }

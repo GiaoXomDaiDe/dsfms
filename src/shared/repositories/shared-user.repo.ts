@@ -196,6 +196,26 @@ export class SharedUserRepository {
     })
   }
 
+  async findActiveTrainers({ excludeUserIds = [] }: { excludeUserIds?: string[] } = {}): Promise<TrainerSummary[]> {
+    return this.prismaService.user.findMany({
+      where: {
+        deletedAt: null,
+        role: {
+          name: RoleName.TRAINER
+        },
+        ...(excludeUserIds.length > 0 ? { id: { notIn: excludeUserIds } } : {})
+      },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        departmentId: true
+      }
+    })
+  }
+
   async findActiveTraineesByEids(eids: string[]): Promise<TraineeIdLookup[]> {
     if (eids.length === 0) {
       return []

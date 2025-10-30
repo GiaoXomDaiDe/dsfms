@@ -17,17 +17,19 @@ import { StatusUpdaterService } from '~/shared/services/status-updater.service'
 import { SharedModule } from '~/shared/shared.module'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
+import { AssessmentModule } from './routes/assessment/assessment.module'
 import { AuthModule } from './routes/auth/auth.module'
 import { EmailModule } from './routes/email/email.module'
 import { GlobalFieldModule } from './routes/global-field/global-field.module'
 import { PermissionModule } from './routes/permission/permission.module'
 import { ProfileModule } from './routes/profile/profile.module'
 import { TemplateModule } from './routes/template/template.module'
-import { AssessmentModule } from './routes/assessment/assessment.module'
 
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
+    ScheduleModule.forRoot({
+      cronJobs: true
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env'

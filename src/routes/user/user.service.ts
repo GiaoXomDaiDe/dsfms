@@ -22,6 +22,7 @@ import {
   RoleIsDisabledException,
   RoleNotFoundException,
   TraineeProfileNotAllowedException,
+  TrainerAssignedToOngoingSubjectException,
   TrainerProfileNotAllowedException,
   UserAlreadyExistsException,
   UserIsNotDisabledException,
@@ -732,6 +733,13 @@ export class UserService {
 
       if (user.department && user.department.isActive !== true) {
         throw DepartmentIsDisabledException
+      }
+
+      if (user.role.name === RoleName.TRAINER) {
+        const ongoingSubjects = await this.userRepo.findOngoingSubjectsForTrainer(user.id)
+        if (ongoingSubjects.length > 0) {
+          throw TrainerAssignedToOngoingSubjectException(ongoingSubjects)
+        }
       }
 
       await this.userRepo.delete({
