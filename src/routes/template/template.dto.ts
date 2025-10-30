@@ -134,6 +134,20 @@ export class CreateTemplateFormDto {
   sections: CreateTemplateSectionDto[]
 }
 
+export class UpdateTemplateFormDto {
+  @IsNotEmpty()
+  @IsString()
+  name: string
+
+  @IsOptional()
+  @IsString()
+  description?: string
+
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string
+}
+
 // Response DTOs
 export class TemplateFieldResponseDto {
   id: string
