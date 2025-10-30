@@ -672,7 +672,7 @@ export class TemplateService {
     }
 
     // Update template status
-    const updatedTemplate = await this.templateRepository.updateTemplateStatus(templateId, newStatus)
+    const updatedTemplate = await this.templateRepository.updateTemplateStatus(templateId, newStatus, userContext.userId)
 
     return {
       success: true,
