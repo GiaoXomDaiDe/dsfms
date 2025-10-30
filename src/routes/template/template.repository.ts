@@ -367,12 +367,112 @@ export class TemplateRepository {
     })
   }
 
-  async findTemplatesByDepartment(departmentId: string) {
+  async findTemplatesByDepartment(departmentId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const whereCondition: any = {
+      departmentId
+    };
+
+    // If status is provided, add it to where condition, otherwise get all statuses
+    if (status) {
+      whereCondition.status = status;
+    }
+
     return this.prismaService.templateForm.findMany({
-      where: {
-        departmentId,
-        status: 'PUBLISHED'
+      where: whereCondition,
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        _count: {
+          select: {
+            sections: true
+          }
+        }
       },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+  }
+
+  async findTemplatesByCourse(courseId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const whereCondition: any = {
+      department: {
+        courses: {
+          some: {
+            id: courseId
+          }
+        }
+      }
+    };
+
+    // If status is provided, add it to where condition, otherwise get all statuses
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    return this.prismaService.templateForm.findMany({
+      where: whereCondition,
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        _count: {
+          select: {
+            sections: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+  }
+
+  async findTemplatesBySubject(subjectId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const whereCondition: any = {
+      department: {
+        courses: {
+          some: {
+            subjects: {
+              some: {
+                id: subjectId
+              }
+            }
+          }
+        }
+      }
+    };
+
+    // If status is provided, add it to where condition, otherwise get all statuses
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    return this.prismaService.templateForm.findMany({
+      where: whereCondition,
       include: {
         department: {
           select: {

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
+import { Controller, Post, Get, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
@@ -102,13 +102,16 @@ export class TemplateController {
   }
 
   /**
-   * GET /templates/department/:departmentId
+   * GET /templates/department/:departmentId?status=PUBLISHED
+   * Get templates by department with optional status filtering
    */
   @Get('department/:departmentId')
-  @IsPublic()
-  async getTemplatesByDepartment(@Param('departmentId') departmentId: string) {
+  async getTemplatesByDepartment(
+    @Param('departmentId') departmentId: string,
+    @Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED'
+  ) {
     try {
-      return await this.templateService.getTemplatesByDepartment(departmentId)
+      return await this.templateService.getTemplatesByDepartment(departmentId, status)
     } catch (error) {
       throw error
     }

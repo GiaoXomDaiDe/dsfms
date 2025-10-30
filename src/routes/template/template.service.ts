@@ -499,10 +499,10 @@ export class TemplateService {
   }
 
   /**
-   * Get templates by department
+   * Get templates by department with optional status filtering
    */
-  async getTemplatesByDepartment(departmentId: string) {
-    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId)
+  async getTemplatesByDepartment(departmentId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId, status)
 
     return {
       success: true,
