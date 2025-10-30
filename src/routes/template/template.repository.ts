@@ -111,6 +111,7 @@ export class TemplateRepository {
             createdByUserId,
             status: 'PENDING',
             templateContent: templateData.templateContent || '',
+            templateConfig: templateData.templateConfig,
             referFirstVersionId: null,
             templateSchema: templateSchema || null
           }
@@ -227,6 +228,7 @@ export class TemplateRepository {
           createdByUserId,
           status: 'PENDING',
           templateContent: templateData.templateContent || '',
+          templateConfig: templateData.templateConfig,
           referFirstVersionId: null,
           templateSchema: templateSchema || null
         }
