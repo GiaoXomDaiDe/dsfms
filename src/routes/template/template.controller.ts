@@ -52,6 +52,32 @@ export class TemplateController {
   }
 
   /**
+   * POST /templates/extract-fields-from-url
+   * Extract field names from DOCX file hosted on S3
+   * Body: { "url": "https://dsfms.s3.ap-southeast-1.amazonaws.com/docs/file.docx" }
+   */
+  @Post('extract-fields-from-url')
+  @IsPublic()
+  @ZodSerializerDto(ExtractFieldsResponseDTO)
+  async extractFieldsFromUrl(@Body() body: { url: string }) {
+    if (!body.url) {
+      throw new BadRequestException('URL is required')
+    }
+
+    if (!body.url.endsWith('.docx')) {
+      throw new BadRequestException('URL must point to a .docx file')
+    }
+
+    // Validate S3 URL format (optional but recommended)
+    const s3UrlPattern = /^https:\/\/.*\.s3\..*\.amazonaws\.com\/.*\.docx$/
+    if (!s3UrlPattern.test(body.url)) {
+      throw new BadRequestException('Invalid S3 URL format')
+    }
+
+    return await this.templateService.extractFieldsFromS3Url(body.url)
+  }
+
+  /**
    * POST /templates
    * Requires ADMINISTRATOR role authentication
    */
@@ -106,6 +132,7 @@ export class TemplateController {
    * Get templates by department with optional status filtering
    */
   @Get('department/:departmentId')
+  @IsPublic()
   async getTemplatesByDepartment(
     @Param('departmentId') departmentId: string,
     @Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED'
