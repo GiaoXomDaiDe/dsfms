@@ -55,7 +55,6 @@ export class TemplateController {
   /**
    * POST /templates/extract-fields-from-url
    * Extract field names from DOCX file hosted on S3
-   * Body: { "url": "https://dsfms.s3.ap-southeast-1.amazonaws.com/docs/file.docx" }
    */
   @Post('extract-fields-from-url')
   @IsPublic()
@@ -125,12 +124,13 @@ export class TemplateController {
   }
 
   /**
-   * GET /templates
+   * GET /templates?status=PUBLISHED
+   * Get all templates with optional status filtering
    */
   @Get()
-  async getAllTemplates() {
+  async getAllTemplates(@Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     try {
-      return await this.templateService.getAllTemplates()
+      return await this.templateService.getAllTemplates(status)
     } catch (error) {
       throw error
     }

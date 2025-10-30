@@ -632,10 +632,10 @@ export class TemplateService {
   }
 
   /**
-   * Get all templates
+   * Get all templates with optional status filtering
    */
-  async getAllTemplates() {
-    const templates = await this.templateRepository.findAllTemplates()
+  async getAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const templates = await this.templateRepository.findAllTemplates(status)
 
     return {
       success: true,

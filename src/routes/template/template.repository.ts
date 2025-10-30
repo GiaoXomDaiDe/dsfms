@@ -340,8 +340,16 @@ export class TemplateRepository {
     })
   }
 
-  async findAllTemplates() {
+  async findAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const whereCondition: any = {};
+
+    // If status is provided, add it to where condition, otherwise get all statuses
+    if (status) {
+      whereCondition.status = status;
+    }
+
     return this.prismaService.templateForm.findMany({
+      where: whereCondition,
       include: {
         department: {
           select: {
