@@ -275,6 +275,126 @@ export class TemplateService {
   }
 
   /**
+   * Extract field names from DOCX file hosted on S3
+   * Downloads the file from S3 URL and processes it similar to extractFieldsFromDocx
+   */
+  async extractFieldsFromS3Url(s3Url: string): Promise<{
+    success: boolean
+    message: string
+    fields: Array<{
+      fieldName: string
+      placeholder: string
+    }>
+    totalFields: number
+  }> {
+    try {
+      // Download file from S3 URL
+      const response = await fetch(s3Url)
+      
+      if (!response.ok) {
+        throw new BadRequestException(`Failed to download file from S3: ${response.status} ${response.statusText}`)
+      }
+
+      // Get the buffer from the response
+      const buffer = await response.arrayBuffer()
+      const fileBuffer = Buffer.from(buffer)
+
+      // Load file with pizzip
+      const zip = new PizZip(fileBuffer)
+
+      // Use docxtemplater to extract placeholders
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true
+      })
+
+      // Get full text from the DOCX file
+      const fullText = doc.getFullText()
+
+      // Extract all placeholders using regex
+      const tags = fullText.match(/\{[^}]+\}/g) || []
+      
+      // Process placeholders to get unique field names and detect parent sections
+      const fieldSet = new Set<string>()
+      const parentSections = new Set<string>()
+      const fields: Array<{ fieldName: string; placeholder: string }> = []
+
+      // First pass: identify section start tags (parent PART fields)
+      for (const tag of tags) {
+        const cleaned = tag.replace(/[{}]/g, '')
+        
+        // Detect section start tags (#sectionName)
+        if (cleaned.startsWith('#')) {
+          const sectionName = cleaned.substring(1)
+          parentSections.add(sectionName)
+        }
+      }
+
+      // Second pass: process all fields and include parent sections
+      for (const tag of tags) {
+        const cleaned = tag.replace(/[{}]/g, '')
+        
+        // Skip section control tags (^, /) but NOT start tags (#)
+        if (cleaned.startsWith('^') || cleaned.startsWith('/')) {
+          continue
+        }
+
+        // Handle section start tags (#sectionName) - these become PART fields
+        if (cleaned.startsWith('#')) {
+          const sectionName = cleaned.substring(1)
+          if (!fieldSet.has(sectionName)) {
+            fieldSet.add(sectionName)
+            fields.push({
+              fieldName: sectionName,
+              placeholder: `{${sectionName}}` // Convert to standard placeholder format
+            })
+          }
+          continue
+        }
+
+        // Skip fields with operators (calculated fields)
+        if (this.hasOperator(cleaned)) {
+          continue
+        }
+
+        // Add unique regular fields only
+        if (!fieldSet.has(cleaned)) {
+          fieldSet.add(cleaned)
+          fields.push({
+            fieldName: cleaned,
+            placeholder: tag
+          })
+        }
+      }
+
+      return {
+        success: true,
+        message: `Extracted ${fields.length} unique fields from S3 document`,
+        fields,
+        totalFields: fields.length
+      }
+    } catch (error) {
+      // Handle fetch errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new BadRequestException(`Failed to download file from S3: ${error.message}`)
+      }
+
+      // Handle docxtemplater errors
+      if (error.properties && error.properties.errors instanceof Array) {
+        const errorMessages = error.properties.errors
+          .map((err: any) => {
+            return `${err.name}: ${err.message} at ${err.part}`
+          })
+          .join('; ')
+        throw new BadRequestException(`Failed to parse template from S3: ${errorMessages}`)
+      }
+
+      // Handle other errors
+      throw new BadRequestException(`Failed to extract fields from S3 URL: ${error.message || 'Unknown error'}`)
+    }
+  }
+
+  /**
    * Create a complete template with sections and fields
    * Right now, ONLY ADMINISTRATOR role can create templates
    */
