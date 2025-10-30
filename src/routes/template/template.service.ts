@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, ForbiddenException } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import { TemplateRepository } from './template.repository'
@@ -422,14 +422,9 @@ export class TemplateService {
 
   /**
    * Create a complete template with sections and fields
-   * Right now, ONLY ADMINISTRATOR role can create templates
+   * Role validation is handled by RBAC guards
    */
-  async createTemplate(templateData: CreateTemplateFormDto, currentUser: any) {
-    // Check if user has ADMINISTRATOR role
-    if (currentUser.roleName !== 'ADMINISTRATOR') {
-      throw new ForbiddenException('Only ADMINISTRATOR role can create templates')
-    }
-
+  async createTemplate(templateData: CreateTemplateFormDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
     // Validate required fields
     if (!templateData.templateConfig) {
       throw new BadRequestException('templateConfig is required - must provide S3 URL to the original DOCX template')
@@ -475,7 +470,7 @@ export class TemplateService {
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
         templateData,
-        currentUser.userId,
+        userContext.userId,
         templateSchema
       )
 
@@ -637,10 +632,10 @@ export class TemplateService {
   }
 
   /**
-   * Get all templates
+   * Get all templates with optional status filtering
    */
-  async getAllTemplates() {
-    const templates = await this.templateRepository.findAllTemplates()
+  async getAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const templates = await this.templateRepository.findAllTemplates(status)
 
     return {
       success: true,
@@ -660,6 +655,30 @@ export class TemplateService {
       data: templates,
       message: 'Department templates retrieved successfully'
     };
+  }
+
+  /**
+   * Change template status
+   */
+  async changeTemplateStatus(
+    templateId: string, 
+    newStatus: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new BadRequestException('Template not found')
+    }
+
+    // Update template status
+    const updatedTemplate = await this.templateRepository.updateTemplateStatus(templateId, newStatus, userContext.userId)
+
+    return {
+      success: true,
+      data: updatedTemplate,
+      message: `Template status updated to ${newStatus} successfully`
+    }
   }
 
   /**

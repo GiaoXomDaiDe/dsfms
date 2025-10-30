@@ -1,8 +1,9 @@
-import { Controller, Post, Get, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto } from './template.dto'
 import { TemplateService } from './template.service'
 
@@ -54,7 +55,6 @@ export class TemplateController {
   /**
    * POST /templates/extract-fields-from-url
    * Extract field names from DOCX file hosted on S3
-   * Body: { "url": "https://dsfms.s3.ap-southeast-1.amazonaws.com/docs/file.docx" }
    */
   @Post('extract-fields-from-url')
   @IsPublic()
@@ -82,15 +82,25 @@ export class TemplateController {
    * Requires ADMINISTRATOR role authentication
    */
   @Post()
-  async createTemplate(@Body() createTemplateDto: CreateTemplateFormDto, @ActiveUser() currentUser: any) {
-    return await this.templateService.createTemplate(createTemplateDto, currentUser)
+  async createTemplate(
+    @Body() createTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.createTemplate(createTemplateDto, userContext)
   }
 
   /**
    * GET /templates/:id
    */
   @Get(':id')
-  @IsPublic()
   async getTemplateById(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateById(id)
@@ -105,7 +115,6 @@ export class TemplateController {
    * Useful for editing or cloning templates
    */
   @Get(':id/schema')
-  @IsPublic()
   async getTemplateSchema(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateSchemaById(id)
@@ -115,13 +124,13 @@ export class TemplateController {
   }
 
   /**
-   * GET /templates
+   * GET /templates?status=PUBLISHED
+   * Get all templates with optional status filtering
    */
   @Get()
-  @IsPublic()
-  async getAllTemplates() {
+  async getAllTemplates(@Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     try {
-      return await this.templateService.getAllTemplates()
+      return await this.templateService.getAllTemplates(status)
     } catch (error) {
       throw error
     }
@@ -132,13 +141,37 @@ export class TemplateController {
    * Get templates by department with optional status filtering
    */
   @Get('department/:departmentId')
-  @IsPublic()
   async getTemplatesByDepartment(
     @Param('departmentId') departmentId: string,
     @Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED'
   ) {
     try {
       return await this.templateService.getTemplatesByDepartment(departmentId, status)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PATCH /templates/:id/status
+   * Change template status
+   */
+  @Patch(':id/status')
+  async changeTemplateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.changeTemplateStatus(id, body.status, userContext)
     } catch (error) {
       throw error
     }

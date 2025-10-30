@@ -109,6 +109,7 @@ export class TemplateRepository {
             version: 1,
             departmentId: templateData.departmentId || undefined,
             createdByUserId,
+            updatedByUserId: createdByUserId,
             status: 'PENDING',
             templateContent: templateData.templateContent || '',
             templateConfig: templateData.templateConfig,
@@ -226,6 +227,7 @@ export class TemplateRepository {
           version: 1,
           departmentId: templateData.departmentId,
           createdByUserId,
+          updatedByUserId: createdByUserId,
           status: 'PENDING',
           templateContent: templateData.templateContent || '',
           templateConfig: templateData.templateConfig,
@@ -340,8 +342,15 @@ export class TemplateRepository {
     })
   }
 
-  async findAllTemplates() {
+  async findAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const whereCondition: any = {};
+
+    if (status) {
+      whereCondition.status = status;
+    }
+
     return this.prismaService.templateForm.findMany({
+      where: whereCondition,
       include: {
         department: {
           select: {
@@ -502,10 +511,14 @@ export class TemplateRepository {
     })
   }
 
-  async updateTemplateStatus(id: string, status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+  async updateTemplateStatus(id: string, status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', updatedByUserId: string) {
     return this.prismaService.templateForm.update({
       where: { id },
-      data: { status }
+      data: { 
+        status,
+        updatedByUserId,
+        updatedAt: new Date()
+      }
     })
   }
 
