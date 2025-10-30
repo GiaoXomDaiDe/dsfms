@@ -120,8 +120,13 @@ export class CreateTemplateFormDto {
   @IsUUID()
   departmentId: string
 
-  @IsOptional()
-  templateContent?: string // Will be "test later" for now
+  @IsNotEmpty()
+  @IsString()
+  templateContent: string
+
+  @IsNotEmpty()
+  @IsString()
+  templateConfig: string
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -164,6 +169,7 @@ export class TemplateFormResponseDto {
   createdAt: Date
   updatedAt: Date
   templateContent?: string
+  templateConfig?: string
   templateSchema?: any
   sections: TemplateSectionResponseDto[]
 }

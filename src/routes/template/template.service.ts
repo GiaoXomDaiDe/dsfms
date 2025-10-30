@@ -430,6 +430,11 @@ export class TemplateService {
       throw new ForbiddenException('Only ADMINISTRATOR role can create templates')
     }
 
+    // Validate required fields
+    if (!templateData.templateConfig) {
+      throw new BadRequestException('templateConfig is required - must provide S3 URL to the original DOCX template')
+    }
+
     // Validate department exists
     const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
     if (!departmentExists) {

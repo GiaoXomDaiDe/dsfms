@@ -419,6 +419,7 @@ model TemplateForm {
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @default(now()) @updatedAt
   templateContent      String            @db.VarChar(500)
+  templateConfig       String            @db.VarChar(500)
   referFirstVersionId  String?           @db.Uuid
   templateSchema       Json?
   createdByUser        User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
