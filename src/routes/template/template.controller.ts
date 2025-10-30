@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto } from './template.dto'
 import { TemplateService } from './template.service'
 
@@ -82,15 +83,25 @@ export class TemplateController {
    * Requires ADMINISTRATOR role authentication
    */
   @Post()
-  async createTemplate(@Body() createTemplateDto: CreateTemplateFormDto, @ActiveUser() currentUser: any) {
-    return await this.templateService.createTemplate(createTemplateDto, currentUser)
+  async createTemplate(
+    @Body() createTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.createTemplate(createTemplateDto, userContext)
   }
 
   /**
    * GET /templates/:id
    */
   @Get(':id')
-  @IsPublic()
   async getTemplateById(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateById(id)
@@ -105,7 +116,6 @@ export class TemplateController {
    * Useful for editing or cloning templates
    */
   @Get(':id/schema')
-  @IsPublic()
   async getTemplateSchema(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateSchemaById(id)
@@ -118,7 +128,6 @@ export class TemplateController {
    * GET /templates
    */
   @Get()
-  @IsPublic()
   async getAllTemplates() {
     try {
       return await this.templateService.getAllTemplates()
@@ -132,7 +141,6 @@ export class TemplateController {
    * Get templates by department with optional status filtering
    */
   @Get('department/:departmentId')
-  @IsPublic()
   async getTemplatesByDepartment(
     @Param('departmentId') departmentId: string,
     @Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED'
