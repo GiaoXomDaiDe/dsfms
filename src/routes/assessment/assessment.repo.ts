@@ -795,6 +795,8 @@ export class AssessmentRepo {
       select: {
         traineeId: true,
         createdById: true,
+        subjectId: true,
+        courseId: true,
         template: {
           select: {
             department: {
@@ -809,6 +811,19 @@ export class AssessmentRepo {
             instructors: {
               select: {
                 trainerUserId: true
+              }
+            }
+          }
+        },
+        course: {
+          select: {
+            subjects: {
+              select: {
+                instructors: {
+                  select: {
+                    trainerUserId: true
+                  }
+                }
               }
             }
           }
@@ -828,9 +843,19 @@ export class AssessmentRepo {
       return true
     }
 
-    // Trainer can access if assigned to the subject
-    if (userRole === 'TRAINER' && assessment.subject?.instructors.some(inst => inst.trainerUserId === userId)) {
-      return true
+    // Trainer can access if assigned to the subject or course
+    if (userRole === 'TRAINER') {
+      // Check if trainer is assigned to the specific subject (for subject-level assessments)
+      if (assessment.subject?.instructors.some(inst => inst.trainerUserId === userId)) {
+        return true
+      }
+      
+      // Check if trainer is assigned to any subject in the course (for course-level assessments)
+      if (assessment.course?.subjects.some(subject => 
+        subject.instructors.some(inst => inst.trainerUserId === userId)
+      )) {
+        return true
+      }
     }
 
     // Department head can access assessments in their department

@@ -276,7 +276,7 @@ export class TemplateService {
 
   /**
    * Create a complete template with sections and fields
-   * Only ADMINISTRATOR role can create templates
+   * Right now, ONLY ADMINISTRATOR role can create templates
    */
   async createTemplate(templateData: CreateTemplateFormDto, currentUser: any) {
     // Check if user has ADMINISTRATOR role
@@ -291,6 +291,32 @@ export class TemplateService {
     }
 
     try {
+      // Validate that any field-level role requirement (roleRequired) matches the section's editBy
+      // If roleRequired is set (not null/undefined), it must be equal to the section.editBy value.
+      for (const section of templateData.sections) {
+        if (!section.fields || !Array.isArray(section.fields)) continue
+        for (const field of section.fields) {
+          // Only validate when roleRequired is explicitly provided
+          if (field.roleRequired !== undefined && field.roleRequired !== null) {
+            // Compare values directly (do not hardcode 'TRAINER' or 'TRAINEE')
+            if (String(field.roleRequired) !== String(section.editBy)) {
+              throw new BadRequestException(
+                `Field '${field.fieldName}' in section '${section.label}' has required Role ='${field.roleRequired}' which does not match section.editBy='${section.editBy}'`
+              )
+            }
+          }
+
+          // Validate that signature fields must have roleRequired set
+          if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+            if (!field.roleRequired) {
+              throw new BadRequestException(
+                `Signature field '${field.fieldName}' in section '${section.label}' must have roleRequired set to either TRAINEE or TRAINER`
+              )
+            }
+          }
+        }
+      }
+
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
