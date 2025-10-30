@@ -658,6 +658,30 @@ export class TemplateService {
   }
 
   /**
+   * Change template status
+   */
+  async changeTemplateStatus(
+    templateId: string, 
+    newStatus: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new BadRequestException('Template not found')
+    }
+
+    // Update template status
+    const updatedTemplate = await this.templateRepository.updateTemplateStatus(templateId, newStatus)
+
+    return {
+      success: true,
+      data: updatedTemplate,
+      message: `Template status updated to ${newStatus} successfully`
+    }
+  }
+
+  /**
    * Generate nested schema based on field hierarchy (parent-child relationships)
    */
   private generateNestedSchemaFromSections(sections: any[]): Record<string, any> {

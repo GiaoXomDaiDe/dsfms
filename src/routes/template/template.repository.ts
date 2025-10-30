@@ -343,7 +343,6 @@ export class TemplateRepository {
   async findAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     const whereCondition: any = {};
 
-    // If status is provided, add it to where condition, otherwise get all statuses
     if (status) {
       whereCondition.status = status;
     }

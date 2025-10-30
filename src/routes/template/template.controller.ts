@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
@@ -147,6 +147,31 @@ export class TemplateController {
   ) {
     try {
       return await this.templateService.getTemplatesByDepartment(departmentId, status)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PATCH /templates/:id/status
+   * Change template status
+   */
+  @Patch(':id/status')
+  async changeTemplateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.changeTemplateStatus(id, body.status, userContext)
     } catch (error) {
       throw error
     }
