@@ -541,4 +541,62 @@ export class TemplateRepository {
     })
     return !!department
   }
+
+  /**
+   * Check if template has been used to create any assessment forms
+   */
+  async templateHasAssessments(templateId: string): Promise<boolean> {
+    const assessmentCount = await this.prismaService.assessmentForm.count({
+      where: { templateId }
+    })
+    return assessmentCount > 0
+  }
+
+  /**
+   * Check if template name already exists (excluding current template)
+   */
+  async templateNameExists(name: string, excludeTemplateId?: string): Promise<boolean> {
+    const template = await this.prismaService.templateForm.findFirst({
+      where: {
+        name,
+        ...(excludeTemplateId && { id: { not: excludeTemplateId } })
+      },
+      select: { id: true }
+    })
+    return !!template
+  }
+
+  /**
+   * Update template basic information
+   */
+  async updateTemplateBasicInfo(
+    templateId: string,
+    updateData: { name?: string; description?: string; departmentId?: string },
+    updatedByUserId: string
+  ) {
+    return this.prismaService.templateForm.update({
+      where: { id: templateId },
+      data: {
+        ...(updateData.name && { name: updateData.name }),
+        ...(updateData.description !== undefined && { description: updateData.description }),
+        ...(updateData.departmentId && { departmentId: updateData.departmentId }),
+        updatedByUserId,
+        updatedAt: new Date()
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        departmentId: true,
+        updatedAt: true,
+        updatedByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    })
+  }
 }

@@ -4,7 +4,7 @@ import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
-import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto } from './template.dto'
+import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto } from './template.dto'
 import { TemplateService } from './template.service'
 
 @Controller('templates')
@@ -172,6 +172,31 @@ export class TemplateController {
 
     try {
       return await this.templateService.changeTemplateStatus(id, body.status, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PATCH /templates/:id
+   * Update template basic information (name, description, departmentId)
+   */
+  @Patch(':id')
+  async updateTemplateForm(
+    @Param('id') id: string,
+    @Body() updateData: UpdateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateTemplateForm(id, updateData, userContext)
     } catch (error) {
       throw error
     }

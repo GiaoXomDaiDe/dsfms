@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import { TemplateRepository } from './template.repository'
-import { CreateTemplateFormDto } from './template.dto'
+import { CreateTemplateFormDto, UpdateTemplateFormDto } from './template.dto'
 
 interface PlaceholderInfo {
   type: 'field' | 'section' | 'condition' | 'inverted'
@@ -678,6 +678,54 @@ export class TemplateService {
       success: true,
       data: updatedTemplate,
       message: `Template status updated to ${newStatus} successfully`
+    }
+  }
+
+  /**
+   * Update template basic information (name, description, departmentId)
+   */
+  async updateTemplateForm(
+    templateId: string,
+    updateData: UpdateTemplateFormDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new BadRequestException('Template not found')
+    }
+
+    // Check if name is being updated and if it's unique
+    if (updateData.name && updateData.name !== existingTemplate.name) {
+      const nameExists = await this.templateRepository.templateNameExists(updateData.name, templateId)
+      if (nameExists) {
+        throw new BadRequestException(`Template name '${updateData.name}' already exists`)
+      }
+    }
+
+    // If trying to change department, check if template has been used in assessments
+    if (updateData.departmentId && updateData.departmentId !== existingTemplate.departmentId) {
+      const hasAssessments = await this.templateRepository.templateHasAssessments(templateId)
+      if (hasAssessments) {
+        throw new BadRequestException('Cannot change department for templates that have been used to create assessment forms')
+      }
+    }
+
+    // If departmentId is being updated, validate that the new department exists
+    if (updateData.departmentId) {
+      const departmentExists = await this.templateRepository.validateDepartmentExists(updateData.departmentId)
+      if (!departmentExists) {
+        throw new BadRequestException(`Department with ID '${updateData.departmentId}' does not exist`)
+      }
+    }
+
+    // Update template
+    const updatedTemplate = await this.templateRepository.updateTemplateBasicInfo(templateId, updateData, userContext.userId)
+
+    return {
+      success: true,
+      data: updatedTemplate,
+      message: 'Template updated successfully'
     }
   }
 
