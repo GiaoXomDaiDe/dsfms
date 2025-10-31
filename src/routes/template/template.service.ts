@@ -1,8 +1,39 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import { TemplateRepository } from './template.repository'
 import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
+import {
+  InvalidFileTypeError,
+  DocxParsingError,
+  TemplateConfigRequiredError,
+  DepartmentNotFoundError,
+  TemplateNameAlreadyExistsError,
+  RoleRequiredMismatchError,
+  SignatureFieldMissingRoleError,
+  TemplateCreationFailedError,
+  TemplateNotFoundError,
+  S3DownloadError,
+  S3FetchError,
+  S3DocxParsingError,
+  S3ExtractionError,
+  OriginalTemplateNotFoundError,
+  TemplateHasAssessmentsError,
+  TemplateVersionCreationError
+} from './template.error'
+import {
+  TEMPLATE_PARSED_SUCCESSFULLY,
+  TEMPLATE_FIELDS_EXTRACTED,
+  TEMPLATE_FIELDS_EXTRACTED_FROM_S3,
+  TEMPLATE_CREATED_SUCCESSFULLY,
+  TEMPLATE_RETRIEVED_SUCCESSFULLY,
+  TEMPLATE_SCHEMA_RETRIEVED_SUCCESSFULLY,
+  TEMPLATES_RETRIEVED_SUCCESSFULLY,
+  DEPARTMENT_TEMPLATES_RETRIEVED_SUCCESSFULLY,
+  TEMPLATE_UPDATED_SUCCESSFULLY,
+  TEMPLATE_STATUS_UPDATED_SUCCESSFULLY,
+  TEMPLATE_VERSION_CREATED_SUCCESSFULLY
+} from './template.message'
 
 interface PlaceholderInfo {
   type: 'field' | 'section' | 'condition' | 'inverted'
@@ -24,9 +55,9 @@ export class TemplateService {
     placeholders: string[]
   }> {
     try {
-      // Validate type của file
+      // Validate type of file
       if (!file.originalname.endsWith('.docx')) {
-        throw new BadRequestException('Only .docx files are allowed')
+        throw new InvalidFileTypeError()
       }
 
       // load bằng pizzip
@@ -59,7 +90,7 @@ export class TemplateService {
 
       return {
         success: true,
-        message: 'Template parsed successfully',
+        message: TEMPLATE_PARSED_SUCCESSFULLY,
         schema,
         placeholders
       }
@@ -73,11 +104,11 @@ export class TemplateService {
             return `${err.name}: ${err.message} at ${err.part}`
           })
           .join('; ')
-        throw new BadRequestException(`Failed to parse template: ${errorMessages}`)
+        throw new DocxParsingError(errorMessages)
       }
 
       // xử lí 400
-      throw new BadRequestException(`Failed to parse template: ${error.message || 'Unknown error'}`)
+      throw new DocxParsingError(error.message || 'Unknown error')
     }
   }
 
@@ -304,7 +335,7 @@ export class TemplateService {
     try {
       // Validate file type
       if (!file.originalname.endsWith('.docx')) {
-        throw new BadRequestException('Only .docx files are allowed')
+        throw new InvalidFileTypeError()
       }
 
       // Load file with pizzip
@@ -327,7 +358,7 @@ export class TemplateService {
 
       return {
         success: true,
-        message: `Extracted ${structuredFields.length} unique fields from document`,
+        message: TEMPLATE_FIELDS_EXTRACTED(structuredFields.length),
         fields: structuredFields,
         totalFields: structuredFields.length
       }
@@ -339,11 +370,11 @@ export class TemplateService {
             return `${err.name}: ${err.message} at ${err.part}`
           })
           .join('; ')
-        throw new BadRequestException(`Failed to parse template: ${errorMessages}`)
+        throw new DocxParsingError(errorMessages)
       }
 
       // Handle other errors
-      throw new BadRequestException(`Failed to parse template: ${error.message || 'Unknown error'}`)
+      throw new DocxParsingError(error.message || 'Unknown error')
     }
   }
 
@@ -368,7 +399,7 @@ export class TemplateService {
       const response = await fetch(s3Url)
       
       if (!response.ok) {
-        throw new BadRequestException(`Failed to download file from S3: ${response.status} ${response.statusText}`)
+        throw new S3DownloadError(response.status, response.statusText)
       }
 
       // Get the buffer from the response
@@ -395,14 +426,14 @@ export class TemplateService {
 
       return {
         success: true,
-        message: `Extracted ${structuredFields.length} unique fields from S3 document`,
+        message: TEMPLATE_FIELDS_EXTRACTED_FROM_S3(structuredFields.length),
         fields: structuredFields,
         totalFields: structuredFields.length
       }
     } catch (error) {
       // Handle fetch errors
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new BadRequestException(`Failed to download file from S3: ${error.message}`)
+        throw new S3FetchError(error.message)
       }
 
       // Handle docxtemplater errors
@@ -412,11 +443,11 @@ export class TemplateService {
             return `${err.name}: ${err.message} at ${err.part}`
           })
           .join('; ')
-        throw new BadRequestException(`Failed to parse template from S3: ${errorMessages}`)
+        throw new S3DocxParsingError(errorMessages)
       }
 
       // Handle other errors
-      throw new BadRequestException(`Failed to extract fields from S3 URL: ${error.message || 'Unknown error'}`)
+      throw new S3ExtractionError(error.message || 'Unknown error')
     }
   }
 
@@ -427,19 +458,19 @@ export class TemplateService {
   async createTemplate(templateData: CreateTemplateFormDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
     // Validate required fields
     if (!templateData.templateConfig) {
-      throw new BadRequestException('templateConfig is required - must provide S3 URL to the original DOCX template')
+      throw new TemplateConfigRequiredError()
     }
 
     // Validate department exists
     const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
     if (!departmentExists) {
-      throw new BadRequestException(`Department with ID '${templateData.departmentId}' does not exist`)
+      throw new DepartmentNotFoundError(templateData.departmentId)
     }
 
     // Check if template name already exists
     const nameExists = await this.templateRepository.templateNameExists(templateData.name)
     if (nameExists) {
-      throw new BadRequestException(`Template name '${templateData.name}' already exists`)
+      throw new TemplateNameAlreadyExistsError(templateData.name)
     }
 
     try {
@@ -451,18 +482,14 @@ export class TemplateService {
           if (field.roleRequired !== undefined && field.roleRequired !== null) {
             // Compare values directly (do not hardcode 'TRAINER' or 'TRAINEE')
             if (String(field.roleRequired) !== String(section.editBy)) {
-              throw new BadRequestException(
-                `Field '${field.fieldName}' in section '${section.label}' has required Role ='${field.roleRequired}' which does not match section.editBy='${section.editBy}'`
-              )
+              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
             }
           }
 
           // Validate that signature fields must have roleRequired set
           if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
             if (!field.roleRequired) {
-              throw new BadRequestException(
-                `Signature field '${field.fieldName}' in section '${section.label}' must have roleRequired set to either TRAINEE or TRAINER`
-              )
+              throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
             }
           }
         }
@@ -482,10 +509,10 @@ export class TemplateService {
       return {
         success: true,
         data: result,
-        message: 'Template created successfully'
+        message: TEMPLATE_CREATED_SUCCESSFULLY
       }
     } catch (error) {
-      throw new BadRequestException(`Failed to create template: ${error.message}`)
+      throw new TemplateCreationFailedError(error.message)
     }
   }
 
@@ -496,13 +523,13 @@ export class TemplateService {
     const template = await this.templateRepository.findTemplateById(id)
 
     if (!template) {
-      throw new BadRequestException('Template not found')
+      throw new TemplateNotFoundError()
     }
 
     return {
       success: true,
       data: template,
-      message: 'Template retrieved successfully'
+      message: TEMPLATE_RETRIEVED_SUCCESSFULLY
     }
   }
 
@@ -514,7 +541,7 @@ export class TemplateService {
     const template = await this.templateRepository.findTemplateById(id)
 
     if (!template) {
-      throw new BadRequestException('Template not found')
+      throw new TemplateNotFoundError()
     }
 
     // Transform the template data to match the create template format for FE editing
@@ -550,7 +577,7 @@ export class TemplateService {
         department: template.department,
         createdByUser: template.createdByUser
       },
-      message: 'Template schema retrieved successfully'
+      message: TEMPLATE_SCHEMA_RETRIEVED_SUCCESSFULLY
     }
   }
 
@@ -645,7 +672,7 @@ export class TemplateService {
     return {
       success: true,
       data: templates,
-      message: 'Templates retrieved successfully'
+      message: TEMPLATES_RETRIEVED_SUCCESSFULLY
     }
   }
 
@@ -658,7 +685,7 @@ export class TemplateService {
     return {
       success: true,
       data: templates,
-      message: 'Department templates retrieved successfully'
+      message: DEPARTMENT_TEMPLATES_RETRIEVED_SUCCESSFULLY
     };
   }
 
@@ -673,7 +700,7 @@ export class TemplateService {
     // Check if template exists
     const existingTemplate = await this.templateRepository.findTemplateById(templateId)
     if (!existingTemplate) {
-      throw new BadRequestException('Template not found')
+      throw new TemplateNotFoundError()
     }
 
     // Xem coi đây phải là review action hay không
@@ -691,7 +718,7 @@ export class TemplateService {
     return {
       success: true,
       data: updatedTemplate,
-      message: `Template status updated to ${newStatus} successfully`
+      message: TEMPLATE_STATUS_UPDATED_SUCCESSFULLY(newStatus)
     }
   }
 
@@ -706,14 +733,14 @@ export class TemplateService {
     // Check if template exists
     const existingTemplate = await this.templateRepository.findTemplateById(templateId)
     if (!existingTemplate) {
-      throw new BadRequestException('Template not found')
+      throw new TemplateNotFoundError()
     }
 
     // Check if name is being updated and if it's unique
     if (updateData.name && updateData.name !== existingTemplate.name) {
       const nameExists = await this.templateRepository.templateNameExists(updateData.name, templateId)
       if (nameExists) {
-        throw new BadRequestException(`Template name '${updateData.name}' already exists`)
+        throw new TemplateNameAlreadyExistsError(updateData.name)
       }
     }
 
@@ -721,7 +748,7 @@ export class TemplateService {
     if (updateData.departmentId && updateData.departmentId !== existingTemplate.departmentId) {
       const hasAssessments = await this.templateRepository.templateHasAssessments(templateId)
       if (hasAssessments) {
-        throw new BadRequestException('Cannot change department for templates that have been used to create assessment forms')
+        throw new TemplateHasAssessmentsError()
       }
     }
 
@@ -729,7 +756,7 @@ export class TemplateService {
     if (updateData.departmentId) {
       const departmentExists = await this.templateRepository.validateDepartmentExists(updateData.departmentId)
       if (!departmentExists) {
-        throw new BadRequestException(`Department with ID '${updateData.departmentId}' does not exist`)
+        throw new DepartmentNotFoundError(updateData.departmentId)
       }
     }
 
@@ -739,7 +766,7 @@ export class TemplateService {
     return {
       success: true,
       data: updatedTemplate,
-      message: 'Template updated successfully'
+      message: TEMPLATE_UPDATED_SUCCESSFULLY
     }
   }
 
@@ -864,7 +891,7 @@ export class TemplateService {
     // Check if original template exists
     const originalTemplate = await this.templateRepository.findTemplateById(templateVersionData.originalTemplateId)
     if (!originalTemplate) {
-      throw new BadRequestException('Original template not found')
+      throw new OriginalTemplateNotFoundError()
     }
 
     // Validate that any field-level role requirement (roleRequired) matches the section's editBy
@@ -875,18 +902,14 @@ export class TemplateService {
         if (field.roleRequired !== undefined && field.roleRequired !== null) {
           // Compare values directly
           if (String(field.roleRequired) !== String(section.editBy)) {
-            throw new BadRequestException(
-              `Field '${field.fieldName}' in section '${section.label}' has required Role ='${field.roleRequired}' which does not match section.editBy='${section.editBy}'`
-            )
+            throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
           }
         }
 
         // Validate that signature fields must have roleRequired set
         if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
           if (!field.roleRequired) {
-            throw new BadRequestException(
-              `Signature field '${field.fieldName}' in section '${section.label}' must have roleRequired set to either TRAINEE or TRAINER`
-            )
+            throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
           }
         }
       }
@@ -931,10 +954,10 @@ export class TemplateService {
       return {
         success: true,
         data: result,
-        message: 'Template version created successfully'
+        message: TEMPLATE_VERSION_CREATED_SUCCESSFULLY
       }
     } catch (error) {
-      throw new BadRequestException(`Failed to create template version: ${error.message}`)
+      throw new TemplateVersionCreationError(error.message)
     }
   }
 
