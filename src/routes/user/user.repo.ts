@@ -228,7 +228,7 @@ export class UserRepo {
       where: {
         deletedAt: null,
         status: SubjectStatus.ON_GOING,
-        instructors: {
+        examiners: {
           some: {
             trainerUserId: trainerId
           }

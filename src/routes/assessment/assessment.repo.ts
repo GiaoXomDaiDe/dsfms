@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common'
-import { AssessmentStatus, AssessmentSectionStatus, Prisma } from '@prisma/client'
-import {
-  CreateAssessmentBodyType,
-  AssessmentFormResType,
-  GetAssessmentsQueryType,
-  GetAssessmentsResType,
-  GetAssessmentDetailResType
-} from './assessment.model'
+import { AssessmentSectionStatus, AssessmentStatus, Prisma } from '@prisma/client'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
+import {
+  AssessmentFormResType,
+  CreateAssessmentBodyType,
+  GetAssessmentDetailResType,
+  GetAssessmentsQueryType,
+  GetAssessmentsResType
+} from './assessment.model'
 
 @Injectable()
 @SerializeAll()
@@ -25,15 +25,17 @@ export class AssessmentRepo {
   /**
    * Get all enrolled trainees for a specific subject
    */
-  async getEnrolledTraineesForSubject(subjectId: string): Promise<Array<{
-    id: string;
-    eid: string;
-    firstName: string;
-    lastName: string;
-    middleName: string | null;
-    email: string;
-    enrollmentStatus: string;
-  }>> {
+  async getEnrolledTraineesForSubject(subjectId: string): Promise<
+    Array<{
+      id: string
+      eid: string
+      firstName: string
+      lastName: string
+      middleName: string | null
+      email: string
+      enrollmentStatus: string
+    }>
+  > {
     const enrolledTrainees = await this.prisma.user.findMany({
       where: {
         status: 'ACTIVE',
@@ -67,7 +69,7 @@ export class AssessmentRepo {
       }
     })
 
-    return enrolledTrainees.map(trainee => ({
+    return enrolledTrainees.map((trainee) => ({
       id: trainee.id,
       eid: trainee.eid,
       firstName: trainee.firstName,
@@ -81,15 +83,17 @@ export class AssessmentRepo {
   /**
    * Get all enrolled trainees for all subjects in a specific course
    */
-  async getEnrolledTraineesForCourse(courseId: string): Promise<Array<{
-    id: string;
-    eid: string;
-    firstName: string;
-    lastName: string;
-    middleName: string | null;
-    email: string;
-    enrollmentStatus: string;
-  }>> {
+  async getEnrolledTraineesForCourse(courseId: string): Promise<
+    Array<{
+      id: string
+      eid: string
+      firstName: string
+      lastName: string
+      middleName: string | null
+      email: string
+      enrollmentStatus: string
+    }>
+  > {
     const enrolledTrainees = await this.prisma.user.findMany({
       where: {
         status: 'ACTIVE',
@@ -129,7 +133,7 @@ export class AssessmentRepo {
       distinct: ['id'] // Ensure unique trainees even if enrolled in multiple subjects
     })
 
-    return enrolledTrainees.map(trainee => ({
+    return enrolledTrainees.map((trainee) => ({
       id: trainee.id,
       eid: trainee.eid,
       firstName: trainee.firstName,
@@ -331,9 +335,10 @@ export class AssessmentRepo {
       }
     })
 
-    return existingAssessments.map(assessment => ({
+    return existingAssessments.map((assessment) => ({
       traineeId: assessment.traineeId,
-      traineeName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
+      traineeName:
+        `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
     }))
   }
 
@@ -366,9 +371,10 @@ export class AssessmentRepo {
       }
     })
 
-    return existingAssessments.map(assessment => ({
+    return existingAssessments.map((assessment) => ({
       traineeId: assessment.traineeId,
-      traineeName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim(),
+      traineeName:
+        `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim(),
       assessmentId: assessment.id
     }))
   }
@@ -530,7 +536,7 @@ export class AssessmentRepo {
     if (subjectId) whereClause.subjectId = subjectId
     if (courseId) whereClause.courseId = courseId
     if (traineeId) whereClause.traineeId = traineeId
-    
+
     if (fromDate || toDate) {
       whereClause.occuranceDate = {}
       if (fromDate) whereClause.occuranceDate.gte = fromDate
@@ -545,10 +551,7 @@ export class AssessmentRepo {
         where: whereClause,
         skip,
         take: limit,
-        orderBy: [
-          { occuranceDate: 'desc' },
-          { createdAt: 'desc' }
-        ],
+        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
         include: {
           template: {
             select: {
@@ -807,7 +810,7 @@ export class AssessmentRepo {
         },
         subject: {
           select: {
-            instructors: {
+            examiners: {
               select: {
                 trainerUserId: true
               }
@@ -818,7 +821,7 @@ export class AssessmentRepo {
           select: {
             subjects: {
               select: {
-                instructors: {
+                examiners: {
                   select: {
                     trainerUserId: true
                   }
@@ -845,14 +848,14 @@ export class AssessmentRepo {
     // Trainer can access if assigned to the subject or course
     if (userRole === 'TRAINER') {
       // Check if trainer is assigned to the specific subject (for subject-level assessments)
-      if (assessment.subject?.instructors.some(inst => inst.trainerUserId === userId)) {
+      if (assessment.subject?.examiners.some((inst) => inst.trainerUserId === userId)) {
         return true
       }
-      
+
       // Check if trainer is assigned to any subject in the course (for course-level assessments)
-      if (assessment.course?.subjects.some(subject => 
-        subject.instructors.some(inst => inst.trainerUserId === userId)
-      )) {
+      if (
+        assessment.course?.subjects.some((subject) => subject.examiners.some((inst) => inst.trainerUserId === userId))
+      ) {
         return true
       }
     }
@@ -882,7 +885,7 @@ export class AssessmentRepo {
     search?: string
   ) {
     // First verify that the trainer is assigned to this subject
-    const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
+    const trainerAssignment = await this.prisma.assessmentExaminer.findFirst({
       where: {
         subjectId,
         trainerUserId: trainerId
@@ -902,7 +905,7 @@ export class AssessmentRepo {
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
-          { 
+          {
             trainee: {
               OR: [
                 { firstName: { contains: search, mode: 'insensitive' } },
@@ -977,12 +980,13 @@ export class AssessmentRepo {
     const totalPages = Math.ceil(totalItems / limit)
 
     // Transform data to match the expected format
-    const transformedAssessments = assessments.map(assessment => ({
+    const transformedAssessments = assessments.map((assessment) => ({
       ...assessment,
       trainee: {
         id: assessment.trainee.id,
         eid: assessment.trainee.eid,
-        fullName: `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
+        fullName:
+          `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
         email: assessment.trainee.email
       }
     }))
@@ -1009,7 +1013,7 @@ export class AssessmentRepo {
     search?: string
   ) {
     // First verify that the trainer is assigned to this course (through subjects)
-    const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
+    const trainerAssignment = await this.prisma.assessmentExaminer.findFirst({
       where: {
         trainerUserId: trainerId,
         subject: {
@@ -1031,7 +1035,7 @@ export class AssessmentRepo {
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
-          { 
+          {
             trainee: {
               OR: [
                 { firstName: { contains: search, mode: 'insensitive' } },
@@ -1099,12 +1103,13 @@ export class AssessmentRepo {
     const totalPages = Math.ceil(totalItems / limit)
 
     // Transform data to match the expected format
-    const transformedAssessments = assessments.map(assessment => ({
+    const transformedAssessments = assessments.map((assessment) => ({
       ...assessment,
       trainee: {
         id: assessment.trainee.id,
         eid: assessment.trainee.eid,
-        fullName: `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
+        fullName:
+          `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
         email: assessment.trainee.email
       }
     }))

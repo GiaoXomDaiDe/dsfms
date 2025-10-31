@@ -1,15 +1,27 @@
 import { Injectable } from '@nestjs/common'
 import { SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
+import {
+  SubjectNotFoundException,
+  TrainerBelongsToAnotherDepartmentException,
+  TrainerNotFoundException
+} from '~/routes/subject/subject.error'
+import { RoleName } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
+import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CannotArchiveCourseWithActiveSubjectsException,
-  CannotArchiveCourseWithNonCancelledEnrollmentsException
+  CannotArchiveCourseWithNonCancelledEnrollmentsException,
+  CannotAssignExaminerToArchivedCourseException,
+  CourseExaminerAlreadyAssignedException,
+  CourseExaminerAlreadyAssignedForSubjectException,
+  CourseNotFoundException
 } from './course.error'
 import {
+  CourseExaminerAssignmentType,
   CourseTraineeInfoType,
   CourseType,
   CreateCourseBodyType,
@@ -156,7 +168,7 @@ export class CourseRepo {
 
     if (!course) return null
 
-    const [traineeCount, trainerCount] = await Promise.all([
+    const [traineeCount, examinerRecords] = await Promise.all([
       this.prisma.subjectEnrollment
         .findMany({
           where: {
@@ -171,21 +183,92 @@ export class CourseRepo {
           distinct: ['traineeUserId']
         })
         .then((enrollments) => enrollments.length),
-      this.prisma.subjectInstructor
-        .findMany({
-          where: {
-            subject: {
-              courseId: id,
-              deletedAt: null
+      this.prisma.assessmentExaminer.findMany({
+        where: {
+          OR: [
+            { courseId: id },
+            {
+              subject: {
+                courseId: id,
+                deletedAt: null
+              }
+            }
+          ]
+        },
+        include: {
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true
             }
           },
-          select: {
-            trainerUserId: true
-          },
-          distinct: ['trainerUserId']
-        })
-        .then((instructors) => instructors.length)
+          subject: {
+            select: {
+              id: true,
+              courseId: true,
+              code: true,
+              name: true,
+              status: true,
+              startDate: true,
+              endDate: true
+            }
+          }
+        }
+      })
     ])
+
+    const trainerCount = new Set(examinerRecords.map((record) => record.trainerUserId)).size
+
+    const courseExaminers = examinerRecords.map((record) => {
+      const belongsByCourseId = record.courseId === id
+      const subjectCourseId = record.subject?.courseId ?? null
+      const subjectBelongs = subjectCourseId === id
+
+      let scope: 'COURSE' | 'SUBJECT' | 'COURSE_AND_SUBJECT' | 'CROSS_SUBJECT'
+
+      if (belongsByCourseId && subjectBelongs) {
+        scope = 'COURSE_AND_SUBJECT'
+      } else if (belongsByCourseId) {
+        scope = 'COURSE'
+      } else if (subjectBelongs) {
+        scope = 'SUBJECT'
+      } else {
+        scope = 'CROSS_SUBJECT'
+      }
+
+      return {
+        trainer: {
+          id: record.trainer.id,
+          eid: record.trainer.eid,
+          firstName: record.trainer.firstName,
+          middleName: record.trainer.middleName,
+          lastName: record.trainer.lastName,
+          email: record.trainer.email,
+          phoneNumber: record.trainer.phoneNumber,
+          status: record.trainer.status
+        },
+        role: record.roleInSubject,
+        scope,
+        subject: record.subject
+          ? {
+              id: record.subject.id,
+              courseId: record.subject.courseId,
+              code: record.subject.code,
+              name: record.subject.name,
+              status: record.subject.status,
+              startDate: record.subject.startDate,
+              endDate: record.subject.endDate
+            }
+          : null,
+        assignedAt: record.createdAt
+      }
+    })
 
     const { subjects, _count, ...courseData } = course
 
@@ -194,7 +277,8 @@ export class CourseRepo {
       subjectCount: _count.subjects,
       traineeCount,
       trainerCount,
-      subjects
+      subjects,
+      courseExaminers
     }
   }
 
@@ -404,6 +488,194 @@ export class CourseRepo {
     return { cancelledCount, notCancelledCount }
   }
 
+  async assignExaminerToCourse({
+    courseId,
+    trainerUserId,
+    roleInSubject,
+    subjectId
+  }: {
+    courseId: string
+    trainerUserId: string
+    roleInSubject: SubjectInstructorRoleValue
+    subjectId?: string
+  }): Promise<CourseExaminerAssignmentType> {
+    return this.prisma.$transaction(async (tx) => {
+      const course = await tx.course.findFirst({
+        where: {
+          id: courseId,
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          departmentId: true,
+          department: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!course) {
+        throw CourseNotFoundException
+      }
+
+      if (course.status === CourseStatus.ARCHIVED) {
+        throw CannotAssignExaminerToArchivedCourseException
+      }
+
+      const existingCourseAssignment = await tx.assessmentExaminer.findFirst({
+        where: {
+          trainerUserId,
+          courseId
+        },
+        select: {
+          id: true
+        }
+      })
+
+      if (existingCourseAssignment) {
+        throw CourseExaminerAlreadyAssignedException
+      }
+
+      let subject: {
+        id: string
+        courseId: string
+        code: string
+        name: string
+        status: SubjectStatus
+        startDate: Date
+        endDate: Date
+      } | null = null
+
+      if (subjectId) {
+        subject = await tx.subject.findFirst({
+          where: {
+            id: subjectId,
+            deletedAt: null
+          },
+          select: {
+            id: true,
+            courseId: true,
+            code: true,
+            name: true,
+            status: true,
+            startDate: true,
+            endDate: true
+          }
+        })
+
+        if (!subject) {
+          throw SubjectNotFoundException
+        }
+
+        const existingSubjectAssignment = await tx.assessmentExaminer.findFirst({
+          where: {
+            trainerUserId,
+            subjectId
+          },
+          select: {
+            id: true
+          }
+        })
+
+        if (existingSubjectAssignment) {
+          throw CourseExaminerAlreadyAssignedForSubjectException
+        }
+      }
+
+      const trainer = await tx.user.findFirst({
+        where: {
+          id: trainerUserId,
+          deletedAt: null,
+          role: {
+            name: RoleName.TRAINER
+          }
+        },
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          status: true,
+          departmentId: true
+        }
+      })
+
+      if (!trainer) {
+        throw TrainerNotFoundException
+      }
+
+      if (trainer.departmentId && trainer.departmentId !== course.departmentId) {
+        throw TrainerBelongsToAnotherDepartmentException
+      }
+
+      if (!trainer.departmentId) {
+        await tx.user.update({
+          where: { id: trainerUserId },
+          data: {
+            departmentId: course.departmentId
+          }
+        })
+      }
+
+      const assignment = await tx.assessmentExaminer.create({
+        data: {
+          trainerUserId,
+          courseId,
+          subjectId: subjectId ?? null,
+          roleInSubject
+        },
+        select: {
+          createdAt: true
+        }
+      })
+
+      return {
+        trainer: {
+          id: trainer.id,
+          eid: trainer.eid,
+          firstName: trainer.firstName,
+          middleName: trainer.middleName,
+          lastName: trainer.lastName,
+          email: trainer.email,
+          phoneNumber: trainer.phoneNumber,
+          status: trainer.status
+        },
+        course: {
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          status: course.status,
+          startDate: course.startDate,
+          endDate: course.endDate
+        },
+        subject: subject
+          ? {
+              id: subject.id,
+              courseId: subject.courseId,
+              code: subject.code,
+              name: subject.name,
+              status: subject.status,
+              startDate: subject.startDate,
+              endDate: subject.endDate
+            }
+          : null,
+        role: roleInSubject,
+        assignedAt: assignment.createdAt
+      }
+    })
+  }
+
   private aggregateCourseTrainees(
     enrollments: Array<{
       traineeUserId: string
@@ -449,13 +721,6 @@ export class CourseRepo {
         current.batches.add(enrollment.batchCode)
       }
     }
-
-    console.log(
-      Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
-        ...info,
-        batches: Array.from(batches)
-      }))
-    )
 
     return Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
       ...info,

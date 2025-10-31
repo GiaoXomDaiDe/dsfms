@@ -19,7 +19,7 @@ export const GetSubjectsQuerySchema = SubjectSchema.pick({
 }).partial()
 
 export const GetSubjectsSchema = SubjectSchema.extend({
-  instructorCount: z.number().int().default(0),
+  examinerCount: z.number().int().default(0),
   enrollmentCount: z.number().int().default(0)
 })
 
@@ -28,7 +28,7 @@ export const GetSubjectsResSchema = z.object({
   totalItems: z.number().int()
 })
 
-export const SubjectDetailInstructorSchema = UserSchema.pick({
+export const SubjectDetailExaminerSchema = UserSchema.pick({
   id: true,
   eid: true,
   firstName: true,
@@ -83,7 +83,7 @@ export const GetSubjectDetailResSchema = SubjectSchema.omit({
   courseId: true
 }).extend({
   course: SubjectDetailCourseSchema,
-  instructors: z.array(SubjectDetailInstructorSchema).default([]),
+  examiners: z.array(SubjectDetailExaminerSchema).default([]),
   enrollmentsByBatch: z.array(SubjectDetailEnrollmentsByBatchSchema).default([])
 })
 
@@ -268,7 +268,7 @@ export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
 
 export // Export types cho các schema con
-type SubjectDetailInstructorType = z.infer<typeof SubjectDetailInstructorSchema>
+type SubjectDetailExaminerType = z.infer<typeof SubjectDetailExaminerSchema>
 export type SubjectDetailTraineeType = z.infer<typeof SubjectDetailTraineeSchema>
 export type SubjectDetailEnrollmentsByBatchType = z.infer<typeof SubjectDetailEnrollmentsByBatchSchema>
 export type SubjectDetailCourseType = z.infer<typeof SubjectDetailCourseSchema>

@@ -285,7 +285,7 @@ export class DepartmentRepo {
    * Department → Courses → Subjects → SubjectInstructors
    */
   private async getTrainerCountByDepartment(departmentId: string): Promise<{ count: number; trainerIds: string[] }> {
-    const result = await this.prisma.subjectInstructor.findMany({
+    const result = await this.prisma.assessmentExaminer.findMany({
       where: {
         subject: {
           course: {
