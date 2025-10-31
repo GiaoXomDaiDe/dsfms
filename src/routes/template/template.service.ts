@@ -11,6 +11,7 @@ import {
   TemplateNameAlreadyExistsError,
   RoleRequiredMismatchError,
   SignatureFieldMissingRoleError,
+  PartFieldMissingChildrenError,
   TemplateCreationFailedError,
   TemplateNotFoundError,
   S3DownloadError,
@@ -492,6 +493,17 @@ export class TemplateService {
               throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
             }
           }
+
+          // Check if PART field has at least one child field
+          if (field.fieldType === 'PART') {
+            const hasChildFields = section.fields.some(childField => 
+              childField.parentTempId === field.fieldName || 
+              (childField.parentTempId && childField.parentTempId.includes(field.fieldName))
+            )
+            if (!hasChildFields) {
+              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+            }
+          }
         }
       }
 
@@ -910,6 +922,17 @@ export class TemplateService {
         if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
           if (!field.roleRequired) {
             throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
+          }
+        }
+
+        // Check if PART field has at least one child field
+        if (field.fieldType === 'PART') {
+          const hasChildFields = section.fields.some(childField => 
+            childField.parentTempId === field.fieldName || 
+            (childField.parentTempId && childField.parentTempId.includes(field.fieldName))
+          )
+          if (!hasChildFields) {
+            throw new PartFieldMissingChildrenError(field.fieldName, section.label)
           }
         }
       }
