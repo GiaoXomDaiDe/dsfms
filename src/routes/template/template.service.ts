@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import { TemplateRepository } from './template.repository'
-import { CreateTemplateFormDto, UpdateTemplateFormDto } from './template.dto'
+import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
 
 interface PlaceholderInfo {
   type: 'field' | 'section' | 'condition' | 'inverted'
@@ -436,9 +436,14 @@ export class TemplateService {
       throw new BadRequestException(`Department with ID '${templateData.departmentId}' does not exist`)
     }
 
+    // Check if template name already exists
+    const nameExists = await this.templateRepository.templateNameExists(templateData.name)
+    if (nameExists) {
+      throw new BadRequestException(`Template name '${templateData.name}' already exists`)
+    }
+
     try {
       // Validate that any field-level role requirement (roleRequired) matches the section's editBy
-      // If roleRequired is set (not null/undefined), it must be equal to the section.editBy value.
       for (const section of templateData.sections) {
         if (!section.fields || !Array.isArray(section.fields)) continue
         for (const field of section.fields) {
@@ -671,8 +676,17 @@ export class TemplateService {
       throw new BadRequestException('Template not found')
     }
 
-    // Update template status
-    const updatedTemplate = await this.templateRepository.updateTemplateStatus(templateId, newStatus, userContext.userId)
+    // Xem coi đây phải là review action hay không
+    const isReviewAction = existingTemplate.status === 'PENDING' && 
+                          (newStatus === 'PUBLISHED' || newStatus === 'REJECTED')
+
+    // Update
+    const updatedTemplate = await this.templateRepository.updateTemplateStatus(
+      templateId, 
+      newStatus, 
+      userContext.userId,
+      isReviewAction
+    )
 
     return {
       success: true,
@@ -840,6 +854,87 @@ export class TemplateService {
       case 'string':
       default:
         return '';
+    }
+  }
+
+  /**
+   * Create a new version of an existing template
+   */
+  async createTemplateVersion(templateVersionData: CreateTemplateVersionDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
+    // Check if original template exists
+    const originalTemplate = await this.templateRepository.findTemplateById(templateVersionData.originalTemplateId)
+    if (!originalTemplate) {
+      throw new BadRequestException('Original template not found')
+    }
+
+    // Validate that any field-level role requirement (roleRequired) matches the section's editBy
+    for (const section of templateVersionData.sections) {
+      if (!section.fields || !Array.isArray(section.fields)) continue
+      for (const field of section.fields) {
+        // Only validate when roleRequired is explicitly provided
+        if (field.roleRequired !== undefined && field.roleRequired !== null) {
+          // Compare values directly
+          if (String(field.roleRequired) !== String(section.editBy)) {
+            throw new BadRequestException(
+              `Field '${field.fieldName}' in section '${section.label}' has required Role ='${field.roleRequired}' which does not match section.editBy='${section.editBy}'`
+            )
+          }
+        }
+
+        // Validate that signature fields must have roleRequired set
+        if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+          if (!field.roleRequired) {
+            throw new BadRequestException(
+              `Signature field '${field.fieldName}' in section '${section.label}' must have roleRequired set to either TRAINEE or TRAINER`
+            )
+          }
+        }
+      }
+    }
+
+    // Generate appropriate name for the new version
+    let finalTemplateName = templateVersionData.name
+    
+    // Check if template name already exists
+    const nameExists = await this.templateRepository.templateNameExists(templateVersionData.name)
+    if (nameExists) {
+      // Get the version number that will be assigned to automatically generate versioned name
+      // First determine the first version ID for this template group
+      const firstVersionId = originalTemplate.referFirstVersionId || templateVersionData.originalTemplateId
+      
+      // Get max version and calculate new version number
+      const maxVersion = await this.templateRepository.getMaxVersionForTemplate(firstVersionId)
+      const newVersion = maxVersion + 1
+      
+      // Append version suffix to the name
+      finalTemplateName = `${templateVersionData.name} v.${newVersion}`
+    }
+
+    try {
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections);
+
+      // Create new template version with all nested data
+      const result = await this.templateRepository.createTemplateVersion(
+        templateVersionData.originalTemplateId,
+        {
+          name: finalTemplateName,
+          description: templateVersionData.description,
+          templateContent: templateVersionData.templateContent,
+          templateConfig: templateVersionData.templateConfig,
+          sections: templateVersionData.sections
+        },
+        userContext.userId,
+        templateSchema
+      )
+
+      return {
+        success: true,
+        data: result,
+        message: 'Template version created successfully'
+      }
+    } catch (error) {
+      throw new BadRequestException(`Failed to create template version: ${error.message}`)
     }
   }
 

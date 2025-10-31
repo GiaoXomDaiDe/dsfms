@@ -148,6 +148,33 @@ export class UpdateTemplateFormDto {
   departmentId?: string
 }
 
+export class CreateTemplateVersionDto {
+  @IsNotEmpty()
+  @IsUUID()
+  originalTemplateId: string
+
+  @IsNotEmpty()
+  @IsString()
+  name: string
+
+  @IsOptional()
+  @IsString()
+  description?: string
+
+  @IsNotEmpty()
+  @IsString()
+  templateContent: string
+
+  @IsNotEmpty()
+  @IsString()
+  templateConfig: string
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTemplateSectionDto)
+  sections: CreateTemplateSectionDto[]
+}
+
 // Response DTOs
 export class TemplateFieldResponseDto {
   id: string
@@ -182,6 +209,10 @@ export class TemplateFormResponseDto {
   isActive: boolean
   createdAt: Date
   updatedAt: Date
+  createdByUserId: string
+  updatedByUserId: string
+  reviewedByUserId?: string
+  reviewedAt?: Date
   templateContent?: string
   templateConfig?: string
   templateSchema?: any
