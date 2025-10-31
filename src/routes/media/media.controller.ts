@@ -17,10 +17,12 @@ import type { Response } from 'express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import path from 'path'
 import {
+  DeleteMediaObjectBodyDTO,
   PresignedUploadDocBodyDTO,
   PresignedUploadFileBodyDTO,
   PresignedUploadFileResDTO,
-  DeleteMediaObjectBodyDTO,
+  UploadDocFromUrlBodyDTO,
+  UploadDocFromUrlResDTO,
   UploadFilesResDTO
 } from '~/routes/media/media.dto'
 import { MediaService } from '~/routes/media/media.service'
@@ -116,5 +118,15 @@ export class MediaController {
   async deleteObject(@Body() { key }: DeleteMediaObjectBodyDTO) {
     await this.mediaService.deleteObject({ key })
     return { message: 'Deleted successfully' }
+  }
+  @IsPublic()
+  @Post('docs/upload-from-url')
+  @ZodSerializerDto(UploadDocFromUrlResDTO)
+  uploadFromUrl(@Body() { sourceUrl, fileName }: UploadDocFromUrlBodyDTO) {
+    const result = this.mediaService.uploadDocFromUrl({ sourceUrl, fileName })
+    return {
+      message: 'Document uploaded successfully',
+      data: result
+    }
   }
 }

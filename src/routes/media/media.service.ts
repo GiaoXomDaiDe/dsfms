@@ -1,16 +1,22 @@
+import { HttpService } from '@nestjs/axios'
 import { Injectable } from '@nestjs/common'
 import { unlink } from 'fs/promises'
 import path from 'path'
+import { Readable } from 'stream'
 import {
   DeleteMediaObjectBodyType,
   PresignedUploadDocBodyType,
-  PresignedUploadFileBodyType
+  PresignedUploadFileBodyType,
+  UploadDocFromUrlBodyType
 } from '~/routes/media/media.model'
 import { S3Service } from '~/shared/services/s3.service'
 
 @Injectable()
 export class MediaService {
-  constructor(private readonly s3Service: S3Service) {}
+  constructor(
+    private readonly s3Service: S3Service,
+    private readonly httpService: HttpService
+  ) {}
 
   private generateControlledFilename(extension: string, type: string = 'file', userId: string): string {
     return `${type}_${userId}${extension}`
@@ -108,5 +114,10 @@ export class MediaService {
 
   async deleteObject({ key }: DeleteMediaObjectBodyType) {
     await this.s3Service.deleteObject(key)
+  }
+  // : Promise<UploadDocFromUrlResType>
+  uploadDocFromUrl({ fileName, sourceUrl }: UploadDocFromUrlBodyType) {
+    const response = this.httpService.axiosRef.get<Readable>(sourceUrl, { responseType: 'stream' })
+    console.log(response)
   }
 }

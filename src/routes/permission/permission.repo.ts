@@ -60,7 +60,7 @@ export class PermissionRepo {
       }
 
       moduleEntry.module.listPermissions.push({
-        permissionId: permission.id,
+        id: permission.id,
         name: permissionName
       })
 

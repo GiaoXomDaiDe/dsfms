@@ -43,6 +43,15 @@ export const DeleteMediaObjectBodySchema = z
   })
   .strict()
 
+export const UploadDocFromUrlBodySchema = z.object({
+  sourceUrl: z.url(),
+  fileName: z.string().min(1)
+})
+
+export const UploadDocFromUrlResSchema = UploadFilesResSchema
+
 export type PresignedUploadFileBodyType = z.infer<typeof PresignedUploadFileBodySchema>
 export type PresignedUploadDocBodyType = z.infer<typeof PresignedUploadDocBodySchema>
 export type DeleteMediaObjectBodyType = z.infer<typeof DeleteMediaObjectBodySchema>
+export type UploadDocFromUrlBodyType = z.infer<typeof UploadDocFromUrlBodySchema>
+export type UploadDocFromUrlResType = z.infer<typeof UploadDocFromUrlResSchema>
