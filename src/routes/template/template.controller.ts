@@ -4,7 +4,7 @@ import { ZodSerializerDto } from 'nestjs-zod'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
-import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto } from './template.dto'
+import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
 import { TemplateService } from './template.service'
 
 @Controller('templates')
@@ -200,5 +200,25 @@ export class TemplateController {
     } catch (error) {
       throw error
     }
+  }
+
+  /**
+   * POST /templates/create-version
+   * Create a new version of an existing template
+   */
+  @Post('create-version')
+  async createTemplateVersion(
+    @Body() createVersionDto: CreateTemplateVersionDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.createTemplateVersion(createVersionDto, userContext)
   }
 }

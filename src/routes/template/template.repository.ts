@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '~/shared/services/prisma.service'
-import { CreateTemplateFormDto } from './template.dto'
+import { CreateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
 
 @Injectable()
 export class TemplateRepository {
@@ -315,6 +315,13 @@ export class TemplateRepository {
             lastName: true
           }
         },
+        reviewedByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
         sections: {
           include: {
             fields: {
@@ -511,13 +518,47 @@ export class TemplateRepository {
     })
   }
 
-  async updateTemplateStatus(id: string, status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', updatedByUserId: string) {
+  async updateTemplateStatus(
+    id: string, 
+    status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    updatedByUserId: string,
+    isReviewAction: boolean = false
+  ) {
+    const updateData: any = {
+      status,
+      updatedByUserId,
+      updatedAt: new Date()
+    }
+
+    // Set review fields only when transitioning from PENDING to PUBLISHED or REJECTED
+    if (isReviewAction && (status === 'PUBLISHED' || status === 'REJECTED')) {
+      updateData.reviewedByUserId = updatedByUserId
+      updateData.reviewedAt = new Date()
+    }
+
     return this.prismaService.templateForm.update({
       where: { id },
-      data: { 
-        status,
-        updatedByUserId,
-        updatedAt: new Date()
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        updatedAt: true,
+        reviewedAt: true,
+        updatedByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        reviewedByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
       }
     })
   }
@@ -598,5 +639,175 @@ export class TemplateRepository {
         }
       }
     })
+  }
+
+  /**
+   * Get the maximum version number for a template (including all versions)
+   */
+  async getMaxVersionForTemplate(originalTemplateId: string): Promise<number> {
+    const maxVersionResult = await this.prismaService.templateForm.aggregate({
+      where: {
+        OR: [
+          { id: originalTemplateId }, // Original template
+          { referFirstVersionId: originalTemplateId } // All versions
+        ]
+      },
+      _max: {
+        version: true
+      }
+    })
+
+    return maxVersionResult._max.version || 1
+  }
+
+  /**
+   * Create a new version of an existing template
+   */
+  async createTemplateVersion(
+    originalTemplateId: string,
+    templateData: {
+      name: string
+      description?: string
+      templateContent: string
+      templateConfig: string
+      sections: any[]
+    },
+    createdByUserId: string,
+    templateSchema?: any
+  ) {
+    return this.prismaService.$transaction(
+      async (tx) => {
+        // 1. Get original template to get departmentId and calculate new version
+        const originalTemplate = await tx.templateForm.findUnique({
+          where: { id: originalTemplateId },
+          select: { 
+            id: true, 
+            departmentId: true, 
+            referFirstVersionId: true 
+          }
+        })
+
+        if (!originalTemplate) {
+          throw new Error('Original template not found')
+        }
+
+        // 2. Determine the first version ID (if original is already a version, use its referFirstVersionId)
+        const firstVersionId = originalTemplate.referFirstVersionId || originalTemplateId
+
+        // 3. Get the max version number for this template group
+        const maxVersion = await this.getMaxVersionForTemplate(firstVersionId)
+        const newVersion = maxVersion + 1
+
+        // 4. Create new Template Form version
+        const templateForm = await tx.templateForm.create({
+          data: {
+            name: templateData.name,
+            description: templateData.description,
+            version: newVersion,
+            departmentId: originalTemplate.departmentId, // Keep same department
+            createdByUserId,
+            updatedByUserId: createdByUserId,
+            reviewedByUserId: null, // Reset review fields
+            reviewedAt: null,
+            status: 'PENDING', // Always starts as pending
+            templateContent: templateData.templateContent,
+            templateConfig: templateData.templateConfig,
+            referFirstVersionId: firstVersionId, // Reference to first version
+            templateSchema: templateSchema || null
+          }
+        })
+
+        // 5. Create Template Sections
+        const sectionsToCreate = templateData.sections.map((sectionData) => ({
+          templateId: templateForm.id,
+          label: sectionData.label,
+          displayOrder: sectionData.displayOrder,
+          editBy: sectionData.editBy,
+          roleInSubject: sectionData.roleInSubject,
+          isSubmittable: sectionData.isSubmittable || false,
+          isToggleDependent: sectionData.isToggleDependent || false
+        }))
+
+        // Create all sections
+        const createdSections: any[] = []
+        for (let i = 0; i < sectionsToCreate.length; i++) {
+          const section = await tx.templateSection.create({
+            data: sectionsToCreate[i]
+          })
+          createdSections.push(section)
+        }
+
+        // 6. Create all fields
+        const allFieldsToCreate = []
+        const sectionFieldMapping = new Map<number, any[]>()
+
+        // Prepare all fields for batch creation
+        for (let sectionIndex = 0; sectionIndex < templateData.sections.length; sectionIndex++) {
+          const sectionData = templateData.sections[sectionIndex]
+          const section = createdSections[sectionIndex]
+
+          // Validate field hierarchy before processing
+          this.validateFieldHierarchy(sectionData.fields)
+
+          // Create fields for this section
+          const fieldsForSection = sectionData.fields.map((fieldData: any) => ({
+            sectionId: section.id,
+            label: fieldData.label,
+            fieldName: fieldData.fieldName,
+            fieldType: fieldData.fieldType,
+            roleRequired: fieldData.roleRequired,
+            options: fieldData.options,
+            displayOrder: fieldData.displayOrder,
+            parentId: null, // No hierarchy in current implementation
+            createdById: createdByUserId,
+            updatedById: createdByUserId // Set updated by for new version
+          }))
+
+          sectionFieldMapping.set(sectionIndex, fieldsForSection)
+          allFieldsToCreate.push(...fieldsForSection)
+        }
+
+        // Create all fields in batches
+        const batchSize = 20
+        const createdFieldsBySections = new Map<number, any[]>()
+
+        for (let sectionIndex = 0; sectionIndex < templateData.sections.length; sectionIndex++) {
+          const fieldsForSection = sectionFieldMapping.get(sectionIndex)
+          const createdFieldsForSection = []
+
+          if (fieldsForSection) {
+            // Process fields for this section in batches
+            for (let i = 0; i < fieldsForSection.length; i += batchSize) {
+              const batch = fieldsForSection.slice(i, i + batchSize)
+
+              // Create batch of fields
+              for (const fieldData of batch) {
+                const field = await tx.templateField.create({
+                  data: fieldData
+                })
+                createdFieldsForSection.push(field)
+              }
+            }
+          }
+
+          createdFieldsBySections.set(sectionIndex, createdFieldsForSection)
+        }
+
+        // 7. Build final result
+        const finalSections = createdSections.map((section, index) => ({
+          ...section,
+          fields: createdFieldsBySections.get(index) || []
+        }))
+
+        return {
+          ...templateForm,
+          sections: finalSections
+        }
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000
+      }
+    )
   }
 }
