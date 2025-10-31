@@ -1,3 +1,4 @@
+import { HttpModule } from '@nestjs/axios'
 import { Module } from '@nestjs/common'
 import { MulterModule } from '@nestjs/platform-express'
 import { existsSync, mkdirSync } from 'fs'
@@ -21,7 +22,8 @@ const storage = multer.diskStorage({
   imports: [
     MulterModule.register({
       storage
-    })
+    }),
+    HttpModule
   ],
   controllers: [MediaController],
   providers: [MediaService]

@@ -4,14 +4,22 @@ import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 
 export const PermissionSchema = z.object({
   id: z.uuid(),
-  name: z.string().max(500),
+  name: z.string().max(250),
   description: z.string().nullable(),
-  path: z.string().max(1000),
-  module: z.string().max(500),
-  method: z.enum(HttpMethod),
+  path: z.string().max(500),
+  module: z.string().max(100),
+  method: z.enum([
+    HttpMethod.GET,
+    HttpMethod.POST,
+    HttpMethod.PUT,
+    HttpMethod.DELETE,
+    HttpMethod.PATCH,
+    HttpMethod.HEAD,
+    HttpMethod.OPTIONS
+  ]),
   isActive: z.boolean().default(true),
-  viewName: z.string().max(500).nullable().default(''),
-  viewModule: z.string().max(500).nullable().default(''),
+  viewName: z.string().max(250).nullable().default(''),
+  viewModule: z.string().max(250).nullable().default(''),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
@@ -23,9 +31,9 @@ export const PermissionSchema = z.object({
   updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
 
-export const PermissionListItemSchema = z.object({
-  permissionId: z.uuid(),
-  name: z.string().max(500)
+export const PermissionListItemSchema = PermissionSchema.pick({
+  id: true,
+  name: true
 })
 
 export const PermissionModuleSchema = z.object({
@@ -41,6 +49,7 @@ export const GetPermissionsResSchema = z.object({
 })
 
 export const GetPermissionsQuerySchema = IncludeDeletedQuerySchema.strict()
+
 export const GetPermissionParamsSchema = z
   .object({
     permissionId: z.uuid()

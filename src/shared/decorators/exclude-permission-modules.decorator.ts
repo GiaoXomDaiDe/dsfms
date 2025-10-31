@@ -1,6 +1,5 @@
 import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common'
-
-export const EXCLUDE_PERMISSION_MODULES_KEY = 'excludePermissionModules'
+import { EXCLUDE_PERMISSION_MODULES_KEY } from '~/shared/constants/auth.constant'
 
 export const ExcludePermissionModules = (...moduleNames: string[]) =>
   SetMetadata(EXCLUDE_PERMISSION_MODULES_KEY, moduleNames)

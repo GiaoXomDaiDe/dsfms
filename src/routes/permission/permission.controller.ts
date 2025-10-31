@@ -21,6 +21,7 @@ import { MessageResDTO } from '~/shared/dtos/response.dto'
 @Controller('permissions')
 export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
+
   @Get()
   @ExcludePermissionModules('Authentication Management', 'System Services')
   @ZodSerializerDto(GetPermissionsResDTO)
@@ -43,38 +44,50 @@ export class PermissionController {
 
   @Get(':permissionId')
   @ZodSerializerDto(GetPermissionDetailResDTO)
-  findById(
+  async findById(
     @Param() params: GetPermissionParamsDTO,
     @Query() query: GetPermissionsQueryDTO,
     @ActiveRolePermissions('name') roleName: string
   ) {
-    return this.permissionService.findById(params.permissionId, {
+    const permission = await this.permissionService.findById(params.permissionId, {
       includeDeleted: query.includeDeleted,
       userRole: roleName
     })
+    return {
+      message: PermissionMes.DETAIL_SUCCESS,
+      data: permission
+    }
   }
 
   @Post()
   @ZodSerializerDto(GetPermissionDetailResDTO)
-  create(@Body() body: CreatePermissionBodyDTO, @ActiveUser('userId') userId: string) {
-    return this.permissionService.create({
+  async create(@Body() body: CreatePermissionBodyDTO, @ActiveUser('userId') userId: string) {
+    const permission = await this.permissionService.create({
       data: body,
       createdById: userId
     })
+    return {
+      message: PermissionMes.CREATE_SUCCESS,
+      data: permission
+    }
   }
 
   @Put(':permissionId')
   @ZodSerializerDto(GetPermissionDetailResDTO)
-  update(
+  async update(
     @Body() body: UpdatePermissionBodyDTO,
     @Param() params: GetPermissionParamsDTO,
     @ActiveUser('userId') userId: string
   ) {
-    return this.permissionService.update({
+    const permission = await this.permissionService.update({
       data: body,
       id: params.permissionId,
       updatedById: userId
     })
+    return {
+      message: PermissionMes.UPDATE_SUCCESS,
+      data: permission
+    }
   }
 
   @Delete(':permissionId')

@@ -1,5 +1,6 @@
 export const REQUEST_USER_KEY = 'user'
 export const REQUEST_ROLE_PERMISSIONS = 'role_permissions'
+export const EXCLUDE_PERMISSION_MODULES_KEY = 'excludePermissionModules'
 
 export const RoleName = {
   ADMINISTRATOR: 'ADMINISTRATOR',

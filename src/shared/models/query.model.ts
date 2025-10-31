@@ -1,6 +1,5 @@
 import z from 'zod'
 
-//Query cho includeDeleted
 export const IncludeDeletedQuerySchema = z.object({
   includeDeleted: z.coerce.boolean().default(false).optional()
 })
