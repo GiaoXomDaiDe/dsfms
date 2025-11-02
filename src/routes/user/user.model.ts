@@ -12,8 +12,6 @@ import {
   AtLeastOneUserRequiredMessage,
   DepartmentAssignmentNotAllowedMessage,
   DepartmentNotAllowedForRoleMessage,
-  DepartmentRequiredForDepartmentHeadMessage,
-  DepartmentRequiredForTrainerMessage,
   DuplicateEmailInBatchMessage,
   InvalidRoleIdMessage,
   InvalidRoleNameMessage,
@@ -84,24 +82,8 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
       return
     }
 
-    if (data.role.name === 'DEPARTMENT_HEAD') {
-      if (!data.departmentId) {
-        ctx.addIssue({
-          code: 'custom',
-          message: DepartmentRequiredForDepartmentHeadMessage,
-          path: ['departmentId']
-        })
-      }
-    } else if (data.role.name === 'TRAINER') {
-      if (!data.departmentId) {
-        ctx.addIssue({
-          code: 'custom',
-          message: DepartmentRequiredForTrainerMessage,
-          path: ['departmentId']
-        })
-      }
-    } else {
-      if (data.departmentId) {
+    if (data.role.name !== 'DEPARTMENT_HEAD' && data.role.name !== 'TRAINER') {
+      if (data.departmentId !== undefined && data.departmentId !== null) {
         ctx.addIssue({
           code: 'custom',
           message: DepartmentNotAllowedForRoleMessage(data.role.name),

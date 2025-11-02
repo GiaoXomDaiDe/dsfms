@@ -51,7 +51,40 @@ export class StatusUpdaterService {
         },
         endDate: {
           gte: now
-        }
+        },
+        AND: [
+          {
+            OR: [
+              {
+                subjectExaminers: {
+                  some: {}
+                }
+              },
+              {
+                subjects: {
+                  some: {
+                    examiners: {
+                      some: {}
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            subjects: {
+              some: {
+                enrollments: {
+                  some: {
+                    status: {
+                      not: SubjectEnrollmentStatus.CANCELLED
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       data: {
         status: CourseStatus.ON_GOING
@@ -84,6 +117,31 @@ export class StatusUpdaterService {
     const now = new Date()
     now.setHours(0, 0, 0, 0)
 
+    const archivedResult = await this.prisma.subject.updateMany({
+      where: {
+        status: SubjectStatus.PLANNED,
+        deletedAt: null,
+        startDate: {
+          lte: now
+        },
+        OR: [
+          {
+            examiners: {
+              none: {}
+            }
+          },
+          {
+            enrollments: {
+              none: {}
+            }
+          }
+        ]
+      },
+      data: {
+        status: SubjectStatus.ARCHIVED
+      }
+    })
+
     // Cập nhật Subject sang ON_GOING
     const ongoingResult = await this.prisma.subject.updateMany({
       where: {
@@ -94,6 +152,16 @@ export class StatusUpdaterService {
         },
         endDate: {
           gte: now
+        },
+        examiners: {
+          some: {}
+        },
+        enrollments: {
+          some: {
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          }
         }
       },
       data: {
@@ -116,6 +184,10 @@ export class StatusUpdaterService {
         status: SubjectStatus.COMPLETED
       }
     })
+
+    if (archivedResult.count > 0) {
+      this.logger.warn(`Subject statuses auto-archived due to missing trainers or enrollments: ${archivedResult.count}`)
+    }
 
     this.logger.log(`Subject statuses updated: ${ongoingResult.count} → ON_GOING, ${completedResult.count} → COMPLETED`)
   }
