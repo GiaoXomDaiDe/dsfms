@@ -66,7 +66,7 @@ export const GetCourseResSchema = CourseSchema.extend({
       role: z.enum(SubjectInstructorRole),
       scope: z.enum(['COURSE', 'SUBJECT', 'COURSE_AND_SUBJECT', 'CROSS_SUBJECT']),
       subject: CourseExaminerSubjectSchema,
-      assignedAt: z.coerce.date()
+      assignedAt: z.coerce.date().or(z.null())
     })
   )
 })

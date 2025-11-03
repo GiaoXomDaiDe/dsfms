@@ -810,7 +810,7 @@ export class AssessmentRepo {
         },
         subject: {
           select: {
-            examiners: {
+            instructors: {
               select: {
                 trainerUserId: true
               }
@@ -821,7 +821,7 @@ export class AssessmentRepo {
           select: {
             subjects: {
               select: {
-                examiners: {
+                instructors: {
                   select: {
                     trainerUserId: true
                   }
@@ -848,13 +848,13 @@ export class AssessmentRepo {
     // Trainer can access if assigned to the subject or course
     if (userRole === 'TRAINER') {
       // Check if trainer is assigned to the specific subject (for subject-level assessments)
-      if (assessment.subject?.examiners.some((inst) => inst.trainerUserId === userId)) {
+      if (assessment.subject?.instructors.some((inst) => inst.trainerUserId === userId)) {
         return true
       }
 
       // Check if trainer is assigned to any subject in the course (for course-level assessments)
       if (
-        assessment.course?.subjects.some((subject) => subject.examiners.some((inst) => inst.trainerUserId === userId))
+        assessment.course?.subjects.some((subject) => subject.instructors.some((inst) => inst.trainerUserId === userId))
       ) {
         return true
       }
@@ -885,7 +885,7 @@ export class AssessmentRepo {
     search?: string
   ) {
     // First verify that the trainer is assigned to this subject
-    const trainerAssignment = await this.prisma.assessmentExaminer.findFirst({
+    const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
       where: {
         subjectId,
         trainerUserId: trainerId
@@ -1012,18 +1012,27 @@ export class AssessmentRepo {
     status?: AssessmentStatus,
     search?: string
   ) {
-    // First verify that the trainer is assigned to this course (through subjects)
-    const trainerAssignment = await this.prisma.assessmentExaminer.findFirst({
+    // First verify that the trainer is assigned to this course (directly or through its subjects)
+    const trainerAssignment = await this.prisma.courseInstructor.findFirst({
       where: {
         trainerUserId: trainerId,
-        subject: {
-          courseId
-        }
+        courseId
       }
     })
 
     if (!trainerAssignment) {
-      throw new Error('Trainer is not assigned to any subjects in this course')
+      const subjectLevelAssignment = await this.prisma.subjectInstructor.findFirst({
+        where: {
+          trainerUserId: trainerId,
+          subject: {
+            courseId
+          }
+        }
+      })
+
+      if (!subjectLevelAssignment) {
+        throw new Error('Trainer is not assigned to any subjects in this course')
+      }
     }
 
     const skip = (page - 1) * limit

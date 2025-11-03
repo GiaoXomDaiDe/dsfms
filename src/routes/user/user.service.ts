@@ -13,7 +13,6 @@ import {
   CannotUpdateOrDeleteYourselfException,
   DefaultRoleValidationException,
   DepartmentHeadAlreadyExistsException,
-  DepartmentHeadRequiresDepartmentException,
   DepartmentIsDisabledException,
   DepartmentNotFoundException,
   ForbiddenProfileException,
@@ -868,9 +867,9 @@ export class UserService {
       return
     }
 
-    // Department head bắt buộc phải có department
+    // Nếu chưa gán department thì bỏ qua kiểm tra uniqueness
     if (!departmentId) {
-      throw DepartmentHeadRequiresDepartmentException
+      return
     }
 
     // Kiểm tra xem department đã có head chưa

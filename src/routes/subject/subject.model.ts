@@ -19,7 +19,7 @@ export const GetSubjectsQuerySchema = SubjectSchema.pick({
 }).partial()
 
 export const GetSubjectsSchema = SubjectSchema.extend({
-  examinerCount: z.number().int().default(0),
+  instructorCount: z.number().int().default(0),
   enrollmentCount: z.number().int().default(0)
 })
 
@@ -28,7 +28,7 @@ export const GetSubjectsResSchema = z.object({
   totalItems: z.number().int()
 })
 
-export const SubjectDetailExaminerSchema = UserSchema.pick({
+export const SubjectDetailInstructorSchema = UserSchema.pick({
   id: true,
   eid: true,
   firstName: true,
@@ -36,8 +36,7 @@ export const SubjectDetailExaminerSchema = UserSchema.pick({
   lastName: true,
   status: true
 }).extend({
-  roleInSubject: z.enum(SubjectInstructorRole),
-  assignedAt: z.iso.datetime().transform((value) => new Date(value))
+  roleInSubject: z.enum(SubjectInstructorRole)
 })
 
 export const SubjectDetailTraineeSchema = UserSchema.pick({
@@ -83,7 +82,7 @@ export const GetSubjectDetailResSchema = SubjectSchema.omit({
   courseId: true
 }).extend({
   course: SubjectDetailCourseSchema,
-  examiners: z.array(SubjectDetailExaminerSchema).default([]),
+  instructors: z.array(SubjectDetailInstructorSchema).default([]),
   enrollmentsByBatch: z.array(SubjectDetailEnrollmentsByBatchSchema).default([])
 })
 
@@ -188,8 +187,7 @@ export const AssignTrainerResSchema = z.object({
     startDate: true,
     endDate: true
   }),
-  role: z.enum(SubjectInstructorRole),
-  assignedAt: z.coerce.date()
+  role: z.enum(SubjectInstructorRole)
 })
 
 export const UpdateTrainerAssignmentBodySchema = z.object({
@@ -268,7 +266,7 @@ export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
 
 export // Export types cho các schema con
-type SubjectDetailExaminerType = z.infer<typeof SubjectDetailExaminerSchema>
+type SubjectDetailInstructorType = z.infer<typeof SubjectDetailInstructorSchema>
 export type SubjectDetailTraineeType = z.infer<typeof SubjectDetailTraineeSchema>
 export type SubjectDetailEnrollmentsByBatchType = z.infer<typeof SubjectDetailEnrollmentsByBatchSchema>
 export type SubjectDetailCourseType = z.infer<typeof SubjectDetailCourseSchema>
