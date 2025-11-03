@@ -48,7 +48,8 @@ model User {
   deletedSubjects            Subject[]           @relation("SubjectDeletedBy")
   updatedSubjects            Subject[]           @relation("SubjectUpdatedBy")
   subjectEnrollments         SubjectEnrollment[]
-  subjectExaminers           AssessmentExaminer[]
+  subjectInstructors         SubjectInstructor[] @relation("UserSubjectInstructor")
+  courseInstructors          CourseInstructor[]  @relation("UserCourseInstructor")
   createdTemplateFields      TemplateField[]     @relation("TemplateFieldCreatedBy")
   updatedTemplateFields      TemplateField[]     @relation("TemplateFieldUpdatedBy")
   createdTemplateForms       TemplateForm[]      @relation("TemplateFormCreatedBy")
@@ -223,7 +224,7 @@ model Course {
   department      Department       @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedBy       User?            @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   subjects        Subject[]
-  subjectExaminers AssessmentExaminer[]
+  instructors     CourseInstructor[]  @relation("CourseCourseInstructor")
   assessmentForms AssessmentForm[]
 
   @@index([departmentId])
@@ -259,7 +260,7 @@ model Subject {
   deletedBy       User?               @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy       User?               @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   enrollments     SubjectEnrollment[]
-  examiners     AssessmentExaminer[]
+  instructors     SubjectInstructor[] @relation("SubjectSubjectInstructor")
   assessmentForms AssessmentForm[]
 
   @@index([courseId])
@@ -267,22 +268,26 @@ model Subject {
   @@map("Subject")
 }
 
-model AssessmentExaminer  {
-  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  trainerUserId String                @db.Uuid
-  subjectId     String?               @db.Uuid      
-  courseId      String?               @db.Uuid      
-  roleInSubject SubjectInstructorRole
-  createdAt     DateTime              @default(now())
-  subject       Subject?              @relation(fields: [subjectId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  course        Course?               @relation(fields: [courseId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  trainer       User                  @relation(fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+model SubjectInstructor {
+  trainerUserId    String          @db.Uuid
+  subjectId        String          @db.Uuid
+  roleInAssessment RoleInSubject
+  trainer          User            @relation("UserSubjectInstructor", fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subject          Subject         @relation("SubjectSubjectInstructor", fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([trainerUserId, subjectId], map: "assessment_examiner_trainer_subject_key")
-  @@unique([trainerUserId, courseId], map: "assessment_examiner_trainer_course_key")
-  @@index([subjectId])
-  @@index([courseId])
-  @@map("Assessment_Examiners")
+  @@id([trainerUserId, subjectId])
+  @@map("Subject_Instructors")
+}
+
+model CourseInstructor {
+  trainerUserId    String          @db.Uuid
+  courseId         String          @db.Uuid
+  roleInAssessment RoleInSubject
+  trainer          User            @relation("UserCourseInstructor", fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  course           Course          @relation("CourseCourseInstructor", fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([trainerUserId, courseId])
+  @@map("Course_Instructors")
 }
 
 model SubjectEnrollment {

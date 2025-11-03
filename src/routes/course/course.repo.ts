@@ -168,7 +168,7 @@ export class CourseRepo {
 
     if (!course) return null
 
-    const [traineeCount, examinerRecords] = await Promise.all([
+    const [traineeCount, courseInstructorRecords, subjectInstructorRecords] = await Promise.all([
       this.prisma.subjectEnrollment
         .findMany({
           where: {
@@ -183,19 +183,39 @@ export class CourseRepo {
           distinct: ['traineeUserId']
         })
         .then((enrollments) => enrollments.length),
-      this.prisma.assessmentExaminer.findMany({
+      this.prisma.courseInstructor.findMany({
         where: {
-          OR: [
-            { courseId: id },
-            {
-              subject: {
-                courseId: id,
-                deletedAt: null
-              }
-            }
-          ]
+          courseId: id
         },
-        include: {
+        select: {
+          trainerUserId: true,
+          courseId: true,
+          roleInAssessment: true,
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true
+            }
+          }
+        }
+      }),
+      this.prisma.subjectInstructor.findMany({
+        where: {
+          subject: {
+            courseId: id,
+            deletedAt: null
+          }
+        },
+        select: {
+          trainerUserId: true,
+          subjectId: true,
+          roleInAssessment: true,
           trainer: {
             select: {
               id: true,
@@ -223,26 +243,13 @@ export class CourseRepo {
       })
     ])
 
-    const trainerCount = new Set(examinerRecords.map((record) => record.trainerUserId)).size
+    const trainerIds = new Set<string>([
+      ...courseInstructorRecords.map((record) => record.trainerUserId),
+      ...subjectInstructorRecords.map((record) => record.trainerUserId)
+    ])
 
-    const courseExaminers = examinerRecords.map((record) => {
-      const belongsByCourseId = record.courseId === id
-      const subjectCourseId = record.subject?.courseId ?? null
-      const subjectBelongs = subjectCourseId === id
-
-      let scope: 'COURSE' | 'SUBJECT' | 'COURSE_AND_SUBJECT' | 'CROSS_SUBJECT'
-
-      if (belongsByCourseId && subjectBelongs) {
-        scope = 'COURSE_AND_SUBJECT'
-      } else if (belongsByCourseId) {
-        scope = 'COURSE'
-      } else if (subjectBelongs) {
-        scope = 'SUBJECT'
-      } else {
-        scope = 'CROSS_SUBJECT'
-      }
-
-      return {
+    const courseExaminers = [
+      ...courseInstructorRecords.map((record) => ({
         trainer: {
           id: record.trainer.id,
           eid: record.trainer.eid,
@@ -253,8 +260,24 @@ export class CourseRepo {
           phoneNumber: record.trainer.phoneNumber,
           status: record.trainer.status
         },
-        role: record.roleInSubject,
-        scope,
+        role: record.roleInAssessment,
+        scope: 'COURSE' as const,
+        subject: null,
+        assignedAt: null
+      })),
+      ...subjectInstructorRecords.map((record) => ({
+        trainer: {
+          id: record.trainer.id,
+          eid: record.trainer.eid,
+          firstName: record.trainer.firstName,
+          middleName: record.trainer.middleName,
+          lastName: record.trainer.lastName,
+          email: record.trainer.email,
+          phoneNumber: record.trainer.phoneNumber,
+          status: record.trainer.status
+        },
+        role: record.roleInAssessment,
+        scope: record.subject?.courseId === id ? ('SUBJECT' as const) : ('CROSS_SUBJECT' as const),
         subject: record.subject
           ? {
               id: record.subject.id,
@@ -266,9 +289,9 @@ export class CourseRepo {
               endDate: record.subject.endDate
             }
           : null,
-        assignedAt: record.createdAt
-      }
-    })
+        assignedAt: null
+      }))
+    ]
 
     const { subjects, _count, ...courseData } = course
 
@@ -276,7 +299,7 @@ export class CourseRepo {
       ...courseData,
       subjectCount: _count.subjects,
       traineeCount,
-      trainerCount,
+      trainerCount: trainerIds.size,
       subjects,
       courseExaminers
     }
@@ -530,20 +553,6 @@ export class CourseRepo {
         throw CannotAssignExaminerToArchivedCourseException
       }
 
-      const existingCourseAssignment = await tx.assessmentExaminer.findFirst({
-        where: {
-          trainerUserId,
-          courseId
-        },
-        select: {
-          id: true
-        }
-      })
-
-      if (existingCourseAssignment) {
-        throw CourseExaminerAlreadyAssignedException
-      }
-
       let subject: {
         id: string
         courseId: string
@@ -575,18 +584,30 @@ export class CourseRepo {
           throw SubjectNotFoundException
         }
 
-        const existingSubjectAssignment = await tx.assessmentExaminer.findFirst({
+        const existingSubjectAssignment = await tx.subjectInstructor.findUnique({
           where: {
-            trainerUserId,
-            subjectId
-          },
-          select: {
-            id: true
+            trainerUserId_subjectId: {
+              trainerUserId,
+              subjectId
+            }
           }
         })
 
         if (existingSubjectAssignment) {
           throw CourseExaminerAlreadyAssignedForSubjectException
+        }
+      } else {
+        const existingCourseAssignment = await tx.courseInstructor.findUnique({
+          where: {
+            trainerUserId_courseId: {
+              trainerUserId,
+              courseId
+            }
+          }
+        })
+
+        if (existingCourseAssignment) {
+          throw CourseExaminerAlreadyAssignedException
         }
       }
 
@@ -628,17 +649,25 @@ export class CourseRepo {
         })
       }
 
-      const assignment = await tx.assessmentExaminer.create({
-        data: {
-          trainerUserId,
-          courseId,
-          subjectId: subjectId ?? null,
-          roleInSubject
-        },
-        select: {
-          createdAt: true
-        }
-      })
+      const assignmentTimestamp = new Date()
+
+      if (subjectId) {
+        await tx.subjectInstructor.create({
+          data: {
+            trainerUserId,
+            subjectId,
+            roleInAssessment: roleInSubject as any
+          }
+        })
+      } else {
+        await tx.courseInstructor.create({
+          data: {
+            trainerUserId,
+            courseId,
+            roleInAssessment: roleInSubject as any
+          }
+        })
+      }
 
       return {
         trainer: {
@@ -671,7 +700,7 @@ export class CourseRepo {
             }
           : null,
         role: roleInSubject,
-        assignedAt: assignment.createdAt
+        assignedAt: assignmentTimestamp
       }
     })
   }
