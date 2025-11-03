@@ -29,6 +29,3 @@ export const TEMPLATE_STATUS_UPDATED_SUCCESSFULLY = (status: string) =>
 
 // ==================== Template Version Messages ====================
 export const TEMPLATE_VERSION_CREATED_SUCCESSFULLY = 'Template version created successfully'
-
-// ==================== Template Validation Messages ====================
-export const TEMPLATE_STRUCTURE_VALIDATED_SUCCESSFULLY = 'Template structure validated successfully'
