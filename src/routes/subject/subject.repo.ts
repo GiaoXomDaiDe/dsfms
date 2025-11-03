@@ -38,7 +38,7 @@ import {
   LookupTraineesResType,
   SubjectDetailCourseType,
   SubjectDetailEnrollmentsByBatchType,
-  SubjectDetailExaminerType,
+  SubjectDetailInstructorType,
   SubjectDetailTraineeType,
   TraineeAssignmentDuplicateType,
   TraineeAssignmentIssueType,
@@ -97,7 +97,7 @@ export class SubjectRepo {
         include: {
           _count: {
             select: {
-              examiners: true,
+              instructors: true,
               enrollments: {
                 where: {
                   status: { not: 'CANCELLED' }
@@ -114,7 +114,7 @@ export class SubjectRepo {
       const { _count, ...subjectWithoutCount } = subject
       return {
         ...subjectWithoutCount,
-        examinerCount: _count.examiners,
+        instructorCount: _count.instructors,
         enrollmentCount: _count.enrollments
       }
     }) as GetSubjectsType[]
@@ -151,7 +151,7 @@ export class SubjectRepo {
             }
           }
         },
-        examiners: {
+        instructors: {
           include: {
             trainer: {
               select: {
@@ -160,7 +160,8 @@ export class SubjectRepo {
                 firstName: true,
                 middleName: true,
                 lastName: true,
-                status: true
+                status: true,
+                createdAt: true
               }
             }
           },
@@ -199,15 +200,14 @@ export class SubjectRepo {
 
     if (!subject) return null
 
-    const transformedExaminers: SubjectDetailExaminerType[] = subject.examiners.map((examiner) => ({
-      id: examiner.trainer.id,
-      eid: examiner.trainer.eid,
-      firstName: examiner.trainer.firstName,
-      middleName: examiner.trainer.middleName === null ? '' : examiner.trainer.middleName,
-      lastName: examiner.trainer.lastName,
-      status: examiner.trainer.status,
-      roleInSubject: examiner.roleInSubject,
-      assignedAt: examiner.createdAt
+    const transformedInstructors: SubjectDetailInstructorType[] = subject.instructors.map((instructor) => ({
+      id: instructor.trainer.id,
+      eid: instructor.trainer.eid,
+      firstName: instructor.trainer.firstName,
+      middleName: instructor.trainer.middleName === null ? '' : instructor.trainer.middleName,
+      lastName: instructor.trainer.lastName,
+      status: instructor.trainer.status,
+      roleInSubject: instructor.roleInAssessment
     }))
 
     const enrollmentsByBatch: SubjectDetailEnrollmentsByBatchType[] = subject.enrollments.reduce((acc, enrollment) => {
@@ -256,7 +256,7 @@ export class SubjectRepo {
     return {
       ...subjectWithoutRedundant,
       course: transformedCourse,
-      examiners: transformedExaminers,
+      instructors: transformedInstructors,
       enrollmentsByBatch
     } as GetSubjectDetailResType
   }
@@ -277,7 +277,7 @@ export class SubjectRepo {
 
     const subjectIdsList = map(subjectIds, 'id')
 
-    const assignedExaminerIds = await this.prisma.assessmentExaminer.findMany({
+    const assignedInstructorIds = await this.prisma.subjectInstructor.findMany({
       where: {
         subjectId: { in: subjectIdsList }
       },
@@ -285,7 +285,7 @@ export class SubjectRepo {
       distinct: ['trainerUserId']
     })
 
-    const assignedIds = map(assignedExaminerIds, 'trainerUserId')
+    const assignedIds = map(assignedInstructorIds, 'trainerUserId')
     const availableTrainers = await this.sharedUserRepo.findActiveTrainers({ excludeUserIds: assignedIds })
 
     const trainersWithFlag = availableTrainers.map((trainer) => ({
@@ -479,11 +479,11 @@ export class SubjectRepo {
         })
       }
 
-      const assignment = await tx.assessmentExaminer.create({
+      const assignment = await tx.subjectInstructor.create({
         data: {
           subjectId,
           trainerUserId,
-          roleInSubject
+          roleInAssessment: roleInSubject
         },
         include: {
           subject: {
@@ -547,8 +547,7 @@ export class SubjectRepo {
           startDate: assignment.subject.startDate,
           endDate: assignment.subject.endDate
         },
-        role: assignment.roleInSubject,
-        assignedAt: assignment.createdAt
+        role: assignment.roleInAssessment
       }
     })
   }
@@ -562,7 +561,7 @@ export class SubjectRepo {
     currentTrainerId: string
     newRoleInSubject: SubjectInstructorRoleValue
   }): Promise<UpdateTrainerAssignmentResType> {
-    await this.prisma.assessmentExaminer.delete({
+    await this.prisma.subjectInstructor.delete({
       where: {
         trainerUserId_subjectId: {
           trainerUserId: currentTrainerId,
@@ -585,7 +584,7 @@ export class SubjectRepo {
     subjectId: string
     trainerUserId: string
   }): Promise<void> {
-    await this.prisma.assessmentExaminer.delete({
+    await this.prisma.subjectInstructor.delete({
       where: {
         trainerUserId_subjectId: {
           trainerUserId,
@@ -819,7 +818,7 @@ export class SubjectRepo {
     subjectId: string
     trainerUserId: string
   }): Promise<boolean> {
-    const assignment = await this.prisma.assessmentExaminer.findUnique({
+    const assignment = await this.prisma.subjectInstructor.findUnique({
       where: {
         trainerUserId_subjectId: {
           trainerUserId,

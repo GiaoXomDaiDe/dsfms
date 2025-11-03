@@ -56,14 +56,14 @@ export class StatusUpdaterService {
           {
             OR: [
               {
-                subjectExaminers: {
+                instructors: {
                   some: {}
                 }
               },
               {
                 subjects: {
                   some: {
-                    examiners: {
+                    instructors: {
                       some: {}
                     }
                   }
@@ -126,7 +126,7 @@ export class StatusUpdaterService {
         },
         OR: [
           {
-            examiners: {
+            instructors: {
               none: {}
             }
           },
@@ -153,7 +153,7 @@ export class StatusUpdaterService {
         endDate: {
           gte: now
         },
-        examiners: {
+        instructors: {
           some: {}
         },
         enrollments: {

@@ -17,10 +17,8 @@ export const SubjectStatus = {
 } as const
 
 export const SubjectInstructorRole = {
-  PRIMARY_INSTRUCTOR: 'PRIMARY_INSTRUCTOR',
-  EXAMINER: 'EXAMINER',
-  ASSISTANT_INSTRUCTOR: 'ASSISTANT_INSTRUCTOR',
-  ASSESSMENT_REVIEWER: 'ASSESSMENT_REVIEWER'
+  ASSESSMENT_REVIEWER: 'ASSESSMENT_REVIEWER',
+  EXAMINER: 'EXAMINER'
 } as const
 
 export const SubjectEnrollmentStatus = {
