@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { readFileSync } from 'fs'
 import mime from 'mime-types'
+import type { Readable } from 'stream'
 import envConfig from '~/shared/config'
 
 @Injectable()
@@ -72,5 +73,29 @@ export class S3Service {
       Key: key
     })
     await this.s3.send(command)
+  }
+
+  async uploadStream({ key, body, contentType }: { key: string; body: Readable; contentType?: string }) {
+    const uploader = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: envConfig.AWS_S3_BUCKET_NAME,
+        Key: key,
+        Body: body,
+        ContentType: contentType ?? 'application/octet-stream'
+      },
+      queueSize: 4,
+      partSize: 1024 * 1024 * 5,
+      leavePartsOnError: false
+    })
+
+    const result = (await uploader.done()) as { Key?: string; Location?: string }
+    const resolvedKey = result?.Key ?? key
+    const location = result?.Location ?? this.getObjectUrl(resolvedKey)
+
+    return {
+      key: resolvedKey,
+      url: location
+    }
   }
 }

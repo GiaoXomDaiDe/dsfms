@@ -18,6 +18,8 @@ import { ZodSerializerDto } from 'nestjs-zod'
 import path from 'path'
 import {
   DeleteMediaObjectBodyDTO,
+  OnlyOfficeCallbackBodyDTO,
+  OnlyOfficeCallbackResDTO,
   PresignedUploadDocBodyDTO,
   PresignedUploadFileBodyDTO,
   PresignedUploadFileResDTO,
@@ -119,14 +121,17 @@ export class MediaController {
     await this.mediaService.deleteObject({ key })
     return { message: 'Deleted successfully' }
   }
+
+  @IsPublic()
+  @Post('docs/onlyoffice/callback')
+  @ZodSerializerDto(OnlyOfficeCallbackResDTO)
+  handleOnlyOfficeCallback(@Body() body: OnlyOfficeCallbackBodyDTO) {
+    return this.mediaService.handleOnlyOfficeCallback(body)
+  }
   @IsPublic()
   @Post('docs/upload-from-url')
   @ZodSerializerDto(UploadDocFromUrlResDTO)
   uploadFromUrl(@Body() { sourceUrl, fileName }: UploadDocFromUrlBodyDTO) {
-    const result = this.mediaService.uploadDocFromUrl({ sourceUrl, fileName })
-    return {
-      message: 'Document uploaded successfully',
-      data: result
-    }
+    return this.mediaService.uploadDocFromUrl({ sourceUrl, fileName })
   }
 }

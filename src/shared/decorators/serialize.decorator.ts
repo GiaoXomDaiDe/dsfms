@@ -13,7 +13,11 @@ export function Serialize() {
         return result
       }
 
-      return JSON.parse(JSON.stringify(result))
+      try {
+        return JSON.parse(JSON.stringify(result))
+      } catch {
+        return result
+      }
     }
 
     return descriptor
@@ -44,7 +48,11 @@ export function SerializeAll(excludeMethods: string[] = []) {
           return result
         }
 
-        return JSON.parse(JSON.stringify(result))
+        try {
+          return JSON.parse(JSON.stringify(result))
+        } catch {
+          return result
+        }
       }
     })
 
