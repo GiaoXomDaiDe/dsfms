@@ -17,8 +17,8 @@ export class GlobalFieldService {
     return this.globalFieldRepository.findAll()
   }
 
-  async findAllDetailed() {
-    return this.globalFieldRepository.findAllDetailed()
+  async findAllDetail() {
+    return this.globalFieldRepository.findAllDetail()
   }
 
   async findById(id: string) {
@@ -34,12 +34,12 @@ export class GlobalFieldService {
     return globalField
   }
 
-  async findByIdDetailed(id: string) {
+  async findByIdDetail(id: string) {
     if (!id) {
       throw new RequiredFieldMissingError('id')
     }
 
-    const globalField = await this.globalFieldRepository.findByIdDetailed(id)
+    const globalField = await this.globalFieldRepository.findByIdDetail(id)
     if (!globalField) {
       throw new GlobalFieldNotFoundError()
     }
