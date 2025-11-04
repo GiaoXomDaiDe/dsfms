@@ -1,6 +1,8 @@
 import { createZodDto } from 'nestjs-zod'
 import {
   DeleteMediaObjectBodySchema,
+  OnlyOfficeCallbackBodySchema,
+  OnlyOfficeCallbackResSchema,
   PresignedUploadDocBodySchema,
   PresignedUploadFileBodySchema,
   PresignedUploadFileResSchema,
@@ -21,3 +23,7 @@ export class DeleteMediaObjectBodyDTO extends createZodDto(DeleteMediaObjectBody
 export class UploadDocFromUrlBodyDTO extends createZodDto(UploadDocFromUrlBodySchema) {}
 
 export class UploadDocFromUrlResDTO extends createZodDto(UploadFilesResSchema) {}
+
+export class OnlyOfficeCallbackBodyDTO extends createZodDto(OnlyOfficeCallbackBodySchema) {}
+
+export class OnlyOfficeCallbackResDTO extends createZodDto(OnlyOfficeCallbackResSchema) {}
