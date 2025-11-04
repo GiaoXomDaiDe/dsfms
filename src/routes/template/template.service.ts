@@ -497,8 +497,9 @@ export class TemplateService {
           // Check if PART field has at least one child field
           if (field.fieldType === 'PART') {
             const hasChildFields = section.fields.some(childField => 
-              childField.parentTempId === field.fieldName || 
-              (childField.parentTempId && childField.parentTempId.includes(field.fieldName))
+              childField.parentTempId === field.tempId || 
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
             )
             if (!hasChildFields) {
               throw new PartFieldMissingChildrenError(field.fieldName, section.label)
@@ -928,8 +929,9 @@ export class TemplateService {
         // Check if PART field has at least one child field
         if (field.fieldType === 'PART') {
           const hasChildFields = section.fields.some(childField => 
-            childField.parentTempId === field.fieldName || 
-            (childField.parentTempId && childField.parentTempId.includes(field.fieldName))
+            childField.parentTempId === field.tempId || 
+            childField.parentTempId === field.fieldName ||
+            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
           )
           if (!hasChildFields) {
             throw new PartFieldMissingChildrenError(field.fieldName, section.label)
