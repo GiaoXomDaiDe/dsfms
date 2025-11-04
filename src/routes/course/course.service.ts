@@ -12,6 +12,8 @@ import {
   CourseDateRangeViolationException,
   CourseExaminerAlreadyAssignedException,
   CourseNotFoundException,
+  CourseTrainerAlreadyAssignedException,
+  CourseTrainerAssignmentNotFoundException,
   DepartmentNotFoundException,
   OnlyAcademicDepartmentCanCreateCourseException,
   OnlyAcademicDepartmentCanDeleteCourseException,
@@ -20,6 +22,8 @@ import {
 import {
   AssignCourseExaminerBodyType,
   AssignCourseExaminerResType,
+  AssignCourseTrainerBodyType,
+  AssignCourseTrainerResType,
   CreateCourseBodyType,
   CreateCourseResType,
   GetCourseParamsType,
@@ -29,7 +33,9 @@ import {
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
-  UpdateCourseResType
+  UpdateCourseResType,
+  UpdateCourseTrainerAssignmentBodyType,
+  UpdateCourseTrainerAssignmentResType
 } from './course.model'
 import { CourseRepo } from './course.repo'
 
@@ -229,6 +235,92 @@ export class CourseService {
         notCancelledCount: result.notCancelledCount
       }
     }
+  }
+
+  async assignTrainerToCourse({
+    courseId,
+    data
+  }: {
+    courseId: string
+    data: AssignCourseTrainerBodyType
+  }): Promise<AssignCourseTrainerResType> {
+    const course = await this.courseRepo.findById(courseId)
+
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: data.trainerUserId
+    })
+
+    if (exists) {
+      throw CourseTrainerAlreadyAssignedException
+    }
+
+    try {
+      return await this.courseRepo.assignTrainerToCourse({
+        courseId,
+        trainerUserId: data.trainerUserId,
+        roleInSubject: data.roleInSubject
+      })
+    } catch (error) {
+      if (isUniqueConstraintPrismaError(error)) {
+        throw CourseTrainerAlreadyAssignedException
+      }
+
+      throw error
+    }
+  }
+
+  async updateCourseTrainerAssignment({
+    courseId,
+    trainerId,
+    data
+  }: {
+    courseId: string
+    trainerId: string
+    data: UpdateCourseTrainerAssignmentBodyType
+  }): Promise<UpdateCourseTrainerAssignmentResType> {
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw CourseTrainerAssignmentNotFoundException
+    }
+
+    return await this.courseRepo.updateCourseTrainerAssignment({
+      courseId,
+      trainerUserId: trainerId,
+      newRoleInSubject: data.roleInSubject
+    })
+  }
+
+  async removeTrainerFromCourse({
+    courseId,
+    trainerId
+  }: {
+    courseId: string
+    trainerId: string
+  }): Promise<MessageResType> {
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw CourseTrainerAssignmentNotFoundException
+    }
+
+    await this.courseRepo.removeTrainerFromCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    return { message: 'Trainer removed successfully' }
   }
 
   async assignExaminerToCourse({

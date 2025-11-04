@@ -117,32 +117,6 @@ export const GetDepartmentHeadsResSchema = z.object({
   totalItems: z.number()
 })
 
-// Add Trainers Schema
-export const AddTrainersToDepartmentBodySchema = z
-  .object({
-    trainerEids: z.array(z.string().min(1))
-  })
-  .strict()
-
-export const AddTrainersToDepartmentParamsSchema = z
-  .object({
-    departmentId: z.uuid()
-  })
-  .strict()
-
-// Remove Trainers Schema
-export const RemoveTrainersFromDepartmentBodySchema = z
-  .object({
-    trainerEids: z.array(z.string().min(1))
-  })
-  .strict()
-
-export const RemoveTrainersFromDepartmentParamsSchema = z
-  .object({
-    departmentId: z.uuid()
-  })
-  .strict()
-
 // Update Department Enhanced Schema (includes code and returns department heads)
 export const UpdateDepartmentEnhancedBodySchema = DepartmentSchema.pick({
   name: true,
@@ -158,9 +132,5 @@ export const UpdateDepartmentEnhancedResSchema = z.object({
 
 export type DepartmentHeadUserType = z.infer<typeof DepartmentHeadUserSchema>
 export type GetDepartmentHeadsResType = z.infer<typeof GetDepartmentHeadsResSchema>
-export type AddTrainersToDepartmentBodyType = z.infer<typeof AddTrainersToDepartmentBodySchema>
-export type AddTrainersToDepartmentParamsType = z.infer<typeof AddTrainersToDepartmentParamsSchema>
-export type RemoveTrainersFromDepartmentBodyType = z.infer<typeof RemoveTrainersFromDepartmentBodySchema>
-export type RemoveTrainersFromDepartmentParamsType = z.infer<typeof RemoveTrainersFromDepartmentParamsSchema>
 export type UpdateDepartmentEnhancedBodyType = z.infer<typeof UpdateDepartmentEnhancedBodySchema>
 export type UpdateDepartmentEnhancedResType = z.infer<typeof UpdateDepartmentEnhancedResSchema>

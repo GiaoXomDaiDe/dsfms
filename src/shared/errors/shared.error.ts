@@ -6,9 +6,7 @@ import { BadRequestException, ConflictException, ForbiddenException } from '@nes
  * Lỗi khi permissions không tồn tại
  */
 export function createPermissionNotFoundError(missingIds: string[]) {
-  const count = missingIds.length
-  const message =
-    count === 1 ? `Permission not found: ${missingIds[0]}` : `Permissions not found: ${missingIds.join(', ')}`
+  const message = `Permission not found`
 
   return new BadRequestException({
     message,
