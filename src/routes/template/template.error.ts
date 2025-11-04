@@ -113,3 +113,9 @@ export class SignatureFieldMissingRoleError extends BadRequestException {
     super(`Signature field '${fieldName}' in section '${sectionLabel}' must have roleRequired set to either TRAINEE or TRAINER`)
   }
 }
+
+export class PartFieldMissingChildrenError extends BadRequestException {
+  constructor(fieldName: string, sectionLabel: string) {
+    super(`PART field '${fieldName}' in section '${sectionLabel}' must have at least one child field`)
+  }
+}

@@ -101,14 +101,6 @@ export class AssessmentService {
       // Step 4: Validate occurrence date is within subject/course date range
       const occurrenceDate = new Date(data.occuranceDate)
       
-      // Debug logging to check date values
-      console.log('Date validation check:')
-      console.log('- Occurrence Date:', occurrenceDate.toISOString(), '(parsed from:', data.occuranceDate, ')')
-      console.log('- Start Date:', startDate.toISOString())
-      console.log('- End Date:', endDate.toISOString())
-      console.log('- Is occurrence < start?', occurrenceDate < startDate)
-      console.log('- Is occurrence > end?', occurrenceDate > endDate)
-      
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
       }
