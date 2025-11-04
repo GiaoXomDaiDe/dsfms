@@ -12,7 +12,7 @@ import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
-@SerializeAll()
+@SerializeAll(['getClient'])
 export class DepartmentRepo {
   constructor(
     private readonly prisma: PrismaService,
