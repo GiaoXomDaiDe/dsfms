@@ -354,3 +354,78 @@ export const GetCourseAssessmentsResSchema = z.object({
 })
 
 export type GetCourseAssessmentsResType = z.infer<typeof GetCourseAssessmentsResSchema>
+
+// Get Assessment Sections for Assessment (for trainers to see what they can assess)
+export const GetAssessmentSectionsQuerySchema = z.object({
+  assessmentId: z.string().uuid()
+})
+
+export type GetAssessmentSectionsQueryType = z.infer<typeof GetAssessmentSectionsQuerySchema>
+
+export const AssessmentSectionDetailSchema = z.object({
+  id: z.string().uuid(),
+  assessmentFormId: z.string().uuid(),
+  assessedById: z.string().uuid().nullable(),
+  templateSectionId: z.string().uuid(),
+  status: z.nativeEnum(AssessmentSectionStatus),
+  createdAt: z.coerce.date(),
+  // Template section information
+  templateSection: z.object({
+    id: z.string().uuid(),
+    label: z.string(),
+    displayOrder: z.number(),
+    editBy: z.string(), // EditByRole enum as string
+    roleInSubject: z.string().nullable(), // RoleInSubject enum as string
+    isSubmittable: z.boolean(),
+    isToggleDependent: z.boolean()
+  }),
+  // Assessor information (if assessed)
+  assessedBy: z.object({
+    id: z.string().uuid(),
+    firstName: z.string(),
+    lastName: z.string(),
+    eid: z.string()
+  }).nullable(),
+  // Permissions for current user
+  canAssess: z.boolean(),
+  roleRequirement: z.string().nullable() // What role is required to assess this section
+})
+
+export type AssessmentSectionDetailType = z.infer<typeof AssessmentSectionDetailSchema>
+
+export const GetAssessmentSectionsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    trainee: z.object({
+      id: z.string().uuid(),
+      firstName: z.string(),
+      lastName: z.string(),
+      eid: z.string()
+    }),
+    template: z.object({
+      id: z.string().uuid(),
+      name: z.string()
+    }),
+    subject: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string()
+    }).nullable(),
+    course: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string()
+    }).nullable(),
+    occuranceDate: z.coerce.date(),
+    status: z.nativeEnum(AssessmentStatus)
+  }),
+  sections: z.array(AssessmentSectionDetailSchema),
+  userRole: z.string(),
+  totalSections: z.number(),
+  sectionsCanAssess: z.number()
+})
+
+export type GetAssessmentSectionsResType = z.infer<typeof GetAssessmentSectionsResSchema>

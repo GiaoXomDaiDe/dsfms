@@ -12,7 +12,8 @@ import {
   GetSubjectAssessmentsQueryType,
   GetSubjectAssessmentsResType,
   GetCourseAssessmentsQueryType,
-  GetCourseAssessmentsResType
+  GetCourseAssessmentsResType,
+  GetAssessmentSectionsResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -98,14 +99,11 @@ export class AssessmentService {
         throw TemplateDepartmentMismatchException
       }
 
-      // Step 4: Validate occurrence date is within subject/course date range
+      // Step 4: Validate occurrence date is after start date (no end date restriction)
       const occurrenceDate = new Date(data.occuranceDate)
       
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
-      }
-      if (occurrenceDate > endDate) {
-        throw OccurrenceDateAfterEndException(endDate, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 5: Validate trainees
@@ -292,6 +290,7 @@ export class AssessmentService {
       }
 
       // Step 3: Check if any trainees are enrolled
+      // For course-level assessments: trainees enrolled in at least one active subject in the course
       if (enrolledTrainees.length === 0) {
         throw NoEnrolledTraineesFoundException(
           data.subjectId ? 'subject' : 'course',
@@ -312,22 +311,11 @@ export class AssessmentService {
         throw TemplateDepartmentMismatchException
       }
 
-      // Step 6: Validate occurrence date is within subject/course date range
+      // Step 6: Validate occurrence date is after start date (no end date restriction)
       const occurrenceDate = new Date(data.occuranceDate)
-      
-      // Debug logging to check date values
-    //   console.log('Bulk Assessment Date validation check:')
-    //   console.log('- Occurrence Date:', occurrenceDate.toISOString(), '(parsed from:', data.occuranceDate, ')')
-    //   console.log('- Start Date:', startDate.toISOString())
-    //   console.log('- End Date:', endDate.toISOString())
-    //   console.log('- Is occurrence < start?', occurrenceDate < startDate)
-    //   console.log('- Is occurrence > end?', occurrenceDate > endDate)
       
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
-      }
-      if (occurrenceDate > endDate) {
-        throw OccurrenceDateAfterEndException(endDate, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 7: Check for existing assessments and filter out trainees who already have assessments
@@ -622,5 +610,47 @@ export class AssessmentService {
         isEnrolled: trainee?.subjectEnrollments.some(e => e.status === 'ENROLLED') || false
       }
     })
+  }
+
+  /**
+   * Get assessment sections that a user can assess
+   */
+  async getAssessmentSections(
+    assessmentId: string,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    try {
+      // First check if assessment exists and user has access to it
+      const hasAccess = await this.assessmentRepo.checkAssessmentAccess(
+        assessmentId,
+        currentUser.userId,
+        currentUser.roleName
+      )
+
+      if (!hasAccess) {
+        throw AssessmentNotAccessibleException
+      }
+
+      // Get sections with permission information
+      const result = await this.assessmentRepo.getAssessmentSections(
+        assessmentId,
+        currentUser.userId
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get assessment sections failed:', error)
+      
+      if (error.name === 'ForbiddenException' || 
+          error.name === 'NotFoundException') {
+        throw error
+      }
+
+      if (error.message === 'Assessment not found') {
+        throw AssessmentNotFoundException
+      }
+
+      throw new Error('Failed to get assessment sections')
+    }
   }
 }
