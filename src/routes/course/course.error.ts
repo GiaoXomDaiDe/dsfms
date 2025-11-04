@@ -81,3 +81,9 @@ export const CourseExaminerAlreadyAssignedForSubjectException = new BadRequestEx
 export const CannotAssignExaminerToArchivedCourseException = new BadRequestException(
   'Cannot assign examiner to an archived course'
 )
+export const CourseTrainerAlreadyAssignedException = new BadRequestException(
+  'Trainer is already assigned to this course'
+)
+export const CourseTrainerAssignmentNotFoundException = new NotFoundException(
+  'Trainer assignment for this course not found'
+)

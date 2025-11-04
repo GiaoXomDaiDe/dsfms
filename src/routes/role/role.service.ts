@@ -6,9 +6,9 @@ import {
   RoleAlreadyExistsException,
   UnexpectedEnableErrorException
 } from '~/routes/role/role.error'
+import { RoleMes } from '~/routes/role/role.message'
 import { CreateRoleBodyType, UpdateRoleBodyType } from '~/routes/role/role.model'
 import { RoleRepo } from '~/routes/role/role.repo'
-import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
@@ -22,20 +22,13 @@ export class RoleService {
     private readonly sharedRoleRepo: SharedRoleRepository
   ) {}
 
-  async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
-    const data = await this.roleRepo.list({
-      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
-    })
+  async list() {
+    const data = await this.roleRepo.list()
     return data
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
-  ) {
-    const role = await this.roleRepo.findById(id, {
-      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
-    })
+  async findById(id: string) {
+    const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
     return role
   }
@@ -78,7 +71,7 @@ export class RoleService {
 
     try {
       await this.roleRepo.delete({ id, deletedById })
-      return { message: 'Disable successfully' }
+      return { message: RoleMes.DELETE_SUCCESS }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       throw error
@@ -86,7 +79,7 @@ export class RoleService {
   }
 
   async enable({ id, enabledById }: { id: string; enabledById: string }) {
-    const role = await this.roleRepo.findById(id, { includeDeleted: true })
+    const role = await this.roleRepo.findByIdIncludingDeleted(id)
     if (!role) throw NotFoundRoleException
 
     // Business rule: Check if already active
@@ -94,7 +87,7 @@ export class RoleService {
 
     try {
       await this.roleRepo.enable({ id, enabledById })
-      return { message: 'Enable role successfully' }
+      return { message: RoleMes.ENABLE_SUCCESS }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       if (isUniqueConstraintPrismaError(error)) throw UnexpectedEnableErrorException
@@ -128,8 +121,9 @@ export class RoleService {
       }
 
       return {
-        message: `Successfully added ${result.addedPermissions.length} permission(s) to role '${role.name}'`,
-        addedPermissions: result.addedPermissions
+        addedPermissions: result.addedPermissions,
+        addedCount: result.addedPermissions.length,
+        summary: `Successfully added ${result.addedPermissions.length} permission(s) to role '${role.name}'`
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException

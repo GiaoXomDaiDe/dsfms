@@ -21,6 +21,7 @@ import {
   CourseNotFoundException
 } from './course.error'
 import {
+  AssignCourseTrainerResType,
   CourseExaminerAssignmentType,
   CourseTraineeInfoType,
   CourseType,
@@ -31,7 +32,8 @@ import {
   GetCoursesResType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
-  UpdateCourseResType
+  UpdateCourseResType,
+  UpdateCourseTrainerAssignmentResType
 } from './course.model'
 
 @Injectable()
@@ -703,6 +705,202 @@ export class CourseRepo {
         assignedAt: assignmentTimestamp
       }
     })
+  }
+
+  async assignTrainerToCourse({
+    courseId,
+    trainerUserId,
+    roleInSubject
+  }: {
+    courseId: string
+    trainerUserId: string
+    roleInSubject: SubjectInstructorRoleValue
+  }): Promise<AssignCourseTrainerResType> {
+    return this.prisma.$transaction(async (tx) => {
+      const course = await tx.course.findFirst({
+        where: {
+          id: courseId,
+          deletedAt: null,
+          status: {
+            not: CourseStatus.ARCHIVED
+          }
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          departmentId: true
+        }
+      })
+
+      if (!course) {
+        throw CourseNotFoundException
+      }
+
+      const trainer = await tx.user.findFirst({
+        where: {
+          id: trainerUserId,
+          deletedAt: null,
+          role: {
+            name: RoleName.TRAINER
+          }
+        },
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          status: true,
+          departmentId: true
+        }
+      })
+
+      if (!trainer) {
+        throw TrainerNotFoundException
+      }
+
+      if (trainer.departmentId && trainer.departmentId !== course.departmentId) {
+        throw TrainerBelongsToAnotherDepartmentException
+      }
+
+      if (!trainer.departmentId && course.departmentId) {
+        await tx.user.update({
+          where: { id: trainerUserId },
+          data: {
+            departmentId: course.departmentId
+          }
+        })
+      }
+
+      const assignment = await tx.courseInstructor.create({
+        data: {
+          trainerUserId,
+          courseId,
+          roleInAssessment: roleInSubject as any
+        },
+        include: {
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true
+            }
+          }
+        }
+      })
+
+      return {
+        trainer: assignment.trainer,
+        course: {
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          status: course.status,
+          startDate: course.startDate,
+          endDate: course.endDate
+        },
+        role: assignment.roleInAssessment as SubjectInstructorRoleValue
+      }
+    })
+  }
+
+  async updateCourseTrainerAssignment({
+    courseId,
+    trainerUserId,
+    newRoleInSubject
+  }: {
+    courseId: string
+    trainerUserId: string
+    newRoleInSubject: SubjectInstructorRoleValue
+  }): Promise<UpdateCourseTrainerAssignmentResType> {
+    const assignment = await this.prisma.courseInstructor.update({
+      where: {
+        trainerUserId_courseId: {
+          trainerUserId,
+          courseId
+        }
+      },
+      data: {
+        roleInAssessment: newRoleInSubject as any
+      },
+      include: {
+        trainer: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true,
+            phoneNumber: true,
+            status: true
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            startDate: true,
+            endDate: true
+          }
+        }
+      }
+    })
+
+    return {
+      trainer: assignment.trainer,
+      course: assignment.course,
+      role: assignment.roleInAssessment as SubjectInstructorRoleValue
+    }
+  }
+
+  async removeTrainerFromCourse({
+    courseId,
+    trainerUserId
+  }: {
+    courseId: string
+    trainerUserId: string
+  }): Promise<void> {
+    await this.prisma.courseInstructor.delete({
+      where: {
+        trainerUserId_courseId: {
+          trainerUserId,
+          courseId
+        }
+      }
+    })
+  }
+
+  async isTrainerAssignedToCourse({
+    courseId,
+    trainerUserId
+  }: {
+    courseId: string
+    trainerUserId: string
+  }): Promise<boolean> {
+    const assignment = await this.prisma.courseInstructor.findUnique({
+      where: {
+        trainerUserId_courseId: {
+          trainerUserId,
+          courseId
+        }
+      }
+    })
+
+    return !!assignment
   }
 
   private aggregateCourseTrainees(

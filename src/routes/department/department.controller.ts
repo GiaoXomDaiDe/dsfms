@@ -1,7 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
-  AddTrainersToDepartmentBodyDTO,
   CreateDepartmentBodyDTO,
   CreateDepartmentResDTO,
   GetDepartmentDetailQueryDTO,
@@ -10,7 +9,6 @@ import {
   GetDepartmentParamsDTO,
   GetDepartmentsQueryDTO,
   GetDepartmentsResDTO,
-  RemoveTrainersFromDepartmentBodyDTO,
   UpdateDepartmentBodyDTO
 } from '~/routes/department/department.dto'
 import { DepartmentService } from '~/routes/department/department.service'
@@ -94,33 +92,5 @@ export class DepartmentController {
   @ZodSerializerDto(GetDepartmentHeadsResDTO)
   getDepartmentHeads() {
     return this.departmentService.getDepartmentHeads()
-  }
-
-  @Patch(':departmentId/add-trainers')
-  @ZodSerializerDto(MessageResDTO)
-  addTrainersToDepartment(
-    @Param() params: GetDepartmentParamsDTO,
-    @Body() body: AddTrainersToDepartmentBodyDTO,
-    @ActiveUser('userId') userId: string
-  ) {
-    return this.departmentService.addTrainersToDepartment({
-      departmentId: params.departmentId,
-      trainerEids: body.trainerEids,
-      updatedById: userId
-    })
-  }
-
-  @Patch(':departmentId/remove-trainers')
-  @ZodSerializerDto(MessageResDTO)
-  removeTrainersFromDepartment(
-    @Param() params: GetDepartmentParamsDTO,
-    @Body() body: RemoveTrainersFromDepartmentBodyDTO,
-    @ActiveUser('userId') userId: string
-  ) {
-    return this.departmentService.removeTrainersFromDepartment({
-      departmentId: params.departmentId,
-      trainerEids: body.trainerEids,
-      updatedById: userId
-    })
   }
 }

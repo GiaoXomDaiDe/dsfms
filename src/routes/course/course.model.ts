@@ -1,6 +1,4 @@
-import { SubjectEnrollmentStatus } from '@prisma/client'
 import { z } from 'zod'
-import { TraineeEnrollmentSubjectSchema } from '~/routes/subject/subject.model'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
 import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 import { CourseSchema } from '~/shared/models/shared-course.model'
@@ -33,6 +31,10 @@ export const GetCoursesQuerySchema = IncludeDeletedQuerySchema.strict()
 
 export const GetCourseParamsSchema = z.object({
   courseId: z.uuid()
+})
+
+export const CourseTrainerParamsSchema = GetCourseParamsSchema.extend({
+  trainerId: z.uuid()
 })
 
 export const GetCoursesResSchema = z.object({
@@ -131,43 +133,37 @@ export const CancelCourseEnrollmentsBodySchema = z.object({
   batchCode: z.string().min(1)
 })
 
-export const TraineeEnrollmentUserSchema = UserSchema.pick({
-  id: true,
-  eid: true,
-  firstName: true,
-  middleName: true,
-  lastName: true,
-  email: true
-}).extend({
-  department: DepartmentSchema.pick({
-    id: true,
-    name: true,
-    code: true,
-    description: true
-  }).nullable()
-})
-
-export const TraineeEnrollmentRecordSchema = z.object({
-  subject: TraineeEnrollmentSubjectSchema,
-  enrollment: z.object({
-    batchCode: z.string(),
-    status: z.enum(SubjectEnrollmentStatus),
-    enrollmentDate: z.iso.datetime().transform((d) => new Date(d)),
-    updatedAt: z.iso.datetime().transform((d) => new Date(d))
-  })
-})
-
-export const GetTraineeEnrollmentsResSchema = z.object({
-  trainee: TraineeEnrollmentUserSchema,
-  enrollments: z.array(TraineeEnrollmentRecordSchema),
-  totalCount: z.number().int()
-})
-
 export const AssignCourseExaminerBodySchema = z.object({
   trainerUserId: z.uuid(),
   roleInSubject: z.enum(SubjectInstructorRole),
   subjectId: z.uuid().optional()
 })
+
+const CourseTrainerCourseSchema = CourseSchema.pick({
+  id: true,
+  code: true,
+  name: true,
+  status: true,
+  startDate: true,
+  endDate: true
+})
+
+export const AssignCourseTrainerBodySchema = z.object({
+  trainerUserId: z.uuid(),
+  roleInSubject: z.enum(SubjectInstructorRole)
+})
+
+export const AssignCourseTrainerResSchema = z.object({
+  trainer: CourseExaminerTrainerSchema,
+  course: CourseTrainerCourseSchema,
+  role: z.enum(SubjectInstructorRole)
+})
+
+export const UpdateCourseTrainerAssignmentBodySchema = z.object({
+  roleInSubject: z.enum(SubjectInstructorRole)
+})
+
+export const UpdateCourseTrainerAssignmentResSchema = AssignCourseTrainerResSchema
 
 const CourseExaminerCourseSchema = CourseSchema.pick({
   id: true,
@@ -198,11 +194,16 @@ export type CreateCourseBodyType = z.infer<typeof CreateCourseBodySchema>
 export type CreateCourseResType = z.infer<typeof CreateCourseResSchema>
 export type UpdateCourseBodyType = z.infer<typeof UpdateCourseBodySchema>
 export type UpdateCourseResType = z.infer<typeof UpdateCourseResSchema>
+export type CourseTrainerParamsType = z.infer<typeof CourseTrainerParamsSchema>
 export type GetCourseParamsType = z.infer<typeof GetCourseParamsSchema>
 export type GetCoursesQueryType = z.infer<typeof GetCoursesQuerySchema>
 export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
 export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
 export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
+export type AssignCourseTrainerBodyType = z.infer<typeof AssignCourseTrainerBodySchema>
+export type AssignCourseTrainerResType = z.infer<typeof AssignCourseTrainerResSchema>
+export type UpdateCourseTrainerAssignmentBodyType = z.infer<typeof UpdateCourseTrainerAssignmentBodySchema>
+export type UpdateCourseTrainerAssignmentResType = z.infer<typeof UpdateCourseTrainerAssignmentResSchema>
 export type AssignCourseExaminerBodyType = z.infer<typeof AssignCourseExaminerBodySchema>
 export type CourseExaminerAssignmentType = z.infer<typeof CourseExaminerAssignmentSchema>
 export type AssignCourseExaminerResType = z.infer<typeof AssignCourseExaminerResSchema>

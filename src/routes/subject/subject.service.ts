@@ -451,6 +451,7 @@ export class SubjectService {
       batchCode,
       status
     })
+    console.log('trainee', result.trainee)
 
     return {
       trainee: result.trainee,

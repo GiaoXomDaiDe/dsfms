@@ -1,7 +1,5 @@
 import { createZodDto } from 'nestjs-zod'
 import {
-  AddTrainersToDepartmentBodySchema,
-  AddTrainersToDepartmentParamsSchema,
   CreateDepartmentBodySchema,
   CreateDepartmentResSchema,
   GetDepartmentDetailQuerySchema,
@@ -10,8 +8,6 @@ import {
   GetDepartmentParamsSchema,
   GetDepartmentsQuerySchema,
   GetDepartmentsResSchema,
-  RemoveTrainersFromDepartmentBodySchema,
-  RemoveTrainersFromDepartmentParamsSchema,
   UpdateDepartmentBodySchema,
   UpdateDepartmentEnhancedBodySchema,
   UpdateDepartmentEnhancedResSchema
@@ -32,14 +28,6 @@ export class CreateDepartmentBodyDTO extends createZodDto(CreateDepartmentBodySc
 export class CreateDepartmentResDTO extends createZodDto(CreateDepartmentResSchema) {}
 
 export class UpdateDepartmentBodyDTO extends createZodDto(UpdateDepartmentBodySchema) {}
-
-export class AddTrainersToDepartmentBodyDTO extends createZodDto(AddTrainersToDepartmentBodySchema) {}
-
-export class AddTrainersToDepartmentParamsDTO extends createZodDto(AddTrainersToDepartmentParamsSchema) {}
-
-export class RemoveTrainersFromDepartmentBodyDTO extends createZodDto(RemoveTrainersFromDepartmentBodySchema) {}
-
-export class RemoveTrainersFromDepartmentParamsDTO extends createZodDto(RemoveTrainersFromDepartmentParamsSchema) {}
 
 export class GetDepartmentHeadsResDTO extends createZodDto(GetDepartmentHeadsResSchema) {}
 

@@ -3,7 +3,10 @@ import { ZodSerializerDto } from 'nestjs-zod'
 import {
   AssignCourseExaminerBodyDto,
   AssignCourseExaminerResDto,
+  AssignCourseTrainerBodyDto,
+  AssignCourseTrainerResDto,
   CancelCourseEnrollmentsBodyDto,
+  CourseTrainerParamsDto,
   CreateCourseBodyDto,
   CreateCourseResDto,
   GetCourseParamsDto,
@@ -12,12 +15,17 @@ import {
   GetCoursesResDto,
   GetCourseTraineesQueryDto,
   GetCourseTraineesResDto,
-  GetTraineeEnrollmentsResDto,
   UpdateCourseBodyDto,
-  UpdateCourseResDto
+  UpdateCourseResDto,
+  UpdateCourseTrainerAssignmentBodyDto,
+  UpdateCourseTrainerAssignmentResDto
 } from '~/routes/course/course.dto'
 import { CourseService } from '~/routes/course/course.service'
-import { CancelCourseEnrollmentsResDto, GetTraineeEnrollmentsQueryDto } from '~/routes/subject/subject.dto'
+import {
+  CancelCourseEnrollmentsResDto,
+  GetTraineeEnrollmentsQueryDto,
+  GetTraineeEnrollmentsResDto
+} from '~/routes/subject/subject.dto'
 
 import { SubjectService } from '~/routes/subject/subject.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -98,6 +106,37 @@ export class CourseController {
     return await this.courseService.assignExaminerToCourse({
       courseId: params.courseId,
       data: body
+    })
+  }
+
+  @Post(':courseId/trainers')
+  @ZodSerializerDto(AssignCourseTrainerResDto)
+  async assignTrainer(@Param() params: GetCourseParamsDto, @Body() body: AssignCourseTrainerBodyDto) {
+    return await this.courseService.assignTrainerToCourse({
+      courseId: params.courseId,
+      data: body
+    })
+  }
+
+  @Put(':courseId/trainers/:trainerId')
+  @ZodSerializerDto(UpdateCourseTrainerAssignmentResDto)
+  async updateTrainerAssignment(
+    @Param() params: CourseTrainerParamsDto,
+    @Body() body: UpdateCourseTrainerAssignmentBodyDto
+  ) {
+    return await this.courseService.updateCourseTrainerAssignment({
+      courseId: params.courseId,
+      trainerId: params.trainerId,
+      data: body
+    })
+  }
+
+  @Delete(':courseId/trainers/:trainerId')
+  @ZodSerializerDto(MessageResDTO)
+  async removeTrainer(@Param() params: CourseTrainerParamsDto) {
+    return await this.courseService.removeTrainerFromCourse({
+      courseId: params.courseId,
+      trainerId: params.trainerId
     })
   }
 
