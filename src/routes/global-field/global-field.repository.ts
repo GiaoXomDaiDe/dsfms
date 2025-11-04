@@ -21,7 +21,7 @@ export class GlobalFieldRepository {
     })
   }
 
-  async findAllDetailed() {
+  async findAllDetail() {
     return this.prismaService.globalField.findMany({
       include: {
         parent: {
@@ -73,7 +73,7 @@ export class GlobalFieldRepository {
     })
   }
 
-  async findByIdDetailed(id: string) {
+  async findByIdDetail(id: string) {
     return this.prismaService.globalField.findUnique({
       where: { id },
       include: {
