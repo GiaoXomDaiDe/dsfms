@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
 import {
   BulkDuplicateDataFoundMessage,
@@ -6,14 +7,54 @@ import {
   BulkUnknownErrorMessage,
   UserNotFoundException
 } from '~/routes/user/user.error'
-import { BulkCreateResultType, CreateUserInternalType, UserType } from '~/routes/user/user.model'
+import { BulkCreateResultType, CreateUserInternalType, GetUsersQueryType, UserType } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { GetUsersResType } from '~/shared/models/shared-user.model'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
+
+const roleNameSelect = {
+  name: true
+} satisfies Prisma.RoleSelect
+
+const roleIdNameSelect = {
+  id: true,
+  name: true
+} satisfies Prisma.RoleSelect
+
+const departmentNameSelect = {
+  name: true
+} satisfies Prisma.DepartmentSelect
+
+const departmentIdNameSelect = {
+  id: true,
+  name: true
+} satisfies Prisma.DepartmentSelect
+
+const userRoleNameInclude = {
+  role: {
+    select: roleNameSelect
+  }
+} satisfies Prisma.UserInclude
+
+const userRoleDepartmentNameInclude = {
+  role: {
+    select: roleNameSelect
+  },
+  department: {
+    select: departmentNameSelect
+  }
+} satisfies Prisma.UserInclude
+
+const userRoleDepartmentInclude = {
+  role: {
+    select: roleIdNameSelect
+  },
+  department: {
+    select: departmentIdNameSelect
+  }
+} satisfies Prisma.UserInclude
 
 type BulkUserData = CreateUserInternalType & {
   roleName: string
@@ -24,27 +65,16 @@ type BulkUserData = CreateUserInternalType & {
 @Injectable()
 @SerializeAll()
 export class UserRepo {
-  constructor(
-    private prismaService: PrismaService,
-    private readonly sharedUserRepository: SharedUserRepository
-  ) {}
+  constructor(private prismaService: PrismaService) {}
 
-  async list({
-    includeDeleted = false,
-    roleName
-  }: IncludeDeletedQueryType & { roleName?: string } = {}): Promise<GetUsersResType> {
-    const whereClause = this.sharedUserRepository.buildListFilters({
-      includeDeleted,
-      extend: ({ includeDeleted: includeDeletedContext }) =>
-        roleName
-          ? {
-              role: {
-                name: roleName,
-                ...(includeDeletedContext ? {} : { deletedAt: null })
-              }
-            }
-          : {}
-    })
+  async list({ roleName }: GetUsersQueryType = {}): Promise<GetUsersResType> {
+    const whereClause: Prisma.UserWhereInput = roleName
+      ? {
+          role: {
+            name: roleName
+          }
+        }
+      : {}
 
     const [totalItems, data] = await Promise.all([
       this.prismaService.user.count({
@@ -58,17 +88,7 @@ export class UserRepo {
           roleId: true,
           departmentId: true
         },
-        include: {
-          role: {
-            select: { id: true, name: true }
-          },
-          department: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
+        include: userRoleDepartmentInclude
       })
     ])
     return {
@@ -97,16 +117,7 @@ export class UserRepo {
           ...userData,
           createdById
         },
-        include: {
-          role: {
-            select: { name: true }
-          },
-          department: {
-            select: {
-              name: true
-            }
-          }
-        }
+        include: userRoleDepartmentNameInclude
       })
 
       // Bước 2: Tạo profile tương ứng dựa trên role
@@ -139,12 +150,7 @@ export class UserRepo {
       return await tx.user.findUnique({
         where: { id: newUser.id },
         include: {
-          role: {
-            select: { id: true, name: true }
-          },
-          department: {
-            select: { id: true, name: true }
-          },
+          ...userRoleDepartmentInclude,
           trainerProfile: roleName === RoleName.TRAINER,
           traineeProfile: roleName === RoleName.TRAINEE
         }
@@ -210,12 +216,7 @@ export class UserRepo {
       return await tx.user.findUnique({
         where: { id },
         include: {
-          role: {
-            select: { id: true, name: true }
-          },
-          department: {
-            select: { id: true, name: true }
-          },
+          ...userRoleDepartmentInclude,
           trainerProfile: roleName === RoleName.TRAINER,
           traineeProfile: roleName === RoleName.TRAINEE
         }
@@ -292,9 +293,7 @@ export class UserRepo {
       // Lấy thông tin user với role
       const user = await tx.user.findUnique({
         where: { id },
-        include: {
-          role: { select: { name: true } }
-        }
+        include: userRoleNameInclude
       })
       if (!user) throw UserNotFoundException
 
@@ -329,8 +328,7 @@ export class UserRepo {
       return await tx.user.findUnique({
         where: { id, deletedAt: null },
         include: {
-          role: { select: { id: true, name: true } },
-          department: { select: { id: true, name: true } },
+          ...userRoleDepartmentInclude,
           trainerProfile: user.role.name === RoleName.TRAINER,
           traineeProfile: user.role.name === RoleName.TRAINEE
         }
@@ -419,10 +417,7 @@ export class UserRepo {
 
             const createdUsers = await tx.user.createManyAndReturn({
               data: usersToCreate,
-              include: {
-                role: { select: { id: true, name: true } },
-                department: { select: { id: true, name: true } }
-              }
+              include: userRoleDepartmentInclude
             })
 
             // Bước 2: Tạo hàng loạt profiles (tách riêng để tối ưu hiệu suất)
@@ -475,8 +470,7 @@ export class UserRepo {
                 id: { in: createdUsers.map((u) => u.id) }
               },
               include: {
-                role: { select: { id: true, name: true } },
-                department: { select: { id: true, name: true } },
+                ...userRoleDepartmentInclude,
                 trainerProfile: true,
                 traineeProfile: true
               }

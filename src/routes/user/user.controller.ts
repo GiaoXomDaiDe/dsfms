@@ -23,11 +23,8 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  list(@Query() { roleName }: GetUsersQueryDTO, @ActiveRolePermissions('name') activeUserRoleName: string) {
-    return this.userService.list({
-      roleName,
-      activeUserRoleName
-    })
+  list(@Query() query: GetUsersQueryDTO) {
+    return this.userService.list(query)
   }
 
   @Get(':userId')

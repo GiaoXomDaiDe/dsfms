@@ -30,6 +30,7 @@ import {
 import {
   CreateBulkUsersBodyType,
   CreateUserBodyWithProfileType,
+  GetUsersQueryType,
   UpdateUserBodyWithProfileType
 } from '~/routes/user/user.model'
 import { UserRepo } from '~/routes/user/user.repo'
@@ -65,19 +66,12 @@ export class UserService {
     private readonly nodemailerService: NodemailerService
   ) {}
 
-  list({ roleName, activeUserRoleName }: { roleName?: string; activeUserRoleName?: string } = {}) {
-    const includeDeleted = activeUserRoleName === RoleName.ADMINISTRATOR
-
-    return this.userRepo.list({
-      includeDeleted,
-      roleName
-    })
+  list(query: GetUsersQueryType = {}) {
+    return this.userRepo.list(query)
   }
 
-  async findById(id: string, { userRole }: { userRole?: string } = {}) {
-    const includeDeleted = userRole === RoleName.ADMINISTRATOR
-
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted })
+  async findById(id: string, { userRole: _userRole }: { userRole?: string } = {}) {
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: true })
 
     if (!user) {
       throw UserNotFoundException
@@ -524,11 +518,7 @@ export class UserService {
     return true
   }
 
-  /**
-   * Cập nhật thông tin người dùng.
-   * Chỉ ADMINISTRATOR mới được phép update user bị disabled.
-   * Ví dụ: PUT /users/:userId?includeDeleted=true
-   */
+  /** Cập nhật thông tin người dùng. Chỉ ADMINISTRATOR mới được phép update user bị disabled. */
   async update({
     id,
     data,
@@ -548,10 +538,12 @@ export class UserService {
       })
 
       // Bước 2: Lấy thông tin user hiện tại
-      const includeDeleted = updatedByRoleName === RoleName.ADMINISTRATOR
-
-      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted })
+      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: true })
       if (!currentUser) {
+        throw UserNotFoundException
+      }
+
+      if (currentUser.deletedAt && updatedByRoleName !== RoleName.ADMINISTRATOR) {
         throw UserNotFoundException
       }
 
@@ -601,7 +593,7 @@ export class UserService {
           newRoleName,
           trainerProfile,
           traineeProfile,
-          includeDeleted
+          includeDeleted: true
         }
       )
 

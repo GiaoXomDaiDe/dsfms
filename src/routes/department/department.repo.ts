@@ -8,7 +8,7 @@ import {
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
+import { SharedFilterService } from '~/shared/repositories/shared-filter.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -16,11 +16,11 @@ import { PrismaService } from '~/shared/services/prisma.service'
 export class DepartmentRepo {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sharedUserRepo: SharedUserRepository
+    private readonly sharedFilterService: SharedFilterService
   ) {}
 
   async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetDepartmentsResType> {
-    const whereClause = this.sharedUserRepo.buildListFilters({ includeDeleted })
+    const whereClause = this.sharedFilterService.buildListFilters({ includeDeleted })
 
     const [totalItems, departments] = await Promise.all([
       this.prisma.department.count({
