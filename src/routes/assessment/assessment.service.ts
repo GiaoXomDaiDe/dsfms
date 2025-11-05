@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common'
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common'
 import { CourseStatus, SubjectStatus } from '@prisma/client'
 import { AssessmentRepo } from './assessment.repo'
 import {
@@ -12,7 +12,16 @@ import {
   GetSubjectAssessmentsQueryType,
   GetSubjectAssessmentsResType,
   GetCourseAssessmentsQueryType,
-  GetCourseAssessmentsResType
+  GetCourseAssessmentsResType,
+  GetAssessmentSectionsResType,
+  GetAssessmentSectionFieldsResType,
+  SaveAssessmentValuesBodyType,
+  SaveAssessmentValuesResType,
+  ToggleTraineeLockBodyType,
+  ToggleTraineeLockResType,
+  SubmitAssessmentResType,
+  UpdateAssessmentValuesBodyType,
+  UpdateAssessmentValuesResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -98,14 +107,11 @@ export class AssessmentService {
         throw TemplateDepartmentMismatchException
       }
 
-      // Step 4: Validate occurrence date is within subject/course date range
+      // Step 4: Validate occurrence date is after start date (no end date restriction)
       const occurrenceDate = new Date(data.occuranceDate)
       
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
-      }
-      if (occurrenceDate > endDate) {
-        throw OccurrenceDateAfterEndException(endDate, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 5: Validate trainees
@@ -292,6 +298,7 @@ export class AssessmentService {
       }
 
       // Step 3: Check if any trainees are enrolled
+      // For course-level assessments: trainees enrolled in at least one active subject in the course
       if (enrolledTrainees.length === 0) {
         throw NoEnrolledTraineesFoundException(
           data.subjectId ? 'subject' : 'course',
@@ -312,22 +319,11 @@ export class AssessmentService {
         throw TemplateDepartmentMismatchException
       }
 
-      // Step 6: Validate occurrence date is within subject/course date range
+      // Step 6: Validate occurrence date is after start date (no end date restriction)
       const occurrenceDate = new Date(data.occuranceDate)
-      
-      // Debug logging to check date values
-    //   console.log('Bulk Assessment Date validation check:')
-    //   console.log('- Occurrence Date:', occurrenceDate.toISOString(), '(parsed from:', data.occuranceDate, ')')
-    //   console.log('- Start Date:', startDate.toISOString())
-    //   console.log('- End Date:', endDate.toISOString())
-    //   console.log('- Is occurrence < start?', occurrenceDate < startDate)
-    //   console.log('- Is occurrence > end?', occurrenceDate > endDate)
       
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
-      }
-      if (occurrenceDate > endDate) {
-        throw OccurrenceDateAfterEndException(endDate, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 7: Check for existing assessments and filter out trainees who already have assessments
@@ -622,5 +618,447 @@ export class AssessmentService {
         isEnrolled: trainee?.subjectEnrollments.some(e => e.status === 'ENROLLED') || false
       }
     })
+  }
+
+  /**
+   * Get assessment sections that a user can assess
+   */
+  async getAssessmentSections(
+    assessmentId: string,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    try {
+      // First check if assessment exists and user has access to it
+      const hasAccess = await this.assessmentRepo.checkAssessmentAccess(
+        assessmentId,
+        currentUser.userId,
+        currentUser.roleName
+      )
+
+      if (!hasAccess) {
+        throw AssessmentNotAccessibleException
+      }
+
+      // Get sections with permission information
+      const result = await this.assessmentRepo.getAssessmentSections(
+        assessmentId,
+        currentUser.userId
+      )
+
+      return result
+    } catch (error) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors  
+      if (error.name === 'ForbiddenException') {
+        throw new ForbiddenException(error.message)
+      }
+
+      if (error.message === 'Assessment not found') {
+        throw AssessmentNotFoundException
+      }
+
+      // Handle any other unexpected errors
+      console.error('Get assessment sections failed:', error)
+      throw new NotFoundException('Failed to get assessment sections')
+    }
+  }
+
+  /**
+   * Get all fields of an assessment section with their template field information and assessment values
+   */
+  async getAssessmentSectionFields(
+    assessmentSectionId: string,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    try {
+      // Get the assessment section fields with basic info
+      const result = await this.assessmentRepo.getAssessmentSectionFields(assessmentSectionId)
+
+      // Get the assessment form ID to check permissions
+      const assessmentFormId = result.assessmentSectionInfo.assessmentFormId
+
+      // First check if user has access to the assessment form
+      const hasAccess = await this.assessmentRepo.checkAssessmentAccess(
+        assessmentFormId,
+        currentUser.userId,
+        currentUser.roleName
+      )
+
+      if (!hasAccess) {
+        throw AssessmentNotAccessibleException
+      }
+
+      // Now check if user has permission to access this specific section based on role
+      const templateSection = result.assessmentSectionInfo.templateSection
+      
+      // Get user's role in the assessment (same logic as getAssessmentSections)
+      let userRoleInAssessment: string | null = null
+      
+      // Get assessment details to check subject/course
+      const assessment = await this.assessmentRepo.findById(assessmentFormId)
+      
+      if (assessment?.subjectId) {
+        // Check if user is instructor for this subject
+        const subjectInstructor = await this.assessmentRepo.prismaClient.subjectInstructor.findFirst({
+          where: {
+            subjectId: assessment.subjectId,
+            trainerUserId: currentUser.userId
+          },
+          select: {
+            roleInAssessment: true
+          }
+        })
+        userRoleInAssessment = subjectInstructor?.roleInAssessment || null
+      } else if (assessment?.courseId) {
+        // Check if user is instructor for this course
+        const courseInstructor = await this.assessmentRepo.prismaClient.courseInstructor.findFirst({
+          where: {
+            courseId: assessment.courseId,
+            trainerUserId: currentUser.userId
+          },
+          select: {
+            roleInAssessment: true
+          }
+        })
+        userRoleInAssessment = courseInstructor?.roleInAssessment || null
+      }
+
+      // Check section-level permissions
+      let canAccess = false
+      
+      if (templateSection.editBy === 'TRAINER') {
+        // Section requires trainer access
+        if (currentUser.roleName === 'TRAINER') {
+          // Check if section requires specific role in subject/course
+          if (templateSection.roleInSubject) {
+            // Section requires specific assessment role
+            canAccess = userRoleInAssessment === templateSection.roleInSubject
+          } else {
+            // Section just requires trainer role
+            canAccess = userRoleInAssessment !== null // Must be assigned to subject/course
+          }
+        }
+      } else if (templateSection.editBy === 'TRAINEE') {
+        // Section requires trainee access - trainee can only access their own assessment
+        canAccess = currentUser.roleName === 'TRAINEE' && assessment?.traineeId === currentUser.userId
+      }
+
+      if (!canAccess) {
+        throw new ForbiddenException('You do not have permission to access this assessment section')
+      }
+
+      return result
+    } catch (error) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors  
+      if (error.name === 'ForbiddenException') {
+        throw new ForbiddenException(error.message)
+      }
+
+      if (error.message === 'Assessment section not found') {
+        throw new NotFoundException('Assessment section not found')
+      }
+
+      // Handle any other unexpected errors
+      console.error('Get assessment section fields failed:', error)
+      throw new NotFoundException('Failed to get assessment section fields')
+    }
+  }
+
+  /**
+   * Save assessment values for a section
+   */
+  async saveAssessmentValues(
+    body: SaveAssessmentValuesBodyType,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<SaveAssessmentValuesResType> {
+    try {
+      // First, get the assessment section to check permissions
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId)
+      
+      // Get assessment info for permission check
+      const assessmentSection = await this.assessmentRepo.prismaClient.assessmentSection.findUnique({
+        where: { id: body.assessmentSectionId },
+        include: {
+          assessmentForm: {
+            select: {
+              id: true,
+              traineeId: true,
+              subjectId: true,
+              courseId: true
+            }
+          },
+          templateSection: {
+            select: {
+              editBy: true,
+              roleInSubject: true
+            }
+          }
+        }
+      })
+
+      if (!assessmentSection) {
+        throw new NotFoundException('Assessment section not found')
+      }
+
+      // Check permission to edit this section
+      const hasPermission = await this.checkSectionEditPermission(
+        assessmentSection.assessmentForm.id,
+        assessmentSection.templateSection.editBy,
+        assessmentSection.templateSection.roleInSubject,
+        userContext
+      )
+
+      if (!hasPermission) {
+        throw new ForbiddenException('You do not have permission to edit this assessment section')
+      }
+
+      // Validate that all provided assessment value IDs belong to this section
+      const sectionValueIds = sectionFields.fields.map(field => field.assessmentValue.id)
+      const providedValueIds = body.values.map(v => v.assessmentValueId)
+      
+      const invalidIds = providedValueIds.filter(id => !sectionValueIds.includes(id))
+      if (invalidIds.length > 0) {
+        throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
+      }
+
+      // Save the values
+      return await this.assessmentRepo.saveAssessmentValues(
+        body.assessmentSectionId,
+        body.values,
+        userContext.userId
+      )
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle any other unexpected errors
+      console.error('Save assessment values failed:', error)
+      throw new BadRequestException('Failed to save assessment values')
+    }
+  }
+
+  /**
+   * Toggle trainee lock status
+   */
+  async toggleTraineeLock(
+    assessmentId: string,
+    body: ToggleTraineeLockBodyType,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<ToggleTraineeLockResType> {
+    try {
+      // Check if user has access to this assessment
+      const hasAccess = await this.assessmentRepo.checkAssessmentAccess(
+        assessmentId,
+        userContext.userId,
+        userContext.roleName
+      )
+
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have permission to access this assessment')
+      }
+
+      return await this.assessmentRepo.toggleTraineeLock(
+        assessmentId,
+        body.isTraineeLocked,
+        userContext.userId
+      )
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors from repository
+      if (error.message.includes('occurrence date') || 
+          error.message.includes('trainee sections')) {
+        throw new BadRequestException(error.message)
+      }
+
+      // Handle any other unexpected errors
+      console.error('Toggle trainee lock failed:', error)
+      throw new BadRequestException('Failed to toggle trainee lock')
+    }
+  }
+
+  /**
+   * Submit assessment
+   */
+  async submitAssessment(
+    assessmentId: string,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<SubmitAssessmentResType> {
+    try {
+      // Check if user has access to this assessment
+      const hasAccess = await this.assessmentRepo.checkAssessmentAccess(
+        assessmentId,
+        userContext.userId,
+        userContext.roleName
+      )
+
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have permission to access this assessment')
+      }
+
+      return await this.assessmentRepo.submitAssessment(
+        assessmentId,
+        userContext.userId
+      )
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors from repository
+      if (error.message.includes('not ready to submit') || 
+          error.message.includes('must be completed') ||
+          error.message.includes('submittable section')) {
+        throw new BadRequestException(error.message)
+      }
+
+      // Handle any other unexpected errors
+      console.error('Submit assessment failed:', error)
+      throw new BadRequestException('Failed to submit assessment')
+    }
+  }
+
+  /**
+   * Helper method to check section edit permissions
+   */
+  private async checkSectionEditPermission(
+    assessmentId: string,
+    sectionEditBy: string,
+    sectionRoleInSubject: string | null,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<boolean> {
+    // Get assessment details
+    const assessment = await this.assessmentRepo.prismaClient.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      select: {
+        traineeId: true,
+        subjectId: true,
+        courseId: true
+      }
+    })
+
+    if (!assessment) {
+      return false
+    }
+
+    // If section is for trainee
+    if (sectionEditBy === 'TRAINEE') {
+      return userContext.roleName === 'TRAINEE' && assessment.traineeId === userContext.userId
+    }
+
+    // If section is for trainer
+    if (sectionEditBy === 'TRAINER' && userContext.roleName === 'TRAINER') {
+      // Check role in subject/course if required
+      if (sectionRoleInSubject) {
+        // Get user's role in assessment
+        let userRoleInAssessment: string | null = null
+
+        if (assessment.subjectId) {
+          const subjectInstructor = await this.assessmentRepo.prismaClient.subjectInstructor.findFirst({
+            where: {
+              subjectId: assessment.subjectId,
+              trainerUserId: userContext.userId
+            },
+            select: {
+              roleInAssessment: true
+            }
+          })
+          userRoleInAssessment = subjectInstructor?.roleInAssessment || null
+        } else if (assessment.courseId) {
+          const courseInstructor = await this.assessmentRepo.prismaClient.courseInstructor.findFirst({
+            where: {
+              courseId: assessment.courseId,
+              trainerUserId: userContext.userId
+            },
+            select: {
+              roleInAssessment: true
+            }
+          })
+          userRoleInAssessment = courseInstructor?.roleInAssessment || null
+        }
+
+        return userRoleInAssessment === sectionRoleInSubject
+      } else {
+        // Just need to be assigned to the subject/course
+        return assessment.subjectId !== null || assessment.courseId !== null
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * Update assessment values (only by original assessor)
+   */
+  async updateAssessmentValues(
+    body: UpdateAssessmentValuesBodyType,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<UpdateAssessmentValuesResType> {
+    try {
+      // First, get the assessment section to validate access
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId)
+      
+      // Validate that all provided assessment value IDs belong to this section
+      const sectionValueIds = sectionFields.fields.map(field => field.assessmentValue.id)
+      const providedValueIds = body.values.map((v: any) => v.assessmentValueId)
+      
+      const invalidIds = providedValueIds.filter((id: any) => !sectionValueIds.includes(id))
+      if (invalidIds.length > 0) {
+        throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
+      }
+
+      // Update the values (repository will check if user is the original assessor)
+      return await this.assessmentRepo.updateAssessmentValues(
+        body.assessmentSectionId,
+        body.values,
+        userContext.userId
+      )
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors from repository
+      if (error.message.includes('originally assessed') || 
+          error.message.includes('DRAFT status')) {
+        throw new ForbiddenException(error.message)
+      }
+
+      if (error.message === 'Assessment section not found') {
+        throw new NotFoundException('Assessment section not found')
+      }
+
+      // Handle any other unexpected errors
+      console.error('Update assessment values failed:', error)
+      throw new BadRequestException('Failed to update assessment values')
+    }
   }
 }

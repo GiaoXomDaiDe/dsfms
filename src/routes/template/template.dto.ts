@@ -74,6 +74,10 @@ export class CreateTemplateFieldDto {
   @IsOptional()
   @IsString()
   parentTempId?: string // Temporary ID for parent reference
+
+  @IsOptional()
+  @IsString()
+  tempId?: string // Temporary ID for this field (used for PART fields)
 }
 
 export class CreateTemplateSectionDto {

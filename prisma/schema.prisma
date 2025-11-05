@@ -604,9 +604,11 @@ enum AssessmentStatus {
   ON_GOING
   SIGNATURE_PENDING
   DRAFT
+  READY_TO_SUBMIT
   SUBMITTED
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum AssessmentResult {
