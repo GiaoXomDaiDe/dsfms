@@ -429,3 +429,116 @@ export const GetAssessmentSectionsResSchema = z.object({
 })
 
 export type GetAssessmentSectionsResType = z.infer<typeof GetAssessmentSectionsResSchema>
+
+// ===== GET ASSESSMENT SECTION FIELDS API =====
+
+// Query schema for getting assessment section fields
+export const GetAssessmentSectionFieldsQuerySchema = z.object({
+  assessmentSectionId: z.string().uuid()
+})
+
+export type GetAssessmentSectionFieldsQueryType = z.infer<typeof GetAssessmentSectionFieldsQuerySchema>
+
+// Template field detail schema with assessment value
+export const AssessmentSectionFieldDetailSchema = z.object({
+  templateField: z.object({
+    id: z.string().uuid(),
+    label: z.string(),
+    fieldName: z.string(),
+    fieldType: z.string(),
+    roleRequired: z.string().nullable(),
+    options: z.any().nullable(),
+    displayOrder: z.number(),
+    parentId: z.string().uuid().nullable()
+  }),
+  assessmentValue: z.object({
+    id: z.string().uuid(),
+    answerValue: z.string().nullable()
+  })
+})
+
+export type AssessmentSectionFieldDetailType = z.infer<typeof AssessmentSectionFieldDetailSchema>
+
+// Response schema for assessment section fields
+export const GetAssessmentSectionFieldsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentSectionInfo: z.object({
+    id: z.string().uuid(),
+    assessmentFormId: z.string().uuid(),
+    templateSectionId: z.string().uuid(),
+    status: z.nativeEnum(AssessmentSectionStatus),
+    templateSection: z.object({
+      id: z.string().uuid(),
+      label: z.string(),
+      displayOrder: z.number(),
+      editBy: z.string(),
+      roleInSubject: z.string().nullable(),
+      isSubmittable: z.boolean(),
+      isToggleDependent: z.boolean()
+    })
+  }),
+  fields: z.array(AssessmentSectionFieldDetailSchema),
+  totalFields: z.number()
+})
+
+export type GetAssessmentSectionFieldsResType = z.infer<typeof GetAssessmentSectionFieldsResSchema>
+
+// ===== SAVE ASSESSMENT VALUES SCHEMAS =====
+
+export const SaveAssessmentValueSchema = z.object({
+  assessmentValueId: z.string().uuid('Assessment value ID must be a valid UUID'),
+  answerValue: z.string().max(2000, 'Answer value must not exceed 2000 characters').nullable()
+})
+
+export const SaveAssessmentValuesBodySchema = z.object({
+  assessmentSectionId: z.string().uuid('Assessment section ID must be a valid UUID'),
+  values: z.array(SaveAssessmentValueSchema).min(1, 'At least one value must be provided')
+})
+
+export const SaveAssessmentValuesResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentSectionId: z.string().uuid(),
+  updatedValues: z.number(),
+  sectionStatus: z.nativeEnum(AssessmentSectionStatus),
+  assessmentFormStatus: z.nativeEnum(AssessmentStatus)
+})
+
+export type SaveAssessmentValuesBodyType = z.infer<typeof SaveAssessmentValuesBodySchema>
+export type SaveAssessmentValuesResType = z.infer<typeof SaveAssessmentValuesResSchema>
+
+// ===== TOGGLE TRAINEE LOCK SCHEMAS =====
+
+export const ToggleTraineeLockBodySchema = z.object({
+  isTraineeLocked: z.boolean()
+})
+
+export const ToggleTraineeLockResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentFormId: z.string().uuid(),
+  isTraineeLocked: z.boolean(),
+  status: z.nativeEnum(AssessmentStatus)
+})
+
+export type ToggleTraineeLockBodyType = z.infer<typeof ToggleTraineeLockBodySchema>
+export type ToggleTraineeLockResType = z.infer<typeof ToggleTraineeLockResSchema>
+
+// ===== SUBMIT ASSESSMENT SCHEMAS =====
+
+export const SubmitAssessmentParamsSchema = z.object({
+  assessmentId: z.string().uuid('Assessment ID must be a valid UUID')
+})
+
+export const SubmitAssessmentResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentFormId: z.string().uuid(),
+  submittedAt: z.coerce.date(),
+  submittedBy: z.string().uuid(),
+  status: z.nativeEnum(AssessmentStatus)
+})
+
+export type SubmitAssessmentParamsType = z.infer<typeof SubmitAssessmentParamsSchema>
+export type SubmitAssessmentResType = z.infer<typeof SubmitAssessmentResSchema>

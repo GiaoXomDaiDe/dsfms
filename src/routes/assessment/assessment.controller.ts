@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CreateAssessmentBodyDTO,
@@ -13,7 +13,13 @@ import {
   GetSubjectAssessmentsResDTO,
   GetCourseAssessmentsQueryDTO,
   GetCourseAssessmentsResDTO,
-  GetAssessmentSectionsResDTO
+  GetAssessmentSectionsResDTO,
+  GetAssessmentSectionFieldsResDTO,
+  SaveAssessmentValuesBodyDTO,
+  SaveAssessmentValuesResDTO,
+  ToggleTraineeLockBodyDTO,
+  ToggleTraineeLockResDTO,
+  SubmitAssessmentResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -168,6 +174,101 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.getAssessmentSections(
+      params.assessmentId,
+      userContext
+    )
+  }
+
+  /**
+   * GET /assessments/sections/:assessmentSectionId/fields
+   * Get all fields of an assessment section with template field info and assessment values
+   */
+  @Get('sections/:assessmentSectionId/fields')
+  @ZodSerializerDto(GetAssessmentSectionFieldsResDTO)
+  async getAssessmentSectionFields(
+    @Param('assessmentSectionId') assessmentSectionId: string,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getAssessmentSectionFields(
+      assessmentSectionId,
+      userContext
+    )
+  }
+
+  /**
+   * POST /assessments/sections/save-values
+   * Save assessment values for a section and update section status
+   */
+  @Post('sections/save-values')
+  @ZodSerializerDto(SaveAssessmentValuesResDTO)
+  async saveAssessmentValues(
+    @Body() body: SaveAssessmentValuesBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.saveAssessmentValues(body, userContext)
+  }
+
+  /**
+   * PUT /assessments/:assessmentId/trainee-lock
+   * Toggle trainee lock status (only on occurrence date)
+   */
+  @Put(':assessmentId/trainee-lock')
+  @ZodSerializerDto(ToggleTraineeLockResDTO)
+  async toggleTraineeLock(
+    @Param() params: GetAssessmentParamsDTO,
+    @Body() body: ToggleTraineeLockBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.toggleTraineeLock(
+      params.assessmentId,
+      body,
+      userContext
+    )
+  }
+
+  /**
+   * POST /assessments/:assessmentId/submit
+   * Submit assessment (only when ready and user filled submittable sections)
+   */
+  @Post(':assessmentId/submit')
+  @ZodSerializerDto(SubmitAssessmentResDTO)
+  async submitAssessment(
+    @Param() params: GetAssessmentParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.submitAssessment(
       params.assessmentId,
       userContext
     )
