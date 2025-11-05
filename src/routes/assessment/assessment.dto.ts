@@ -25,7 +25,9 @@ import {
   ToggleTraineeLockBodySchema,
   ToggleTraineeLockResSchema,
   SubmitAssessmentParamsSchema,
-  SubmitAssessmentResSchema
+  SubmitAssessmentResSchema,
+  UpdateAssessmentValuesBodySchema,
+  UpdateAssessmentValuesResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -91,6 +93,12 @@ export class ToggleTraineeLockResDTO extends createZodDto(ToggleTraineeLockResSc
 export class SubmitAssessmentParamsDTO extends createZodDto(SubmitAssessmentParamsSchema) {}
 
 export class SubmitAssessmentResDTO extends createZodDto(SubmitAssessmentResSchema) {}
+
+// ===== UPDATE ASSESSMENT VALUES DTOs =====
+
+export class UpdateAssessmentValuesBodyDTO extends createZodDto(UpdateAssessmentValuesBodySchema) {}
+
+export class UpdateAssessmentValuesResDTO extends createZodDto(UpdateAssessmentValuesResSchema) {}
 
 // ===== TYPE EXPORTS =====
 

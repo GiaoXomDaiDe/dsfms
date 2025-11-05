@@ -542,3 +542,21 @@ export const SubmitAssessmentResSchema = z.object({
 
 export type SubmitAssessmentParamsType = z.infer<typeof SubmitAssessmentParamsSchema>
 export type SubmitAssessmentResType = z.infer<typeof SubmitAssessmentResSchema>
+
+// ===== UPDATE ASSESSMENT VALUES SCHEMAS =====
+
+export const UpdateAssessmentValuesBodySchema = z.object({
+  assessmentSectionId: z.string().uuid('Assessment section ID must be a valid UUID'),
+  values: z.array(SaveAssessmentValueSchema).min(1, 'At least one value must be provided')
+})
+
+export const UpdateAssessmentValuesResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentSectionId: z.string().uuid(),
+  updatedValues: z.number(),
+  sectionStatus: z.nativeEnum(AssessmentSectionStatus)
+})
+
+export type UpdateAssessmentValuesBodyType = z.infer<typeof UpdateAssessmentValuesBodySchema>
+export type UpdateAssessmentValuesResType = z.infer<typeof UpdateAssessmentValuesResSchema>
