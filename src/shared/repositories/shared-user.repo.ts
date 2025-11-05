@@ -108,22 +108,6 @@ export class SharedUserRepository {
     private readonly eidService: EidService
   ) {}
 
-  buildListFilters({
-    includeDeleted = false,
-    extend
-  }: {
-    includeDeleted?: boolean
-    extend?: (context: { includeDeleted: boolean }) => Record<string, any>
-  } = {}) {
-    const filters: Record<string, any> = includeDeleted ? {} : { deletedAt: null }
-
-    if (extend) {
-      Object.assign(filters, extend({ includeDeleted }))
-    }
-
-    return filters
-  }
-
   findUnique(
     where: WhereUniqueUserType,
     { includeDeleted = false }: IncludeDeletedQueryType = {}

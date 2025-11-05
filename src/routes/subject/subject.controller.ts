@@ -99,7 +99,7 @@ export class SubjectController {
 
   @Post(':subjectId/trainers')
   @ZodSerializerDto(AssignTrainerResDto)
-  async assignTrainer(@Param('subjectId') { subjectId }: SubjectIdParamsDto, @Body() body: AssignTrainerBodyDto) {
+  async assignTrainer(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: AssignTrainerBodyDto) {
     return await this.subjectService.assignTrainer({
       subjectId,
       data: body
