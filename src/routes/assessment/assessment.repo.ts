@@ -1719,4 +1719,54 @@ export class AssessmentRepo {
       }
     })
   }
+
+  /**
+   * Update assessment values (only by the user who originally assessed the section)
+   */
+  async updateAssessmentValues(
+    assessmentSectionId: string,
+    values: Array<{ assessmentValueId: string; answerValue: string | null }>,
+    userId: string
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      // First check if the user is the one who assessed this section
+      const assessmentSection = await tx.assessmentSection.findUnique({
+        where: { id: assessmentSectionId },
+        select: {
+          assessedById: true,
+          status: true
+        }
+      })
+
+      if (!assessmentSection) {
+        throw new Error('Assessment section not found')
+      }
+
+      if (assessmentSection.assessedById !== userId) {
+        throw new Error('Only the user who originally assessed this section can update the values')
+      }
+
+      if (assessmentSection.status !== AssessmentSectionStatus.DRAFT) {
+        throw new Error('Can only update values for sections in DRAFT status')
+      }
+
+      // Update each assessment value
+      let updatedCount = 0
+      for (const value of values) {
+        await tx.assessmentValue.update({
+          where: { id: value.assessmentValueId },
+          data: { answerValue: value.answerValue }
+        })
+        updatedCount++
+      }
+
+      return {
+        success: true,
+        message: 'Assessment values updated successfully',
+        assessmentSectionId: assessmentSectionId,
+        updatedValues: updatedCount,
+        sectionStatus: assessmentSection.status
+      }
+    })
+  }
 }

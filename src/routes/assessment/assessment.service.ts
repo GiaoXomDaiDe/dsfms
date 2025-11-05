@@ -19,7 +19,9 @@ import {
   SaveAssessmentValuesResType,
   ToggleTraineeLockBodyType,
   ToggleTraineeLockResType,
-  SubmitAssessmentResType
+  SubmitAssessmentResType,
+  UpdateAssessmentValuesBodyType,
+  UpdateAssessmentValuesResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -1007,5 +1009,56 @@ export class AssessmentService {
     }
 
     return false
+  }
+
+  /**
+   * Update assessment values (only by original assessor)
+   */
+  async updateAssessmentValues(
+    body: UpdateAssessmentValuesBodyType,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<UpdateAssessmentValuesResType> {
+    try {
+      // First, get the assessment section to validate access
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId)
+      
+      // Validate that all provided assessment value IDs belong to this section
+      const sectionValueIds = sectionFields.fields.map(field => field.assessmentValue.id)
+      const providedValueIds = body.values.map((v: any) => v.assessmentValueId)
+      
+      const invalidIds = providedValueIds.filter((id: any) => !sectionValueIds.includes(id))
+      if (invalidIds.length > 0) {
+        throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
+      }
+
+      // Update the values (repository will check if user is the original assessor)
+      return await this.assessmentRepo.updateAssessmentValues(
+        body.assessmentSectionId,
+        body.values,
+        userContext.userId
+      )
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors from repository
+      if (error.message.includes('originally assessed') || 
+          error.message.includes('DRAFT status')) {
+        throw new ForbiddenException(error.message)
+      }
+
+      if (error.message === 'Assessment section not found') {
+        throw new NotFoundException('Assessment section not found')
+      }
+
+      // Handle any other unexpected errors
+      console.error('Update assessment values failed:', error)
+      throw new BadRequestException('Failed to update assessment values')
+    }
   }
 }

@@ -19,7 +19,9 @@ import {
   SaveAssessmentValuesResDTO,
   ToggleTraineeLockBodyDTO,
   ToggleTraineeLockResDTO,
-  SubmitAssessmentResDTO
+  SubmitAssessmentResDTO,
+  UpdateAssessmentValuesBodyDTO,
+  UpdateAssessmentValuesResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -272,5 +274,26 @@ export class AssessmentController {
       params.assessmentId,
       userContext
     )
+  }
+
+  /**
+   * PUT /assessments/sections/update-values
+   * Update assessment values (only by original assessor)
+   */
+  @Put('sections/update-values')
+  @ZodSerializerDto(UpdateAssessmentValuesResDTO)
+  async updateAssessmentValues(
+    @Body() body: UpdateAssessmentValuesBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.updateAssessmentValues(body, userContext)
   }
 }
