@@ -102,7 +102,6 @@ model Role {
   users       User[]
   permissions Permission[] @relation("PermissionToRole")
 
-  @@index([deletedAt])
   @@map("Role")
 }
 
@@ -127,7 +126,6 @@ model Permission {
   updatedBy   User?        @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   roles       Role[]       @relation("PermissionToRole")
 
-  @@index([deletedAt])
   @@map("Permission")
 }
 

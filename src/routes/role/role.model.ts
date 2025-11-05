@@ -67,11 +67,11 @@ export const CreateRoleBodySchema = RoleSchema.pick({
   })
   .strict()
 
-export const CreateRoleResSchema = RoleSchema
+export const CreateRoleResSchema = GetRoleDetailResSchema
 
 export const UpdateRoleBodySchema = CreateRoleBodySchema.partial()
 
-export const UpdateRoleResSchema = CreateRoleResSchema
+export const UpdateRoleResSchema = GetRoleDetailResSchema
 
 export const AddPermissionsToRoleBodySchema = z
   .object({
@@ -88,6 +88,14 @@ export const AddPermissionsToRoleResSchema = z.object({
   summary: z.string()
 })
 
+export const RemovePermissionsFromRoleBodySchema = AddPermissionsToRoleBodySchema
+
+export const RemovePermissionsFromRoleResSchema = z.object({
+  removedPermissions: z.array(PermissionSchema),
+  removedCount: z.number().int().nonnegative(),
+  summary: z.string()
+})
+
 export type RoleType = z.infer<typeof RoleSchema>
 export type RoleWithPermissionsType = z.infer<typeof RoleWithPermissionsSchema>
 export type GetRolesResType = z.infer<typeof GetRolesResSchema>
@@ -99,3 +107,5 @@ export type UpdateRoleBodyType = z.infer<typeof UpdateRoleBodySchema>
 export type RoleWithUserCountType = z.infer<typeof RoleWithUserCountSchema>
 export type AddPermissionsToRoleBodyType = z.infer<typeof AddPermissionsToRoleBodySchema>
 export type AddPermissionsToRoleResType = z.infer<typeof AddPermissionsToRoleResSchema>
+export type RemovePermissionsFromRoleBodyType = z.infer<typeof RemovePermissionsFromRoleBodySchema>
+export type RemovePermissionsFromRoleResType = z.infer<typeof RemovePermissionsFromRoleResSchema>

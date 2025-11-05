@@ -8,6 +8,8 @@ import {
   GetRoleDetailResDTO,
   GetRoleParamsDTO,
   GetRolesResDTO,
+  RemovePermissionsFromRoleBodyDTO,
+  RemovePermissionsFromRoleResDTO,
   UpdateRoleBodyDTO,
   UpdateRoleResDTO
 } from '~/routes/role/role.dto'
@@ -58,12 +60,12 @@ export class RoleController {
   @ZodSerializerDto(UpdateRoleResDTO)
   async update(
     @Body() body: UpdateRoleBodyDTO,
-    @Param() params: GetRoleParamsDTO,
+    @Param() { roleId }: GetRoleParamsDTO,
     @ActiveUser('userId') userId: string
   ) {
     const role = await this.roleService.update({
       data: body,
-      id: params.roleId,
+      id: roleId,
       updatedById: userId
     })
     return {
@@ -97,17 +99,36 @@ export class RoleController {
   @IsPublic()
   @ZodSerializerDto(AddPermissionsToRoleResDTO)
   async addPermissions(
-    @Param() params: GetRoleParamsDTO,
+    @Param() { roleId }: GetRoleParamsDTO,
     @Body() body: AddPermissionsToRoleBodyDTO,
     @ActiveUser('userId') userId: string
   ) {
     const result = await this.roleService.addPermissions({
-      roleId: params.roleId,
+      roleId,
       permissionIds: body.permissionIds,
       updatedById: userId
     })
     return {
       message: RoleMes.ADD_PERMISSIONS_SUCCESS,
+      data: result
+    }
+  }
+
+  @Patch(':roleId/remove-permissions')
+  @IsPublic()
+  @ZodSerializerDto(RemovePermissionsFromRoleResDTO)
+  async removePermissions(
+    @Param() { roleId }: GetRoleParamsDTO,
+    @Body() body: RemovePermissionsFromRoleBodyDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    const result = await this.roleService.removePermissions({
+      roleId,
+      permissionIds: body.permissionIds,
+      updatedById: userId
+    })
+    return {
+      message: RoleMes.REMOVE_PERMISSIONS_SUCCESS,
       data: result
     }
   }

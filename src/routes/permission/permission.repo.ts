@@ -6,23 +6,16 @@ import {
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 @SerializeAll()
 export class PermissionRepo {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly sharedUserRepository: SharedUserRepository
-  ) {}
-  async list(options: { includeDeleted?: boolean; excludeModules?: string[] } = {}) {
-    const { includeDeleted = false, excludeModules = [] } = options
-    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
+  constructor(private readonly prisma: PrismaService) {}
+  async list(options: { excludeModules?: string[] } = {}) {
+    const { excludeModules = [] } = options
 
-    const permissions = await this.prisma.permission.findMany({
-      where: whereClause
-    })
+    const permissions = await this.prisma.permission.findMany()
 
     const normalizeModuleName = (value: string) =>
       value
@@ -75,16 +68,14 @@ export class PermissionRepo {
     }
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<PermissionType | null> {
-    const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
-
-    return this.prisma.permission.findUnique({
-      where: whereClause
+  async findById(id: string): Promise<PermissionType | null> {
+    return this.prisma.permission.findFirst({
+      where: {
+        id
+      }
     })
   }
+
   async create({
     data,
     createdById
@@ -104,7 +95,8 @@ export class PermissionRepo {
     return await this.prisma.permission.update({
       where: {
         id,
-        deletedAt: null
+        deletedAt: null,
+        isActive: true
       },
       data: {
         ...data,
@@ -132,7 +124,8 @@ export class PermissionRepo {
       : this.prisma.permission.update({
           where: {
             id,
-            deletedAt: null
+            deletedAt: null,
+            isActive: true
           },
           data: {
             deletedAt: new Date(),
@@ -146,7 +139,8 @@ export class PermissionRepo {
     return this.prisma.permission.update({
       where: {
         id,
-        deletedAt: { not: null }
+        deletedAt: { not: null },
+        isActive: false
       },
       data: {
         deletedAt: null,

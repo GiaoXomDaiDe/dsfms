@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import {
   createRoleAlreadyActiveError,
   NoNewPermissionsToAddException,
+  NoPermissionsToRemoveException,
   NotFoundRoleException,
   RoleAlreadyExistsException,
   UnexpectedEnableErrorException
@@ -79,11 +80,10 @@ export class RoleService {
   }
 
   async enable({ id, enabledById }: { id: string; enabledById: string }) {
-    const role = await this.roleRepo.findByIdIncludingDeleted(id)
+    const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
 
-    // Business rule: Check if already active
-    if (!role.deletedAt) throw createRoleAlreadyActiveError(role.name)
+    if (!role.deletedAt && role.isActive) throw createRoleAlreadyActiveError(role.name)
 
     try {
       await this.roleRepo.enable({ id, enabledById })
@@ -124,6 +124,42 @@ export class RoleService {
         addedPermissions: result.addedPermissions,
         addedCount: result.addedPermissions.length,
         summary: `Successfully added ${result.addedPermissions.length} permission(s) to role '${role.name}'`
+      }
+    } catch (error) {
+      if (isNotFoundPrismaError(error)) throw NotFoundRoleException
+      throw error
+    }
+  }
+
+  async removePermissions({
+    roleId,
+    permissionIds,
+    updatedById
+  }: {
+    roleId: string
+    permissionIds: string[]
+    updatedById: string
+  }) {
+    const role = await this.roleRepo.findById(roleId)
+    if (!role) throw NotFoundRoleException
+
+    await this.sharedPermissionRepo.validatePermissionIds(permissionIds)
+
+    try {
+      const result = await this.roleRepo.removePermissions({
+        roleId,
+        permissionIds,
+        updatedById
+      })
+
+      if (result.removedPermissions.length === 0) {
+        throw NoPermissionsToRemoveException
+      }
+
+      return {
+        removedPermissions: result.removedPermissions,
+        removedCount: result.removedPermissions.length,
+        summary: `Successfully removed ${result.removedPermissions.length} permission(s) from role '${role.name}'`
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException

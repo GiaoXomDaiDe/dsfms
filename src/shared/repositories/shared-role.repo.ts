@@ -21,7 +21,8 @@ export class SharedRoleRepository {
     return this.prismaService.role.findUnique({
       where: {
         id: roleId,
-        deletedAt: null
+        deletedAt: null,
+        isActive: true
       }
     })
   }

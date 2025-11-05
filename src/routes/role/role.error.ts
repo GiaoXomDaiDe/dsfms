@@ -196,6 +196,12 @@ export const NoNewPermissionsToAddException = new BadRequestException({
   suggestion: 'Check current role permissions before adding new ones'
 })
 
+export const NoPermissionsToRemoveException = new BadRequestException({
+  message: 'None of the specified permissions are currently assigned to this role',
+  errorCode: 'NO_PERMISSIONS_TO_REMOVE',
+  suggestion: 'Verify the permission list before removing'
+})
+
 /* =========================
  * Validation Error Messages - Messages cho schema validation
  * Phục vụ: Cung cấp consistent error messages cho Zod schema validation
