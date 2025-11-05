@@ -41,7 +41,6 @@ import {
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
-import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -66,26 +65,19 @@ export class UserService {
     private readonly nodemailerService: NodemailerService
   ) {}
 
-  list({
-    includeDeleted = false,
-    roleName,
-    activeUserRoleName
-  }: IncludeDeletedQueryType & { roleName?: string; activeUserRoleName?: string } = {}) {
-    // Nếu không phải admin thì luôn luôn không cho xem user đã bị xóa mềm
+  list({ roleName, activeUserRoleName }: { roleName?: string; activeUserRoleName?: string } = {}) {
+    const includeDeleted = activeUserRoleName === RoleName.ADMINISTRATOR
+
     return this.userRepo.list({
-      includeDeleted: activeUserRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false,
+      includeDeleted,
       roleName
     })
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
-  ) {
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile(
-      { id },
-      { includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false }
-    )
+  async findById(id: string, { userRole }: { userRole?: string } = {}) {
+    const includeDeleted = userRole === RoleName.ADMINISTRATOR
+
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted })
 
     if (!user) {
       throw UserNotFoundException
@@ -541,14 +533,12 @@ export class UserService {
     id,
     data,
     updatedById,
-    updatedByRoleName,
-    includeDeleted = false
+    updatedByRoleName
   }: {
     id: string
     data: UpdateUserBodyWithProfileType
     updatedById: string
     updatedByRoleName: string
-    includeDeleted?: boolean
   }) {
     try {
       // Không thể cập nhật chính mình
@@ -558,10 +548,9 @@ export class UserService {
       })
 
       // Bước 2: Lấy thông tin user hiện tại
-      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(
-        { id },
-        { includeDeleted: updatedByRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false }
-      )
+      const includeDeleted = updatedByRoleName === RoleName.ADMINISTRATOR
+
+      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted })
       if (!currentUser) {
         throw UserNotFoundException
       }
@@ -612,7 +601,7 @@ export class UserService {
           newRoleName,
           trainerProfile,
           traineeProfile,
-          includeDeleted: updatedByRoleName === RoleName.ADMINISTRATOR ? includeDeleted : false
+          includeDeleted
         }
       )
 

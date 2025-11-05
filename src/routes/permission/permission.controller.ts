@@ -1,16 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CreatePermissionBodyDTO,
   GetPermissionDetailResDTO,
   GetPermissionParamsDTO,
-  GetPermissionsQueryDTO,
   GetPermissionsResDTO,
   UpdatePermissionBodyDTO
 } from '~/routes/permission/permission.dto'
 import { PermissionMes } from '~/routes/permission/permission.message'
 import { PermissionService } from '~/routes/permission/permission.service'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import {
   ExcludePermissionModules,
@@ -25,14 +23,8 @@ export class PermissionController {
   @Get()
   @ExcludePermissionModules('Authentication Management', 'System Services')
   @ZodSerializerDto(GetPermissionsResDTO)
-  async list(
-    @Query() { includeDeleted }: GetPermissionsQueryDTO,
-    @ActiveRolePermissions('name') roleName: string,
-    @ExcludedPermissionModules() excludedModules: string[]
-  ) {
+  async list(@ExcludedPermissionModules() excludedModules: string[]) {
     const result = await this.permissionService.list({
-      includeDeleted,
-      userRole: roleName,
       excludeModules: excludedModules
     })
 
@@ -44,15 +36,8 @@ export class PermissionController {
 
   @Get(':permissionId')
   @ZodSerializerDto(GetPermissionDetailResDTO)
-  async findById(
-    @Param() params: GetPermissionParamsDTO,
-    @Query() query: GetPermissionsQueryDTO,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    const permission = await this.permissionService.findById(params.permissionId, {
-      includeDeleted: query.includeDeleted,
-      userRole: roleName
-    })
+  async findById(@Param() { permissionId }: GetPermissionParamsDTO) {
+    const permission = await this.permissionService.findById(permissionId)
     return {
       message: PermissionMes.DETAIL_SUCCESS,
       data: permission

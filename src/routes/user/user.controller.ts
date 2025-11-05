@@ -23,12 +23,8 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  list(
-    @Query() { includeDeleted, roleName }: GetUsersQueryDTO,
-    @ActiveRolePermissions('name') activeUserRoleName: string
-  ) {
+  list(@Query() { roleName }: GetUsersQueryDTO, @ActiveRolePermissions('name') activeUserRoleName: string) {
     return this.userService.list({
-      includeDeleted,
       roleName,
       activeUserRoleName
     })
@@ -36,13 +32,8 @@ export class UserController {
 
   @Get(':userId')
   @ZodSerializerDto(GetUserProfileResDTO)
-  findById(
-    @Param() { userId }: GetUserParamsDTO,
-    @Query() { includeDeleted }: GetUsersQueryDTO,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  findById(@Param() { userId }: GetUserParamsDTO, @ActiveRolePermissions('name') roleName: string) {
     return this.userService.findById(userId, {
-      includeDeleted,
       userRole: roleName
     })
   }
@@ -70,7 +61,6 @@ export class UserController {
   update(
     @Body() body: UpdateUserBodyWithProfileDTO,
     @Param() params: GetUserParamsDTO,
-    @Query() { includeDeleted }: GetUsersQueryDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
   ) {
@@ -78,8 +68,7 @@ export class UserController {
       data: body,
       id: params.userId,
       updatedById: userId,
-      updatedByRoleName: roleName,
-      includeDeleted
+      updatedByRoleName: roleName
     })
   }
 

@@ -4,33 +4,23 @@ import {
   NotFoundPermissionException,
   PermissionAlreadyExistsException
 } from '~/routes/permission/permission.error'
+import { PermissionMes } from '~/routes/permission/permission.message'
 import { CreatePermissionBodyType, UpdatePermissionBodyType } from '~/routes/permission/permission.model'
 import { PermissionRepo } from '~/routes/permission/permission.repo'
-import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 
 @Injectable()
 export class PermissionService {
   constructor(private readonly permissionRepo: PermissionRepo) {}
 
-  async list(options: { includeDeleted?: boolean; userRole?: string; excludeModules?: string[] } = {}) {
-    const { includeDeleted = false, userRole, excludeModules = [] } = options
-    // Chỉ admin mới có thể xem các permission đã bị xóa mềm
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+  async list({ excludeModules = [] }: { excludeModules?: string[] } = {}) {
     return await this.permissionRepo.list({
-      includeDeleted: canViewDeleted ? includeDeleted : false,
       excludeModules
     })
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
-  ) {
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
-    const permission = await this.permissionRepo.findById(id, {
-      includeDeleted: canViewDeleted ? includeDeleted : false
-    })
+  async findById(id: string) {
+    const permission = await this.permissionRepo.findById(id)
     if (!permission) throw NotFoundPermissionException
     return permission
   }
@@ -67,7 +57,7 @@ export class PermissionService {
         id,
         deletedById
       })
-      return { message: 'Disable successfully' }
+      return { message: PermissionMes.DELETE_SUCCESS }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
       throw error
@@ -75,15 +65,14 @@ export class PermissionService {
   }
 
   async enable({ id, enabledById }: { id: string; enabledById: string }) {
-    const permission = await this.permissionRepo.findById(id, { includeDeleted: true })
+    const permission = await this.permissionRepo.findById(id)
     if (!permission) throw NotFoundPermissionException
 
-    // Business rule: Check if already active
-    if (!permission.deletedAt) throw createPermissionAlreadyActiveError(permission.name)
+    if (!permission.deletedAt && permission.isActive) throw createPermissionAlreadyActiveError(permission.name)
 
     try {
       await this.permissionRepo.enable({ id, enabledById })
-      return { message: 'Enable permission successfully' }
+      return { message: PermissionMes.ENABLE_SUCCESS }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
       throw error
