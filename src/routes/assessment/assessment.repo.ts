@@ -1530,7 +1530,9 @@ export class AssessmentRepo {
         section => section.status === AssessmentSectionStatus.DRAFT
       )
       
-      if (allSectionsDraft && newAssessmentStatus === AssessmentStatus.DRAFT) {
+      if (allSectionsDraft && 
+          (newAssessmentStatus === AssessmentStatus.DRAFT || 
+           newAssessmentStatus === AssessmentStatus.SIGNATURE_PENDING)) {
         newAssessmentStatus = AssessmentStatus.READY_TO_SUBMIT
       }
 
@@ -1610,21 +1612,20 @@ export class AssessmentRepo {
       // Determine new status based on lock state and trainee sections
       let newStatus: AssessmentStatus
 
-      if (isTraineeLocked) {
+      if (!isTraineeLocked) {
+        // Switching to false (unlocked) - allows trainee input
         newStatus = AssessmentStatus.SIGNATURE_PENDING
       } else {
-        // Check trainee section status
-        const traineeSections = assessment.sections.filter(
-          section => section.templateSection.editBy === 'TRAINEE'
-        )
-        
-        const allTraineeSectionsDraft = traineeSections.every(
+        // Switching to true (locked) - check ALL section completion
+        const allSectionsDraft = assessment.sections.every(
           section => section.status === AssessmentSectionStatus.DRAFT
         )
 
-        if (allTraineeSectionsDraft) {
+        if (allSectionsDraft) {
+          // All sections (TRAINER + TRAINEE) are completed
           newStatus = AssessmentStatus.READY_TO_SUBMIT
         } else {
+          // Some sections still not completed (either TRAINER or TRAINEE)
           newStatus = AssessmentStatus.DRAFT
         }
       }
