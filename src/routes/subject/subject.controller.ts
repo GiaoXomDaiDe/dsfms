@@ -77,7 +77,7 @@ export class SubjectController {
   @Put(':subjectId')
   @ZodSerializerDto(GetSubjectDetailResDto)
   async update(
-    @Param('subjectId') { subjectId }: SubjectIdParamsDto,
+    @Param() { subjectId }: SubjectIdParamsDto,
     @Body() updateSubjectDto: UpdateSubjectBodyDto,
     @ActiveUser('userId') userId: string
   ) {
@@ -90,7 +90,7 @@ export class SubjectController {
 
   @Delete(':subjectId/archive')
   @ZodSerializerDto(MessageResDTO)
-  async archive(@Param('subjectId') { subjectId }: SubjectIdParamsDto, @ActiveUser('userId') userId: string) {
+  async archive(@Param() { subjectId }: SubjectIdParamsDto, @ActiveUser('userId') userId: string) {
     return await this.subjectService.archive({
       id: subjectId,
       archivedById: userId
@@ -132,10 +132,7 @@ export class SubjectController {
 
   @Delete(':subjectId/enrollments')
   @ZodSerializerDto(RemoveEnrollmentsResDto)
-  async removeEnrollments(
-    @Param('subjectId') { subjectId }: SubjectIdParamsDto,
-    @Body() body: RemoveEnrollmentsBodyDto
-  ) {
+  async removeEnrollments(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: RemoveEnrollmentsBodyDto) {
     return await this.subjectService.removeEnrollments({
       subjectId,
       data: body
@@ -164,7 +161,7 @@ export class SubjectController {
 
   @Post(':subjectId/assign-trainees')
   @ZodSerializerDto(AssignTraineesResDto)
-  async assignTrainees(@Param('subjectId') { subjectId }: SubjectIdParamsDto, @Body() body: AssignTraineesBodyDto) {
+  async assignTrainees(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: AssignTraineesBodyDto) {
     return await this.subjectService.assignTraineesToSubject({
       subjectId,
       data: body

@@ -76,24 +76,19 @@ export class UserRepo {
         }
       : {}
 
-    const [totalItems, data] = await Promise.all([
-      this.prismaService.user.count({
-        where: whereClause
-      }),
-      this.prismaService.user.findMany({
-        where: whereClause,
-        omit: {
-          passwordHash: true,
-          signatureImageUrl: true,
-          roleId: true,
-          departmentId: true
-        },
-        include: userRoleDepartmentInclude
-      })
-    ])
+    const data = await this.prismaService.user.findMany({
+      where: whereClause,
+      omit: {
+        passwordHash: true,
+        signatureImageUrl: true,
+        roleId: true,
+        departmentId: true
+      },
+      include: userRoleDepartmentInclude
+    })
     return {
       data,
-      totalItems
+      totalItems: data.length
     }
   }
 
