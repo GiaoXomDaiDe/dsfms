@@ -17,7 +17,15 @@ import {
   GetCourseAssessmentsResSchema,
   TrainerAssessmentListItemSchema,
   GetAssessmentSectionsQuerySchema,
-  GetAssessmentSectionsResSchema
+  GetAssessmentSectionsResSchema,
+  GetAssessmentSectionFieldsQuerySchema,
+  GetAssessmentSectionFieldsResSchema,
+  SaveAssessmentValuesBodySchema,
+  SaveAssessmentValuesResSchema,
+  ToggleTraineeLockBodySchema,
+  ToggleTraineeLockResSchema,
+  SubmitAssessmentParamsSchema,
+  SubmitAssessmentResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -62,6 +70,28 @@ export class GetAssessmentSectionsQueryDTO extends createZodDto(GetAssessmentSec
 
 export class GetAssessmentSectionsResDTO extends createZodDto(GetAssessmentSectionsResSchema) {}
 
+export class GetAssessmentSectionFieldsQueryDTO extends createZodDto(GetAssessmentSectionFieldsQuerySchema) {}
+
+export class GetAssessmentSectionFieldsResDTO extends createZodDto(GetAssessmentSectionFieldsResSchema) {}
+
+// ===== SAVE ASSESSMENT VALUES DTOs =====
+
+export class SaveAssessmentValuesBodyDTO extends createZodDto(SaveAssessmentValuesBodySchema) {}
+
+export class SaveAssessmentValuesResDTO extends createZodDto(SaveAssessmentValuesResSchema) {}
+
+// ===== TOGGLE TRAINEE LOCK DTOs =====
+
+export class ToggleTraineeLockBodyDTO extends createZodDto(ToggleTraineeLockBodySchema) {}
+
+export class ToggleTraineeLockResDTO extends createZodDto(ToggleTraineeLockResSchema) {}
+
+// ===== SUBMIT ASSESSMENT DTOs =====
+
+export class SubmitAssessmentParamsDTO extends createZodDto(SubmitAssessmentParamsSchema) {}
+
+export class SubmitAssessmentResDTO extends createZodDto(SubmitAssessmentResSchema) {}
+
 // ===== TYPE EXPORTS =====
 
 export type {
@@ -85,5 +115,7 @@ export type {
   GetCourseAssessmentsResType,
   TrainerAssessmentListItemType,
   GetAssessmentSectionsQueryType,
-  GetAssessmentSectionsResType
+  GetAssessmentSectionsResType,
+  GetAssessmentSectionFieldsQueryType,
+  GetAssessmentSectionFieldsResType
 } from './assessment.model'

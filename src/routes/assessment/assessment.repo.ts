@@ -1314,19 +1314,20 @@ export class AssessmentRepo {
         }
       })
       .filter(item => item.canAssess) // Only return sections user can assess
-      .map(item => {
+      .map((item, index) => {
+        // Re-number displayOrder sequentially for filtered sections
+        const frontendDisplayOrder = index + 1
 
         return {
           id: item.section.id,
           assessmentFormId: item.section.assessmentFormId,
           assessedById: item.section.assessedById,
-          templateSectionId: item.section.templateSectionId,
           status: item.section.status,
           createdAt: item.section.createdAt,
           templateSection: {
             id: item.section.templateSection.id,
             label: item.section.templateSection.label,
-            displayOrder: item.section.templateSection.displayOrder,
+            displayOrder: frontendDisplayOrder, // Sequential order for filtered sections
             editBy: item.section.templateSection.editBy,
             roleInSubject: item.section.templateSection.roleInSubject,
             isSubmittable: item.section.templateSection.isSubmittable,
@@ -1379,5 +1380,343 @@ export class AssessmentRepo {
       totalSections: sectionsWithPermissions.length,
       sectionsCanAssess
     }
+  }
+
+  /**
+   * Get all fields of an assessment section with their template field information and assessment values
+   */
+  async getAssessmentSectionFields(assessmentSectionId: string) {
+    // First, get the assessment section with template section info
+    const assessmentSection = await this.prisma.assessmentSection.findUnique({
+      where: { id: assessmentSectionId },
+      include: {
+        templateSection: {
+          select: {
+            id: true,
+            label: true,
+            displayOrder: true,
+            editBy: true,
+            roleInSubject: true,
+            isSubmittable: true,
+            isToggleDependent: true,
+            fields: {
+              orderBy: {
+                displayOrder: 'asc'
+              },
+              select: {
+                id: true,
+                label: true,
+                fieldName: true,
+                fieldType: true,
+                roleRequired: true,
+                options: true,
+                displayOrder: true,
+                parentId: true
+              }
+            }
+          }
+        },
+        values: {
+          select: {
+            id: true,
+            templateFieldId: true,
+            answerValue: true
+          }
+        }
+      }
+    })
+
+    if (!assessmentSection) {
+      throw new Error('Assessment section not found')
+    }
+
+    // Create a map of assessment values by template field ID for quick lookup
+    const assessmentValueMap = new Map<string, { id: string; answerValue: string | null }>()
+    assessmentSection.values.forEach(value => {
+      assessmentValueMap.set(value.templateFieldId, {
+        id: value.id,
+        answerValue: value.answerValue
+      })
+    })
+
+    // Map template fields with their corresponding assessment values
+    const fieldsWithValues = assessmentSection.templateSection.fields.map(templateField => ({
+      templateField: {
+        id: templateField.id,
+        label: templateField.label,
+        fieldName: templateField.fieldName,
+        fieldType: templateField.fieldType,
+        roleRequired: templateField.roleRequired,
+        options: templateField.options,
+        displayOrder: templateField.displayOrder,
+        parentId: templateField.parentId
+      },
+      assessmentValue: assessmentValueMap.get(templateField.id) || {
+        id: '', // This shouldn't happen if data is consistent
+        answerValue: null
+      }
+    }))
+
+    return {
+      success: true,
+      message: 'Assessment section fields retrieved successfully',
+      assessmentSectionInfo: {
+        id: assessmentSection.id,
+        assessmentFormId: assessmentSection.assessmentFormId,
+        templateSectionId: assessmentSection.templateSectionId,
+        status: assessmentSection.status,
+        templateSection: {
+          id: assessmentSection.templateSection.id,
+          label: assessmentSection.templateSection.label,
+          displayOrder: assessmentSection.templateSection.displayOrder,
+          editBy: assessmentSection.templateSection.editBy,
+          roleInSubject: assessmentSection.templateSection.roleInSubject,
+          isSubmittable: assessmentSection.templateSection.isSubmittable,
+          isToggleDependent: assessmentSection.templateSection.isToggleDependent
+        }
+      },
+      fields: fieldsWithValues,
+      totalFields: fieldsWithValues.length
+    }
+  }
+
+  /**
+   * Save assessment values and update section status
+   */
+  async saveAssessmentValues(
+    assessmentSectionId: string, 
+    values: Array<{ assessmentValueId: string; answerValue: string | null }>,
+    userId: string
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Update each assessment value
+      let updatedCount = 0
+      for (const value of values) {
+        await tx.assessmentValue.update({
+          where: { id: value.assessmentValueId },
+          data: { answerValue: value.answerValue }
+        })
+        updatedCount++
+      }
+
+      // Update assessment section status and assessedById
+      const updatedSection = await tx.assessmentSection.update({
+        where: { id: assessmentSectionId },
+        data: {
+          status: AssessmentSectionStatus.DRAFT,
+          assessedById: userId
+        },
+        include: {
+          assessmentForm: {
+            include: {
+              sections: {
+                select: {
+                  status: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      // Check if assessment form should be updated to DRAFT
+      let newAssessmentStatus = updatedSection.assessmentForm.status
+      if (newAssessmentStatus === AssessmentStatus.NOT_STARTED) {
+        newAssessmentStatus = AssessmentStatus.DRAFT
+      }
+
+      // Check if all sections are DRAFT to make it READY_TO_SUBMIT
+      const allSectionsDraft = updatedSection.assessmentForm.sections.every(
+        section => section.status === AssessmentSectionStatus.DRAFT
+      )
+      
+      if (allSectionsDraft && newAssessmentStatus === AssessmentStatus.DRAFT) {
+        newAssessmentStatus = AssessmentStatus.READY_TO_SUBMIT
+      }
+
+      // Update assessment form status if needed
+      if (newAssessmentStatus !== updatedSection.assessmentForm.status) {
+        await tx.assessmentForm.update({
+          where: { id: updatedSection.assessmentFormId },
+          data: { status: newAssessmentStatus }
+        })
+      }
+
+      return {
+        success: true,
+        message: 'Assessment values saved successfully',
+        assessmentSectionId: assessmentSectionId,
+        updatedValues: updatedCount,
+        sectionStatus: AssessmentSectionStatus.DRAFT,
+        assessmentFormStatus: newAssessmentStatus
+      }
+    })
+  }
+
+  /**
+   * Toggle trainee lock status with date and trainee section validation
+   */
+  async toggleTraineeLock(assessmentId: string, isTraineeLocked: boolean, userId: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Get assessment with template sections
+      const assessment = await tx.assessmentForm.findUnique({
+        where: { id: assessmentId },
+        include: {
+          template: {
+            include: {
+              sections: {
+                select: {
+                  editBy: true,
+                  roleInSubject: true
+                }
+              }
+            }
+          },
+          sections: {
+            include: {
+              templateSection: {
+                select: {
+                  editBy: true,
+                  roleInSubject: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!assessment) {
+        throw new Error('Assessment not found')
+      }
+
+      // Check if today is the occurrence date
+      const today = new Date()
+      const occurrenceDate = new Date(assessment.occuranceDate)
+      const isSameDate = today.toDateString() === occurrenceDate.toDateString()
+
+      if (!isSameDate) {
+        throw new Error('Can only toggle trainee lock on the occurrence date')
+      }
+
+      // Check if assessment has trainee sections
+      const hasTraineeSections = assessment.template.sections.some(
+        section => section.editBy === 'TRAINEE'
+      )
+
+      if (!hasTraineeSections) {
+        throw new Error('Assessment does not have any trainee sections')
+      }
+
+      // Determine new status based on lock state and trainee sections
+      let newStatus: AssessmentStatus
+
+      if (isTraineeLocked) {
+        newStatus = AssessmentStatus.SIGNATURE_PENDING
+      } else {
+        // Check trainee section status
+        const traineeSections = assessment.sections.filter(
+          section => section.templateSection.editBy === 'TRAINEE'
+        )
+        
+        const allTraineeSectionsDraft = traineeSections.every(
+          section => section.status === AssessmentSectionStatus.DRAFT
+        )
+
+        if (allTraineeSectionsDraft) {
+          newStatus = AssessmentStatus.READY_TO_SUBMIT
+        } else {
+          newStatus = AssessmentStatus.DRAFT
+        }
+      }
+
+      // Update assessment form
+      const updatedAssessment = await tx.assessmentForm.update({
+        where: { id: assessmentId },
+        data: {
+          isTraineeLocked,
+          status: newStatus
+        }
+      })
+
+      return {
+        success: true,
+        message: `Trainee lock ${isTraineeLocked ? 'enabled' : 'disabled'} successfully`,
+        assessmentFormId: assessmentId,
+        isTraineeLocked,
+        status: newStatus
+      }
+    })
+  }
+
+  /**
+   * Submit assessment with submittable section validation
+   */
+  async submitAssessment(assessmentId: string, userId: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Get assessment with all sections
+      const assessment = await tx.assessmentForm.findUnique({
+        where: { id: assessmentId },
+        include: {
+          sections: {
+            include: {
+              templateSection: {
+                select: {
+                  isSubmittable: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!assessment) {
+        throw new Error('Assessment not found')
+      }
+
+      // Check if status is READY_TO_SUBMIT
+      if (assessment.status !== AssessmentStatus.READY_TO_SUBMIT) {
+        throw new Error('Assessment is not ready to submit')
+      }
+
+      // Check if all sections are DRAFT
+      const allSectionsDraft = assessment.sections.every(
+        section => section.status === AssessmentSectionStatus.DRAFT
+      )
+
+      if (!allSectionsDraft) {
+        throw new Error('All sections must be completed before submission')
+      }
+
+      // Check if user filled any submittable sections
+      const submittableSections = assessment.sections.filter(
+        section => section.templateSection.isSubmittable
+      )
+
+      const userFilledSubmittableSection = submittableSections.some(
+        section => section.assessedById === userId
+      )
+
+      if (!userFilledSubmittableSection) {
+        throw new Error('You must complete at least one submittable section to submit this assessment')
+      }
+
+      // Update assessment to submitted
+      const submittedAssessment = await tx.assessmentForm.update({
+        where: { id: assessmentId },
+        data: {
+          status: AssessmentStatus.SUBMITTED,
+          submittedAt: new Date()
+        }
+      })
+
+      return {
+        success: true,
+        message: 'Assessment submitted successfully',
+        assessmentFormId: assessmentId,
+        submittedAt: submittedAssessment.submittedAt!,
+        submittedBy: userId,
+        status: AssessmentStatus.SUBMITTED
+      }
+    })
   }
 }
