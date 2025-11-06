@@ -4,6 +4,8 @@ WORKDIR /app
 
 RUN apk add --no-cache libreoffice
 
+RUN libreoffice --version
+
 COPY package*.json ./
 COPY prisma ./prisma/
 
