@@ -21,7 +21,8 @@ import {
   ToggleTraineeLockResDTO,
   SubmitAssessmentResDTO,
   UpdateAssessmentValuesBodyDTO,
-  UpdateAssessmentValuesResDTO
+  UpdateAssessmentValuesResDTO,
+  ConfirmAssessmentParticipationResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -295,5 +296,29 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.updateAssessmentValues(body, userContext)
+  }
+
+  /**
+   * PUT /assessments/:assessmentId/confirm-participation
+   * Confirm trainee participation and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   */
+  @Put(':assessmentId/confirm-participation')
+  @ZodSerializerDto(ConfirmAssessmentParticipationResDTO)
+  async confirmAssessmentParticipation(
+    @Param() params: GetAssessmentParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.confirmAssessmentParticipation(
+      params.assessmentId,
+      userContext
+    )
   }
 }

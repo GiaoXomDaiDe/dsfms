@@ -366,7 +366,6 @@ export const AssessmentSectionDetailSchema = z.object({
   id: z.string().uuid(),
   assessmentFormId: z.string().uuid(),
   assessedById: z.string().uuid().nullable(),
-  templateSectionId: z.string().uuid(),
   status: z.nativeEnum(AssessmentSectionStatus),
   createdAt: z.coerce.date(),
   // Template section information
@@ -386,9 +385,8 @@ export const AssessmentSectionDetailSchema = z.object({
     lastName: z.string(),
     eid: z.string()
   }).nullable(),
-  // Permissions for current user
-  canAssess: z.boolean(),
-  roleRequirement: z.string().nullable() // What role is required to assess this section
+  // Optional field for TRAINER users
+  canAssessed: z.boolean().optional()
 })
 
 export type AssessmentSectionDetailType = z.infer<typeof AssessmentSectionDetailSchema>
@@ -424,8 +422,8 @@ export const GetAssessmentSectionsResSchema = z.object({
   }),
   sections: z.array(AssessmentSectionDetailSchema),
   userRole: z.string(),
-  totalSections: z.number(),
-  sectionsCanAssess: z.number()
+  // Optional field for TRAINEE users - indicates if assessment is locked
+  isTraineeLocked: z.boolean().optional()
 })
 
 export type GetAssessmentSectionsResType = z.infer<typeof GetAssessmentSectionsResSchema>
@@ -560,3 +558,17 @@ export const UpdateAssessmentValuesResSchema = z.object({
 
 export type UpdateAssessmentValuesBodyType = z.infer<typeof UpdateAssessmentValuesBodySchema>
 export type UpdateAssessmentValuesResType = z.infer<typeof UpdateAssessmentValuesResSchema>
+
+// ===== CONFIRM ASSESSMENT PARTICIPATION SCHEMAS =====
+
+export const ConfirmAssessmentParticipationResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentFormId: z.string().uuid(),
+  traineeId: z.string().uuid(),
+  confirmedAt: z.coerce.date(),
+  status: z.nativeEnum(AssessmentStatus),
+  previousStatus: z.nativeEnum(AssessmentStatus)
+})
+
+export type ConfirmAssessmentParticipationResType = z.infer<typeof ConfirmAssessmentParticipationResSchema>

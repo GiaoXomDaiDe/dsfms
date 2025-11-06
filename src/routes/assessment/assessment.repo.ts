@@ -1280,8 +1280,8 @@ export class AssessmentRepo {
 
     const userMainRole = user?.role.name || 'UNKNOWN'
 
-    // Process sections and filter only sections user can access
-    const sectionsWithPermissions = assessment.sections
+    // First filter sections user can access
+    const accessibleSections = assessment.sections
       .map(section => {
         let canAssess = false
         let roleRequirement: string | null = null
@@ -1313,12 +1313,36 @@ export class AssessmentRepo {
           roleRequirement
         }
       })
-      .filter(item => item.canAssess) // Only return sections user can assess
+      .filter(item => item.canAssess) // Only return sections user can access
+      .sort((a, b) => a.section.templateSection.displayOrder - b.section.templateSection.displayOrder) // Sort by original order
+
+    // Process sections with sequential logic based on filtered list
+    const sectionsWithPermissions = accessibleSections
       .map((item, index) => {
         // Re-number displayOrder sequentially for filtered sections
         const frontendDisplayOrder = index + 1
 
-        return {
+        // For TRAINER: Calculate canAssessed logic based on filtered sections only
+        let canAssessed: boolean | undefined = undefined
+        if (userMainRole === 'TRAINER') {
+          // Check if section is available for assessment
+          const sectionNotAssessed = item.section.assessedById === null
+          const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
+          
+          // Check if user has assessed any section in the accessible list
+          const userHasAssessedAnySection = accessibleSections.some(s => s.section.assessedById === userId)
+          
+          // For sequential assessment: only the first unassessed section can be assessed
+          // AND user hasn't assessed any section yet
+          const isFirstUnassessedSection = index === accessibleSections.findIndex(s => s.section.assessedById === null)
+          
+          canAssessed = sectionNotAssessed && 
+                       sectionRequiredAssessment && 
+                       !userHasAssessedAnySection && 
+                       isFirstUnassessedSection
+        }
+
+        const baseSection = {
           id: item.section.id,
           assessmentFormId: item.section.assessmentFormId,
           assessedById: item.section.assessedById,
@@ -1339,14 +1363,24 @@ export class AssessmentRepo {
             lastName: item.section.assessedBy.lastName,
             eid: item.section.assessedBy.eid
           } : null,
-          canAssess: true, // All returned sections can be assessed
-          roleRequirement: item.roleRequirement
         }
+
+        // Add role-specific fields
+        if (userMainRole === 'TRAINER' && canAssessed !== undefined) {
+          return {
+            roleRequirement: item.roleRequirement,
+            ...baseSection,
+            canAssessed: canAssessed
+          }
+        }
+
+        return baseSection
       })
 
-    const sectionsCanAssess = sectionsWithPermissions.length
+    // const sectionsCanAssess = sectionsWithPermissions.length
 
-    return {
+    // Base response
+    const baseResponse = {
       success: true,
       message: 'Assessment sections retrieved successfully',
       assessmentInfo: {
@@ -1376,20 +1410,68 @@ export class AssessmentRepo {
         status: assessment.status
       },
       sections: sectionsWithPermissions,
-      userRole: userRoleInAssessment || userMainRole,
-      totalSections: sectionsWithPermissions.length,
-      sectionsCanAssess
+      userRole: userRoleInAssessment || userMainRole
     }
+
+    // Add role-specific fields to response
+    if (userMainRole === 'TRAINEE') {
+      return {
+        ...baseResponse,
+        isTraineeLocked: assessment.isTraineeLocked
+      }
+    }
+
+    return baseResponse
   }
 
   /**
    * Get all fields of an assessment section with their template field information and assessment values
    */
-  async getAssessmentSectionFields(assessmentSectionId: string) {
-    // First, get the assessment section with template section info
+  async getAssessmentSectionFields(assessmentSectionId: string, userId?: string) {
+    // First, get the assessment section with template section info and assessment form data
     const assessmentSection = await this.prisma.assessmentSection.findUnique({
       where: { id: assessmentSectionId },
       include: {
+        assessmentForm: {
+          include: {
+            trainee: {
+              select: {
+                id: true,
+                eid: true,
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                traineeProfile: {
+                  select: {
+                    nation: true,
+                    trainingBatch: true
+                  }
+                }
+              }
+            },
+            template: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            subject: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            },
+            course: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                venue: true
+              }
+            }
+          }
+        },
         templateSection: {
           select: {
             id: true,
@@ -1422,12 +1504,105 @@ export class AssessmentRepo {
             templateFieldId: true,
             answerValue: true
           }
+        },
+        assessedBy: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true
+          }
         }
       }
     })
 
     if (!assessmentSection) {
       throw new Error('Assessment section not found')
+    }
+
+    // Get current user information if userId is provided
+    let currentUser = null
+    if (userId) {
+      currentUser = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          middleName: true,
+          lastName: true
+        }
+      })
+    }
+
+    // Helper function to map system fields to actual values
+    const getSystemFieldValue = (fieldName: string): string | null => {
+      const assessment = assessmentSection.assessmentForm
+      
+      switch (fieldName) {
+        case 'trainee_name':
+          return `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
+        
+        case 'trainee_eid':
+          return assessment.trainee.eid
+        
+        case 'trainee_nationality':
+          return assessment.trainee.traineeProfile?.nation || null
+        
+        case 'training_batch':
+          return assessment.trainee.traineeProfile?.trainingBatch || null
+        
+        case 'course_name':
+          return assessment.course?.name || null
+        
+        case 'course_code':
+          return assessment.course?.code || null
+        
+        case 'subject_name':
+          return assessment.subject?.name || null
+        
+        case 'subject_code':
+          return assessment.subject?.code || null
+        
+        case 'assessment_date':
+          return new Date().toISOString().split('T')[0] // Current date in YYYY-MM-DD format
+        
+        case 'assessment_venue':
+          return assessment.course?.venue || null
+        
+        case 'trainer_name':
+        case 'instructor_name': // Alternative field name for trainer
+          // Priority: 1) Current user if provided, 2) Assessor if section is assessed
+          if (currentUser) {
+            return `${currentUser.firstName} ${currentUser.middleName || ''} ${currentUser.lastName}`.trim()
+          } else if (assessmentSection.assessedBy) {
+            return `${assessmentSection.assessedBy.firstName} ${assessmentSection.assessedBy.middleName || ''} ${assessmentSection.assessedBy.lastName}`.trim()
+          }
+          return null
+        
+        case 'trainer_eid':
+        case 'instructor_eid': // Alternative field name for trainer eid
+          // Priority: 1) Current user if provided, 2) Assessor if section is assessed
+          if (currentUser) {
+            return currentUser.eid
+          } else if (assessmentSection.assessedBy) {
+            return assessmentSection.assessedBy.eid
+          }
+          return null
+        
+        case 'template_name':
+          return assessment.template.name
+        
+        case 'course_type':
+          return assessment.course?.name || null // Using course name as course type
+        
+        case 'course_number':
+          return assessment.course?.code || null // Using course code as course number
+        
+        default:
+          return null
+      }
     }
 
     // Create a map of assessment values by template field ID for quick lookup
@@ -1440,22 +1615,35 @@ export class AssessmentRepo {
     })
 
     // Map template fields with their corresponding assessment values
-    const fieldsWithValues = assessmentSection.templateSection.fields.map(templateField => ({
-      templateField: {
-        id: templateField.id,
-        label: templateField.label,
-        fieldName: templateField.fieldName,
-        fieldType: templateField.fieldType,
-        roleRequired: templateField.roleRequired,
-        options: templateField.options,
-        displayOrder: templateField.displayOrder,
-        parentId: templateField.parentId
-      },
-      assessmentValue: assessmentValueMap.get(templateField.id) || {
-        id: '', // This shouldn't happen if data is consistent
-        answerValue: null
+    const fieldsWithValues = assessmentSection.templateSection.fields.map(templateField => {
+      const existingValue = assessmentValueMap.get(templateField.id)
+      
+      // Check if this is a system field and auto-populate if no value exists
+      let finalAnswerValue = existingValue?.answerValue
+      if (!finalAnswerValue) {
+        const systemValue = getSystemFieldValue(templateField.fieldName)
+        if (systemValue) {
+          finalAnswerValue = systemValue
+        }
       }
-    }))
+
+      return {
+        templateField: {
+          id: templateField.id,
+          label: templateField.label,
+          fieldName: templateField.fieldName,
+          fieldType: templateField.fieldType,
+          roleRequired: templateField.roleRequired,
+          options: templateField.options,
+          displayOrder: templateField.displayOrder,
+          parentId: templateField.parentId
+        },
+        assessmentValue: {
+          id: existingValue?.id || '',
+          answerValue: finalAnswerValue
+        }
+      }
+    })
 
     return {
       success: true,
@@ -1519,21 +1707,36 @@ export class AssessmentRepo {
         }
       })
 
-      // Check if assessment form should be updated to DRAFT
-      let newAssessmentStatus = updatedSection.assessmentForm.status
-      if (newAssessmentStatus === AssessmentStatus.NOT_STARTED) {
-        newAssessmentStatus = AssessmentStatus.DRAFT
-      }
+      // Get total number of sections in this assessment form
+      const totalSections = updatedSection.assessmentForm.sections.length
 
-      // Check if all sections are DRAFT to make it READY_TO_SUBMIT
-      const allSectionsDraft = updatedSection.assessmentForm.sections.every(
+      // Check current assessment form status
+      let newAssessmentStatus = updatedSection.assessmentForm.status
+
+      // Check how many sections are now DRAFT (including the one just updated)
+      const draftSectionsCount = updatedSection.assessmentForm.sections.filter(
         section => section.status === AssessmentSectionStatus.DRAFT
-      )
-      
-      if (allSectionsDraft && 
-          (newAssessmentStatus === AssessmentStatus.DRAFT || 
-           newAssessmentStatus === AssessmentStatus.SIGNATURE_PENDING)) {
-        newAssessmentStatus = AssessmentStatus.READY_TO_SUBMIT
+      ).length
+
+      if (totalSections === 1) {
+        // Single section: ON_GOING → SIGNATURE_PENDING
+        if (newAssessmentStatus === AssessmentStatus.ON_GOING) {
+          newAssessmentStatus = AssessmentStatus.SIGNATURE_PENDING
+        }
+      } else {
+        // Multiple sections
+        if (newAssessmentStatus === AssessmentStatus.ON_GOING && draftSectionsCount === 1) {
+          // First section completed: ON_GOING → DRAFT
+          newAssessmentStatus = AssessmentStatus.DRAFT
+        }
+        
+        if (newAssessmentStatus === AssessmentStatus.DRAFT && draftSectionsCount === totalSections) {
+          // Last section completed: DRAFT → SIGNATURE_PENDING
+          newAssessmentStatus = AssessmentStatus.SIGNATURE_PENDING
+        }
+        
+        // Middle sections (not first, not last) don't change Assessment Form status
+        // They only change their own section status to DRAFT
       }
 
       // Update assessment form status if needed
@@ -1560,28 +1763,15 @@ export class AssessmentRepo {
    */
   async toggleTraineeLock(assessmentId: string, isTraineeLocked: boolean, userId: string) {
     return await this.prisma.$transaction(async (tx) => {
-      // Get assessment with template sections
+      // Get assessment with sections
       const assessment = await tx.assessmentForm.findUnique({
         where: { id: assessmentId },
         include: {
-          template: {
-            include: {
-              sections: {
-                select: {
-                  editBy: true,
-                  roleInSubject: true
-                }
-              }
-            }
-          },
           sections: {
-            include: {
-              templateSection: {
-                select: {
-                  editBy: true,
-                  roleInSubject: true
-                }
-              }
+            select: {
+              id: true,
+              assessedById: true,
+              status: true
             }
           }
         }
@@ -1600,42 +1790,20 @@ export class AssessmentRepo {
         throw new Error('Can only toggle trainee lock on the occurrence date')
       }
 
-      // Check if assessment has trainee sections
-      const hasTraineeSections = assessment.template.sections.some(
-        section => section.editBy === 'TRAINEE'
+      // Check if the user has assessed any section in this assessment form
+      const userAssessedSections = assessment.sections.filter(
+        section => section.assessedById === userId
       )
 
-      if (!hasTraineeSections) {
-        throw new Error('Assessment does not have any trainee sections')
+      if (userAssessedSections.length === 0) {
+        throw new Error('You can only toggle trainee lock for assessments where you have assessed at least one section')
       }
 
-      // Determine new status based on lock state and trainee sections
-      let newStatus: AssessmentStatus
-
-      if (!isTraineeLocked) {
-        // Switching to false (unlocked) - allows trainee input
-        newStatus = AssessmentStatus.SIGNATURE_PENDING
-      } else {
-        // Switching to true (locked) - check ALL section completion
-        const allSectionsDraft = assessment.sections.every(
-          section => section.status === AssessmentSectionStatus.DRAFT
-        )
-
-        if (allSectionsDraft) {
-          // All sections (TRAINER + TRAINEE) are completed
-          newStatus = AssessmentStatus.READY_TO_SUBMIT
-        } else {
-          // Some sections still not completed (either TRAINER or TRAINEE)
-          newStatus = AssessmentStatus.DRAFT
-        }
-      }
-
-      // Update assessment form
+      // Update assessment form (only toggle isTraineeLocked, no status change)
       const updatedAssessment = await tx.assessmentForm.update({
         where: { id: assessmentId },
         data: {
-          isTraineeLocked,
-          status: newStatus
+          isTraineeLocked
         }
       })
 
@@ -1643,8 +1811,9 @@ export class AssessmentRepo {
         success: true,
         message: `Trainee lock ${isTraineeLocked ? 'enabled' : 'disabled'} successfully`,
         assessmentFormId: assessmentId,
-        isTraineeLocked,
-        status: newStatus
+        isTraineeLocked: isTraineeLocked,
+        status: assessment.status, // Status remains unchanged
+        assessedSectionsCount: userAssessedSections.length
       }
     })
   }
@@ -1767,6 +1936,22 @@ export class AssessmentRepo {
         assessmentSectionId: assessmentSectionId,
         updatedValues: updatedCount,
         sectionStatus: assessmentSection.status
+      }
+    })
+  }
+
+  /**
+   * Confirm assessment participation - Change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   */
+  async confirmAssessmentParticipation(assessmentId: string) {
+    return await this.prisma.assessmentForm.update({
+      where: { 
+        id: assessmentId,
+        status: AssessmentStatus.SIGNATURE_PENDING
+      },
+      data: {
+        status: AssessmentStatus.READY_TO_SUBMIT,
+        updatedAt: new Date()
       }
     })
   }
