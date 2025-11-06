@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import { NodemailerService } from '~/routes/email/nodemailer.service'
 import {
-  BulkDepartmentIsDisabledAtIndexException,
   BulkDepartmentNotFoundAtIndexException,
+  BulkEidCountMismatchException,
   BulkForbiddenProfileException,
   BulkRequiredProfileMissingException,
-  BulkRoleIsDisabledAtIndexException,
   BulkRoleNotFoundAtIndexException,
   BulkTraineeProfileNotAllowedException,
   BulkTrainerProfileNotAllowedException,
@@ -27,20 +26,26 @@ import {
   UserIsNotDisabledException,
   UserNotFoundException
 } from '~/routes/user/user.error'
+import { UserMes } from '~/routes/user/user.message'
 import {
+  BulkCreateResultType,
   CreateBulkUsersBodyType,
   CreateUserBodyWithProfileType,
+  GetUserProfileResType,
+  GetUsersQueryType,
   UpdateUserBodyWithProfileType
 } from '~/routes/user/user.model'
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import { RoleName } from '~/shared/constants/auth.constant'
-import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
+import { ROLE_PROFILE_VIOLATION_TYPES } from '~/shared/constants/user.constant'
 import {
+  evaluateRoleProfileRules,
   isForeignKeyConstraintPrismaError,
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
+import { GetUsersResType } from '~/shared/models/shared-user.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -65,37 +70,27 @@ export class UserService {
     private readonly nodemailerService: NodemailerService
   ) {}
 
-  list({ roleName, activeUserRoleName }: { roleName?: string; activeUserRoleName?: string } = {}) {
-    const includeDeleted = activeUserRoleName === RoleName.ADMINISTRATOR
-
-    return this.userRepo.list({
-      includeDeleted,
-      roleName
-    })
+  list(query: GetUsersQueryType = {}): Promise<GetUsersResType> {
+    return this.userRepo.list(query)
   }
 
-  async findById(id: string, { userRole }: { userRole?: string } = {}) {
-    const includeDeleted = userRole === RoleName.ADMINISTRATOR
-
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted })
+  async findById(id: string): Promise<GetUserProfileResType> {
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile(id)
 
     if (!user) {
       throw UserNotFoundException
     }
 
-    const { trainerProfile, traineeProfile, ...baseUser } = user
-
-    // Nếu là trainer thì trả về kèm trainerProfile, trainee thì trả về kèm traineeProfile
-    if (user.role.name === RoleName.TRAINER && trainerProfile) {
-      return { ...baseUser, trainerProfile }
-    } else if (user.role.name === RoleName.TRAINEE && traineeProfile) {
-      return { ...baseUser, traineeProfile }
-    } else {
-      return baseUser
-    }
+    return this.formatUserProfileForRole(user)
   }
 
-  async create({ data, createdById }: { data: CreateUserBodyWithProfileType; createdById: string }) {
+  async create({
+    data,
+    createdById
+  }: {
+    data: CreateUserBodyWithProfileType
+    createdById: string
+  }): Promise<GetUserProfileResType> {
     try {
       // Lấy thông tin role mục tiêu
       const targetRole = await this.sharedRoleRepository.findRolebyId(data.role.id)
@@ -104,19 +99,19 @@ export class UserService {
       }
 
       // Kiểm tra role có đang active không
-      if (!targetRole.isActive) {
+      if (!targetRole.isActive || targetRole.deletedAt) {
         throw RoleIsDisabledException
       }
 
       // Kiểm tra departmentId có tồn tại và active không (nếu được cung cấp)
       if (data.departmentId) {
-        const department = await this.sharedDepartmentRepository.findById(data.departmentId)
+        const department = await this.sharedDepartmentRepository.findDepartmentById(data.departmentId)
         if (!department) {
           throw DepartmentNotFoundException
         }
 
         // Kiểm tra department có đang active không
-        if (department.isActive !== true) {
+        if (!department.isActive) {
           throw DepartmentIsDisabledException
         }
       }
@@ -138,7 +133,7 @@ export class UserService {
       // Tách profile và role ra khỏi data
       const { trainerProfile, traineeProfile, role, ...userData } = data
 
-      const user = await this.userRepo.createWithProfile({
+      const createdUser = await this.userRepo.createWithProfile({
         createdById,
         userData: {
           ...userData,
@@ -150,6 +145,15 @@ export class UserService {
         trainerProfile,
         traineeProfile
       })
+
+      if (!createdUser) {
+        throw UserNotFoundException
+      }
+
+      const userWithProfile = await this.sharedUserRepository.findUniqueIncludeProfile(createdUser.id)
+      if (!userWithProfile) {
+        throw UserNotFoundException
+      }
 
       // Gửi email chào mừng cho user mới
       try {
@@ -163,8 +167,7 @@ export class UserService {
         // Nếu gửi email lỗi thì chỉ log, không throw
         console.error(`Gửi email chào mừng thất bại tới ${data.email}:`, emailError)
       }
-
-      return user
+      return this.formatUserProfileForRole(userWithProfile)
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw RoleNotFoundException
@@ -177,12 +180,18 @@ export class UserService {
     }
   }
 
-  async createBulk({ data, createdById }: { data: CreateBulkUsersBodyType; createdById: string }) {
+  async createBulk({
+    data,
+    createdById
+  }: {
+    data: CreateBulkUsersBodyType
+    createdById: string
+  }): Promise<BulkCreateResultType> {
     try {
       const users = data.users
 
-      // Bước 0: Check duplicate department heads trong batch
-      const departmentHeadMap = new Map<string, number>() // departmentId -> index
+      // Bước 0: kiểm tra trùng department heads trong batch
+      const departmentHeadMap = new Map<string, number>()
       for (let i = 0; i < users.length; i++) {
         const userData = users[i]
         const role = await this.sharedRoleRepository.findRolebyId(userData.role.id)
@@ -190,7 +199,7 @@ export class UserService {
         if (role?.name === RoleName.DEPARTMENT_HEAD && userData.departmentId) {
           const existingIndex = departmentHeadMap.get(userData.departmentId)
           if (existingIndex !== undefined) {
-            const department = await this.sharedDepartmentRepository.findById(userData.departmentId)
+            const department = await this.sharedDepartmentRepository.findDepartmentById(userData.departmentId)
             throw new Error(
               `Duplicate department heads in batch: Users at index ${existingIndex} and ${i} are both assigned as department head for "${department?.name || 'Unknown'}"`
             )
@@ -199,7 +208,7 @@ export class UserService {
         }
       }
 
-      // Bước 1: Validate tất cả các role và tính hợp lệ của profile
+      // Bước 1: Validate tất cả các role và profile
       const roleValidationPromises = users.map(async (userData, index) => {
         try {
           const targetRole = await this.sharedRoleRepository.findRolebyId(userData.role.id)
@@ -207,28 +216,17 @@ export class UserService {
             throw new Error(BulkRoleNotFoundAtIndexException(index))
           }
 
-          // Kiểm tra role có đang active không
-          if (!targetRole.isActive) {
-            throw new Error(BulkRoleIsDisabledAtIndexException(index, targetRole.name))
-          }
-
-          // Kiểm tra departmentId có tồn tại và active không
           if (userData.departmentId) {
-            const department = await this.sharedDepartmentRepository.findById(userData.departmentId)
+            const department = await this.sharedDepartmentRepository.findDepartmentById(userData.departmentId)
             if (!department) {
               throw new Error(BulkDepartmentNotFoundAtIndexException(index, userData.departmentId))
-            }
-
-            // Kiểm tra department có đang active không
-            if (department.isActive !== true) {
-              throw new Error(BulkDepartmentIsDisabledAtIndexException(index, department.name))
             }
           }
 
           // Kiểm tra profile có đúng không
           this.validateProfileDataForRole(targetRole.name, userData, index)
 
-          // Validate unique department head constraint
+          // Kiểm định unique department head constraint
           await this.validateUniqueDepartmentHead({
             departmentId: userData.departmentId ?? undefined,
             roleName: targetRole.name
@@ -248,9 +246,9 @@ export class UserService {
 
       // Lọc ra những thằng ko hợp lệ và hợp lệ
       const validUsers: Array<{
-        userData: CreateUserBodyWithProfileType
-        roleName: string
         index: number
+        roleName: string
+        userData: CreateUserBodyWithProfileType
       }> = []
 
       const invalidUsers: Array<{
@@ -309,7 +307,7 @@ export class UserService {
           const eids = Array.isArray(generatedEids) ? generatedEids : [generatedEids]
 
           if (eids.length !== count) {
-            throw new Error(`Expected ${count} EIDs but got ${eids.length}`)
+            throw BulkEidCountMismatchException(count, eids.length)
           }
 
           // Gán EID cho từng người dùng
@@ -378,7 +376,7 @@ export class UserService {
           createdById
         })
 
-        // Merge all failures
+        // Gộp tất cả lỗi
         bulkResult.failed.push(...invalidUsers)
         bulkResult.summary.failed += invalidUsers.length
         bulkResult.summary.total = users.length
@@ -461,40 +459,24 @@ export class UserService {
     }
   }
 
-  /**
-   * Kiểm tra tính hợp lệ của dữ liệu profile theo role
-   * - TRAINER: bắt buộc có trainerProfile, không được có traineeProfile
-   * - TRAINEE: bắt buộc có traineeProfile, không được có trainerProfile
-   * - Các role khác: không được có bất kỳ profile nào
-   * @param roleName - Tên role cần kiểm tra
-   * @param data - Dữ liệu user với profile
-   */
   private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
-    const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
+    const violations = evaluateRoleProfileRules(roleName, data)
+    if (violations.length === 0) {
+      return
+    }
 
-    if (rules) {
-      // Đối với role có yêu cầu profile cụ thể (TRAINER/TRAINEE)
-      const requiredProfile = data[rules.requiredProfile as keyof typeof data]
-      const forbiddenProfile = data[rules.forbiddenProfile as keyof typeof data]
+    const violation = violations[0]
 
-      // Kiểm tra thiếu profile bắt buộc
-      if (!requiredProfile) {
-        throw RequiredProfileMissingException(roleName, rules.requiredProfile)
-      }
-
-      // Kiểm tra có profile không được phép
-      if (forbiddenProfile) {
-        throw ForbiddenProfileException(roleName, rules.forbiddenProfile, rules.forbiddenMessage)
-      }
-    } else {
-      // Đối với các role khác (ADMINISTRATOR, DEPARTMENT_HEAD, SQA_AUDITOR, etc.)
-      // không được có bất kỳ profile nào
-      if (data.trainerProfile) {
-        throw TrainerProfileNotAllowedException(roleName)
-      }
-      if (data.traineeProfile) {
+    switch (violation.type) {
+      case ROLE_PROFILE_VIOLATION_TYPES.MISSING_REQUIRED:
+        throw RequiredProfileMissingException(roleName, violation.profileKey)
+      case ROLE_PROFILE_VIOLATION_TYPES.FORBIDDEN_PRESENT:
+        throw ForbiddenProfileException(roleName, violation.profileKey, violation.message)
+      case ROLE_PROFILE_VIOLATION_TYPES.UNEXPECTED_PROFILE:
+        if (violation.profileKey === 'trainerProfile') {
+          throw TrainerProfileNotAllowedException(roleName)
+        }
         throw TraineeProfileNotAllowedException(roleName)
-      }
     }
   }
 
@@ -524,11 +506,7 @@ export class UserService {
     return true
   }
 
-  /**
-   * Cập nhật thông tin người dùng.
-   * Chỉ ADMINISTRATOR mới được phép update user bị disabled.
-   * Ví dụ: PUT /users/:userId?includeDeleted=true
-   */
+  /** Cập nhật thông tin người dùng. Chỉ ADMINISTRATOR mới được phép update user bị disabled. */
   async update({
     id,
     data,
@@ -539,7 +517,7 @@ export class UserService {
     data: UpdateUserBodyWithProfileType
     updatedById: string
     updatedByRoleName: string
-  }) {
+  }): Promise<GetUserProfileResType> {
     try {
       // Không thể cập nhật chính mình
       this.verifyYourself({
@@ -548,10 +526,12 @@ export class UserService {
       })
 
       // Bước 2: Lấy thông tin user hiện tại
-      const includeDeleted = updatedByRoleName === RoleName.ADMINISTRATOR
-
-      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted })
+      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(id)
       if (!currentUser) {
+        throw UserNotFoundException
+      }
+
+      if (currentUser.deletedAt && updatedByRoleName !== RoleName.ADMINISTRATOR) {
         throw UserNotFoundException
       }
 
@@ -564,7 +544,7 @@ export class UserService {
 
       // Bước 4: Kiểm tra department exists và active (nếu có)
       if (data.departmentId !== undefined && data.departmentId !== null) {
-        const department = await this.sharedDepartmentRepository.findById(data.departmentId)
+        const department = await this.sharedDepartmentRepository.findDepartmentById(data.departmentId)
         if (!department) {
           throw DepartmentNotFoundException
         }
@@ -601,11 +581,15 @@ export class UserService {
           newRoleName,
           trainerProfile,
           traineeProfile,
-          includeDeleted
+          includeDeleted: true
         }
       )
 
-      return updatedUser
+      if (!updatedUser) {
+        throw UserNotFoundException
+      }
+
+      return this.formatUserProfileForRole(updatedUser)
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw UserNotFoundException
@@ -700,7 +684,7 @@ export class UserService {
     }
   }
 
-  async delete({ id, deletedById }: { id: string; deletedById: string }) {
+  async delete({ id, deletedById }: { id: string; deletedById: string }): Promise<{ message: string }> {
     try {
       // Business rule: Cannot delete yourself
       this.verifyYourself({
@@ -709,7 +693,7 @@ export class UserService {
       })
 
       // Get user info for validation
-      const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: false })
+      const user = await this.sharedUserRepository.findUniqueIncludeProfile(id)
       if (!user) {
         throw UserNotFoundException
       }
@@ -735,7 +719,7 @@ export class UserService {
         deletedById
       })
       return {
-        message: 'Disable successfully'
+        message: UserMes.DELETE_SUCCESS
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
@@ -744,7 +728,7 @@ export class UserService {
       throw error
     }
   }
-  async enable({ id, enabledById }: { id: string; enabledById: string }) {
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<{ message: string }> {
     try {
       // Business rule: Cannot enable yourself
       this.verifyYourself({
@@ -753,7 +737,7 @@ export class UserService {
       })
 
       // Get user info (including disabled users)
-      const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id }, { includeDeleted: true })
+      const user = await this.sharedUserRepository.findUniqueIncludeProfile(id)
       if (!user) {
         throw UserNotFoundException
       }
@@ -778,7 +762,7 @@ export class UserService {
       })
 
       return {
-        message: 'Enable successfully'
+        message: UserMes.ENABLE_SUCCESS
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
@@ -801,47 +785,31 @@ export class UserService {
     userData: CreateUserBodyWithProfileType,
     userIndex: number
   ): void {
-    const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
+    const violations = evaluateRoleProfileRules(roleName, userData)
+    if (violations.length === 0) {
+      return
+    }
 
-    if (rules) {
-      // Đối với role có yêu cầu profile cụ thể (TRAINER/TRAINEE)
-      const requiredProfile = userData[rules.requiredProfile as keyof typeof userData]
-      const forbiddenProfile = userData[rules.forbiddenProfile as keyof typeof userData]
+    const violation = violations[0]
+    const { profileKey, message: violationMessage } = violation
 
-      // Kiểm tra thiếu profile bắt buộc
-      if (!requiredProfile) {
-        throw new Error(
-          BulkRequiredProfileMissingException(userIndex, roleName, rules.requiredProfile, rules.requiredMessage)
-        )
+    switch (violation.type) {
+      case ROLE_PROFILE_VIOLATION_TYPES.MISSING_REQUIRED: {
+        const message = BulkRequiredProfileMissingException(userIndex, roleName, profileKey, violationMessage)
+        throw new Error(message)
       }
-
-      // Kiểm tra có profile không được phép
-      if (forbiddenProfile) {
-        throw new Error(
-          BulkForbiddenProfileException(userIndex, roleName, rules.forbiddenProfile, rules.forbiddenMessage)
-        )
+      case ROLE_PROFILE_VIOLATION_TYPES.FORBIDDEN_PRESENT: {
+        const message = BulkForbiddenProfileException(userIndex, roleName, profileKey, violationMessage)
+        throw new Error(message)
       }
-    } else {
-      // Đối với các role khác (SQA_AUDITOR, ADMINISTRATOR, DEPARTMENT_HEAD, etc.)
-      // không được có bất kỳ profile nào
-      if (userData.trainerProfile) {
-        throw new Error(BulkTrainerProfileNotAllowedException(userIndex, roleName))
-      }
-      if (userData.traineeProfile) {
+      case ROLE_PROFILE_VIOLATION_TYPES.UNEXPECTED_PROFILE:
+        if (profileKey === 'trainerProfile') {
+          throw new Error(BulkTrainerProfileNotAllowedException(userIndex, roleName))
+        }
         throw new Error(BulkTraineeProfileNotAllowedException(userIndex, roleName))
-      }
     }
   }
 
-  /**
-   * Validate unique department head constraint
-   * Business rule: Mỗi department chỉ được có 1 department head
-   * @param departmentId - ID của department cần check
-   * @param roleName - Role name của user
-   * @param excludeUserId - ID của user cần loại trừ (dùng cho update case)
-   * @throws DepartmentHeadAlreadyExistsException nếu department đã có head
-   * @throws DepartmentHeadRequiresDepartmentException nếu department head không có department
-   */
   private async validateUniqueDepartmentHead({
     departmentId,
     roleName,
@@ -869,11 +837,39 @@ export class UserService {
 
     if (existingHead) {
       // Lấy thông tin department để hiển thị tên
-      const department = await this.sharedDepartmentRepository.findById(departmentId)
+      const department = await this.sharedDepartmentRepository.findDepartmentById(departmentId)
       const departmentName = department?.name || 'Unknown Department'
       const existingHeadFullName = `${existingHead.firstName} ${existingHead.lastName}`.trim()
 
       throw DepartmentHeadAlreadyExistsException(departmentName, existingHeadFullName, existingHead.eid)
     }
+  }
+
+  private formatUserProfileForRole(user: GetUserProfileResType): GetUserProfileResType {
+    const { trainerProfile, traineeProfile, ...baseUser } = user
+
+    if (user.role.name === RoleName.TRAINER && trainerProfile) {
+      const formattedTrainer = {
+        ...baseUser,
+        trainerProfile
+      } satisfies GetUserProfileResType
+
+      return formattedTrainer
+    }
+
+    if (user.role.name === RoleName.TRAINEE && traineeProfile) {
+      const formattedTrainee = {
+        ...baseUser,
+        traineeProfile
+      } satisfies GetUserProfileResType
+
+      return formattedTrainee
+    }
+
+    const formattedUser = {
+      ...baseUser
+    } satisfies GetUserProfileResType
+
+    return formattedUser
   }
 }

@@ -100,6 +100,30 @@ type BasicUserInfoWithDepartment = Prisma.UserGetPayload<{
     }
   }
 }>
+
+const roleDetailSelect = {
+  id: true,
+  name: true,
+  description: true,
+  isActive: true
+} satisfies Prisma.RoleSelect
+
+const departmentDetailSelect = {
+  id: true,
+  name: true,
+  isActive: true
+} satisfies Prisma.DepartmentSelect
+
+const userProfileInclude = {
+  role: {
+    select: roleDetailSelect
+  },
+  department: {
+    select: departmentDetailSelect
+  },
+  trainerProfile: true,
+  traineeProfile: true
+} satisfies Prisma.UserInclude
 @Injectable()
 @SerializeAll()
 export class SharedUserRepository {
@@ -107,22 +131,6 @@ export class SharedUserRepository {
     private readonly prismaService: PrismaService,
     private readonly eidService: EidService
   ) {}
-
-  buildListFilters({
-    includeDeleted = false,
-    extend
-  }: {
-    includeDeleted?: boolean
-    extend?: (context: { includeDeleted: boolean }) => Record<string, any>
-  } = {}) {
-    const filters: Record<string, any> = includeDeleted ? {} : { deletedAt: null }
-
-    if (extend) {
-      Object.assign(filters, extend({ includeDeleted }))
-    }
-
-    return filters
-  }
 
   findUnique(
     where: WhereUniqueUserType,
@@ -303,34 +311,12 @@ export class SharedUserRepository {
     })
   }
 
-  async findUniqueIncludeProfile(
-    where: WhereUniqueUserType,
-    { includeDeleted = false }: IncludeDeletedQueryType = {}
-  ): Promise<GetUserProfileResType | null> {
+  async findUniqueIncludeProfile(id: string): Promise<GetUserProfileResType | null> {
     const user = await this.prismaService.user.findFirst({
       where: {
-        ...where,
-        deletedAt: includeDeleted ? undefined : null
+        id
       },
-      include: {
-        role: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            isActive: true
-          }
-        },
-        department: {
-          select: {
-            id: true,
-            name: true,
-            isActive: true
-          }
-        },
-        trainerProfile: true,
-        traineeProfile: true
-      }
+      include: userProfileInclude
     })
     return user
   }
@@ -598,13 +584,6 @@ export class SharedUserRepository {
     })
   }
 
-  /**
-   * Tìm department head hiện tại của một department
-   * Business rule: Mỗi department chỉ có 1 department head
-   * @param departmentId - ID của department cần kiểm tra
-   * @param excludeUserId - ID của user cần loại trừ (dùng cho update case)
-   * @returns User hoặc null nếu không tìm thấy
-   */
   async findDepartmentHeadByDepartment({
     departmentId,
     excludeUserId
@@ -617,7 +596,8 @@ export class SharedUserRepository {
         departmentId,
         role: {
           name: RoleName.DEPARTMENT_HEAD,
-          deletedAt: null
+          deletedAt: null,
+          isActive: true
         },
         deletedAt: null,
         ...(excludeUserId && { id: { not: excludeUserId } })

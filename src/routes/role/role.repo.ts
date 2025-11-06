@@ -11,15 +11,10 @@ import {
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 
-const activeRoleFilter = {
-  deletedAt: null,
-  isActive: true
-} as const
-
 const activePermissionFilter = {
   deletedAt: null,
   isActive: true
-} as const
+} satisfies Prisma.PermissionWhereInput
 
 const roleDetailInclude = {
   permissions: {

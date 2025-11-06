@@ -13,4 +13,4 @@ export const ROLE_PROFILE_RULES = {
     requiredMessage: 'Trainee profile is required for trainee role',
     forbiddenMessage: 'Cannot provide trainer profile for trainee role'
   }
-}
+} as const

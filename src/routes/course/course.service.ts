@@ -76,7 +76,7 @@ export class CourseService {
       throw OnlyAcademicDepartmentCanCreateCourseException
     }
 
-    const department = await this.sharedDepartmentRepo.findById(data.departmentId, {
+    const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
       includeDeleted: false
     })
 
@@ -136,7 +136,7 @@ export class CourseService {
     }
 
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
-      const department = await this.sharedDepartmentRepo.findById(data.departmentId, {
+      const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
         includeDeleted: false
       })
 
