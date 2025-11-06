@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
+import JSZip from 'jszip'
 import { TemplateRepository } from './template.repository'
 import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
+import { PdfConverterService } from '~/shared/services/pdf-converter.service'
 import {
   InvalidFileTypeError,
   DocxParsingError,
@@ -44,7 +46,10 @@ interface PlaceholderInfo {
 
 @Injectable()
 export class TemplateService {
-  constructor(private readonly templateRepository: TemplateRepository) {}
+  constructor(
+    private readonly templateRepository: TemplateRepository,
+    private readonly pdfConverterService: PdfConverterService
+  ) {}
   /**
    * Parse DOCX và trích xuất placeholders
    * trả về JSON schema dựa trên các placeholders tìm thấy
@@ -1007,6 +1012,109 @@ export class TemplateService {
       type: 'object',
       properties: schema,
       additionalProperties: false
+    }
+  }
+
+  /**
+   * Get template PDF from template_content S3 URL
+   */
+  async getTemplatePdf(templateFormId: string): Promise<Buffer> {
+    try {
+      // Get template form from database
+      const templateForm = await this.templateRepository.findTemplateById(templateFormId)
+      if (!templateForm) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (!templateForm.templateContent) {
+        throw new Error('Template content URL not found')
+      }
+
+      // Convert DOCX to PDF using the shared service
+      const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateContent)
+      return pdfBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template PDF: ${error.message}`)
+    }
+  }
+
+  /**
+   * Get template config PDF from template_config S3 URL
+   */
+  async getTemplateConfigPdf(templateFormId: string): Promise<Buffer> {
+    try {
+      // Get template form from database
+      const templateForm = await this.templateRepository.findTemplateById(templateFormId)
+      if (!templateForm) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (!templateForm.templateConfig) {
+        throw new Error('Template config URL not found')
+      }
+
+      // Convert DOCX to PDF using the shared service
+      const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateConfig)
+      return pdfBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template config PDF: ${error.message}`)
+    }
+  }
+
+  /**
+   * Get both template and config PDFs as a ZIP file
+   */
+  async getTemplateBothPdf(templateFormId: string): Promise<Buffer> {
+    try {
+      // Get template form from database
+      const templateForm = await this.templateRepository.findTemplateById(templateFormId)
+      if (!templateForm) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (!templateForm.templateContent && !templateForm.templateConfig) {
+        throw new Error('No template URLs found')
+      }
+
+      const zip = new JSZip()
+      
+      // Add template content PDF if exists
+      if (templateForm.templateContent) {
+        try {
+          const templatePdf = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateContent)
+          zip.file('template-content.pdf', templatePdf)
+        } catch (error) {
+          console.warn('Failed to convert template content:', error.message)
+        }
+      }
+
+      // Add template config PDF if exists
+      if (templateForm.templateConfig) {
+        try {
+          const configPdf = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateConfig)
+          zip.file('template-config.pdf', configPdf)
+        } catch (error) {
+          console.warn('Failed to convert template config:', error.message)
+        }
+      }
+
+      // Generate ZIP buffer
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
+      return zipBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template ZIP: ${error.message}`)
     }
   }
 

@@ -21,7 +21,8 @@ import {
   ToggleTraineeLockResType,
   SubmitAssessmentResType,
   UpdateAssessmentValuesBodyType,
-  UpdateAssessmentValuesResType
+  UpdateAssessmentValuesResType,
+  ConfirmAssessmentParticipationResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -677,7 +678,7 @@ export class AssessmentService {
   ) {
     try {
       // Get the assessment section fields with basic info
-      const result = await this.assessmentRepo.getAssessmentSectionFields(assessmentSectionId)
+      const result = await this.assessmentRepo.getAssessmentSectionFields(assessmentSectionId, currentUser.userId)
 
       // Get the assessment form ID to check permissions
       const assessmentFormId = result.assessmentSectionInfo.assessmentFormId
@@ -784,7 +785,7 @@ export class AssessmentService {
   ): Promise<SaveAssessmentValuesResType> {
     try {
       // First, get the assessment section to check permissions
-      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId)
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId, userContext.userId)
       
       // Get assessment info for permission check
       const assessmentSection = await this.assessmentRepo.prismaClient.assessmentSection.findUnique({
@@ -1020,7 +1021,7 @@ export class AssessmentService {
   ): Promise<UpdateAssessmentValuesResType> {
     try {
       // First, get the assessment section to validate access
-      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId)
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId, userContext.userId)
       
       // Validate that all provided assessment value IDs belong to this section
       const sectionValueIds = sectionFields.fields.map(field => field.assessmentValue.id)
@@ -1059,6 +1060,63 @@ export class AssessmentService {
       // Handle any other unexpected errors
       console.error('Update assessment values failed:', error)
       throw new BadRequestException('Failed to update assessment values')
+    }
+  }
+
+  /**
+   * Confirm assessment participation - Change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Only the trainee assigned to this assessment can confirm participation
+   */
+  async confirmAssessmentParticipation(
+    assessmentId: string,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<ConfirmAssessmentParticipationResType> {
+    try {
+      // Verify user role - only TRAINEE can confirm participation
+      if (userContext.roleName !== 'TRAINEE') {
+        throw new ForbiddenException('Only trainees can confirm assessment participation')
+      }
+
+      // Get assessment form with current status
+      const assessmentForm = await this.assessmentRepo.findById(assessmentId)
+      if (!assessmentForm) {
+        throw new NotFoundException('Assessment not found')
+      }
+
+      // Check if the current user is the trainee assigned to this assessment
+      if (assessmentForm.traineeId !== userContext.userId) {
+        throw new ForbiddenException('You can only confirm participation in your own assessments')
+      }
+
+      // Check if assessment is in SIGNATURE_PENDING status
+      if (assessmentForm.status !== 'SIGNATURE_PENDING') {
+        throw new BadRequestException('Assessment must be in SIGNATURE_PENDING status to confirm participation')
+      }
+
+      // Update status to READY_TO_SUBMIT
+      const result = await this.assessmentRepo.confirmAssessmentParticipation(assessmentId)
+
+      return {
+        success: true,
+        message: 'Assessment participation confirmed successfully',
+        assessmentFormId: assessmentId,
+        traineeId: userContext.userId,
+        confirmedAt: result.updatedAt,
+        status: result.status,
+        previousStatus: 'SIGNATURE_PENDING'
+      }
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle any other unexpected errors
+      console.error('Confirm assessment participation failed:', error)
+      throw new BadRequestException('Failed to confirm assessment participation')
     }
   }
 }

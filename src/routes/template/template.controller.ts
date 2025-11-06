@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Patch, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
+import type { Response } from 'express'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -220,5 +221,49 @@ export class TemplateController {
     }
 
     return await this.templateService.createTemplateVersion(createVersionDto, userContext)
+  }
+
+  @Get('pdf/:templateFormId')
+  @Header('Content-Type', 'application/pdf')
+  async getTemplatePdf(
+    @Param('templateFormId') templateFormId: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const pdfBuffer = await this.templateService.getTemplatePdf(templateFormId)
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="template-${templateFormId}.pdf"`,
+    })
+    res.send(pdfBuffer)
+  }
+
+  @Get('pdf-config/:templateFormId')
+  @Header('Content-Type', 'application/pdf')
+  async getTemplateConfigPdf(
+    @Param('templateFormId') templateFormId: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const pdfBuffer = await this.templateService.getTemplateConfigPdf(templateFormId)
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="template-config-${templateFormId}.pdf"`,
+    })
+    res.send(pdfBuffer)
+  }
+
+  @Get('pdf-both/:templateFormId')
+  async getTemplateBothPdf(
+    @Param('templateFormId') templateFormId: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const zipBuffer = await this.templateService.getTemplateBothPdf(templateFormId)
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="template-${templateFormId}.zip"`,
+    })
+    res.send(zipBuffer)
   }
 }

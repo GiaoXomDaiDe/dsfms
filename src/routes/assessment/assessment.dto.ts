@@ -27,7 +27,8 @@ import {
   SubmitAssessmentParamsSchema,
   SubmitAssessmentResSchema,
   UpdateAssessmentValuesBodySchema,
-  UpdateAssessmentValuesResSchema
+  UpdateAssessmentValuesResSchema,
+  ConfirmAssessmentParticipationResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -99,6 +100,8 @@ export class SubmitAssessmentResDTO extends createZodDto(SubmitAssessmentResSche
 export class UpdateAssessmentValuesBodyDTO extends createZodDto(UpdateAssessmentValuesBodySchema) {}
 
 export class UpdateAssessmentValuesResDTO extends createZodDto(UpdateAssessmentValuesResSchema) {}
+
+export class ConfirmAssessmentParticipationResDTO extends createZodDto(ConfirmAssessmentParticipationResSchema) {}
 
 // ===== TYPE EXPORTS =====
 

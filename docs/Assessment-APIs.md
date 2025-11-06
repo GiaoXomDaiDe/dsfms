@@ -52,9 +52,10 @@ POST /assessments/sections/save-values
 3. Update assessment values in database transaction
 4. Set section status to `DRAFT`
 5. Set section `assessedById` to current user
-6. Update assessment form status logic:
+5. Update assessment form status logic:
    - `NOT_STARTED` → `DRAFT` (if first section completed)
    - `DRAFT` → `READY_TO_SUBMIT` (if all sections are DRAFT)
+   - `SIGNATURE_PENDING` → `READY_TO_SUBMIT` (if all sections are DRAFT)
 
 ### 📤 **Response Schema**
 ```typescript
@@ -80,7 +81,7 @@ POST /assessments/sections/save-values
 ## 2. Toggle Trainee Lock API
 
 ### 📋 **Purpose**
-Controls trainee access to assessment sections by toggling the lock status. This is used to require trainee signature/input on specific assessment dates.
+Controls trainee access to assessment sections by toggling the lock status. Default state is locked (true). When unlocked, allows trainee input and puts assessment in signature pending state.
 
 ### 🎯 **Endpoint**
 ```http
@@ -94,7 +95,7 @@ PUT /assessments/{assessmentId}/trainee-lock
 ### 📝 **Request Schema**
 ```typescript
 {
-  isTraineeLocked: boolean  // Required: Lock state (true = locked, false = unlocked)
+  isTraineeLocked: boolean  // Required: Lock state (true = locked, false = unlocked for trainee input)
 }
 ```
 
@@ -108,15 +109,18 @@ PUT /assessments/{assessmentId}/trainee-lock
 
 #### **Business Logic Validations:**
 1. **Lock State Change:** New lock state must differ from current state
-2. **Status Transition:** Valid status transitions based on trainee section completion
+2. **Status Transition:** Valid status transitions based on ALL section completion
+3. **Comprehensive Section Check:** When locking, validates both TRAINER and TRAINEE sections
 
 ### 🔄 **Process Flow**
 1. Validate assessment exists and user has access
 2. Check if today matches occurrence date
 3. Verify assessment has trainee-editable sections
 4. Update lock status and determine new assessment status:
-   - **Lock ON:** Status → `SIGNATURE_PENDING`
-   - **Lock OFF:** Status → `READY_TO_SUBMIT` (if trainee sections are DRAFT) or `DRAFT`
+   - **Switch to Unlocked (`false`):** Status → `SIGNATURE_PENDING` (allows trainee input)
+   - **Switch to Locked (`true`):** Check ALL section completion:
+     - If ALL sections (TRAINER + TRAINEE) are `DRAFT` → Status → `READY_TO_SUBMIT`
+     - If ANY section is still `REQUIRED_ASSESSMENT` → Status → `DRAFT`
 
 ### 📤 **Response Schema**
 ```typescript
@@ -136,6 +140,39 @@ PUT /assessments/{assessmentId}/trainee-lock
 | 400 | No trainee sections | Assessment lacks TRAINEE sections |
 | 403 | Permission denied | User lacks assessment access |
 | 404 | Assessment not found | Assessment doesn't exist |
+
+### 📊 **Lock Status Scenarios**
+
+#### **Scenario 1: Unlock for Trainee Input**
+```
+Request: isTraineeLocked = false
+Result: Status → SIGNATURE_PENDING
+Purpose: Allow trainee to access and fill their sections
+```
+
+#### **Scenario 2: Lock - All Sections Complete**
+```
+Condition: ALL sections (TRAINER + TRAINEE) are DRAFT
+Request: isTraineeLocked = true  
+Result: Status → READY_TO_SUBMIT
+Purpose: Assessment ready for final submission
+```
+
+#### **Scenario 3: Lock - Trainee Complete, TRAINER Incomplete**
+```
+Condition: TRAINEE sections = DRAFT, Some TRAINER sections = REQUIRED_ASSESSMENT
+Request: isTraineeLocked = true
+Result: Status → DRAFT
+Purpose: Still waiting for TRAINER sections to be completed
+```
+
+#### **Scenario 4: Lock - Trainee Incomplete**
+```
+Condition: TRAINEE sections = REQUIRED_ASSESSMENT
+Request: isTraineeLocked = true
+Result: Status → DRAFT  
+Purpose: Trainee didn't provide required input
+```
 
 ---
 
@@ -361,7 +398,7 @@ graph TD
 | `NOT_STARTED` | Initial state, no sections completed | Assessment creation |
 | `DRAFT` | Work in progress, some sections completed | First section saved |
 | `READY_TO_SUBMIT` | All sections complete, ready for submission | All sections DRAFT |
-| `SIGNATURE_PENDING` | Waiting for trainee signature/input | Trainee lock enabled |
+| `SIGNATURE_PENDING` | Waiting for trainee signature/input | Trainee lock disabled (unlocked) |
 | `SUBMITTED` | Submitted for review | Submit API called |
 | `APPROVED` | Assessment approved | Manual approval |
 | `REJECTED` | Assessment rejected | Manual rejection |
@@ -461,7 +498,40 @@ try {
 
 ---
 
-## 🔧 Technical Implementation Notes
+## � Enhanced Status Flow Scenarios
+
+### **Save Assessment Values Status Transitions**
+
+#### **Scenario 1: Normal Assessment Flow**
+```
+NOT_STARTED → (save first section) → DRAFT → (save all sections) → READY_TO_SUBMIT
+```
+
+#### **Scenario 2: Trainee Assessment During Signature Pending**
+```
+DRAFT → (unlock trainee) → SIGNATURE_PENDING → (trainee completes section) → READY_TO_SUBMIT
+```
+
+#### **Scenario 3: Mixed Section Completion**
+```
+SIGNATURE_PENDING → (any user completes last section) → READY_TO_SUBMIT
+DRAFT → (any user completes last section) → READY_TO_SUBMIT
+```
+
+### **Key Status Transition Rules**
+1. **NOT_STARTED** always transitions to **DRAFT** on first section save
+2. **DRAFT** transitions to **READY_TO_SUBMIT** when all sections are DRAFT
+3. **SIGNATURE_PENDING** transitions to **READY_TO_SUBMIT** when all sections are DRAFT
+4. Any other status maintains current state until all sections complete
+
+### **Trainee Lock Integration**
+- When trainee lock is **disabled** (`false`): Form goes to **SIGNATURE_PENDING**
+- If trainee completes their section while in **SIGNATURE_PENDING**: Can transition directly to **READY_TO_SUBMIT**
+- This allows seamless flow without requiring lock/unlock cycles
+
+---
+
+## �🔧 Technical Implementation Notes
 
 ### Database Transactions
 - All multi-step operations use database transactions

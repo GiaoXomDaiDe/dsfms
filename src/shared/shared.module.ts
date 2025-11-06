@@ -14,6 +14,7 @@ import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.re
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
+import { PdfConverterService } from '~/shared/services/pdf-converter.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { S3Service } from '~/shared/services/s3.service'
 import { TokenService } from '~/shared/services/token.service'
@@ -33,7 +34,8 @@ const sharedServices = [
   AccessTokenGuard,
   APIKeyGuard,
   EidService,
-  S3Service
+  S3Service,
+  PdfConverterService
 ]
 @Global()
 @Module({
