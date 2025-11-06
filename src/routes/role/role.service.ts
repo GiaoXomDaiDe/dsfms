@@ -8,7 +8,16 @@ import {
   UnexpectedEnableErrorException
 } from '~/routes/role/role.error'
 import { RoleMes } from '~/routes/role/role.message'
-import { CreateRoleBodyType, UpdateRoleBodyType } from '~/routes/role/role.model'
+import {
+  AddPermissionsToRoleResType,
+  CreateRoleBodyType,
+  CreateRoleResType,
+  GetRoleDetailResType,
+  GetRolesResType,
+  RemovePermissionsFromRoleResType,
+  RoleWithPermissionsType,
+  UpdateRoleBodyType
+} from '~/routes/role/role.model'
 import { RoleRepo } from '~/routes/role/role.repo'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
@@ -23,18 +32,18 @@ export class RoleService {
     private readonly sharedRoleRepo: SharedRoleRepository
   ) {}
 
-  async list() {
+  async list(): Promise<GetRolesResType> {
     const data = await this.roleRepo.list()
     return data
   }
 
-  async findById(id: string) {
+  async findById(id: string): Promise<GetRoleDetailResType> {
     const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
     return role
   }
 
-  async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }) {
+  async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }): Promise<CreateRoleResType> {
     if (data.permissionIds && data.permissionIds.length > 0) {
       await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
     }
@@ -47,7 +56,15 @@ export class RoleService {
     }
   }
 
-  async update({ id, data, updatedById }: { id: string; data: UpdateRoleBodyType; updatedById: string }) {
+  async update({
+    id,
+    data,
+    updatedById
+  }: {
+    id: string
+    data: UpdateRoleBodyType
+    updatedById: string
+  }): Promise<RoleWithPermissionsType> {
     if (data.permissionIds && data.permissionIds.length > 0) {
       await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
     }
@@ -64,7 +81,7 @@ export class RoleService {
     }
   }
 
-  async delete({ id, deletedById }: { id: string; deletedById: string }) {
+  async delete({ id, deletedById }: { id: string; deletedById: string }): Promise<{ message: string }> {
     const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
 
@@ -79,7 +96,7 @@ export class RoleService {
     }
   }
 
-  async enable({ id, enabledById }: { id: string; enabledById: string }) {
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<{ message: string }> {
     const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
 
@@ -103,7 +120,7 @@ export class RoleService {
     roleId: string
     permissionIds: string[]
     updatedById: string
-  }) {
+  }): Promise<AddPermissionsToRoleResType> {
     const role = await this.roleRepo.findById(roleId)
     if (!role) throw NotFoundRoleException
 
@@ -139,7 +156,7 @@ export class RoleService {
     roleId: string
     permissionIds: string[]
     updatedById: string
-  }) {
+  }): Promise<RemovePermissionsFromRoleResType> {
     const role = await this.roleRepo.findById(roleId)
     if (!role) throw NotFoundRoleException
 

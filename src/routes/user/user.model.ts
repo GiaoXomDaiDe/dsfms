@@ -1,7 +1,9 @@
 import z from 'zod'
 import {
   CreateTraineeProfileSchema,
+  CreateTraineeProfileType,
   CreateTrainerProfileSchema,
+  CreateTrainerProfileType,
   TraineeProfileSchema,
   TrainerProfileSchema,
   UpdateTraineeProfileSchema,
@@ -300,3 +302,8 @@ export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
 export type ExcludeUserResType = z.infer<typeof UpdateUserResSchema>
+export type BulkUserData = CreateUserInternalType & {
+  roleName: string
+  trainerProfile?: CreateTrainerProfileType
+  traineeProfile?: CreateTraineeProfileType
+}

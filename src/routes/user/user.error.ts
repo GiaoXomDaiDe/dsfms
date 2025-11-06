@@ -171,6 +171,14 @@ export const BulkTrainerProfileNotAllowedException = (userIndex: number, roleNam
 export const BulkTraineeProfileNotAllowedException = (userIndex: number, roleName: string) =>
   `User at index ${userIndex}: Role ${roleName} cannot have traineeProfile. Only TRAINEE role is allowed to have trainee profile.`
 
+export const BulkEidCountMismatchException = (expected: number, actual: number) =>
+  new ConflictException({
+    message: `EID generation mismatch. Expected ${expected} but received ${actual}.`,
+    error: 'BULK_EID_COUNT_MISMATCH',
+    expected,
+    actual
+  })
+
 /* =========================
  * Bulk Error Exception Class - Class exception cho bulk operations
  * Phục vụ: Throw error với details khi bulk create user thất bại

@@ -3,7 +3,9 @@ import z from 'zod'
 
 const HAS_ALPHABETIC_MESSAGE = 'Must include at least one alphabetic character'
 
-const hasAlphabeticCharacter = (value: string) => /[A-Za-z]/.test(value)
+const ALPHABETIC_REGEX = /\p{L}/u
+
+const hasAlphabeticCharacter = (value: string) => ALPHABETIC_REGEX.test(value)
 
 const optionalAlphabeticCharacter = (value: string | null | undefined) => {
   if (value === null || value === undefined) {

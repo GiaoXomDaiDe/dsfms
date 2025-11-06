@@ -23,7 +23,7 @@ export class ProfileService {
   ) {}
 
   async getProfile(userId: string) {
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile({ id: userId })
+    const user = await this.sharedUserRepository.findUniqueIncludeProfile(userId)
 
     if (!user) {
       throw UserNotFoundException
@@ -33,7 +33,7 @@ export class ProfileService {
 
   async updateProfile({ userId, body }: { userId: string; body: UpdateProfileBodyType }) {
     try {
-      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile({ id: userId })
+      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(userId)
       if (!currentUser) {
         throw UserNotFoundException
       }

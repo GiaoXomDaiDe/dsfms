@@ -263,7 +263,7 @@ export class DepartmentService {
   }
 
   private async validateDepartmentHead(headUserId: string, targetDepartmentId?: string) {
-    const user = await this.sharedUserRepo.findUniqueIncludeProfile({ id: headUserId })
+    const user = await this.sharedUserRepo.findUniqueIncludeProfile(headUserId)
 
     if (!user) throw DepartmentHeadUserNotFoundException
     if (user.role.name !== RoleName.DEPARTMENT_HEAD) throw DepartmentHeadMustHaveRoleException
