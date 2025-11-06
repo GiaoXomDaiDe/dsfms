@@ -7,7 +7,14 @@ import {
   BulkUnknownErrorMessage,
   UserNotFoundException
 } from '~/routes/user/user.error'
-import { BulkCreateResultType, CreateUserInternalType, GetUsersQueryType, UserType } from '~/routes/user/user.model'
+import {
+  BulkCreateResultType,
+  BulkUserData,
+  CreateUserInternalType,
+  GetUserProfileResType,
+  GetUsersQueryType,
+  UserType
+} from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
@@ -20,7 +27,9 @@ const roleNameSelect = {
 
 const roleIdNameSelect = {
   id: true,
-  name: true
+  name: true,
+  description: true,
+  isActive: true
 } satisfies Prisma.RoleSelect
 
 const departmentNameSelect = {
@@ -29,7 +38,8 @@ const departmentNameSelect = {
 
 const departmentIdNameSelect = {
   id: true,
-  name: true
+  name: true,
+  isActive: true
 } satisfies Prisma.DepartmentSelect
 
 const userRoleNameInclude = {
@@ -56,11 +66,16 @@ const userRoleDepartmentInclude = {
   }
 } satisfies Prisma.UserInclude
 
-type BulkUserData = CreateUserInternalType & {
-  roleName: string
-  trainerProfile?: CreateTrainerProfileType
-  traineeProfile?: CreateTraineeProfileType
-}
+const userRoleDepartmentProfileInclude = {
+  role: {
+    select: roleIdNameSelect
+  },
+  department: {
+    select: departmentIdNameSelect
+  },
+  trainerProfile: true,
+  traineeProfile: true
+} satisfies Prisma.UserInclude
 
 @Injectable()
 @SerializeAll()
@@ -87,7 +102,7 @@ export class UserRepo {
       include: userRoleDepartmentInclude
     })
     return {
-      data,
+      users: data,
       totalItems: data.length
     }
   }
@@ -104,7 +119,7 @@ export class UserRepo {
     roleName: string
     trainerProfile?: CreateTrainerProfileType
     traineeProfile?: CreateTraineeProfileType
-  }) {
+  }): Promise<GetUserProfileResType | null> {
     return await this.prismaService.$transaction(async (tx) => {
       // Bước 1: Tạo user cơ bản
       const newUser = await tx.user.create({
@@ -144,201 +159,11 @@ export class UserRepo {
       // Bước 3: Trả về user hoàn chỉnh với profile
       return await tx.user.findUnique({
         where: { id: newUser.id },
-        include: {
-          ...userRoleDepartmentInclude,
-          trainerProfile: roleName === RoleName.TRAINER,
-          traineeProfile: roleName === RoleName.TRAINEE
-        }
+        include: userRoleDepartmentProfileInclude
       })
     })
   }
 
-  async updateWithProfile(
-    {
-      id
-    }: {
-      id: string
-    },
-    {
-      updatedById,
-      userData,
-      roleName,
-      trainerProfile,
-      traineeProfile
-    }: {
-      id: string
-      updatedById: string
-      userData: Partial<CreateUserInternalType>
-      roleName: string
-      trainerProfile?: any
-      traineeProfile?: any
-    }
-  ) {
-    return await this.prismaService.$transaction(async (tx) => {
-      // Cập nhật thông tin user cơ bản nếu có dữ liệu
-      if (Object.keys(userData).length > 0) {
-        await tx.user.update({
-          where: { id },
-          data: {
-            ...userData,
-            updatedById
-          }
-        })
-      }
-
-      // Cập nhật hoặc tạo mới profile theo role
-      if (roleName === RoleName.TRAINER && trainerProfile) {
-        await tx.trainerProfile.upsert({
-          where: { userId: id },
-          create: {
-            userId: id,
-            ...trainerProfile
-          },
-          update: trainerProfile
-        })
-      } else if (roleName === RoleName.TRAINEE && traineeProfile) {
-        await tx.traineeProfile.upsert({
-          where: { userId: id },
-          create: {
-            userId: id,
-            ...traineeProfile
-          },
-          update: traineeProfile
-        })
-      }
-
-      // Trả về user đã được cập nhật kèm profile
-      return await tx.user.findUnique({
-        where: { id },
-        include: {
-          ...userRoleDepartmentInclude,
-          trainerProfile: roleName === RoleName.TRAINER,
-          traineeProfile: roleName === RoleName.TRAINEE
-        }
-      })
-    })
-  }
-
-  async findOngoingSubjectsForTrainer(trainerId: string): Promise<Array<{ id: string; code: string; name: string }>> {
-    return this.prismaService.subject.findMany({
-      where: {
-        deletedAt: null,
-        status: SubjectStatus.ON_GOING,
-        instructors: {
-          some: {
-            trainerUserId: trainerId
-          }
-        }
-      },
-      select: {
-        id: true,
-        code: true,
-        name: true
-      }
-    })
-  }
-
-  delete(
-    {
-      id,
-      deletedById
-    }: {
-      id: string
-      deletedById: string
-    },
-    isHard?: boolean
-  ): Promise<UserType> {
-    return isHard
-      ? this.prismaService.$transaction(async (tx) => {
-          await tx.trainerProfile.deleteMany({
-            where: { userId: id }
-          })
-
-          await tx.traineeProfile.deleteMany({
-            where: { userId: id }
-          })
-
-          return tx.user.delete({
-            where: { id }
-          })
-        })
-      : this.prismaService.$transaction(async (tx) => {
-          await tx.trainerProfile.updateMany({
-            where: { userId: id, deletedAt: null },
-            data: { deletedAt: new Date(), deletedById: deletedById }
-          })
-
-          await tx.traineeProfile.updateMany({
-            where: { userId: id, deletedAt: null },
-            data: { deletedAt: new Date(), deletedById: deletedById }
-          })
-
-          return tx.user.update({
-            where: { id, deletedAt: null },
-            data: {
-              status: UserStatus.DISABLED,
-              deletedAt: new Date(),
-              deletedById
-            }
-          })
-        })
-  }
-  enable({ id, enabledById }: { id: string; enabledById: string }) {
-    return this.prismaService.$transaction(async (tx) => {
-      // Lấy thông tin user với role
-      const user = await tx.user.findUnique({
-        where: { id },
-        include: userRoleNameInclude
-      })
-      if (!user) throw UserNotFoundException
-
-      // Kích hoạt lại user
-      await tx.user.update({
-        where: { id },
-        data: {
-          status: UserStatus.ACTIVE,
-          deletedAt: null,
-          deletedById: null,
-          updatedById: enabledById
-        }
-      })
-      // Kích hoạt lại các profile tương ứng
-      await tx.trainerProfile.updateMany({
-        where: { userId: id, deletedAt: { not: null } },
-        data: {
-          deletedAt: null,
-          deletedById: null,
-          updatedById: enabledById
-        }
-      })
-      await tx.traineeProfile.updateMany({
-        where: { userId: id, deletedAt: { not: null } },
-        data: {
-          deletedAt: null,
-          deletedById: null,
-          updatedById: enabledById
-        }
-      })
-
-      return await tx.user.findUnique({
-        where: { id, deletedAt: null },
-        include: {
-          ...userRoleDepartmentInclude,
-          trainerProfile: user.role.name === RoleName.TRAINER,
-          traineeProfile: user.role.name === RoleName.TRAINEE
-        }
-      })
-    })
-  }
-
-  /**
-   * Tạo hàng loạt người dùng với hiệu suất tối ưu
-   * Tính năng:
-   * - Xử lý theo chunks để tránh vấn đề memory
-   * - Insert hàng loạt cho users
-   * - Tạo profile riêng biệt để tối ưu hiệu suất
-   * - Hỗ trợ transaction với rollback khi có lỗi
-   */
   async createBulk({
     usersData,
     createdById,
@@ -550,5 +375,179 @@ export class UserRepo {
     }
 
     return results
+  }
+
+  async updateWithProfile(
+    {
+      id
+    }: {
+      id: string
+    },
+    {
+      updatedById,
+      userData,
+      roleName,
+      trainerProfile,
+      traineeProfile
+    }: {
+      id: string
+      updatedById: string
+      userData: Partial<CreateUserInternalType>
+      roleName: string
+      trainerProfile?: any
+      traineeProfile?: any
+    }
+  ): Promise<GetUserProfileResType | null> {
+    return await this.prismaService.$transaction(async (tx) => {
+      // Cập nhật thông tin user cơ bản nếu có dữ liệu
+      if (Object.keys(userData).length > 0) {
+        await tx.user.update({
+          where: { id },
+          data: {
+            ...userData,
+            updatedById
+          }
+        })
+      }
+
+      // Cập nhật hoặc tạo mới profile theo role
+      if (roleName === RoleName.TRAINER && trainerProfile) {
+        await tx.trainerProfile.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            ...trainerProfile
+          },
+          update: trainerProfile
+        })
+      } else if (roleName === RoleName.TRAINEE && traineeProfile) {
+        await tx.traineeProfile.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            ...traineeProfile
+          },
+          update: traineeProfile
+        })
+      }
+
+      // Trả về user đã được cập nhật kèm profile
+      return await tx.user.findUnique({
+        where: { id },
+        include: userRoleDepartmentProfileInclude
+      })
+    })
+  }
+
+  async findOngoingSubjectsForTrainer(trainerId: string): Promise<Array<{ id: string; code: string; name: string }>> {
+    return this.prismaService.subject.findMany({
+      where: {
+        deletedAt: null,
+        status: SubjectStatus.ON_GOING,
+        instructors: {
+          some: {
+            trainerUserId: trainerId
+          }
+        }
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true
+      }
+    })
+  }
+
+  delete(
+    {
+      id,
+      deletedById
+    }: {
+      id: string
+      deletedById: string
+    },
+    isHard?: boolean
+  ): Promise<UserType> {
+    return isHard
+      ? this.prismaService.$transaction(async (tx) => {
+          await tx.trainerProfile.deleteMany({
+            where: { userId: id }
+          })
+
+          await tx.traineeProfile.deleteMany({
+            where: { userId: id }
+          })
+
+          return tx.user.delete({
+            where: { id }
+          })
+        })
+      : this.prismaService.$transaction(async (tx) => {
+          await tx.trainerProfile.updateMany({
+            where: { userId: id, deletedAt: null },
+            data: { deletedAt: new Date(), deletedById: deletedById }
+          })
+
+          await tx.traineeProfile.updateMany({
+            where: { userId: id, deletedAt: null },
+            data: { deletedAt: new Date(), deletedById: deletedById }
+          })
+
+          return tx.user.update({
+            where: { id, deletedAt: null },
+            data: {
+              status: UserStatus.DISABLED,
+              deletedAt: new Date(),
+              deletedById
+            }
+          })
+        })
+  }
+  enable({ id, enabledById }: { id: string; enabledById: string }) {
+    return this.prismaService.$transaction(async (tx) => {
+      // Lấy thông tin user với role
+      const user = await tx.user.findUnique({
+        where: { id },
+        include: userRoleNameInclude
+      })
+      if (!user) throw UserNotFoundException
+
+      // Kích hoạt lại user
+      await tx.user.update({
+        where: { id },
+        data: {
+          status: UserStatus.ACTIVE,
+          deletedAt: null,
+          deletedById: null,
+          updatedById: enabledById
+        }
+      })
+      // Kích hoạt lại các profile tương ứng
+      await tx.trainerProfile.updateMany({
+        where: { userId: id, deletedAt: { not: null } },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          updatedById: enabledById
+        }
+      })
+      await tx.traineeProfile.updateMany({
+        where: { userId: id, deletedAt: { not: null } },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          updatedById: enabledById
+        }
+      })
+
+      return await tx.user.findUnique({
+        where: { id, deletedAt: null },
+        include: {
+          ...userRoleDepartmentInclude,
+          trainerProfile: user.role.name === RoleName.TRAINER,
+          traineeProfile: user.role.name === RoleName.TRAINEE
+        }
+      })
+    })
   }
 }

@@ -12,6 +12,7 @@ import {
   UpdateUserBodyWithProfileDTO,
   UpdateUserResDTO
 } from '~/routes/user/user.dto'
+import { UserMes } from '~/routes/user/user.message'
 import { UserService } from '~/routes/user/user.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
@@ -23,50 +24,68 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  list(@Query() query: GetUsersQueryDTO) {
-    return this.userService.list(query)
+  async list(@Query() query: GetUsersQueryDTO) {
+    const result = await this.userService.list(query)
+    return {
+      message: UserMes.LIST_SUCCESS,
+      data: result
+    }
   }
 
   @Get(':userId')
   @ZodSerializerDto(GetUserProfileResDTO)
-  findById(@Param() { userId }: GetUserParamsDTO, @ActiveRolePermissions('name') roleName: string) {
-    return this.userService.findById(userId, {
-      userRole: roleName
-    })
+  async findById(@Param() { userId }: GetUserParamsDTO) {
+    const data = await this.userService.findById(userId)
+    return {
+      message: UserMes.DETAIL_SUCCESS,
+      data
+    }
   }
 
   @Post()
   @ZodSerializerDto(CreateUserResDTO)
-  create(@Body() body: CreateUserBodyWithProfileDTO, @ActiveUser('userId') userId: string) {
-    return this.userService.create({
+  async create(@Body() body: CreateUserBodyWithProfileDTO, @ActiveUser('userId') userId: string) {
+    const data = await this.userService.create({
       data: body,
       createdById: userId
     })
+    return {
+      message: UserMes.CREATE_SUCCESS,
+      data
+    }
   }
 
   @Post('bulk')
   @ZodSerializerDto(BulkCreateResultDTO)
-  createBulk(@Body() body: CreateBulkUsersBodyDTO, @ActiveUser('userId') userId: string) {
-    return this.userService.createBulk({
+  async createBulk(@Body() body: CreateBulkUsersBodyDTO, @ActiveUser('userId') userId: string) {
+    const data = await this.userService.createBulk({
       data: body,
       createdById: userId
     })
+    return {
+      message: UserMes.BULK_CREATE_SUCCESS,
+      data
+    }
   }
 
   @Put(':userId')
   @ZodSerializerDto(UpdateUserResDTO)
-  update(
+  async update(
     @Body() body: UpdateUserBodyWithProfileDTO,
     @Param() params: GetUserParamsDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
   ) {
-    return this.userService.update({
+    const data = await this.userService.update({
       data: body,
       id: params.userId,
       updatedById: userId,
       updatedByRoleName: roleName
     })
+    return {
+      message: UserMes.UPDATE_SUCCESS,
+      data
+    }
   }
 
   @Delete(':userId')
