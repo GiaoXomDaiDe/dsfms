@@ -95,8 +95,8 @@ jobs:
               CRON_COMMENT="# dsfms-disk-maintenance"
               CRON_JOB="0 2 * * * APP_LOG_ROOT=$(pwd)/logs ${MAINTENANCE_SCRIPT} --cron >> /var/log/dsfms-disk-maintenance.log 2>&1 ${CRON_COMMENT}"
               TMP_CRON=$(mktemp)
-              run_with_sudo bash -c "crontab -l 2>/dev/null | grep -v '${CRON_COMMENT}' > ${TMP_CRON} || true"
-              echo "${CRON_JOB}" | run_with_sudo tee -a "${TMP_CRON}" >/dev/null
+              run_with_sudo bash -c "crontab -l 2>/dev/null | grep -v '${CRON_COMMENT}' > '${TMP_CRON}' || true"
+              run_with_sudo bash -c "echo \"${CRON_JOB}\" >> '${TMP_CRON}'"
               run_with_sudo crontab "${TMP_CRON}"
               run_with_sudo rm -f "${TMP_CRON}"
             else
@@ -107,6 +107,8 @@ jobs:
             AVAILABLE_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
             if [ "${AVAILABLE_GB}" -lt 2 ]; then
               echo "WARNING: Less than 2GB free on root filesystem (${AVAILABLE_GB}G available)."
+              echo "Attempting aggressive Docker cleanup to free space..."
+              docker system prune -af --volumes || echo "Docker cleanup encountered issues"
             else
               echo "Available disk space: ${AVAILABLE_GB}G"
             fi
@@ -142,6 +144,7 @@ jobs:
               --name dsfms \
               --restart unless-stopped \
               -p 4000:4000 \
+              --env NODE_ENV=production \
               --env-file $(pwd)/.env \
               thisishuy/dsfms:v0
 
