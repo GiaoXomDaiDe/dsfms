@@ -197,18 +197,18 @@ export class MediaService {
 
     const timestamp = Date.now()
     const safeKeySegment = this.sanitizeKeySegment(payload.key)
-    const baseKey = `docs/onlyoffice/${safeKeySegment}`
-    const documentKey = `${baseKey}/${timestamp}${this.normalizeExtension(payload.filetype, '.docx')}`
+    const keyPrefix = `docs/onlyoffice/${safeKeySegment}`
+    const documentKey = `${keyPrefix}_${timestamp}${this.normalizeExtension(payload.filetype, '.docx')}`
 
     try {
       await this.uploadFromSourceUrl(payload.url, documentKey)
 
       if (payload.changesurl) {
-        await this.uploadFromSourceUrl(payload.changesurl, `${baseKey}/${timestamp}-changes.zip`)
+        await this.uploadFromSourceUrl(payload.changesurl, `${keyPrefix}_${timestamp}-changes.zip`)
       }
 
       if (payload.formsdataurl) {
-        await this.uploadFromSourceUrl(payload.formsdataurl, `${baseKey}/${timestamp}-forms.json`, 'application/json')
+        await this.uploadFromSourceUrl(payload.formsdataurl, `${keyPrefix}_${timestamp}-forms.json`, 'application/json')
       }
 
       return { error: 0 }

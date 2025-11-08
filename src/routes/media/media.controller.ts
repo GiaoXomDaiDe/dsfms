@@ -4,6 +4,7 @@ import {
   Delete,
   FileTypeValidator,
   Get,
+  HttpCode,
   MaxFileSizeValidator,
   NotFoundException,
   Param,
@@ -124,6 +125,7 @@ export class MediaController {
 
   @IsPublic()
   @Post('docs/onlyoffice/callback')
+  @HttpCode(200)
   @ZodSerializerDto(OnlyOfficeCallbackResDTO)
   handleOnlyOfficeCallback(@Body() body: OnlyOfficeCallbackBodyDTO) {
     return this.mediaService.handleOnlyOfficeCallback(body)
