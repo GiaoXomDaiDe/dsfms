@@ -75,6 +75,8 @@ export class MediaService {
   }
 
   async uploadDocFile(files: Array<Express.Multer.File>, type: string, userId: string) {
+    this.logger.debug(`uploadDocFile invoked with ${files.length} file(s) for type=${type} userId=${userId}`)
+
     const uploads = files.map(async (file, index) => {
       const extension = path.extname(file.originalname)
       const controlledFilename = this.generateControlledFilename(
@@ -84,6 +86,13 @@ export class MediaService {
       )
       const key = `docs/${controlledFilename}`
 
+      this.logger.debug(`Uploading doc file`, {
+        originalName: file.originalname,
+        key,
+        tempPath: file.path,
+        index
+      })
+
       try {
         const uploadResult = await this.s3Service.uploadedFile({
           filename: key,
@@ -91,19 +100,45 @@ export class MediaService {
           contentType: file.mimetype
         })
 
-        return {
+        const resolved = {
           id: uploadResult.Key ?? key,
           url: uploadResult.Location ?? this.s3Service.getObjectUrl(key)
         }
+
+        this.logger.debug(`Upload succeeded`, resolved)
+
+        return resolved
+      } catch (error) {
+        this.logger.error(
+          `Upload failed for ${file.originalname} -> ${key}: ${error instanceof Error ? error.message : error}`,
+          error instanceof Error ? error.stack : undefined
+        )
+        throw error
       } finally {
-        await unlink(file.path)
+        try {
+          await unlink(file.path)
+        } catch (cleanupError) {
+          this.logger.warn(
+            `Failed to remove temp file ${file.path}: ${
+              cleanupError instanceof Error ? cleanupError.message : cleanupError
+            }`
+          )
+        }
       }
     })
 
-    const result = await Promise.all(uploads)
-
-    return {
-      data: result
+    try {
+      const result = await Promise.all(uploads)
+      this.logger.debug(`uploadDocFile completed with ${result.length} item(s)`)
+      return {
+        data: result
+      }
+    } catch (error) {
+      this.logger.error(
+        `uploadDocFile encountered an error: ${error instanceof Error ? error.message : error}`,
+        error instanceof Error ? error.stack : undefined
+      )
+      throw error
     }
   }
 
@@ -155,24 +190,25 @@ export class MediaService {
   }
 
   async handleOnlyOfficeCallback(payload: OnlyOfficeCallbackBodyType): Promise<OnlyOfficeCallbackResType> {
+    console.log('Payload come from callback:', JSON.stringify(payload, null, 2))
     if (!MediaService.ONLYOFFICE_SAVE_STATUSES.has(payload.status) || !payload.url) {
       return { error: 0 }
     }
 
     const timestamp = Date.now()
     const safeKeySegment = this.sanitizeKeySegment(payload.key)
-    const baseKey = `docs/onlyoffice/${safeKeySegment}`
-    const documentKey = `${baseKey}/${timestamp}${this.normalizeExtension(payload.filetype, '.docx')}`
+    const keyPrefix = `docs/onlyoffice/${safeKeySegment}`
+    const documentKey = `${keyPrefix}_${timestamp}${this.normalizeExtension(payload.filetype, '.docx')}`
 
     try {
       await this.uploadFromSourceUrl(payload.url, documentKey)
 
       if (payload.changesurl) {
-        await this.uploadFromSourceUrl(payload.changesurl, `${baseKey}/${timestamp}-changes.zip`)
+        await this.uploadFromSourceUrl(payload.changesurl, `${keyPrefix}_${timestamp}-changes.zip`)
       }
 
       if (payload.formsdataurl) {
-        await this.uploadFromSourceUrl(payload.formsdataurl, `${baseKey}/${timestamp}-forms.json`, 'application/json')
+        await this.uploadFromSourceUrl(payload.formsdataurl, `${keyPrefix}_${timestamp}-forms.json`, 'application/json')
       }
 
       return { error: 0 }
@@ -237,7 +273,10 @@ export class MediaService {
 
   private async uploadFromSourceUrl(sourceUrl: string, key: string, overrideContentType?: string) {
     const response = await this.httpService.axiosRef.get<Readable>(sourceUrl, { responseType: 'stream' })
-
+    this.logger.debug(
+      `Fetched source URL ${sourceUrl} with status ${response.status}`,
+      typeof response.headers === 'object' ? { 'content-type': response.headers['content-type'] } : undefined
+    )
     try {
       const headerContentType = this.extractContentType(response.headers?.['content-type'])
       const contentType = overrideContentType ?? headerContentType ?? (mime.lookup(key) || 'application/octet-stream')

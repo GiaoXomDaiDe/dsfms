@@ -5,9 +5,10 @@ import z from 'zod'
 
 config()
 
-if (process.env.NODE_ENV !== 'test' && !fs.existsSync(path.resolve('.env'))) {
-  console.log('Không tìm thấy file .env')
-  process.exit(1)
+const envPath = path.resolve('.env')
+
+if (process.env.NODE_ENV !== 'test' && !fs.existsSync(envPath)) {
+  console.warn('Không tìm thấy file .env, sử dụng biến môi trường hiện có')
 }
 
 //Schema kiểm tra biến môi trường có đủ ko
