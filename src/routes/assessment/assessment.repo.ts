@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { AssessmentSectionStatus, AssessmentStatus, Prisma } from '@prisma/client'
+import { AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
@@ -7,8 +7,29 @@ import {
   CreateAssessmentBodyType,
   GetAssessmentDetailResType,
   GetAssessmentsQueryType,
-  GetAssessmentsResType
+  GetAssessmentsResType,
+  GetDepartmentAssessmentsQueryType,
+  GetDepartmentAssessmentsResType,
+  DepartmentAssessmentItemType
 } from './assessment.model'
+import { 
+  AssessmentSectionNotFoundError,
+  OriginalAssessorOnlyError,
+  SectionDraftStatusOnlyError,
+  AssessmentStatusNotAllowedError,
+  TrainerNotAssignedToSubjectError,
+  TrainerNotAssignedToCourseError,
+  TraineeNoAssessmentsInSubjectError,
+  TraineeNoAssessmentsInCourseError,
+  SubjectNotFoundError,
+  CourseNotFoundError,
+  AccessDeniedError,
+  AssessmentNotReadyToSubmitError,
+  SubmittableSectionNotCompletedError,
+  OccurrenceDateNotTodayError,
+  TraineeSectionsNotFoundError
+} from './assessment.error'
+import { ASSESSMENT_MESSAGES } from './assessment.message'
 
 @Injectable()
 @SerializeAll()
@@ -907,50 +928,99 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get assessments for a specific subject with trainer access check and pagination
+   * Get assessments for a specific subject with trainer/trainee access check and pagination
    */
   async getSubjectAssessments(
     subjectId: string,
-    trainerId: string,
+    userId: string,
+    userRole: string,
     page: number = 1,
     limit: number = 10,
     status?: AssessmentStatus,
     search?: string
   ) {
-    // First verify that the trainer is assigned to this subject
-    const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
-      where: {
-        subjectId,
-        trainerUserId: trainerId
-      }
-    })
+    let whereClause: Prisma.AssessmentFormWhereInput = {
+      subjectId,
+      ...(status && { status })
+    }
 
-    if (!trainerAssignment) {
-      throw new Error('Trainer is not assigned to this subject')
+    // Handle different user roles
+    if (userRole === 'TRAINEE') {
+      // Trainees can only see their own assessments
+      whereClause.traineeId = userId
+      
+      // Check if trainee has any assessments in this subject
+      const traineeAssessmentCount = await this.prisma.assessmentForm.count({
+        where: { subjectId, traineeId: userId }
+      })
+      
+      if (traineeAssessmentCount === 0) {
+        throw TraineeNoAssessmentsInSubjectError
+      }
+    } else if (userRole === 'TRAINER') {
+      // For trainers, check their role in assessment and filter accordingly
+      const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
+        where: {
+          subjectId,
+          trainerUserId: userId
+        },
+        select: {
+          roleInAssessment: true
+        }
+      })
+
+      if (!trainerAssignment) {
+        throw TrainerNotAssignedToSubjectError
+      }
+
+      // Get all assessments that have sections requiring this trainer's role
+      const assessmentsWithMatchingRole = await this.prisma.assessmentForm.findMany({
+        where: {
+          subjectId,
+          sections: {
+            some: {
+              templateSection: {
+                OR: [
+                  { roleInSubject: trainerAssignment.roleInAssessment as RoleInSubject },
+                  { roleInSubject: null, editBy: 'TRAINER' } // Sections that don't require specific role but need trainer
+                ]
+              }
+            }
+          }
+        },
+        select: { id: true }
+      })
+
+      const relevantAssessmentIds = assessmentsWithMatchingRole.map(a => a.id)
+      
+      if (relevantAssessmentIds.length === 0) {
+        // No assessments found with sections matching this trainer's role
+        whereClause.id = { in: [] } // This will return empty results
+      } else {
+        whereClause.id = { in: relevantAssessmentIds }
+      }
+    } else {
+      throw new Error('Access denied')
+    }
+
+    // Add search functionality to the existing where clause
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        {
+          trainee: {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { eid: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        }
+      ]
     }
 
     const skip = (page - 1) * limit
-
-    // Build where clause
-    const whereClause: Prisma.AssessmentFormWhereInput = {
-      subjectId,
-      ...(status && { status }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          {
-            trainee: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { eid: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } }
-              ]
-            }
-          }
-        ]
-      })
-    }
 
     // Get total count
     const totalItems = await this.prisma.assessmentForm.count({
@@ -1007,7 +1077,7 @@ export class AssessmentRepo {
     })
 
     if (!subject) {
-      throw new Error('Subject not found')
+      throw SubjectNotFoundError
     }
 
     const totalPages = Math.ceil(totalItems / limit)
@@ -1035,61 +1105,102 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get assessments for a specific course with trainer access check and pagination
+   * Get assessments for a specific course with trainer/TRAINEE access check and pagination
    */
   async getCourseAssessments(
     courseId: string,
-    trainerId: string,
+    userId: string,
+    userRole: string,
     page: number = 1,
     limit: number = 10,
     status?: AssessmentStatus,
     search?: string
   ) {
-    // First verify that the trainer is assigned to this course (directly or through its subjects)
-    const trainerAssignment = await this.prisma.courseInstructor.findFirst({
-      where: {
-        trainerUserId: trainerId,
-        courseId
-      }
-    })
+    let whereClause: Prisma.AssessmentFormWhereInput = {
+      courseId,
+      subjectId: null, // Only course-level assessments (not subject-level)
+      ...(status && { status })
+    }
 
-    if (!trainerAssignment) {
-      const subjectLevelAssignment = await this.prisma.subjectInstructor.findFirst({
+    // Handle different user roles
+    if (userRole === 'TRAINEE') {
+      // Trainees can only see their own assessments
+      whereClause.traineeId = userId
+      
+      // Check if trainee has any assessments in this course
+      const traineeAssessmentCount = await this.prisma.assessmentForm.count({
+        where: { courseId, traineeId: userId }
+      })
+      
+      if (traineeAssessmentCount === 0) {
+        throw TraineeNoAssessmentsInCourseError
+      }
+    } else if (userRole === 'TRAINER') {
+      // For course scope, only check CourseInstructor table
+      const courseAssignment = await this.prisma.courseInstructor.findFirst({
         where: {
-          trainerUserId: trainerId,
-          subject: {
-            courseId
-          }
+          trainerUserId: userId,
+          courseId
+        },
+        select: {
+          roleInAssessment: true
         }
       })
 
-      if (!subjectLevelAssignment) {
-        throw new Error('Trainer is not assigned to any subjects in this course')
+      if (!courseAssignment) {
+        throw TrainerNotAssignedToCourseError
       }
+
+      const trainerRoleInAssessment = courseAssignment.roleInAssessment
+
+      // Get all assessments that have sections requiring this trainer's role
+      const assessmentsWithMatchingRole = await this.prisma.assessmentForm.findMany({
+        where: {
+          courseId,
+          sections: {
+            some: {
+              templateSection: {
+                OR: [
+                  { roleInSubject: trainerRoleInAssessment as RoleInSubject },
+                  { roleInSubject: null, editBy: 'TRAINER' } // Sections that don't require specific role but need trainer
+                ]
+              }
+            }
+          }
+        },
+        select: { id: true }
+      })
+
+      const relevantAssessmentIds = assessmentsWithMatchingRole.map(a => a.id)
+      
+      if (relevantAssessmentIds.length === 0) {
+        // No assessments found with sections matching this trainer's role
+        whereClause.id = { in: [] } // This will return empty results
+      } else {
+        whereClause.id = { in: relevantAssessmentIds }
+      }
+    } else {
+      throw new Error('Access denied')
+    }
+
+    // Add search functionality to the existing where clause
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        {
+          trainee: {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { eid: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        }
+      ]
     }
 
     const skip = (page - 1) * limit
-
-    // Build where clause
-    const whereClause: Prisma.AssessmentFormWhereInput = {
-      courseId,
-      ...(status && { status }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          {
-            trainee: {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { eid: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } }
-              ]
-            }
-          }
-        ]
-      })
-    }
 
     // Get total count
     const totalItems = await this.prisma.assessmentForm.count({
@@ -1139,7 +1250,7 @@ export class AssessmentRepo {
     })
 
     if (!course) {
-      throw new Error('Course not found')
+      throw CourseNotFoundError
     }
 
     const totalPages = Math.ceil(totalItems / limit)
@@ -1163,6 +1274,221 @@ export class AssessmentRepo {
       limit,
       totalPages,
       courseInfo: course
+    }
+  }
+
+  /**
+   * Get assessments for a department (for Department Head)
+   * Permanently blocks access to assessments in early stages (NOT_STARTED, ON_GOING, SIGNATURE_PENDING, DRAFT, READY_TO_SUBMIT)
+   * Only allows access to completed workflow assessments (SUBMITTED, APPROVED, REJECTED, CANCELLED)
+   * Blocked statuses cannot be accessed even when explicitly queried
+   */
+  async getDepartmentAssessments(
+    departmentId: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: AssessmentStatus,
+    templateId?: string,
+    subjectId?: string,
+    courseId?: string,
+    traineeId?: string,
+    fromDate?: Date,
+    toDate?: Date,
+    search?: string
+  ): Promise<GetDepartmentAssessmentsResType> {
+    let whereClause: Prisma.AssessmentFormWhereInput = {
+      OR: [
+        // Assessments in subjects that belong to courses in this department
+        {
+          subject: {
+            course: {
+              departmentId
+            }
+          }
+        },
+        // Assessments in courses directly in this department
+        {
+          course: {
+            departmentId
+          }
+        }
+      ],
+      // Exclude assessments with these statuses
+      status: {
+        notIn: [
+          AssessmentStatus.NOT_STARTED,
+          AssessmentStatus.ON_GOING,
+          AssessmentStatus.SIGNATURE_PENDING,
+          AssessmentStatus.DRAFT,
+          AssessmentStatus.READY_TO_SUBMIT
+        ]
+      }
+    }
+
+    // Apply status filter only if it's not in the excluded list
+    if (status) {
+      const excludedStatuses: AssessmentStatus[] = [
+        AssessmentStatus.NOT_STARTED,
+        AssessmentStatus.ON_GOING,
+        AssessmentStatus.SIGNATURE_PENDING,
+        AssessmentStatus.DRAFT,
+        AssessmentStatus.READY_TO_SUBMIT
+      ]
+      
+      if (excludedStatuses.includes(status)) {
+        // If trying to query an excluded status, return empty result
+        whereClause.status = 'INVALID_STATUS' as any // This will match nothing
+      } else {
+        whereClause.status = status
+      }
+    }
+    if (templateId) whereClause.templateId = templateId
+    if (subjectId) whereClause.subjectId = subjectId
+    if (courseId) whereClause.courseId = courseId
+    if (traineeId) whereClause.traineeId = traineeId
+
+    if (fromDate || toDate) {
+      whereClause.occuranceDate = {}
+      if (fromDate) whereClause.occuranceDate.gte = fromDate
+      if (toDate) whereClause.occuranceDate.lte = toDate
+    }
+
+    // Add search functionality
+    if (search) {
+      const existingAnd = Array.isArray(whereClause.AND) ? whereClause.AND : whereClause.AND ? [whereClause.AND] : []
+      whereClause.AND = [
+        ...existingAnd,
+        {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { trainee: { firstName: { contains: search, mode: 'insensitive' } } },
+            { trainee: { lastName: { contains: search, mode: 'insensitive' } } },
+            { trainee: { eid: { contains: search, mode: 'insensitive' } } }
+          ]
+        }
+      ]
+    }
+
+    const skip = (page - 1) * limit
+
+    // Get total count
+    const totalItems = await this.prisma.assessmentForm.count({
+      where: whereClause
+    })
+
+    // Get assessments with all related info
+    const assessments = await this.prisma.assessmentForm.findMany({
+      where: whereClause,
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        subject: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            course: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true
+          }
+        },
+        approvedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      },
+      skip,
+      take: limit
+    })
+
+    // Get department info
+    const department = await this.prisma.department.findUnique({
+      where: { id: departmentId },
+      select: {
+        id: true,
+        name: true,
+        code: true
+      }
+    })
+
+    const totalPages = Math.ceil(totalItems / limit)
+
+    // Transform data to match the expected format
+    const transformedAssessments = assessments.map((assessment) => ({
+      ...assessment,
+      trainee: {
+        id: assessment.trainee.id,
+        eid: assessment.trainee.eid,
+        fullName:
+          `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
+        email: assessment.trainee.email
+      }
+    })) as DepartmentAssessmentItemType[]
+
+    return {
+      assessments: transformedAssessments,
+      totalItems,
+      page,
+      limit,
+      totalPages,
+      departmentInfo: department || undefined
     }
   }
 
@@ -1899,25 +2225,43 @@ export class AssessmentRepo {
     userId: string
   ) {
     return await this.prisma.$transaction(async (tx) => {
-      // First check if the user is the one who assessed this section
+      // First check if the user is the one who assessed this section and get assessment form info
       const assessmentSection = await tx.assessmentSection.findUnique({
         where: { id: assessmentSectionId },
         select: {
           assessedById: true,
-          status: true
+          status: true,
+          assessmentForm: {
+            select: {
+              id: true,
+              status: true
+            }
+          }
         }
       })
 
       if (!assessmentSection) {
-        throw new Error('Assessment section not found')
+        throw AssessmentSectionNotFoundError
       }
 
       if (assessmentSection.assessedById !== userId) {
-        throw new Error('Only the user who originally assessed this section can update the values')
+        throw OriginalAssessorOnlyError
       }
 
       if (assessmentSection.status !== AssessmentSectionStatus.DRAFT) {
-        throw new Error('Can only update values for sections in DRAFT status')
+        throw SectionDraftStatusOnlyError
+      }
+
+      // Check if assessment form allows updates (DRAFT, SIGNATURE_PENDING, READY_TO_SUBMIT, or REJECTED)
+      const allowedStatuses = [
+        AssessmentStatus.DRAFT,
+        AssessmentStatus.SIGNATURE_PENDING,
+        AssessmentStatus.READY_TO_SUBMIT,
+        AssessmentStatus.REJECTED
+      ] as const
+      
+      if (!allowedStatuses.includes(assessmentSection.assessmentForm.status as any)) {
+        throw AssessmentStatusNotAllowedError
       }
 
       // Update each assessment value
@@ -1930,12 +2274,29 @@ export class AssessmentRepo {
         updatedCount++
       }
 
+      let assessmentFormStatus = assessmentSection.assessmentForm.status
+      
+      // If assessment was REJECTED, change it back to READY_TO_SUBMIT after updating any section
+      if (assessmentSection.assessmentForm.status === AssessmentStatus.REJECTED) {
+        await tx.assessmentForm.update({
+          where: { id: assessmentSection.assessmentForm.id },
+          data: { 
+            status: AssessmentStatus.READY_TO_SUBMIT,
+            updatedAt: new Date()
+          }
+        })
+        assessmentFormStatus = AssessmentStatus.READY_TO_SUBMIT
+      }
+
       return {
         success: true,
-        message: 'Assessment values updated successfully',
+        message: assessmentSection.assessmentForm.status === AssessmentStatus.REJECTED 
+          ? ASSESSMENT_MESSAGES.ASSESSMENT_VALUES_UPDATED_WITH_STATUS_CHANGE
+          : ASSESSMENT_MESSAGES.ASSESSMENT_VALUES_UPDATED,
         assessmentSectionId: assessmentSectionId,
         updatedValues: updatedCount,
-        sectionStatus: assessmentSection.status
+        sectionStatus: assessmentSection.status,
+        assessmentFormStatus: assessmentFormStatus
       }
     })
   }
@@ -1952,6 +2313,93 @@ export class AssessmentRepo {
       data: {
         status: AssessmentStatus.READY_TO_SUBMIT,
         updatedAt: new Date()
+      }
+    })
+  }
+
+  /**
+   * Check if user has access to an assessment based on department
+   */
+  async checkUserAssessmentAccess(
+    assessmentId: string, 
+    userId: string, 
+    departmentId: string
+  ): Promise<boolean> {
+    const assessment = await this.prisma.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      select: {
+        template: {
+          select: {
+            departmentId: true
+          }
+        }
+      }
+    })
+
+    if (!assessment) return false
+
+    // Check if the assessment's template belongs to the user's department
+    return assessment.template.departmentId === departmentId
+  }
+
+  /**
+   * Get assessment with detailed information for email notifications
+   */
+  async getAssessmentWithDetails(assessmentId: string) {
+    return await this.prisma.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      select: {
+        id: true,
+        name: true,
+        submittedAt: true,
+        trainee: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        template: {
+          select: {
+            name: true
+          }
+        },
+        subject: {
+          select: {
+            name: true
+          }
+        },
+        course: {
+          select: {
+            name: true
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Approve or reject a SUBMITTED assessment form
+   */
+  async approveRejectAssessment(
+    assessmentId: string,
+    action: 'APPROVED' | 'REJECTED',
+    comment: string | undefined,
+    approvedById: string
+  ) {
+    const now = new Date()
+
+    return await this.prisma.assessmentForm.update({
+      where: { 
+        id: assessmentId,
+        status: AssessmentStatus.SUBMITTED
+      },
+      data: {
+        status: action === 'APPROVED' ? AssessmentStatus.APPROVED : AssessmentStatus.REJECTED,
+        comment: comment || null,
+        approvedById: action === 'APPROVED' ? approvedById : null,
+        approvedAt: action === 'APPROVED' ? now : null,
+        updatedAt: now
       }
     })
   }

@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common'
 import { CourseStatus, SubjectStatus } from '@prisma/client'
 import { AssessmentRepo } from './assessment.repo'
+import { NodemailerService } from '../email/nodemailer.service'
 import {
   CreateAssessmentBodyType,
   CreateBulkAssessmentBodyType,
@@ -22,7 +23,11 @@ import {
   SubmitAssessmentResType,
   UpdateAssessmentValuesBodyType,
   UpdateAssessmentValuesResType,
-  ConfirmAssessmentParticipationResType
+  ConfirmAssessmentParticipationResType,
+  GetDepartmentAssessmentsQueryType,
+  GetDepartmentAssessmentsResType,
+  ApproveRejectAssessmentBodyType,
+  ApproveRejectAssessmentResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -53,7 +58,10 @@ import { isNotFoundPrismaError } from '~/shared/helper'
 
 @Injectable()
 export class AssessmentService {
-  constructor(private readonly assessmentRepo: AssessmentRepo) {}
+  constructor(
+    private readonly assessmentRepo: AssessmentRepo,
+    private readonly nodemailerService: NodemailerService
+  ) {}
 
   /**
    * Create assessments for specific trainees
@@ -474,7 +482,7 @@ export class AssessmentService {
   }
 
   /**
-   * Get assessments for a specific subject (for trainers)
+   * Get assessments for a specific subject (for trainers and trainees)
    */
   async getSubjectAssessments(
     query: GetSubjectAssessmentsQueryType,
@@ -484,6 +492,7 @@ export class AssessmentService {
       const result = await this.assessmentRepo.getSubjectAssessments(
         query.subjectId,
         currentUser.userId,
+        currentUser.roleName,
         query.page,
         query.limit,
         query.status,
@@ -498,8 +507,16 @@ export class AssessmentService {
         throw new ForbiddenException('You are not assigned to this subject')
       }
       
+      if (error.message === 'Trainee has no assessments in this subject') {
+        throw new ForbiddenException('You have no assessments in this subject')
+      }
+      
       if (error.message === 'Subject not found') {
         throw SubjectNotFoundException
+      }
+
+      if (error.message === 'Access denied') {
+        throw new ForbiddenException('You do not have permission to access assessments in this subject')
       }
 
       throw new Error('Failed to get subject assessments')
@@ -507,7 +524,7 @@ export class AssessmentService {
   }
 
   /**
-   * Get assessments for a specific course (for trainers)
+   * Get assessments for a specific course (for trainers and trainees)
    */
   async getCourseAssessments(
     query: GetCourseAssessmentsQueryType,
@@ -517,6 +534,7 @@ export class AssessmentService {
       const result = await this.assessmentRepo.getCourseAssessments(
         query.courseId,
         currentUser.userId,
+        currentUser.roleName,
         query.page,
         query.limit,
         query.status,
@@ -527,15 +545,62 @@ export class AssessmentService {
     } catch (error) {
       console.error('Get course assessments failed:', error)
       
-      if (error.message === 'Trainer is not assigned to any subjects in this course') {
-        throw new ForbiddenException('You are not assigned to any subjects in this course')
+      if (error.message === 'Trainer is not assigned to this course') {
+        throw new ForbiddenException('You are not assigned to this course')
+      }
+      
+      if (error.message === 'Trainee has no assessments in this course') {
+        throw new ForbiddenException('You have no assessments in this course')
       }
       
       if (error.message === 'Course not found') {
         throw CourseNotFoundException
       }
 
+      if (error.message === 'Access denied') {
+        throw new ForbiddenException('You do not have permission to access assessments in this course')
+      }
+
       throw new Error('Failed to get course assessments')
+    }
+  }
+
+  /**
+   * Get assessments for a department (for Department Head)
+   */
+  async getDepartmentAssessments(
+    query: GetDepartmentAssessmentsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetDepartmentAssessmentsResType> {
+    try {
+      // Department Head must have a department assigned
+      if (!currentUser.departmentId) {
+        throw new ForbiddenException('Department Head must have a department assigned')
+      }
+
+      const result = await this.assessmentRepo.getDepartmentAssessments(
+        currentUser.departmentId,
+        query.page,
+        query.limit,
+        query.status,
+        query.templateId,
+        query.subjectId,
+        query.courseId,
+        query.traineeId,
+        query.fromDate,
+        query.toDate,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get department assessments failed:', error)
+      
+      if (error instanceof ForbiddenException) {
+        throw error
+      }
+
+      throw new BadRequestException('Failed to get department assessments')
     }
   }
 
@@ -1049,7 +1114,8 @@ export class AssessmentService {
 
       // Handle custom application errors from repository
       if (error.message.includes('originally assessed') || 
-          error.message.includes('DRAFT status')) {
+          error.message.includes('DRAFT status') ||
+          error.message.includes('Cannot update values for assessment in this status')) {
         throw new ForbiddenException(error.message)
       }
 
@@ -1117,6 +1183,123 @@ export class AssessmentService {
       // Handle any other unexpected errors
       console.error('Confirm assessment participation failed:', error)
       throw new BadRequestException('Failed to confirm assessment participation')
+    }
+  }
+
+  /**
+   * Approve or reject a SUBMITTED assessment form
+   * Only authorized users (e.g., Department Head, Admin) can approve/reject assessments
+   */
+  async approveRejectAssessment(
+    assessmentId: string, 
+    body: ApproveRejectAssessmentBodyType, 
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<ApproveRejectAssessmentResType> {
+    try {
+      // Validate assessment exists and get current status
+      const assessmentForm = await this.assessmentRepo.findById(assessmentId)
+
+      if (!assessmentForm) {
+        throw new NotFoundException('Assessment form not found')
+      }
+
+      // Check if user has access to this assessment (same department)
+      if (userContext.departmentId) {
+        const hasAccess = await this.assessmentRepo.checkUserAssessmentAccess(
+          assessmentId, 
+          userContext.userId, 
+          userContext.departmentId
+        )
+        if (!hasAccess) {
+          throw new ForbiddenException('You do not have access to this assessment')
+        }
+      }
+
+      // Check if assessment is in SUBMITTED status
+      if (assessmentForm.status !== 'SUBMITTED') {
+        throw new BadRequestException('Assessment must be in SUBMITTED status to approve or reject')
+      }
+
+      // Check if user has permission to approve/reject assessments
+      // This could be expanded based on role permissions
+      if (userContext.roleName !== 'DEPARTMENT_HEAD' && userContext.roleName !== 'ADMIN') {
+        throw new ForbiddenException('You do not have permission to approve or reject assessments')
+      }
+
+      // Process the approval/rejection
+      const result = await this.assessmentRepo.approveRejectAssessment(
+        assessmentId,
+        body.action,
+        body.comment,
+        userContext.userId
+      )
+
+      // Send email notification if assessment is rejected
+      if (body.action === 'REJECTED') {
+        try {
+          // Get detailed assessment information for email
+          const detailedAssessment = await this.assessmentRepo.getAssessmentWithDetails(assessmentId)
+          
+          if (detailedAssessment) {
+            // Format dates for email
+            const submissionDate = detailedAssessment.submittedAt 
+              ? new Date(detailedAssessment.submittedAt).toLocaleDateString()
+              : 'N/A'
+            const reviewDate = new Date().toLocaleDateString()
+
+            // Get reviewer name (current user)
+            const reviewerName = userContext.roleName === 'DEPARTMENT_HEAD' ? 'Department Head' : 'Administrator'
+            
+            // Get subject or course name
+            const subjectOrCourseName = detailedAssessment.subject?.name || detailedAssessment.course?.name || 'N/A'
+
+            await this.nodemailerService.sendRejectedAssessmentEmail(
+              detailedAssessment.trainee.email,
+              `${detailedAssessment.trainee.firstName} ${detailedAssessment.trainee.lastName}`,
+              detailedAssessment.name,
+              subjectOrCourseName,
+              detailedAssessment.template.name,
+              submissionDate,
+              reviewerName,
+              reviewDate,
+              body.comment || 'No specific comment provided.',
+              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}`  // sửa lại chỗ này khi có URL đúng
+            )
+          }
+        } catch (emailError) {
+          // Log email error but don't fail the main operation
+          console.error('Failed to send rejection email:', emailError)
+        }
+      }
+
+      const actionMessage = body.action === 'APPROVED' ? 'approved' : 'rejected'
+
+      return {
+        success: true,
+        message: `Assessment ${actionMessage} successfully`,
+        data: {
+          assessmentFormId: assessmentId,
+          status: result.status,
+          previousStatus: 'SUBMITTED',
+          comment: result.comment,
+          approvedById: result.approvedById,
+          approvedAt: result.approvedAt,
+          processedAt: result.updatedAt,
+          processedBy: userContext.userId
+        }
+      }
+
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle any other unexpected errors
+      console.error('Approve/reject assessment failed:', error)
+      throw new BadRequestException('Failed to process assessment approval/rejection')
     }
   }
 }
