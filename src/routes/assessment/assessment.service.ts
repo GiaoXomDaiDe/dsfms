@@ -474,7 +474,7 @@ export class AssessmentService {
   }
 
   /**
-   * Get assessments for a specific subject (for trainers)
+   * Get assessments for a specific subject (for trainers and trainees)
    */
   async getSubjectAssessments(
     query: GetSubjectAssessmentsQueryType,
@@ -484,6 +484,7 @@ export class AssessmentService {
       const result = await this.assessmentRepo.getSubjectAssessments(
         query.subjectId,
         currentUser.userId,
+        currentUser.roleName,
         query.page,
         query.limit,
         query.status,
@@ -498,8 +499,16 @@ export class AssessmentService {
         throw new ForbiddenException('You are not assigned to this subject')
       }
       
+      if (error.message === 'Trainee has no assessments in this subject') {
+        throw new ForbiddenException('You have no assessments in this subject')
+      }
+      
       if (error.message === 'Subject not found') {
         throw SubjectNotFoundException
+      }
+
+      if (error.message === 'Access denied') {
+        throw new ForbiddenException('You do not have permission to access assessments in this subject')
       }
 
       throw new Error('Failed to get subject assessments')
@@ -507,7 +516,7 @@ export class AssessmentService {
   }
 
   /**
-   * Get assessments for a specific course (for trainers)
+   * Get assessments for a specific course (for trainers and trainees)
    */
   async getCourseAssessments(
     query: GetCourseAssessmentsQueryType,
@@ -517,6 +526,7 @@ export class AssessmentService {
       const result = await this.assessmentRepo.getCourseAssessments(
         query.courseId,
         currentUser.userId,
+        currentUser.roleName,
         query.page,
         query.limit,
         query.status,
@@ -527,12 +537,20 @@ export class AssessmentService {
     } catch (error) {
       console.error('Get course assessments failed:', error)
       
-      if (error.message === 'Trainer is not assigned to any subjects in this course') {
-        throw new ForbiddenException('You are not assigned to any subjects in this course')
+      if (error.message === 'Trainer is not assigned to this course') {
+        throw new ForbiddenException('You are not assigned to this course')
+      }
+      
+      if (error.message === 'Trainee has no assessments in this course') {
+        throw new ForbiddenException('You have no assessments in this course')
       }
       
       if (error.message === 'Course not found') {
         throw CourseNotFoundException
+      }
+
+      if (error.message === 'Access denied') {
+        throw new ForbiddenException('You do not have permission to access assessments in this course')
       }
 
       throw new Error('Failed to get course assessments')
@@ -1049,7 +1067,8 @@ export class AssessmentService {
 
       // Handle custom application errors from repository
       if (error.message.includes('originally assessed') || 
-          error.message.includes('DRAFT status')) {
+          error.message.includes('DRAFT status') ||
+          error.message.includes('Cannot update values for assessment in this status')) {
         throw new ForbiddenException(error.message)
       }
 

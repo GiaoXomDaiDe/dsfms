@@ -553,7 +553,8 @@ export const UpdateAssessmentValuesResSchema = z.object({
   message: z.string(),
   assessmentSectionId: z.string().uuid(),
   updatedValues: z.number(),
-  sectionStatus: z.nativeEnum(AssessmentSectionStatus)
+  sectionStatus: z.nativeEnum(AssessmentSectionStatus),
+  assessmentFormStatus: z.nativeEnum(AssessmentStatus)
 })
 
 export type UpdateAssessmentValuesBodyType = z.infer<typeof UpdateAssessmentValuesBodySchema>
