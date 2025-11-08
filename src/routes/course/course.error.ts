@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 
 // Lỗi xác thực và tồn tại dữ liệu course
 export const CourseNotFoundException = new NotFoundException('Course not found')
-export const CourseCodeAlreadyExistsException = new BadRequestException('Course code already exists')
+export const CourseCodeAlreadyExistsException = new BadRequestException('Course code already exists in this department')
 export const DepartmentNotFoundException = new NotFoundException('Department not found')
 export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
 

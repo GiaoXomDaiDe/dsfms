@@ -5,7 +5,7 @@ export const SubjectNotFoundException = new NotFoundException('Subject not found
 export const CourseNotFoundException = new NotFoundException('Course not found')
 
 // Subject Validation Errors
-export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists')
+export const SubjectCodeAlreadyExistsException = new BadRequestException('Subject code already exists in this course')
 // Permission Errors
 export const OnlyAcademicDepartmentCanCreateSubjectsException = new ForbiddenException(
   'Only ACADEMIC_DEPARTMENT can create subjects'
@@ -111,7 +111,7 @@ export const CannotHardDeleteSubjectWithInstructorsException = new BadRequestExc
 
 // Bulk Operation Errors
 export const BulkSubjectCodeAlreadyExistsAtIndexException = (index: number, code: string) =>
-  `Subject code '${code}' at index ${index} already exists`
+  `Subject code '${code}' at index ${index} already exists in this course`
 
 export const BulkInvalidDateRangeAtIndexException = (index: number) =>
   `Invalid date range at index ${index}: end date must be after start date`

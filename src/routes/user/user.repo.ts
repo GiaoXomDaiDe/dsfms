@@ -5,6 +5,7 @@ import {
   BulkDuplicateDataFoundMessage,
   BulkEmailAlreadyExistsMessage,
   BulkUnknownErrorMessage,
+  DuplicateEmailInBatchMessage,
   UserNotFoundException
 } from '~/routes/user/user.error'
 import {
@@ -183,194 +184,215 @@ export class UserRepo {
       }
     }
 
+    const seenEmails = new Map<string, number>()
+
+    const toFailedUserData = (userData: BulkUserData) => {
+      const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
+
+      return {
+        ...originalUserData,
+        role: { id: roleId, name: roleName }
+      }
+    }
+
     // Xử lý theo chunks để tránh vấn đề memory và timeout database
     for (let i = 0; i < usersData.length; i += chunkSize) {
       const chunk = usersData.slice(i, i + chunkSize)
 
-      try {
-        const chunkResults = await this.prismaService.$transaction(
-          async (tx) => {
-            // Bước 0: Kiểm tra email đã tồn tại trong chunk này
-            const emails = chunk.map((userData) => userData.email)
-            const existingUsers = await tx.user.findMany({
-              where: {
-                email: { in: emails },
-                deletedAt: null
-              },
-              select: { email: true }
-            })
+      const chunkEntries = chunk.map((userData, chunkIndex) => ({
+        userData,
+        originalIndex: i + chunkIndex
+      }))
 
-            const existingEmails = new Set(existingUsers.map((u) => u.email))
+      const payloadDuplicateFailures: Array<{
+        index: number
+        error: string
+        userData: ReturnType<typeof toFailedUserData>
+      }> = []
+      const candidatesForTransaction: Array<{
+        userData: BulkUserData
+        originalIndex: number
+      }> = []
 
-            // Tách users hợp lệ khỏi những users trùng lặp
-            const validUsersInChunk: typeof chunk = []
-            const duplicateUsersInChunk: Array<{ userData: (typeof chunk)[0]; originalIndex: number }> = []
+      chunkEntries.forEach(({ userData, originalIndex }) => {
+        const email = userData.email
+        const firstSeenIndex = seenEmails.get(email)
 
-            chunk.forEach((userData, chunkIndex) => {
-              if (existingEmails.has(userData.email)) {
-                duplicateUsersInChunk.push({
-                  userData,
-                  originalIndex: i + chunkIndex
-                })
-              } else {
-                validUsersInChunk.push(userData)
+        if (firstSeenIndex !== undefined) {
+          payloadDuplicateFailures.push({
+            index: originalIndex,
+            error: DuplicateEmailInBatchMessage(email, firstSeenIndex, originalIndex),
+            userData: toFailedUserData(userData)
+          })
+        } else {
+          seenEmails.set(email, originalIndex)
+          candidatesForTransaction.push({ userData, originalIndex })
+        }
+      })
+
+      if (candidatesForTransaction.length > 0) {
+        try {
+          const chunkResults = await this.prismaService.$transaction(
+            async (tx) => {
+              const emails = candidatesForTransaction.map(({ userData }) => userData.email)
+
+              const existingUsers = await tx.user.findMany({
+                where: {
+                  email: { in: emails },
+                  deletedAt: null
+                },
+                select: { email: true }
+              })
+
+              const existingEmails = new Set(existingUsers.map((u) => u.email))
+
+              const validUsersInChunk: Array<{ userData: BulkUserData; originalIndex: number }> = []
+              const duplicateUsersInChunk: Array<{ userData: BulkUserData; originalIndex: number }> = []
+
+              candidatesForTransaction.forEach((entry) => {
+                if (existingEmails.has(entry.userData.email)) {
+                  duplicateUsersInChunk.push(entry)
+                } else {
+                  validUsersInChunk.push(entry)
+                }
+              })
+
+              if (validUsersInChunk.length === 0) {
+                return {
+                  created: [],
+                  duplicates: duplicateUsersInChunk
+                }
               }
-            })
 
-            // Nếu không có users hợp lệ trong chunk này, trả về kết quả rỗng
-            if (validUsersInChunk.length === 0) {
+              const usersToCreate = validUsersInChunk.map(({ userData }) => ({
+                ...userData,
+                createdById,
+                trainerProfile: undefined,
+                traineeProfile: undefined,
+                roleName: undefined
+              }))
+
+              const createdUsers = await tx.user.createManyAndReturn({
+                data: usersToCreate,
+                include: userRoleDepartmentInclude
+              })
+
+              const trainerProfiles: any[] = []
+              const traineeProfiles: any[] = []
+
+              validUsersInChunk.forEach(({ userData }, index) => {
+                const userId = createdUsers[index].id
+
+                if (userData.roleName === RoleName.TRAINER && userData.trainerProfile) {
+                  trainerProfiles.push({
+                    userId,
+                    specialization: userData.trainerProfile.specialization,
+                    certificationNumber: userData.trainerProfile.certificationNumber,
+                    yearsOfExp: Number(userData.trainerProfile.yearsOfExp),
+                    bio: userData.trainerProfile.bio,
+                    createdById
+                  })
+                }
+
+                if (userData.roleName === RoleName.TRAINEE && userData.traineeProfile) {
+                  traineeProfiles.push({
+                    userId,
+                    dob: userData.traineeProfile.dob,
+                    enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
+                    trainingBatch: userData.traineeProfile.trainingBatch,
+                    passportNo: userData.traineeProfile.passportNo || null,
+                    nation: userData.traineeProfile.nation || null,
+                    createdById
+                  })
+                }
+              })
+
+              if (trainerProfiles.length > 0) {
+                await tx.trainerProfile.createMany({
+                  data: trainerProfiles
+                })
+              }
+
+              if (traineeProfiles.length > 0) {
+                await tx.traineeProfile.createMany({
+                  data: traineeProfiles
+                })
+              }
+
+              const completeUsers = await tx.user.findMany({
+                where: {
+                  id: { in: createdUsers.map((u) => u.id) }
+                },
+                include: {
+                  ...userRoleDepartmentInclude,
+                  trainerProfile: true,
+                  traineeProfile: true
+                }
+              })
+
+              const finalUsers = completeUsers.map((user) => {
+                const { trainerProfile, traineeProfile, ...baseUser } = user
+
+                if (user.role.name === RoleName.TRAINER && trainerProfile) {
+                  return { ...baseUser, trainerProfile }
+                }
+
+                if (user.role.name === RoleName.TRAINEE && traineeProfile) {
+                  return { ...baseUser, traineeProfile }
+                }
+
+                return baseUser
+              })
+
               return {
-                created: [],
+                created: finalUsers,
                 duplicates: duplicateUsersInChunk
               }
+            },
+            {
+              timeout: 30000
             }
+          )
 
-            // Bước 1: Tạo hàng loạt chỉ những users hợp lệ
-            const usersToCreate = validUsersInChunk.map((userData) => ({
-              ...userData,
-              createdById,
-              // Loại bỏ dữ liệu profile khỏi quá trình tạo user
-              trainerProfile: undefined,
-              traineeProfile: undefined,
-              roleName: undefined
-            }))
+          results.success.push(...chunkResults.created)
+          results.summary.successful += chunkResults.created.length
 
-            const createdUsers = await tx.user.createManyAndReturn({
-              data: usersToCreate,
-              include: userRoleDepartmentInclude
+          chunkResults.duplicates.forEach(({ userData, originalIndex }) => {
+            results.failed.push({
+              index: originalIndex,
+              error: BulkEmailAlreadyExistsMessage(userData.email),
+              userData: toFailedUserData(userData)
             })
-
-            // Bước 2: Tạo hàng loạt profiles (tách riêng để tối ưu hiệu suất)
-            const trainerProfiles: any[] = []
-            const traineeProfiles: any[] = []
-
-            validUsersInChunk.forEach((userData, index) => {
-              const userId = createdUsers[index].id
-
-              if (userData.roleName === RoleName.TRAINER && userData.trainerProfile) {
-                trainerProfiles.push({
-                  userId,
-                  specialization: userData.trainerProfile.specialization,
-                  certificationNumber: userData.trainerProfile.certificationNumber,
-                  yearsOfExp: Number(userData.trainerProfile.yearsOfExp),
-                  bio: userData.trainerProfile.bio,
-                  createdById
-                })
-              }
-
-              if (userData.roleName === RoleName.TRAINEE && userData.traineeProfile) {
-                traineeProfiles.push({
-                  userId,
-                  dob: userData.traineeProfile.dob,
-                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
-                  trainingBatch: userData.traineeProfile.trainingBatch,
-                  passportNo: userData.traineeProfile.passportNo || null,
-                  nation: userData.traineeProfile.nation || null,
-                  createdById
-                })
-              }
-            })
-
-            // Tạo hàng loạt profiles
-            if (trainerProfiles.length > 0) {
-              await tx.trainerProfile.createMany({
-                data: trainerProfiles
-              })
-            }
-
-            if (traineeProfiles.length > 0) {
-              await tx.traineeProfile.createMany({
-                data: traineeProfiles
-              })
-            }
-
-            // Bước 3: Lấy thông tin users hoàn chỉnh kèm profiles
-            const completeUsers = await tx.user.findMany({
-              where: {
-                id: { in: createdUsers.map((u) => u.id) }
-              },
-              include: {
-                ...userRoleDepartmentInclude,
-                trainerProfile: true,
-                traineeProfile: true
-              }
-            })
-
-            const finalUsers = completeUsers.map((user) => {
-              const { trainerProfile, traineeProfile, ...baseUser } = user
-
-              if (user.role.name === RoleName.TRAINER && trainerProfile) {
-                return { ...baseUser, trainerProfile }
-              } else if (user.role.name === RoleName.TRAINEE && traineeProfile) {
-                return { ...baseUser, traineeProfile }
+          })
+          results.summary.failed += chunkResults.duplicates.length
+        } catch (error) {
+          candidatesForTransaction.forEach(({ userData, originalIndex }) => {
+            let errorMessage = BulkUnknownErrorMessage
+            if (error instanceof Error) {
+              if (error.message.includes('Unique constraint failed on the fields: (`email`)')) {
+                errorMessage = BulkEmailAlreadyExistsMessage(userData.email)
+              } else if (error.message.includes('Unique constraint failed')) {
+                errorMessage = BulkDuplicateDataFoundMessage
               } else {
-                return baseUser
+                errorMessage = error.message
               }
+            }
+
+            results.failed.push({
+              index: originalIndex,
+              error: errorMessage,
+              userData: toFailedUserData(userData)
             })
-
-            return {
-              created: finalUsers,
-              duplicates: duplicateUsersInChunk
-            }
-          },
-          {
-            timeout: 30000
-          }
-        )
-
-        // Xử lý các tạo thành công
-        results.success.push(...chunkResults.created)
-        results.summary.successful += chunkResults.created.length
-
-        // Xử lý các email trùng lặp được tìm thấy trước khi tạo
-        chunkResults.duplicates.forEach(({ userData, originalIndex }) => {
-          // Extract original user data without internal fields
-          const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
-
-          const failedUserData = {
-            ...originalUserData,
-            role: { id: roleId, name: roleName }
-          }
-
-          results.failed.push({
-            index: originalIndex,
-            error: BulkEmailAlreadyExistsMessage(originalUserData.email),
-            userData: failedUserData
           })
-        })
-        results.summary.failed += chunkResults.duplicates.length
-      } catch (error) {
-        // Xử lý lỗi chunk - thêm tất cả users trong chunk này vào mảng thất bại
-        chunk.forEach((userData, index) => {
-          // Tách dữ liệu user gốc không bao gồm các field nội bộ
-          const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
+          results.summary.failed += candidatesForTransaction.length
 
-          // Tái tạo role object cho response thất bại
-          const failedUserData = {
-            ...originalUserData,
-            role: { id: roleId, name: roleName }
-          }
+          console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
+        }
+      }
 
-          let errorMessage = BulkUnknownErrorMessage
-          if (error instanceof Error) {
-            if (error.message.includes('Unique constraint failed on the fields: (`email`)')) {
-              errorMessage = BulkEmailAlreadyExistsMessage(originalUserData.email)
-            } else if (error.message.includes('Unique constraint failed')) {
-              errorMessage = BulkDuplicateDataFoundMessage
-            } else {
-              errorMessage = error.message
-            }
-          }
-
-          results.failed.push({
-            index: i + index,
-            error: errorMessage,
-            userData: failedUserData
-          })
-        })
-        results.summary.failed += chunk.length
-
-        console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
+      if (payloadDuplicateFailures.length > 0) {
+        results.failed.push(...payloadDuplicateFailures)
+        results.summary.failed += payloadDuplicateFailures.length
       }
     }
 

@@ -150,7 +150,7 @@ export class SubjectService {
       const subject = subjects[i]
 
       try {
-        const codeExists = await this.sharedSubjectRepository.checkCodeExists(subject.code)
+        const codeExists = await this.sharedSubjectRepository.checkCodeExists(subject.code, courseId)
         if (codeExists) {
           throw BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code)
         }
@@ -224,7 +224,7 @@ export class SubjectService {
 
       // Validate subject code unique nếu thay đổi
       if (data.code && data.code !== existingSubject.code) {
-        const codeExists = await this.sharedSubjectRepository.checkCodeExists(data.code, id)
+        const codeExists = await this.sharedSubjectRepository.checkCodeExists(data.code, finalCourseId, id)
         if (codeExists) {
           throw SubjectCodeAlreadyExistsException
         }
@@ -451,7 +451,6 @@ export class SubjectService {
       batchCode,
       status
     })
-    console.log('trainee', result.trainee)
 
     return {
       trainee: result.trainee,
