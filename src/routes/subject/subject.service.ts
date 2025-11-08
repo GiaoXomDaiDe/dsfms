@@ -10,6 +10,7 @@ import {
 } from '~/shared/helper'
 import { CourseIdParamsType } from '~/shared/models/shared-course.model'
 import { SubjectIdParamsType, SubjectType } from '~/shared/models/shared-subject.model'
+import { MessageResType } from '~/shared/models/response.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import {
@@ -271,7 +272,7 @@ export class SubjectService {
     }
   }
 
-  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<string> {
+  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<MessageResType> {
     const existingSubject = await this.sharedSubjectRepository.findById(id)
     if (!existingSubject) {
       throw SubjectNotFoundException
@@ -293,7 +294,7 @@ export class SubjectService {
       status: subjectStatus
     })
 
-    return 'Archived subject successfully'
+    return { message: 'Archived subject successfully' }
   }
 
   async assignTrainer({
@@ -353,7 +354,7 @@ export class SubjectService {
     return updated
   }
 
-  async removeTrainer({ subjectId, trainerId }: { subjectId: string; trainerId: string }): Promise<string> {
+  async removeTrainer({ subjectId, trainerId }: { subjectId: string; trainerId: string }): Promise<MessageResType> {
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId,
       trainerUserId: trainerId
@@ -368,8 +369,9 @@ export class SubjectService {
       trainerUserId: trainerId
     })
 
-    return 'Trainer removed successfully'
+    return { message: 'Trainer removed successfully' }
   }
+
   async lookupTrainees({ data }: { data: LookupTraineesBodyType }): Promise<LookupTraineesResType> {
     const result = await this.subjectRepo.lookupTrainees({
       trainees: data.traineesList
@@ -458,6 +460,7 @@ export class SubjectService {
       totalCount: result.enrollments.length
     }
   }
+
   async removeEnrollments({
     subjectId,
     data
@@ -492,7 +495,7 @@ export class SubjectService {
     subjectId: string
     traineeId: string
     data: CancelSubjectEnrollmentBodyType
-  }): Promise<string> {
+  }): Promise<MessageResType> {
     const success = await this.subjectRepo.cancelSubjectEnrollment({
       subjectId,
       traineeUserId: traineeId,
@@ -503,7 +506,7 @@ export class SubjectService {
       throw CannotCancelSubjectEnrollmentException
     }
 
-    return 'Enrollment cancelled successfully'
+    return { message: 'Enrollment cancelled successfully' }
   }
 
   private ensureSubjectWithinCourseRange({
