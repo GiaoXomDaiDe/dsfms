@@ -14,10 +14,13 @@ export class HttpExceptionFilter extends BaseExceptionFilter {
       const httpContext = host.switchToHttp()
       const request = httpContext.getRequest<Request>()
       const route = request ? `${request.method} ${request.originalUrl ?? request.url}` : 'Unknown route'
-      console.log('Log thử: ', JSON.stringify(exception.initCause(), null, 2))
       if (zodError instanceof ZodErrorV4) {
         const serializedIssues = JSON.stringify(zodError.issues, null, 2)
+        const payloadPreview = request?.body ? JSON.stringify(request.body, null, 2) : undefined
         this.logger.error(`ZodSerializationException at ${route}`, serializedIssues)
+        if (payloadPreview) {
+          this.logger.error(`ZodSerializationException payload at ${route}`, payloadPreview)
+        }
       }
     }
 
