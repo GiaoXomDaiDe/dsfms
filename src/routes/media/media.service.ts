@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios'
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { unlink } from 'fs/promises'
 import mime from 'mime-types'
 import path from 'path'
@@ -18,7 +18,9 @@ import { S3Service } from '~/shared/services/s3.service'
 @Injectable()
 export class MediaService {
   private static readonly ONLYOFFICE_SAVE_STATUSES = new Set([2, 6, 7])
+  private static readonly ONLYOFFICE_RESULT_TTL_MS = 5 * 60 * 1000
   private readonly logger = new Logger(MediaService.name)
+  private readonly onlyOfficeResults = new Map<string, { objectKey: string; url: string; savedAt: number }>()
 
   constructor(
     private readonly s3Service: S3Service,
@@ -201,7 +203,10 @@ export class MediaService {
     const documentKey = `${keyPrefix}_${timestamp}${this.normalizeExtension(payload.filetype, '.docx')}`
 
     try {
-      await this.uploadFromSourceUrl(payload.url, documentKey)
+      const { key: uploadedObjectKey, url: uploadedObjectUrl } = await this.uploadFromSourceUrl(
+        payload.url,
+        documentKey
+      )
 
       if (payload.changesurl) {
         await this.uploadFromSourceUrl(payload.changesurl, `${keyPrefix}_${timestamp}-changes.zip`)
@@ -210,6 +215,14 @@ export class MediaService {
       if (payload.formsdataurl) {
         await this.uploadFromSourceUrl(payload.formsdataurl, `${keyPrefix}_${timestamp}-forms.json`, 'application/json')
       }
+
+      this.pruneExpiredOnlyOfficeResults()
+      this.onlyOfficeResults.set(payload.key, {
+        objectKey: uploadedObjectKey,
+        url: uploadedObjectUrl,
+        savedAt: Date.now()
+      })
+      this.logger.debug(`Stored OnlyOffice save result for key=${payload.key} -> ${uploadedObjectKey}`)
 
       return { error: 0 }
     } catch (error) {
@@ -289,6 +302,35 @@ export class MediaService {
     } finally {
       if (typeof response.data.destroy === 'function') {
         response.data.destroy()
+      }
+    }
+  }
+
+  getOnlyOfficeResult(documentKey: string) {
+    const record = this.onlyOfficeResults.get(documentKey)
+
+    if (!record) {
+      throw new NotFoundException('Không tìm thấy kết quả lưu cho tài liệu này')
+    }
+
+    const isExpired = record.savedAt + MediaService.ONLYOFFICE_RESULT_TTL_MS < Date.now()
+    if (isExpired) {
+      this.onlyOfficeResults.delete(documentKey)
+      throw new NotFoundException('Kết quả lưu đã hết hạn, vui lòng lưu lại tài liệu')
+    }
+
+    return {
+      key: record.objectKey,
+      url: record.url,
+      savedAt: new Date(record.savedAt).toISOString()
+    }
+  }
+
+  private pruneExpiredOnlyOfficeResults() {
+    const now = Date.now()
+    for (const [key, record] of this.onlyOfficeResults.entries()) {
+      if (record.savedAt + MediaService.ONLYOFFICE_RESULT_TTL_MS < now) {
+        this.onlyOfficeResults.delete(key)
       }
     }
   }

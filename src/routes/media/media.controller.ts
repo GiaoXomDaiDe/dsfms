@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   Res,
   UploadedFiles,
   UseInterceptors
@@ -21,6 +22,7 @@ import {
   DeleteMediaObjectBodyDTO,
   OnlyOfficeCallbackBodyDTO,
   OnlyOfficeCallbackResDTO,
+  OnlyOfficeDocumentResultDTO,
   PresignedUploadDocBodyDTO,
   PresignedUploadFileBodyDTO,
   PresignedUploadFileResDTO,
@@ -129,6 +131,13 @@ export class MediaController {
   @ZodSerializerDto(OnlyOfficeCallbackResDTO)
   handleOnlyOfficeCallback(@Body() body: OnlyOfficeCallbackBodyDTO) {
     return this.mediaService.handleOnlyOfficeCallback(body)
+  }
+
+  @IsPublic()
+  @Get('docs/onlyoffice/result')
+  @ZodSerializerDto(OnlyOfficeDocumentResultDTO)
+  getOnlyOfficeResult(@Query('key') key: string) {
+    return this.mediaService.getOnlyOfficeResult(key)
   }
   @IsPublic()
   @Post('docs/upload-from-url')

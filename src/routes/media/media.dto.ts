@@ -3,6 +3,7 @@ import {
   DeleteMediaObjectBodySchema,
   OnlyOfficeCallbackBodySchema,
   OnlyOfficeCallbackResSchema,
+  OnlyOfficeDocumentResultSchema,
   PresignedUploadDocBodySchema,
   PresignedUploadFileBodySchema,
   PresignedUploadFileResSchema,
@@ -27,3 +28,5 @@ export class UploadDocFromUrlResDTO extends createZodDto(UploadFilesResSchema) {
 export class OnlyOfficeCallbackBodyDTO extends createZodDto(OnlyOfficeCallbackBodySchema) {}
 
 export class OnlyOfficeCallbackResDTO extends createZodDto(OnlyOfficeCallbackResSchema) {}
+
+export class OnlyOfficeDocumentResultDTO extends createZodDto(OnlyOfficeDocumentResultSchema) {}
