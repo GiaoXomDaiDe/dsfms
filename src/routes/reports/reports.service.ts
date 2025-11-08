@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import {
+  AssessmentApprovalDecisionInvalidException,
+  AssessmentRequestCannotBeAcknowledgedException,
   CanOnlyAcknowledgeSubmittedReportException,
   CanOnlyCancelOwnReportException,
   CanOnlyCancelSubmittedReportException,
+  CanOnlyDecideSubmittedAssessmentException,
   CanOnlyRespondAcknowledgedReportException,
-  ReportNotFoundException
+  ReportNotFoundException,
+  RespondStatusMustBeResolvedException
 } from '~/routes/reports/reports.error'
 import {
   CreateReportBodyType,
@@ -17,7 +21,7 @@ import {
   RespondReportResType
 } from '~/routes/reports/reports.model'
 import { ReportsRepo } from '~/routes/reports/reports.repo'
-import { RequestStatus } from '~/shared/constants/report.constant'
+import { RequestStatus, RequestType } from '~/shared/constants/report.constant'
 
 @Injectable()
 export class ReportsService {
@@ -71,6 +75,10 @@ export class ReportsService {
       throw ReportNotFoundException
     }
 
+    if (existingReport.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST) {
+      throw AssessmentRequestCannotBeAcknowledgedException
+    }
+
     // Chỉ có thể acknowledge report đang ở trạng thái SUBMITTED
     if (existingReport.status !== RequestStatus.SUBMITTED) {
       throw CanOnlyAcknowledgeSubmittedReportException
@@ -86,11 +94,36 @@ export class ReportsService {
       throw ReportNotFoundException
     }
 
+    if (existingReport.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST) {
+      if (existingReport.status !== RequestStatus.SUBMITTED) {
+        throw CanOnlyDecideSubmittedAssessmentException
+      }
+
+      const nextStatus = data.status ?? RequestStatus.APPROVED
+
+      if (nextStatus !== RequestStatus.APPROVED && nextStatus !== RequestStatus.REJECTED) {
+        throw AssessmentApprovalDecisionInvalidException
+      }
+
+      return this.reportsRepo.respond({
+        id,
+        data,
+        managedById,
+        status: nextStatus
+      })
+    }
+
     // Chỉ có thể respond report đang ở trạng thái ACKNOWLEDGED
     if (existingReport.status !== RequestStatus.ACKNOWLEDGED) {
       throw CanOnlyRespondAcknowledgedReportException
     }
 
-    return this.reportsRepo.respond({ id, data, managedById })
+    const nextStatus = data.status ?? RequestStatus.RESOLVED
+
+    if (nextStatus !== RequestStatus.RESOLVED) {
+      throw RespondStatusMustBeResolvedException
+    }
+
+    return this.reportsRepo.respond({ id, data, managedById, status: nextStatus })
   }
 }

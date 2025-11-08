@@ -33,7 +33,10 @@ export const ExtractFieldsResponseSchema = z.object({
   fields: z.array(
     z.object({
       fieldName: z.string(),
-      placeholder: z.string()
+      fieldType: z.string(),
+      displayOrder: z.number(),
+      parentTempId: z.string().nullable(),
+      tempId: z.string().optional()
     })
   ),
   totalFields: z.number()
@@ -71,6 +74,10 @@ export class CreateTemplateFieldDto {
   @IsOptional()
   @IsString()
   parentTempId?: string // Temporary ID for parent reference
+
+  @IsOptional()
+  @IsString()
+  tempId?: string // Temporary ID for this field (used for PART fields)
 }
 
 export class CreateTemplateSectionDto {
@@ -117,8 +124,54 @@ export class CreateTemplateFormDto {
   @IsUUID()
   departmentId: string
 
+  @IsNotEmpty()
+  @IsString()
+  templateContent: string
+
+  @IsNotEmpty()
+  @IsString()
+  templateConfig: string
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTemplateSectionDto)
+  sections: CreateTemplateSectionDto[]
+}
+
+export class UpdateTemplateFormDto {
+  @IsNotEmpty()
+  @IsString()
+  name: string
+
   @IsOptional()
-  templateContent?: string // Will be "test later" for now
+  @IsString()
+  description?: string
+
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string
+}
+
+export class CreateTemplateVersionDto {
+  @IsNotEmpty()
+  @IsUUID()
+  originalTemplateId: string
+
+  @IsNotEmpty()
+  @IsString()
+  name: string
+
+  @IsOptional()
+  @IsString()
+  description?: string
+
+  @IsNotEmpty()
+  @IsString()
+  templateContent: string
+
+  @IsNotEmpty()
+  @IsString()
+  templateConfig: string
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -160,7 +213,12 @@ export class TemplateFormResponseDto {
   isActive: boolean
   createdAt: Date
   updatedAt: Date
+  createdByUserId: string
+  updatedByUserId: string
+  reviewedByUserId?: string
+  reviewedAt?: Date
   templateContent?: string
+  templateConfig?: string
   templateSchema?: any
   sections: TemplateSectionResponseDto[]
 }

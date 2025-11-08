@@ -13,7 +13,9 @@ export class ProfileController {
   @Get()
   @ZodSerializerDto(GetUserProfileResDTO)
   getProfile(@ActiveUser('userId') userId: string) {
-    return this.profileService.getProfile(userId)
+    return this.profileService.getProfile(userId).then((profile) => ({
+      data: profile
+    }))
   }
 
   @Put()

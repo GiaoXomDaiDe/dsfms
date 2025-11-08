@@ -25,3 +25,10 @@ export const CourseSchema = z.object({
   createdAt: z.iso.datetime().transform((d) => new Date(d)),
   updatedAt: z.iso.datetime().transform((d) => new Date(d))
 })
+
+export const CourseIdParamsSchema = z.object({
+  courseId: z.uuid()
+})
+
+export type CourseType = z.infer<typeof CourseSchema>
+export type CourseIdParamsType = string

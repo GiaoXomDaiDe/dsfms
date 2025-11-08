@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
-import { CourseStatus, SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
+import { AssessmentStatus } from '@prisma/client'
+import { CourseStatus } from '~/shared/constants/course.constant'
+import { SubjectEnrollmentStatus, SubjectStatus } from '~/shared/constants/subject.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
@@ -10,10 +12,10 @@ export class StatusUpdaterService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Cron job chạy mỗi ngày lúc 00:01 (1 phút sau nửa đêm)
+   * Cron job chạy mỗi ngày đúng 00:00 (vừa qua ngày mới)
    * để cập nhật status của Course, Subject và Enrollment
    */
-  @Cron(CronExpression.EVERY_DAY_AT_1AM, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'update-academic-statuses',
     timeZone: 'Asia/Ho_Chi_Minh'
   })
@@ -24,6 +26,7 @@ export class StatusUpdaterService {
       await this.updateCourseStatuses()
       await this.updateSubjectStatuses()
       await this.updateEnrollmentStatuses()
+      await this.updateAssessmentStatuses()
 
       this.logger.log('Automatic status update completed successfully')
     } catch (error) {
@@ -48,7 +51,40 @@ export class StatusUpdaterService {
         },
         endDate: {
           gte: now
-        }
+        },
+        AND: [
+          {
+            OR: [
+              {
+                instructors: {
+                  some: {}
+                }
+              },
+              {
+                subjects: {
+                  some: {
+                    instructors: {
+                      some: {}
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            subjects: {
+              some: {
+                enrollments: {
+                  some: {
+                    status: {
+                      not: SubjectEnrollmentStatus.CANCELLED
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       data: {
         status: CourseStatus.ON_GOING
@@ -81,6 +117,31 @@ export class StatusUpdaterService {
     const now = new Date()
     now.setHours(0, 0, 0, 0)
 
+    const archivedResult = await this.prisma.subject.updateMany({
+      where: {
+        status: SubjectStatus.PLANNED,
+        deletedAt: null,
+        startDate: {
+          lte: now
+        },
+        OR: [
+          {
+            instructors: {
+              none: {}
+            }
+          },
+          {
+            enrollments: {
+              none: {}
+            }
+          }
+        ]
+      },
+      data: {
+        status: SubjectStatus.ARCHIVED
+      }
+    })
+
     // Cập nhật Subject sang ON_GOING
     const ongoingResult = await this.prisma.subject.updateMany({
       where: {
@@ -91,6 +152,16 @@ export class StatusUpdaterService {
         },
         endDate: {
           gte: now
+        },
+        instructors: {
+          some: {}
+        },
+        enrollments: {
+          some: {
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          }
         }
       },
       data: {
@@ -113,6 +184,10 @@ export class StatusUpdaterService {
         status: SubjectStatus.COMPLETED
       }
     })
+
+    if (archivedResult.count > 0) {
+      this.logger.warn(`Subject statuses auto-archived due to missing trainers or enrollments: ${archivedResult.count}`)
+    }
 
     this.logger.log(`Subject statuses updated: ${ongoingResult.count} → ON_GOING, ${completedResult.count} → COMPLETED`)
   }
@@ -158,6 +233,30 @@ export class StatusUpdaterService {
     this.logger.log(
       `Enrollment statuses updated: ${ongoingResult.count} → ON_GOING, ${finishedResult.count} → FINISHED`
     )
+  }
+
+  /**
+   * Chuyển đổi status của Assessment từ NOT_STARTED sang ON_GOING khi ngày hiện tại >= startDate
+   */
+  private async updateAssessmentStatuses() {
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+
+    const result = await this.prisma.assessmentForm.updateMany({
+      where: {
+        status: AssessmentStatus.NOT_STARTED,
+        occuranceDate: {
+          lte: now
+        }
+      },
+      data: {
+        status: AssessmentStatus.ON_GOING
+      }
+    })
+
+    if (result.count > 0) {
+      this.logger.log(`Assessment statuses updated: ${result.count} → ON_GOING`)
+    }
   }
 
   /**

@@ -18,7 +18,7 @@ export const NotFoundDepartmentException = new NotFoundException('Department not
 
 // Lỗi khi cố gắng xóa phòng ban đang có course hoạt động
 export const DepartmentHasActiveCoursesException = new ForbiddenException(
-  'Cannot delete department with active courses'
+  'Cannot delete department while courses or subjects are still active'
 )
 
 // Lỗi liên quan đến department head
@@ -40,31 +40,6 @@ export const OnlyAdministratorCanEnableDepartmentException = new ForbiddenExcept
 )
 export const DepartmentAlreadyActiveException = new BadRequestException('Department is already active')
 
-// Lỗi khi thao tác với trainer trong phòng ban
-export const TrainersNotFoundOrInvalidRoleException = (trainerEids: string[]) =>
-  new BadRequestException({
-    message: 'Trainers not found or missing TRAINER role',
-    trainerEids
-  })
-
-export const TrainersAlreadyInDepartmentException = (trainerEids: string[]) =>
-  new BadRequestException({
-    message: 'Trainers already belong to this department',
-    trainerEids
-  })
-
-export const TrainersBelongToOtherDepartmentsException = (trainerEids: string[]) =>
-  new BadRequestException({
-    message: 'Trainers already belong to other departments',
-    trainerEids
-  })
-
-export const NoTrainersFoundInDepartmentException = new BadRequestException(
-  'No trainers found in this department with the provided EIDs'
+export const DepartmentHeadBelongsToAnotherDepartmentException = new BadRequestException(
+  'This department head belongs to another department, choose a head within this department'
 )
-
-export const TrainersNotInDepartmentException = (trainerEids: string[]) =>
-  new BadRequestException({
-    message: 'Trainers not found in this department',
-    trainerEids
-  })

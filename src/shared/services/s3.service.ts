@@ -1,9 +1,10 @@
-import { PutObjectCommand, S3 } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { readFileSync } from 'fs'
 import mime from 'mime-types'
+import type { Readable } from 'stream'
 import envConfig from '~/shared/config'
 
 @Injectable()
@@ -44,5 +45,57 @@ export class S3Service {
       ContentType: contentType
     })
     return getSignedUrl(this.s3, command, { expiresIn })
+  }
+
+  getObjectUrl(key: string) {
+    return `https://${envConfig.AWS_S3_BUCKET_NAME}.s3.${envConfig.AWS_S3_REGION}.amazonaws.com/${key}`
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    try {
+      await this.s3.send(
+        new HeadObjectCommand({
+          Bucket: envConfig.AWS_S3_BUCKET_NAME,
+          Key: key
+        })
+      )
+    } catch (error: any) {
+      const statusCode = error?.$metadata?.httpStatusCode
+      const errorName = error?.name
+      if (statusCode === 404 || errorName === 'NotFound' || errorName === 'NoSuchKey') {
+        throw new NotFoundException('Object not found on S3')
+      }
+      throw error
+    }
+
+    const command = new DeleteObjectCommand({
+      Bucket: envConfig.AWS_S3_BUCKET_NAME,
+      Key: key
+    })
+    await this.s3.send(command)
+  }
+
+  async uploadStream({ key, body, contentType }: { key: string; body: Readable; contentType?: string }) {
+    const uploader = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: envConfig.AWS_S3_BUCKET_NAME,
+        Key: key,
+        Body: body,
+        ContentType: contentType ?? 'application/octet-stream'
+      },
+      queueSize: 4,
+      partSize: 1024 * 1024 * 5,
+      leavePartsOnError: false
+    })
+
+    const result = (await uploader.done()) as { Key?: string; Location?: string }
+    const resolvedKey = result?.Key ?? key
+    const location = result?.Location ?? this.getObjectUrl(resolvedKey)
+
+    return {
+      key: resolvedKey,
+      url: location
+    }
   }
 }

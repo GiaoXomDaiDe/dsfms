@@ -248,6 +248,49 @@ export const GetAssessmentsQuerySchema = z.object({
 
 export type GetAssessmentsQueryType = z.infer<typeof GetAssessmentsQuerySchema>
 
+export const GetDepartmentAssessmentsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  templateId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  traineeId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+  search: z.string().optional(),
+  includeDeleted: z.coerce.boolean().default(false).optional()
+}).strict()
+
+export type GetDepartmentAssessmentsQueryType = z.infer<typeof GetDepartmentAssessmentsQuerySchema>
+
+// Department Assessment Item with custom trainee field
+export const DepartmentAssessmentItemSchema = AssessmentFormResSchema.extend({
+  trainee: z.object({
+    id: z.string(),
+    eid: z.string(),
+    fullName: z.string(), // Custom field combining first, middle, last names
+    email: z.string()
+  })
+})
+
+export type DepartmentAssessmentItemType = z.infer<typeof DepartmentAssessmentItemSchema>
+
+export const GetDepartmentAssessmentsResSchema = z.object({
+  assessments: z.array(DepartmentAssessmentItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  departmentInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    code: z.string()
+  }).optional()
+})
+
+export type GetDepartmentAssessmentsResType = z.infer<typeof GetDepartmentAssessmentsResSchema>
+
 export const GetAssessmentParamsSchema = z.object({
   assessmentId: z.string().uuid('Assessment ID must be a valid UUID')
 }).strict()
@@ -273,3 +316,332 @@ export const GetAssessmentDetailResSchema = AssessmentFormResSchema.extend({
 })
 
 export type GetAssessmentDetailResType = z.infer<typeof GetAssessmentDetailResSchema>
+
+// ===== TRAINER ASSESSMENT SCHEMAS =====
+
+// Request schemas for trainer assessment lists
+export const GetSubjectAssessmentsQuerySchema = z.object({
+  subjectId: z.string().uuid('Subject ID must be a valid UUID'),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  search: z.string().max(255).optional()
+}).strict()
+
+export type GetSubjectAssessmentsQueryType = z.infer<typeof GetSubjectAssessmentsQuerySchema>
+
+export const GetCourseAssessmentsQuerySchema = z.object({
+  courseId: z.string().uuid('Course ID must be a valid UUID'),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  search: z.string().max(255).optional()
+}).strict()
+
+export type GetCourseAssessmentsQueryType = z.infer<typeof GetCourseAssessmentsQuerySchema>
+
+// Assessment list item schema for trainers (basic info only)
+export const TrainerAssessmentListItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  subjectId: z.string().uuid().nullable(),
+  courseId: z.string().uuid().nullable(),
+  occuranceDate: z.coerce.date(),
+  status: z.nativeEnum(AssessmentStatus),
+  resultScore: z.number().nullable(),
+  resultText: z.nativeEnum(AssessmentResult).nullable(),
+  pdfUrl: z.string().nullable(),
+  comment: z.string().nullable(),
+  trainee: z.object({
+    id: z.string().uuid(),
+    eid: z.string(),
+    fullName: z.string(),
+    email: z.string()
+  })
+})
+
+export type TrainerAssessmentListItemType = z.infer<typeof TrainerAssessmentListItemSchema>
+
+// Response schemas for trainer assessment lists
+export const GetSubjectAssessmentsResSchema = z.object({
+  assessments: z.array(TrainerAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  subjectInfo: z.object({
+    id: z.string(),
+    name: z.string(),
+    code: z.string(),
+    course: z.object({
+      id: z.string(),
+      name: z.string(),
+      code: z.string()
+    })
+  })
+})
+
+export type GetSubjectAssessmentsResType = z.infer<typeof GetSubjectAssessmentsResSchema>
+
+export const GetCourseAssessmentsResSchema = z.object({
+  assessments: z.array(TrainerAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  courseInfo: z.object({
+    id: z.string(),
+    name: z.string(),
+    code: z.string()
+  })
+})
+
+export type GetCourseAssessmentsResType = z.infer<typeof GetCourseAssessmentsResSchema>
+
+// Get Assessment Sections for Assessment (for trainers to see what they can assess)
+export const GetAssessmentSectionsQuerySchema = z.object({
+  assessmentId: z.string().uuid()
+})
+
+export type GetAssessmentSectionsQueryType = z.infer<typeof GetAssessmentSectionsQuerySchema>
+
+export const AssessmentSectionDetailSchema = z.object({
+  id: z.string().uuid(),
+  assessmentFormId: z.string().uuid(),
+  assessedById: z.string().uuid().nullable(),
+  status: z.nativeEnum(AssessmentSectionStatus),
+  createdAt: z.coerce.date(),
+  // Template section information
+  templateSection: z.object({
+    id: z.string().uuid(),
+    label: z.string(),
+    displayOrder: z.number(),
+    editBy: z.string(), // EditByRole enum as string
+    roleInSubject: z.string().nullable(), // RoleInSubject enum as string
+    isSubmittable: z.boolean(),
+    isToggleDependent: z.boolean()
+  }),
+  // Assessor information (if assessed)
+  assessedBy: z.object({
+    id: z.string().uuid(),
+    firstName: z.string(),
+    lastName: z.string(),
+    eid: z.string()
+  }).nullable(),
+  // Optional field for TRAINER users
+  canAssessed: z.boolean().optional()
+})
+
+export type AssessmentSectionDetailType = z.infer<typeof AssessmentSectionDetailSchema>
+
+export const GetAssessmentSectionsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    trainee: z.object({
+      id: z.string().uuid(),
+      firstName: z.string(),
+      lastName: z.string(),
+      eid: z.string()
+    }),
+    template: z.object({
+      id: z.string().uuid(),
+      name: z.string()
+    }),
+    subject: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string()
+    }).nullable(),
+    course: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string()
+    }).nullable(),
+    occuranceDate: z.coerce.date(),
+    status: z.nativeEnum(AssessmentStatus)
+  }),
+  sections: z.array(AssessmentSectionDetailSchema),
+  userRole: z.string(),
+  // Optional field for TRAINEE users - indicates if assessment is locked
+  isTraineeLocked: z.boolean().optional()
+})
+
+export type GetAssessmentSectionsResType = z.infer<typeof GetAssessmentSectionsResSchema>
+
+// ===== GET ASSESSMENT SECTION FIELDS API =====
+
+// Query schema for getting assessment section fields
+export const GetAssessmentSectionFieldsQuerySchema = z.object({
+  assessmentSectionId: z.string().uuid()
+})
+
+export type GetAssessmentSectionFieldsQueryType = z.infer<typeof GetAssessmentSectionFieldsQuerySchema>
+
+// Template field detail schema with assessment value
+export const AssessmentSectionFieldDetailSchema = z.object({
+  templateField: z.object({
+    id: z.string().uuid(),
+    label: z.string(),
+    fieldName: z.string(),
+    fieldType: z.string(),
+    roleRequired: z.string().nullable(),
+    options: z.any().nullable(),
+    displayOrder: z.number(),
+    parentId: z.string().uuid().nullable()
+  }),
+  assessmentValue: z.object({
+    id: z.string().uuid(),
+    answerValue: z.string().nullable()
+  })
+})
+
+export type AssessmentSectionFieldDetailType = z.infer<typeof AssessmentSectionFieldDetailSchema>
+
+// Response schema for assessment section fields
+export const GetAssessmentSectionFieldsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentSectionInfo: z.object({
+    id: z.string().uuid(),
+    assessmentFormId: z.string().uuid(),
+    templateSectionId: z.string().uuid(),
+    status: z.nativeEnum(AssessmentSectionStatus),
+    templateSection: z.object({
+      id: z.string().uuid(),
+      label: z.string(),
+      displayOrder: z.number(),
+      editBy: z.string(),
+      roleInSubject: z.string().nullable(),
+      isSubmittable: z.boolean(),
+      isToggleDependent: z.boolean()
+    })
+  }),
+  fields: z.array(AssessmentSectionFieldDetailSchema),
+  totalFields: z.number()
+})
+
+export type GetAssessmentSectionFieldsResType = z.infer<typeof GetAssessmentSectionFieldsResSchema>
+
+// ===== SAVE ASSESSMENT VALUES SCHEMAS =====
+
+export const SaveAssessmentValueSchema = z.object({
+  assessmentValueId: z.string().uuid('Assessment value ID must be a valid UUID'),
+  answerValue: z.string().max(2000, 'Answer value must not exceed 2000 characters').nullable()
+})
+
+export const SaveAssessmentValuesBodySchema = z.object({
+  assessmentSectionId: z.string().uuid('Assessment section ID must be a valid UUID'),
+  values: z.array(SaveAssessmentValueSchema).min(1, 'At least one value must be provided')
+})
+
+export const SaveAssessmentValuesResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentSectionId: z.string().uuid(),
+  updatedValues: z.number(),
+  sectionStatus: z.nativeEnum(AssessmentSectionStatus),
+  assessmentFormStatus: z.nativeEnum(AssessmentStatus)
+})
+
+export type SaveAssessmentValuesBodyType = z.infer<typeof SaveAssessmentValuesBodySchema>
+export type SaveAssessmentValuesResType = z.infer<typeof SaveAssessmentValuesResSchema>
+
+// ===== TOGGLE TRAINEE LOCK SCHEMAS =====
+
+export const ToggleTraineeLockBodySchema = z.object({
+  isTraineeLocked: z.boolean()
+})
+
+export const ToggleTraineeLockResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentFormId: z.string().uuid(),
+  isTraineeLocked: z.boolean(),
+  status: z.nativeEnum(AssessmentStatus)
+})
+
+export type ToggleTraineeLockBodyType = z.infer<typeof ToggleTraineeLockBodySchema>
+export type ToggleTraineeLockResType = z.infer<typeof ToggleTraineeLockResSchema>
+
+// ===== SUBMIT ASSESSMENT SCHEMAS =====
+
+export const SubmitAssessmentParamsSchema = z.object({
+  assessmentId: z.string().uuid('Assessment ID must be a valid UUID')
+})
+
+export const SubmitAssessmentResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentFormId: z.string().uuid(),
+  submittedAt: z.coerce.date(),
+  submittedBy: z.string().uuid(),
+  status: z.nativeEnum(AssessmentStatus)
+})
+
+export type SubmitAssessmentParamsType = z.infer<typeof SubmitAssessmentParamsSchema>
+export type SubmitAssessmentResType = z.infer<typeof SubmitAssessmentResSchema>
+
+// ===== UPDATE ASSESSMENT VALUES SCHEMAS =====
+
+export const UpdateAssessmentValuesBodySchema = z.object({
+  assessmentSectionId: z.string().uuid('Assessment section ID must be a valid UUID'),
+  values: z.array(SaveAssessmentValueSchema).min(1, 'At least one value must be provided')
+})
+
+export const UpdateAssessmentValuesResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentSectionId: z.string().uuid(),
+  updatedValues: z.number(),
+  sectionStatus: z.nativeEnum(AssessmentSectionStatus),
+  assessmentFormStatus: z.nativeEnum(AssessmentStatus)
+})
+
+export type UpdateAssessmentValuesBodyType = z.infer<typeof UpdateAssessmentValuesBodySchema>
+export type UpdateAssessmentValuesResType = z.infer<typeof UpdateAssessmentValuesResSchema>
+
+// ===== CONFIRM ASSESSMENT PARTICIPATION SCHEMAS =====
+
+export const ConfirmAssessmentParticipationResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  assessmentFormId: z.string().uuid(),
+  traineeId: z.string().uuid(),
+  confirmedAt: z.coerce.date(),
+  status: z.nativeEnum(AssessmentStatus),
+  previousStatus: z.nativeEnum(AssessmentStatus)
+})
+
+export type ConfirmAssessmentParticipationResType = z.infer<typeof ConfirmAssessmentParticipationResSchema>
+
+// ===== APPROVE/REJECT ASSESSMENT SCHEMAS =====
+
+export const ApproveRejectAssessmentBodySchema = z.object({
+  action: z.enum(['APPROVED', 'REJECTED'], {
+    message: 'Action must be either APPROVED or REJECTED'
+  }),
+  comment: z.string()
+    .max(1000, 'Comment must not exceed 1000 characters')
+    .optional()
+})
+
+export const ApproveRejectAssessmentResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    assessmentFormId: z.string().uuid(),
+    status: z.nativeEnum(AssessmentStatus),
+    previousStatus: z.nativeEnum(AssessmentStatus),
+    comment: z.string().nullable(),
+    approvedById: z.string().uuid().nullable(),
+    approvedAt: z.coerce.date().nullable(),
+    processedAt: z.coerce.date(),
+    processedBy: z.string().uuid()
+  })
+})
+
+export type ApproveRejectAssessmentBodyType = z.infer<typeof ApproveRejectAssessmentBodySchema>
+export type ApproveRejectAssessmentResType = z.infer<typeof ApproveRejectAssessmentResSchema>

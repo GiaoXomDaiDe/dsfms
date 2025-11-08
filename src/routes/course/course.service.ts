@@ -1,18 +1,29 @@
 import { Injectable } from '@nestjs/common'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { CourseStatus } from '~/shared/constants/course.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
-import { PrismaService } from '~/shared/services/prisma.service'
 import {
+  CannotAssignExaminerToArchivedCourseException,
+  CourseAlreadyArchivedException,
+  CourseCannotBeArchivedFromCurrentStatusException,
   CourseCodeAlreadyExistsException,
+  CourseDateRangeViolationException,
+  CourseExaminerAlreadyAssignedException,
   CourseNotFoundException,
+  CourseTrainerAlreadyAssignedException,
+  CourseTrainerAssignmentNotFoundException,
   DepartmentNotFoundException,
   OnlyAcademicDepartmentCanCreateCourseException,
   OnlyAcademicDepartmentCanDeleteCourseException,
   OnlyAcademicDepartmentCanUpdateCourseException
 } from './course.error'
 import {
+  AssignCourseExaminerBodyType,
+  AssignCourseExaminerResType,
+  AssignCourseTrainerBodyType,
+  AssignCourseTrainerResType,
   CreateCourseBodyType,
   CreateCourseResType,
   GetCourseParamsType,
@@ -22,7 +33,9 @@ import {
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
-  UpdateCourseResType
+  UpdateCourseResType,
+  UpdateCourseTrainerAssignmentBodyType,
+  UpdateCourseTrainerAssignmentResType
 } from './course.model'
 import { CourseRepo } from './course.repo'
 
@@ -30,8 +43,7 @@ import { CourseRepo } from './course.repo'
 export class CourseService {
   constructor(
     private readonly courseRepo: CourseRepo,
-    private readonly sharedDepartmentRepo: SharedDepartmentRepository,
-    private readonly prisma: PrismaService
+    private readonly sharedDepartmentRepo: SharedDepartmentRepository
   ) {}
 
   async list({
@@ -64,7 +76,7 @@ export class CourseService {
       throw OnlyAcademicDepartmentCanCreateCourseException
     }
 
-    const department = await this.sharedDepartmentRepo.findById(data.departmentId, {
+    const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
       includeDeleted: false
     })
 
@@ -124,12 +136,34 @@ export class CourseService {
     }
 
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
-      const department = await this.sharedDepartmentRepo.findById(data.departmentId, {
+      const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
         includeDeleted: false
       })
 
       if (!department) {
         throw DepartmentNotFoundException
+      }
+    }
+
+    if (existingCourse.subjects && existingCourse.subjects.length > 0) {
+      const newCourseStart = data.startDate ?? existingCourse.startDate
+      const newCourseEnd = data.endDate ?? existingCourse.endDate
+
+      const violations = existingCourse.subjects.filter((subject) => {
+        const outsideStartDate = newCourseStart && subject.startDate < newCourseStart
+        const outsideEndDate = newCourseEnd && subject.endDate > newCourseEnd
+        return outsideStartDate || outsideEndDate
+      })
+
+      if (violations.length > 0) {
+        throw CourseDateRangeViolationException(
+          violations.map((item) => ({
+            subjectId: item.id,
+            subjectName: item.name,
+            subjectStart: item.startDate,
+            subjectEnd: item.endDate
+          }))
+        )
       }
     }
 
@@ -162,7 +196,17 @@ export class CourseService {
       throw OnlyAcademicDepartmentCanDeleteCourseException
     }
 
-    await this.courseRepo.archive({ id, deletedById })
+    const courseStatus = existingCourse.status as string
+
+    if (courseStatus === CourseStatus.ARCHIVED) {
+      throw CourseAlreadyArchivedException
+    }
+
+    if (courseStatus !== CourseStatus.PLANNED && courseStatus !== CourseStatus.ON_GOING) {
+      throw CourseCannotBeArchivedFromCurrentStatusException
+    }
+
+    await this.courseRepo.archive({ id, deletedById, status: courseStatus })
 
     return { message: 'Course archived successfully' }
   }
@@ -190,6 +234,130 @@ export class CourseService {
         cancelledCount: result.cancelledCount,
         notCancelledCount: result.notCancelledCount
       }
+    }
+  }
+
+  async assignTrainerToCourse({
+    courseId,
+    data
+  }: {
+    courseId: string
+    data: AssignCourseTrainerBodyType
+  }): Promise<AssignCourseTrainerResType> {
+    const course = await this.courseRepo.findById(courseId)
+
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: data.trainerUserId
+    })
+
+    if (exists) {
+      throw CourseTrainerAlreadyAssignedException
+    }
+
+    try {
+      return await this.courseRepo.assignTrainerToCourse({
+        courseId,
+        trainerUserId: data.trainerUserId,
+        roleInSubject: data.roleInSubject
+      })
+    } catch (error) {
+      if (isUniqueConstraintPrismaError(error)) {
+        throw CourseTrainerAlreadyAssignedException
+      }
+
+      throw error
+    }
+  }
+
+  async updateCourseTrainerAssignment({
+    courseId,
+    trainerId,
+    data
+  }: {
+    courseId: string
+    trainerId: string
+    data: UpdateCourseTrainerAssignmentBodyType
+  }): Promise<UpdateCourseTrainerAssignmentResType> {
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw CourseTrainerAssignmentNotFoundException
+    }
+
+    return await this.courseRepo.updateCourseTrainerAssignment({
+      courseId,
+      trainerUserId: trainerId,
+      newRoleInSubject: data.roleInSubject
+    })
+  }
+
+  async removeTrainerFromCourse({
+    courseId,
+    trainerId
+  }: {
+    courseId: string
+    trainerId: string
+  }): Promise<MessageResType> {
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw CourseTrainerAssignmentNotFoundException
+    }
+
+    await this.courseRepo.removeTrainerFromCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    return { message: 'Trainer removed successfully' }
+  }
+
+  async assignExaminerToCourse({
+    courseId,
+    data
+  }: {
+    courseId: string
+    data: AssignCourseExaminerBodyType
+  }): Promise<AssignCourseExaminerResType> {
+    const course = await this.courseRepo.findById(courseId, { includeDeleted: true })
+
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    if ((course.status as string) === CourseStatus.ARCHIVED) {
+      throw CannotAssignExaminerToArchivedCourseException
+    }
+
+    try {
+      const assignment = await this.courseRepo.assignExaminerToCourse({
+        courseId,
+        trainerUserId: data.trainerUserId,
+        roleInSubject: data.roleInSubject,
+        subjectId: data.subjectId
+      })
+
+      return {
+        message: 'Assigned examiner successfully',
+        data: assignment
+      }
+    } catch (error) {
+      if (isUniqueConstraintPrismaError(error)) {
+        throw CourseExaminerAlreadyAssignedException
+      }
+
+      throw error
     }
   }
 }

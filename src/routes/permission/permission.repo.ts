@@ -6,35 +6,42 @@ import {
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 @SerializeAll()
 export class PermissionRepo {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly sharedUserRepository: SharedUserRepository
-  ) {}
-  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}) {
-    const whereClause = this.sharedUserRepository.buildListFilters({ includeDeleted })
+  constructor(private readonly prisma: PrismaService) {}
+  async list(options: { excludeModules?: string[] } = {}) {
+    const { excludeModules = [] } = options
 
-    const [totalItems, permissions] = await Promise.all([
-      this.prisma.permission.count({
-        where: whereClause
-      }),
-      this.prisma.permission.findMany({
-        where: whereClause
-      })
-    ])
+    const permissions = await this.prisma.permission.findMany()
+
+    const normalizeModuleName = (value: string) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+
+    const excludedModuleNames = new Set(
+      excludeModules
+        .filter((moduleName) => typeof moduleName === 'string')
+        .map((moduleName) => normalizeModuleName(moduleName))
+        .filter((moduleName) => moduleName.length > 0)
+    )
 
     const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
       const rawModuleName = permission.viewModule ?? permission.module ?? ''
       const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
+      const normalizedModuleName = normalizeModuleName(moduleName)
+
+      if (excludedModuleNames.has(normalizedModuleName)) return acc
+
       const rawPermissionName = permission.viewName ?? permission.name ?? ''
       const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : permission.name
 
-      let moduleEntry = acc.find((entry) => entry.module.name === moduleName)
+      let moduleEntry = acc.find((entry) => normalizeModuleName(entry.module.name) === normalizedModuleName)
       if (!moduleEntry) {
         moduleEntry = {
           module: {
@@ -46,29 +53,29 @@ export class PermissionRepo {
       }
 
       moduleEntry.module.listPermissions.push({
-        permissionId: permission.id,
+        id: permission.id,
         name: permissionName
       })
 
       return acc
     }, [])
 
+    const totalItems = grouped.reduce((sum, item) => sum + item.module.listPermissions.length, 0)
+
     return {
-      data: grouped,
+      modules: grouped,
       totalItems
     }
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<PermissionType | null> {
-    const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
-
-    return this.prisma.permission.findUnique({
-      where: whereClause
+  async findById(id: string): Promise<PermissionType | null> {
+    return this.prisma.permission.findFirst({
+      where: {
+        id
+      }
     })
   }
+
   async create({
     data,
     createdById
@@ -88,7 +95,8 @@ export class PermissionRepo {
     return await this.prisma.permission.update({
       where: {
         id,
-        deletedAt: null
+        deletedAt: null,
+        isActive: true
       },
       data: {
         ...data,
@@ -116,7 +124,8 @@ export class PermissionRepo {
       : this.prisma.permission.update({
           where: {
             id,
-            deletedAt: null
+            deletedAt: null,
+            isActive: true
           },
           data: {
             deletedAt: new Date(),
@@ -130,7 +139,8 @@ export class PermissionRepo {
     return this.prisma.permission.update({
       where: {
         id,
-        deletedAt: { not: null }
+        deletedAt: { not: null },
+        isActive: false
       },
       data: {
         deletedAt: null,

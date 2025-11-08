@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import {
   CreateTraineeProfileType,
   CreateTrainerProfileType,
@@ -10,35 +11,126 @@ import { GetUserProfileResType, UpdateUserInternalType, UserType } from '~/route
 import { RoleName } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
-import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 export type WhereUniqueUserType = { id: string } | { email: string }
+type UserWithRoleAndDepartment = Prisma.UserGetPayload<{
+  select: {
+    id: true
+    eid: true
+    firstName: true
+    lastName: true
+    middleName: true
+    address: true
+    email: true
+    status: true
+    gender: true
+    phoneNumber: true
+    avatarUrl: true
+    createdById: true
+    updatedById: true
+    deletedById: true
+    deletedAt: true
+    createdAt: true
+    updatedAt: true
+    role: {
+      select: {
+        id: true
+        name: true
+      }
+    }
+    department: {
+      select: {
+        id: true
+        name: true
+      }
+    }
+  }
+}>
+type TrainerSummary = Prisma.UserGetPayload<{
+  select: {
+    id: true
+    eid: true
+    firstName: true
+    lastName: true
+    email: true
+    departmentId: true
+  }
+}>
+type TraineeIdLookup = Prisma.UserGetPayload<{
+  select: {
+    id: true
+    eid: true
+  }
+}>
+export type AssignmentUserForSubject = Prisma.UserGetPayload<{
+  select: {
+    id: true
+    eid: true
+    firstName: true
+    lastName: true
+    email: true
+    deletedAt: true
+    role: {
+      select: {
+        name: true
+      }
+    }
+    department: {
+      select: {
+        id: true
+        name: true
+      }
+    }
+  }
+}>
+type BasicUserInfoWithDepartment = Prisma.UserGetPayload<{
+  select: {
+    id: true
+    eid: true
+    firstName: true
+    lastName: true
+    email: true
+    department: {
+      select: {
+        id: true
+        name: true
+      }
+    }
+  }
+}>
+
+const roleDetailSelect = {
+  id: true,
+  name: true,
+  description: true,
+  isActive: true
+} satisfies Prisma.RoleSelect
+
+const departmentDetailSelect = {
+  id: true,
+  name: true,
+  isActive: true
+} satisfies Prisma.DepartmentSelect
+
+const userProfileInclude = {
+  role: {
+    select: roleDetailSelect
+  },
+  department: {
+    select: departmentDetailSelect
+  },
+  trainerProfile: true,
+  traineeProfile: true
+} satisfies Prisma.UserInclude
 @Injectable()
 @SerializeAll()
 export class SharedUserRepository {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly sharedRoleRepo: SharedRoleRepository,
     private readonly eidService: EidService
   ) {}
-
-  buildListFilters({
-    includeDeleted = false,
-    extend
-  }: {
-    includeDeleted?: boolean
-    extend?: (context: { includeDeleted: boolean }) => Record<string, any>
-  } = {}) {
-    const filters: Record<string, any> = includeDeleted ? {} : { deletedAt: null }
-
-    if (extend) {
-      Object.assign(filters, extend({ includeDeleted }))
-    }
-
-    return filters
-  }
 
   findUnique(
     where: WhereUniqueUserType,
@@ -51,35 +143,180 @@ export class SharedUserRepository {
       }
     })
   }
-
-  async findUniqueIncludeProfile(
-    where: WhereUniqueUserType,
+  async findFirstWithRoleAndDepartment(
+    where: Prisma.UserWhereInput,
     { includeDeleted = false }: IncludeDeletedQueryType = {}
-  ): Promise<GetUserProfileResType | null> {
-    const user = await this.prismaService.user.findFirst({
+  ): Promise<UserWithRoleAndDepartment | null> {
+    return this.prismaService.user.findFirst({
       where: {
         ...where,
         deletedAt: includeDeleted ? undefined : null
       },
-      include: {
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        address: true,
+        email: true,
+        status: true,
+        gender: true,
+        phoneNumber: true,
+        avatarUrl: true,
+        createdById: true,
+        updatedById: true,
+        deletedById: true,
+        deletedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        role: {
+          select: { id: true, name: true }
+        },
+        department: {
+          select: { id: true, name: true }
+        }
+      }
+    })
+  }
+
+  async findAvailableTrainersByDepartment(
+    departmentId: string,
+    excludeUserIds: string[] = []
+  ): Promise<TrainerSummary[]> {
+    return this.prismaService.user.findMany({
+      where: {
+        departmentId,
+        deletedAt: null,
+        role: {
+          name: RoleName.TRAINER
+        },
+        ...(excludeUserIds.length > 0 ? { id: { notIn: excludeUserIds } } : {})
+      },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        departmentId: true
+      }
+    })
+  }
+
+  async findActiveTrainers({ excludeUserIds = [] }: { excludeUserIds?: string[] } = {}): Promise<TrainerSummary[]> {
+    return this.prismaService.user.findMany({
+      where: {
+        deletedAt: null,
+        role: {
+          name: RoleName.TRAINER
+        },
+        ...(excludeUserIds.length > 0 ? { id: { notIn: excludeUserIds } } : {})
+      },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        departmentId: true
+      }
+    })
+  }
+
+  async findActiveTraineesByEids(eids: string[]): Promise<TraineeIdLookup[]> {
+    if (eids.length === 0) {
+      return []
+    }
+
+    return this.prismaService.user.findMany({
+      where: {
+        eid: { in: eids },
+        deletedAt: null,
+        role: {
+          name: RoleName.TRAINEE
+        }
+      },
+      select: {
+        id: true,
+        eid: true
+      }
+    })
+  }
+
+  async findActiveUsersByEids(eids: string[]): Promise<TraineeIdLookup[]> {
+    if (eids.length === 0) {
+      return []
+    }
+
+    return this.prismaService.user.findMany({
+      where: {
+        eid: { in: eids },
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        eid: true
+      }
+    })
+  }
+
+  async findUsersForAssignment(userIds: string[]): Promise<AssignmentUserForSubject[]> {
+    if (userIds.length === 0) {
+      return []
+    }
+
+    return this.prismaService.user.findMany({
+      where: {
+        id: { in: userIds }
+      },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        deletedAt: true,
         role: {
           select: {
-            id: true,
-            name: true,
-            description: true,
-            isActive: true
+            name: true
           }
         },
         department: {
           select: {
             id: true,
-            name: true,
-            isActive: true
+            name: true
           }
-        },
-        trainerProfile: true,
-        traineeProfile: true
+        }
       }
+    })
+  }
+
+  async findBasicInfoWithDepartmentById(userId: string): Promise<BasicUserInfoWithDepartment | null> {
+    return this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    })
+  }
+
+  async findUniqueIncludeProfile(id: string): Promise<GetUserProfileResType | null> {
+    const user = await this.prismaService.user.findFirst({
+      where: {
+        id
+      },
+      include: userProfileInclude
     })
     return user
   }
@@ -347,13 +584,6 @@ export class SharedUserRepository {
     })
   }
 
-  /**
-   * Tìm department head hiện tại của một department
-   * Business rule: Mỗi department chỉ có 1 department head
-   * @param departmentId - ID của department cần kiểm tra
-   * @param excludeUserId - ID của user cần loại trừ (dùng cho update case)
-   * @returns User hoặc null nếu không tìm thấy
-   */
   async findDepartmentHeadByDepartment({
     departmentId,
     excludeUserId
@@ -366,7 +596,8 @@ export class SharedUserRepository {
         departmentId,
         role: {
           name: RoleName.DEPARTMENT_HEAD,
-          deletedAt: null
+          deletedAt: null,
+          isActive: true
         },
         deletedAt: null,
         ...(excludeUserId && { id: { not: excludeUserId } })

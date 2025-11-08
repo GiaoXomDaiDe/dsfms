@@ -1,11 +1,28 @@
 import { Injectable } from '@nestjs/common'
-import { SubjectEnrollmentStatus } from '@prisma/client'
+import { SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
+import {
+  SubjectNotFoundException,
+  TrainerBelongsToAnotherDepartmentException,
+  TrainerNotFoundException
+} from '~/routes/subject/subject.error'
+import { RoleName } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
+import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
+  CannotArchiveCourseWithActiveSubjectsException,
+  CannotArchiveCourseWithNonCancelledEnrollmentsException,
+  CannotAssignExaminerToArchivedCourseException,
+  CourseExaminerAlreadyAssignedException,
+  CourseExaminerAlreadyAssignedForSubjectException,
+  CourseNotFoundException
+} from './course.error'
+import {
+  AssignCourseTrainerResType,
+  CourseExaminerAssignmentType,
   CourseTraineeInfoType,
   CourseType,
   CreateCourseBodyType,
@@ -15,7 +32,8 @@ import {
   GetCoursesResType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
-  UpdateCourseResType
+  UpdateCourseResType,
+  UpdateCourseTrainerAssignmentResType
 } from './course.model'
 
 @Injectable()
@@ -152,7 +170,7 @@ export class CourseRepo {
 
     if (!course) return null
 
-    const [traineeCount, trainerCount] = await Promise.all([
+    const [traineeCount, courseInstructorRecords, subjectInstructorRecords] = await Promise.all([
       this.prisma.subjectEnrollment
         .findMany({
           where: {
@@ -167,21 +185,115 @@ export class CourseRepo {
           distinct: ['traineeUserId']
         })
         .then((enrollments) => enrollments.length),
-      this.prisma.subjectInstructor
-        .findMany({
-          where: {
-            subject: {
-              courseId: id,
-              deletedAt: null
+      this.prisma.courseInstructor.findMany({
+        where: {
+          courseId: id
+        },
+        select: {
+          trainerUserId: true,
+          courseId: true,
+          roleInAssessment: true,
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true
+            }
+          }
+        }
+      }),
+      this.prisma.subjectInstructor.findMany({
+        where: {
+          subject: {
+            courseId: id,
+            deletedAt: null
+          }
+        },
+        select: {
+          trainerUserId: true,
+          subjectId: true,
+          roleInAssessment: true,
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true
             }
           },
-          select: {
-            trainerUserId: true
-          },
-          distinct: ['trainerUserId']
-        })
-        .then((instructors) => instructors.length)
+          subject: {
+            select: {
+              id: true,
+              courseId: true,
+              code: true,
+              name: true,
+              status: true,
+              startDate: true,
+              endDate: true
+            }
+          }
+        }
+      })
     ])
+
+    const trainerIds = new Set<string>([
+      ...courseInstructorRecords.map((record) => record.trainerUserId),
+      ...subjectInstructorRecords.map((record) => record.trainerUserId)
+    ])
+
+    const courseExaminers = [
+      ...courseInstructorRecords.map((record) => ({
+        trainer: {
+          id: record.trainer.id,
+          eid: record.trainer.eid,
+          firstName: record.trainer.firstName,
+          middleName: record.trainer.middleName,
+          lastName: record.trainer.lastName,
+          email: record.trainer.email,
+          phoneNumber: record.trainer.phoneNumber,
+          status: record.trainer.status
+        },
+        role: record.roleInAssessment,
+        scope: 'COURSE' as const,
+        subject: null,
+        assignedAt: null
+      })),
+      ...subjectInstructorRecords.map((record) => ({
+        trainer: {
+          id: record.trainer.id,
+          eid: record.trainer.eid,
+          firstName: record.trainer.firstName,
+          middleName: record.trainer.middleName,
+          lastName: record.trainer.lastName,
+          email: record.trainer.email,
+          phoneNumber: record.trainer.phoneNumber,
+          status: record.trainer.status
+        },
+        role: record.roleInAssessment,
+        scope: record.subject?.courseId === id ? ('SUBJECT' as const) : ('CROSS_SUBJECT' as const),
+        subject: record.subject
+          ? {
+              id: record.subject.id,
+              courseId: record.subject.courseId,
+              code: record.subject.code,
+              name: record.subject.name,
+              status: record.subject.status,
+              startDate: record.subject.startDate,
+              endDate: record.subject.endDate
+            }
+          : null,
+        assignedAt: null
+      }))
+    ]
 
     const { subjects, _count, ...courseData } = course
 
@@ -189,8 +301,9 @@ export class CourseRepo {
       ...courseData,
       subjectCount: _count.subjects,
       traineeCount,
-      trainerCount,
-      subjects
+      trainerCount: trainerIds.size,
+      subjects,
+      courseExaminers
     }
   }
 
@@ -255,15 +368,108 @@ export class CourseRepo {
     })
   }
 
-  async archive({ id, deletedById }: { id: string; deletedById: string }): Promise<CourseType> {
+  async archive({ id, deletedById, status }: { id: string; deletedById: string; status: string }): Promise<CourseType> {
+    const now = new Date()
+
+    if (status === CourseStatus.PLANNED) {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.subjectEnrollment.updateMany({
+          where: {
+            subject: {
+              courseId: id
+            },
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          },
+          data: {
+            status: SubjectEnrollmentStatus.CANCELLED,
+            updatedAt: now
+          }
+        })
+
+        await tx.subject.updateMany({
+          where: {
+            courseId: id,
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
+          },
+          data: {
+            status: SubjectStatus.ARCHIVED,
+            deletedAt: now,
+            deletedById,
+            updatedAt: now,
+            updatedById: deletedById
+          }
+        })
+
+        return tx.course.update({
+          where: { id },
+          data: {
+            deletedAt: now,
+            deletedById,
+            status: CourseStatus.ARCHIVED,
+            updatedById: deletedById,
+            updatedAt: now
+          }
+        })
+      })
+    }
+
+    if (status === CourseStatus.ON_GOING) {
+      return await this.prisma.$transaction(async (tx) => {
+        const activeSubjectCount = await tx.subject.count({
+          where: {
+            courseId: id,
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
+          }
+        })
+
+        if (activeSubjectCount > 0) {
+          throw CannotArchiveCourseWithActiveSubjectsException
+        }
+
+        const activeEnrollmentCount = await tx.subjectEnrollment.count({
+          where: {
+            subject: {
+              courseId: id
+            },
+            status: {
+              not: SubjectEnrollmentStatus.CANCELLED
+            }
+          }
+        })
+
+        if (activeEnrollmentCount > 0) {
+          throw CannotArchiveCourseWithNonCancelledEnrollmentsException
+        }
+
+        return tx.course.update({
+          where: { id },
+          data: {
+            deletedAt: now,
+            deletedById,
+            status: CourseStatus.ARCHIVED,
+            updatedById: deletedById,
+            updatedAt: now
+          }
+        })
+      })
+    }
+
     return this.prisma.course.update({
       where: { id },
       data: {
-        deletedAt: new Date(),
+        deletedAt: now,
         deletedById,
         status: CourseStatus.ARCHIVED,
         updatedById: deletedById,
-        updatedAt: new Date()
+        updatedAt: now
       }
     })
   }
@@ -305,6 +511,396 @@ export class CourseRepo {
     })
 
     return { cancelledCount, notCancelledCount }
+  }
+
+  async assignExaminerToCourse({
+    courseId,
+    trainerUserId,
+    roleInSubject,
+    subjectId
+  }: {
+    courseId: string
+    trainerUserId: string
+    roleInSubject: SubjectInstructorRoleValue
+    subjectId?: string
+  }): Promise<CourseExaminerAssignmentType> {
+    return this.prisma.$transaction(async (tx) => {
+      const course = await tx.course.findFirst({
+        where: {
+          id: courseId,
+          deletedAt: null
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          departmentId: true,
+          department: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      })
+
+      if (!course) {
+        throw CourseNotFoundException
+      }
+
+      if (course.status === CourseStatus.ARCHIVED) {
+        throw CannotAssignExaminerToArchivedCourseException
+      }
+
+      let subject: {
+        id: string
+        courseId: string
+        code: string
+        name: string
+        status: SubjectStatus
+        startDate: Date
+        endDate: Date
+      } | null = null
+
+      if (subjectId) {
+        subject = await tx.subject.findFirst({
+          where: {
+            id: subjectId,
+            deletedAt: null
+          },
+          select: {
+            id: true,
+            courseId: true,
+            code: true,
+            name: true,
+            status: true,
+            startDate: true,
+            endDate: true
+          }
+        })
+
+        if (!subject) {
+          throw SubjectNotFoundException
+        }
+
+        const existingSubjectAssignment = await tx.subjectInstructor.findUnique({
+          where: {
+            trainerUserId_subjectId: {
+              trainerUserId,
+              subjectId
+            }
+          }
+        })
+
+        if (existingSubjectAssignment) {
+          throw CourseExaminerAlreadyAssignedForSubjectException
+        }
+      } else {
+        const existingCourseAssignment = await tx.courseInstructor.findUnique({
+          where: {
+            trainerUserId_courseId: {
+              trainerUserId,
+              courseId
+            }
+          }
+        })
+
+        if (existingCourseAssignment) {
+          throw CourseExaminerAlreadyAssignedException
+        }
+      }
+
+      const trainer = await tx.user.findFirst({
+        where: {
+          id: trainerUserId,
+          deletedAt: null,
+          role: {
+            name: RoleName.TRAINER
+          }
+        },
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          status: true,
+          departmentId: true
+        }
+      })
+
+      if (!trainer) {
+        throw TrainerNotFoundException
+      }
+
+      if (trainer.departmentId && trainer.departmentId !== course.departmentId) {
+        throw TrainerBelongsToAnotherDepartmentException
+      }
+
+      if (!trainer.departmentId) {
+        await tx.user.update({
+          where: { id: trainerUserId },
+          data: {
+            departmentId: course.departmentId
+          }
+        })
+      }
+
+      const assignmentTimestamp = new Date()
+
+      if (subjectId) {
+        await tx.subjectInstructor.create({
+          data: {
+            trainerUserId,
+            subjectId,
+            roleInAssessment: roleInSubject as any
+          }
+        })
+      } else {
+        await tx.courseInstructor.create({
+          data: {
+            trainerUserId,
+            courseId,
+            roleInAssessment: roleInSubject as any
+          }
+        })
+      }
+
+      return {
+        trainer: {
+          id: trainer.id,
+          eid: trainer.eid,
+          firstName: trainer.firstName,
+          middleName: trainer.middleName,
+          lastName: trainer.lastName,
+          email: trainer.email,
+          phoneNumber: trainer.phoneNumber,
+          status: trainer.status
+        },
+        course: {
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          status: course.status,
+          startDate: course.startDate,
+          endDate: course.endDate
+        },
+        subject: subject
+          ? {
+              id: subject.id,
+              courseId: subject.courseId,
+              code: subject.code,
+              name: subject.name,
+              status: subject.status,
+              startDate: subject.startDate,
+              endDate: subject.endDate
+            }
+          : null,
+        role: roleInSubject,
+        assignedAt: assignmentTimestamp
+      }
+    })
+  }
+
+  async assignTrainerToCourse({
+    courseId,
+    trainerUserId,
+    roleInSubject
+  }: {
+    courseId: string
+    trainerUserId: string
+    roleInSubject: SubjectInstructorRoleValue
+  }): Promise<AssignCourseTrainerResType> {
+    return this.prisma.$transaction(async (tx) => {
+      const course = await tx.course.findFirst({
+        where: {
+          id: courseId,
+          deletedAt: null,
+          status: {
+            not: CourseStatus.ARCHIVED
+          }
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          departmentId: true
+        }
+      })
+
+      if (!course) {
+        throw CourseNotFoundException
+      }
+
+      const trainer = await tx.user.findFirst({
+        where: {
+          id: trainerUserId,
+          deletedAt: null,
+          role: {
+            name: RoleName.TRAINER
+          }
+        },
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          phoneNumber: true,
+          status: true,
+          departmentId: true
+        }
+      })
+
+      if (!trainer) {
+        throw TrainerNotFoundException
+      }
+
+      if (trainer.departmentId && trainer.departmentId !== course.departmentId) {
+        throw TrainerBelongsToAnotherDepartmentException
+      }
+
+      if (!trainer.departmentId && course.departmentId) {
+        await tx.user.update({
+          where: { id: trainerUserId },
+          data: {
+            departmentId: course.departmentId
+          }
+        })
+      }
+
+      const assignment = await tx.courseInstructor.create({
+        data: {
+          trainerUserId,
+          courseId,
+          roleInAssessment: roleInSubject as any
+        },
+        include: {
+          trainer: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              status: true
+            }
+          }
+        }
+      })
+
+      return {
+        trainer: assignment.trainer,
+        course: {
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          status: course.status,
+          startDate: course.startDate,
+          endDate: course.endDate
+        },
+        role: assignment.roleInAssessment as SubjectInstructorRoleValue
+      }
+    })
+  }
+
+  async updateCourseTrainerAssignment({
+    courseId,
+    trainerUserId,
+    newRoleInSubject
+  }: {
+    courseId: string
+    trainerUserId: string
+    newRoleInSubject: SubjectInstructorRoleValue
+  }): Promise<UpdateCourseTrainerAssignmentResType> {
+    const assignment = await this.prisma.courseInstructor.update({
+      where: {
+        trainerUserId_courseId: {
+          trainerUserId,
+          courseId
+        }
+      },
+      data: {
+        roleInAssessment: newRoleInSubject as any
+      },
+      include: {
+        trainer: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true,
+            phoneNumber: true,
+            status: true
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            startDate: true,
+            endDate: true
+          }
+        }
+      }
+    })
+
+    return {
+      trainer: assignment.trainer,
+      course: assignment.course,
+      role: assignment.roleInAssessment as SubjectInstructorRoleValue
+    }
+  }
+
+  async removeTrainerFromCourse({
+    courseId,
+    trainerUserId
+  }: {
+    courseId: string
+    trainerUserId: string
+  }): Promise<void> {
+    await this.prisma.courseInstructor.delete({
+      where: {
+        trainerUserId_courseId: {
+          trainerUserId,
+          courseId
+        }
+      }
+    })
+  }
+
+  async isTrainerAssignedToCourse({
+    courseId,
+    trainerUserId
+  }: {
+    courseId: string
+    trainerUserId: string
+  }): Promise<boolean> {
+    const assignment = await this.prisma.courseInstructor.findUnique({
+      where: {
+        trainerUserId_courseId: {
+          trainerUserId,
+          courseId
+        }
+      }
+    })
+
+    return !!assignment
   }
 
   private aggregateCourseTrainees(
@@ -352,13 +948,6 @@ export class CourseRepo {
         current.batches.add(enrollment.batchCode)
       }
     }
-
-    console.log(
-      Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
-        ...info,
-        batches: Array.from(batches)
-      }))
-    )
 
     return Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
       ...info,

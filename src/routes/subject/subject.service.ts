@@ -1,44 +1,56 @@
 import { Injectable } from '@nestjs/common'
+import { round } from 'lodash'
 import { RoleName } from '~/shared/constants/auth.constant'
+import { SubjectInstructorRoleValue, SubjectStatus } from '~/shared/constants/subject.constant'
+import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
   isForeignKeyConstraintPrismaError,
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
+import { CourseIdParamsType } from '~/shared/models/shared-course.model'
+import { SubjectIdParamsType, SubjectType } from '~/shared/models/shared-subject.model'
+import { MessageResType } from '~/shared/models/response.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
-import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
-import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
-import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
+import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import {
-  BulkInvalidDateRangeAtIndexException,
   BulkSubjectCodeAlreadyExistsAtIndexException,
   BulkSubjectCreationFailedException,
   CannotCancelSubjectEnrollmentException,
-  CannotEnrollInRecurrentSubjectException,
-  CannotHardDeleteSubjectWithEnrollmentsException,
-  CannotHardDeleteSubjectWithInstructorsException,
+  CourseAtCapacityException,
   CourseNotFoundException,
   DuplicateInstructorException,
   DuplicateTraineeEnrollmentException,
-  InvalidDateRangeException,
   InvalidTraineeSubmissionException,
-  OnlyAcademicDepartmentCanCreateSubjectsException,
-  OnlyAcademicDepartmentCanDeleteSubjectsException,
-  OnlyAcademicDepartmentCanUpdateSubjectsException,
+  SubjectAlreadyArchivedException,
+  SubjectCannotBeArchivedFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
-  SubjectDateOutsideCourseDateRangeException,
+  SubjectDatesOutsideCourseRangeException,
+  SubjectEnrollmentWindowClosedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
 } from './subject.error'
 import {
+  AssignTraineesBodyType,
+  AssignTraineesResType,
+  AssignTrainerBodyType,
+  AssignTrainerResType,
   BulkCreateSubjectsBodyType,
   BulkCreateSubjectsResType,
+  CancelSubjectEnrollmentBodyType,
   CreateSubjectBodyType,
+  GetAvailableTrainersResType,
   GetSubjectDetailResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
-  SubjectEntityType,
-  UpdateSubjectBodyType
+  GetTraineeEnrollmentsQueryType,
+  GetTraineeEnrollmentsResType,
+  LookupTraineesBodyType,
+  LookupTraineesResType,
+  RemoveEnrollmentsBodyType,
+  RemoveEnrollmentsResType,
+  UpdateSubjectBodyType,
+  UpdateTrainerAssignmentResType
 } from './subject.model'
 import { SubjectRepo } from './subject.repo'
 
@@ -46,10 +58,8 @@ import { SubjectRepo } from './subject.repo'
 export class SubjectService {
   constructor(
     private readonly subjectRepo: SubjectRepo,
-    private readonly sharedDepartmentRepository: SharedDepartmentRepository,
-    private readonly sharedCourseRepository: SharedCourseRepository,
-    private readonly sharedUserRepository: SharedUserRepository,
-    private readonly sharedRoleRepository: SharedRoleRepository
+    private readonly sharedSubjectRepository: SharedSubjectRepository,
+    private readonly sharedCourseRepository: SharedCourseRepository
   ) {}
 
   async list(query: GetSubjectsQueryType, userRoleName: string): Promise<GetSubjectsResType> {
@@ -61,77 +71,52 @@ export class SubjectService {
     })
   }
 
-  async findById(id: string, { roleName }: { roleName: string }): Promise<GetSubjectDetailResType> {
+  async findById(subjectId: SubjectIdParamsType, { roleName }: { roleName: string }): Promise<GetSubjectDetailResType> {
     const includeDeleted = roleName === RoleName.ACADEMIC_DEPARTMENT
 
-    const subject = await this.subjectRepo.findById(id, { includeDeleted })
+    const subject = await this.subjectRepo.findById(subjectId, { includeDeleted })
     if (!subject) {
       throw SubjectNotFoundException
     }
 
     return subject
-  } /**
-   * Tạo mới một subject cho course.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
-   * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-   * - Kiểm tra course tồn tại và không bị xóa
-   * - Kiểm tra subject code duy nhất
-   * - Validate date range
-   */
+  }
+
+  async getAvailableTrainers(courseId: CourseIdParamsType): Promise<GetAvailableTrainersResType> {
+    const trainers = await this.subjectRepo.getAvailableTrainers(courseId)
+
+    return trainers
+  }
+
   async create({
-    data,
-    createdById,
-    createdByRoleName
+    data: subject,
+    createdById
   }: {
     data: CreateSubjectBodyType
     createdById: string
-    createdByRoleName: string
-  }): Promise<GetSubjectDetailResType> {
+  }): Promise<SubjectType> {
     try {
-      // Kiểm tra quyền tạo subject
-      this.validateCreatePermissions(createdByRoleName)
-
-      // Kiểm tra course tồn tại (nếu có courseId)
-      let course = null
-      if (data.courseId) {
-        course = await this.sharedCourseRepository.findById(data.courseId)
-        if (!course) {
-          throw CourseNotFoundException
-        }
+      const course = await this.sharedCourseRepository.findById(subject.courseId)
+      if (!course) {
+        throw CourseNotFoundException
       }
 
-      // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-      // Không cần kiểm tra department access
+      this.ensureSubjectWithinCourseRange({
+        courseId: course.id,
+        courseStartDate: course.startDate,
+        courseEndDate: course.endDate,
+        subjectStartDate: subject.startDate,
+        subjectEndDate: subject.endDate
+      })
 
-      // Kiểm tra subject code unique
-      const codeExists = await this.subjectRepo.checkCodeExists(data.code)
-      if (codeExists) {
-        throw SubjectCodeAlreadyExistsException
-      }
+      const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
 
-      // Validate date range
-      this.validateDateRange(data.startDate, data.endDate)
-
-      // Nếu có course, validate subject dates phải nằm trong course dates
-      if (course) {
-        this.validateSubjectDatesWithinCourse(data.startDate, data.endDate, course.startDate, course.endDate)
-      }
-
-      // Tính duration tự động: (endDate - startDate) / 30 ngày
-      const durationInMonths = this.calculateDuration(data.startDate, data.endDate)
-
-      const createdSubject = await this.subjectRepo.createSimple({
-        data: { ...data, duration: durationInMonths },
+      const createdSubject = await this.subjectRepo.create({
+        data: { ...subject, duration: durationInMonths },
         createdById
       })
 
-      // Fetch full subject detail with relations
-      const subjectDetail = await this.subjectRepo.findById(createdSubject.id, { includeDeleted: true })
-      if (!subjectDetail) {
-        throw SubjectNotFoundException
-      }
-
-      return subjectDetail
+      return createdSubject
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw CourseNotFoundException
@@ -143,71 +128,46 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Tạo nhiều subjects cùng lúc cho một course.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền tạo
-   * - ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-   * - Validate từng subject riêng biệt và trả về kết quả chi tiết
-   */
+  @Serialize()
   async bulkCreate({
     data,
-    createdById,
-    createdByRoleName
+    createdById
   }: {
     data: BulkCreateSubjectsBodyType
     createdById: string
-    createdByRoleName: string
   }): Promise<BulkCreateSubjectsResType> {
     const { courseId, subjects } = data
 
-    // Kiểm tra quyền tạo subject
-    this.validateCreatePermissions(createdByRoleName)
-
-    // Kiểm tra course tồn tại
     const course = await this.sharedCourseRepository.findById(courseId)
     if (!course) {
       throw CourseNotFoundException
     }
 
-    // ACADEMIC_DEPARTMENT có thể tạo subject cho bất kỳ course nào
-    // Không cần kiểm tra department access
-
-    const createdSubjects: GetSubjectDetailResType[] = []
-    const failedSubjects: { subject: any; error: string }[] = []
+    const createdSubjects: SubjectType[] = []
+    const failedSubjects: { subject: Omit<CreateSubjectBodyType, 'courseId'>; error: string }[] = []
 
     // Xử lý từng subject
     for (let i = 0; i < subjects.length; i++) {
       const subject = subjects[i]
 
       try {
-        // Kiểm tra subject code unique
-        const codeExists = await this.subjectRepo.checkCodeExists(subject.code)
+        const codeExists = await this.sharedSubjectRepository.checkCodeExists(subject.code, courseId)
         if (codeExists) {
           throw BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code)
         }
 
-        // Validate date range
-        if (subject.startDate && subject.endDate) {
-          const isValidRange = new Date(subject.startDate) < new Date(subject.endDate)
-          if (!isValidRange) {
-            throw BulkInvalidDateRangeAtIndexException(i)
-          }
+        this.ensureSubjectWithinCourseRange({
+          courseId: course.id,
+          courseStartDate: course.startDate,
+          courseEndDate: course.endDate,
+          subjectStartDate: subject.startDate,
+          subjectEndDate: subject.endDate
+        })
 
-          // Validate subject dates nằm trong course dates
-          this.validateSubjectDatesWithinCourse(subject.startDate, subject.endDate, course.startDate, course.endDate)
-        }
-
-        // Tính duration tự động
         const durationInMonths = this.calculateDuration(subject.startDate, subject.endDate)
 
-        // Tạo subject data với courseId và duration
-        const createData: CreateSubjectBodyType = {
-          ...subject,
-          courseId
-        }
-
         const createdSubject = await this.subjectRepo.create({
-          data: { ...createData, duration: durationInMonths },
+          data: { ...subject, courseId, duration: durationInMonths },
           createdById
         })
 
@@ -234,40 +194,22 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Cập nhật thông tin subject.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền update
-   * - ACADEMIC_DEPARTMENT có thể update bất kỳ subject nào
-   * - Kiểm tra subject code unique (nếu thay đổi)
-   * - Validate date range
-   */
   async update({
     id,
     data,
-    updatedById,
-    updatedByRoleName
+    updatedById
   }: {
     id: string
     data: UpdateSubjectBodyType
     updatedById: string
-    updatedByRoleName: string
   }): Promise<GetSubjectDetailResType> {
     try {
-      // Kiểm tra quyền update
-      this.validateUpdatePermissions(updatedByRoleName)
-
-      // Lấy subject hiện tại
-      const existingSubject = await this.subjectRepo.findById(id)
+      const existingSubject = await this.sharedSubjectRepository.findById(id)
       if (!existingSubject) {
         throw SubjectNotFoundException
       }
-
-      // ACADEMIC_DEPARTMENT có thể update bất kỳ subject nào
-      // Không cần kiểm tra department access
-
-      // Validate course mới nếu thay đổi
       let course = null
-      const existingCourseId = existingSubject.course?.id
+      const existingCourseId = existingSubject.courseId
       const finalCourseId = data.courseId || existingCourseId
       if (data.courseId && data.courseId !== existingCourseId) {
         course = await this.sharedCourseRepository.findById(data.courseId)
@@ -283,7 +225,7 @@ export class SubjectService {
 
       // Validate subject code unique nếu thay đổi
       if (data.code && data.code !== existingSubject.code) {
-        const codeExists = await this.subjectRepo.checkCodeExists(data.code, id)
+        const codeExists = await this.sharedSubjectRepository.checkCodeExists(data.code, finalCourseId, id)
         if (codeExists) {
           throw SubjectCodeAlreadyExistsException
         }
@@ -292,12 +234,6 @@ export class SubjectService {
       // Validate date range
       const startDate = data.startDate || existingSubject.startDate
       const endDate = data.endDate || existingSubject.endDate
-      this.validateDateRange(startDate, endDate)
-
-      // Validate subject dates nằm trong course dates (nếu có course)
-      if (course) {
-        this.validateSubjectDatesWithinCourse(startDate, endDate, course.startDate, course.endDate)
-      }
 
       // Tính lại duration nếu dates thay đổi
       const updatedData: UpdateSubjectBodyType & { duration?: number } = { ...data }
@@ -306,7 +242,17 @@ export class SubjectService {
         updatedData.duration = durationInMonths
       }
 
-      const updatedSubject = await this.subjectRepo.updateSimple({ id, data: updatedData, updatedById })
+      if (course) {
+        this.ensureSubjectWithinCourseRange({
+          courseId: course.id,
+          courseStartDate: course.startDate,
+          courseEndDate: course.endDate,
+          subjectStartDate: startDate,
+          subjectEndDate: endDate
+        })
+      }
+
+      const updatedSubject = await this.subjectRepo.update({ id, data: updatedData, updatedById })
       const result = await this.subjectRepo.findById(updatedSubject.id, { includeDeleted: true })
       if (!result) {
         throw SubjectNotFoundException
@@ -326,326 +272,70 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Xóa subject (soft delete hoặc hard delete).
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền xóa
-   * - ACADEMIC_DEPARTMENT có thể xóa bất kỳ subject nào
-   * - Hard delete chỉ được phép nếu không có instructors và enrollments
-   */
-  async delete({
-    id,
-    deletedById,
-    deletedByRoleName,
-    isHard = false
-  }: {
-    id: string
-    deletedById: string
-    deletedByRoleName: string
-    isHard?: boolean
-  }): Promise<SubjectEntityType> {
-    // Kiểm tra quyền xóa
-    this.validateDeletePermissions(deletedByRoleName)
-
-    // Lấy subject hiện tại
-    const existingSubject = await this.subjectRepo.findById(id)
+  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<MessageResType> {
+    const existingSubject = await this.sharedSubjectRepository.findById(id)
     if (!existingSubject) {
       throw SubjectNotFoundException
     }
 
-    // ACADEMIC_DEPARTMENT có thể xóa bất kỳ subject nào
-    // Không cần kiểm tra department access
+    const subjectStatus = existingSubject.status as string
 
-    // Kiểm tra hard delete
-    if (isHard) {
-      await this.validateHardDeleteSafety(id)
+    if (subjectStatus === SubjectStatus.ARCHIVED) {
+      throw SubjectAlreadyArchivedException
     }
 
-    return await this.subjectRepo.delete({ id, deletedById, isHard })
-  }
-
-  /**
-   * Archive subject bằng cách đổi status sang ARCHIVED.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền archive
-   * - ACADEMIC_DEPARTMENT có thể archive bất kỳ subject nào
-   */
-  async archive({
-    id,
-    archivedById,
-    archivedByRoleName
-  }: {
-    id: string
-    archivedById: string
-    archivedByRoleName: string
-  }): Promise<GetSubjectDetailResType> {
-    // Kiểm tra quyền archive
-    this.validateDeletePermissions(archivedByRoleName) // Sử dụng delete permission vì tương tự
-
-    // Lấy subject hiện tại
-    const existingSubject = await this.subjectRepo.findById(id)
-    if (!existingSubject) {
-      throw SubjectNotFoundException
+    if (subjectStatus !== SubjectStatus.PLANNED && subjectStatus !== SubjectStatus.ON_GOING) {
+      throw SubjectCannotBeArchivedFromCurrentStatusException
     }
 
-    // ACADEMIC_DEPARTMENT có thể archive bất kỳ subject nào
-    // Không cần kiểm tra department access
-
-    // Archive by changing status to ARCHIVED
-    const archivedSubject = await this.subjectRepo.updateSimple({
+    await this.subjectRepo.archive({
       id,
-      data: {},
-      updatedById: archivedById
+      archivedById,
+      status: subjectStatus
     })
 
-    const result = await this.subjectRepo.findById(archivedSubject.id, { includeDeleted: true })
-    if (!result) {
-      throw SubjectNotFoundException
-    }
-    return result
+    return { message: 'Archived subject successfully' }
   }
 
-  /**
-   * Enroll trainees vào subject.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
-   * - Validate tất cả trainees tồn tại và có role TRAINEE
-   */
-  async enrollTrainees({
+  async assignTrainer({
     subjectId,
-    data,
-    roleName
+    data
   }: {
     subjectId: string
-    data: any
-    roleName: string
-  }): Promise<any> {
-    // Kiểm tra quyền
-    this.validateUpdatePermissions(roleName)
-
-    // Kiểm tra subject tồn tại
-    const subject = await this.subjectRepo.findById(subjectId)
+    data: AssignTrainerBodyType
+  }): Promise<AssignTrainerResType> {
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
 
-    // Enroll trainees
-    const result = await this.subjectRepo.enrollTrainees({
-      subjectId,
-      trainees: data.trainees
-    })
-
-    return {
-      success: true,
-      enrolledTrainees: result.enrolledTrainees,
-      duplicateTrainees: result.duplicateTrainees,
-      message: `Successfully enrolled ${result.enrolledTrainees.length} trainees. ${result.duplicateTrainees.length} duplicates skipped.`
-    }
-  }
-
-  /**
-   * Xóa enrollments từ subject.
-   * - Chỉ ACADEMIC_DEPARTMENT mới có quyền
-   */
-  async removeEnrollments({
-    subjectId,
-    data,
-    roleName
-  }: {
-    subjectId: string
-    data: any
-    roleName: string
-  }): Promise<any> {
-    // Kiểm tra quyền
-    this.validateUpdatePermissions(roleName)
-
-    // Kiểm tra subject tồn tại
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    // Xóa enrollments
-    const result = await this.subjectRepo.removeEnrollments({
-      subjectId,
-      traineeEids: data.traineeEids
-    })
-
-    return {
-      success: true,
-      removedTrainees: result.removedTrainees,
-      notFoundTrainees: result.notFoundTrainees,
-      message: `Successfully removed ${result.removedTrainees.length} trainees. ${result.notFoundTrainees.length} not found.`
-    }
-  }
-
-  // =============== PRIVATE HELPER METHODS ===============
-
-  /**
-   * Kiểm tra quyền tạo subject - chỉ ACADEMIC_DEPARTMENT được phép
-   */
-  private validateCreatePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanCreateSubjectsException
-    }
-  }
-
-  /**
-   * Kiểm tra quyền update subject - chỉ ACADEMIC_DEPARTMENT được phép
-   */
-  private validateUpdatePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanUpdateSubjectsException
-    }
-  }
-
-  /**
-   * Kiểm tra quyền xóa subject - chỉ ACADEMIC_DEPARTMENT được phép
-   */
-  private validateDeletePermissions(roleName: string): void {
-    if (roleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanDeleteSubjectsException
-    }
-  }
-
-  /**
-   * Validate date range (end date phải sau start date)
-   */
-  private validateDateRange(startDate?: Date | null, endDate?: Date | null): void {
-    if (startDate && endDate) {
-      if (new Date(startDate) >= new Date(endDate)) {
-        throw InvalidDateRangeException
-      }
-    }
-  }
-
-  /**
-   * Validate subject dates phải nằm trong khoảng course dates
-   */
-  private validateSubjectDatesWithinCourse(
-    subjectStartDate: Date,
-    subjectEndDate: Date,
-    courseStartDate: Date,
-    courseEndDate: Date
-  ): void {
-    const subStart = new Date(subjectStartDate)
-    const subEnd = new Date(subjectEndDate)
-    const courStart = new Date(courseStartDate)
-    const courEnd = new Date(courseEndDate)
-
-    if (subStart < courStart || subEnd > courEnd) {
-      throw SubjectDateOutsideCourseDateRangeException
-    }
-  }
-
-  /**
-   * Tính duration (số tháng) dựa trên (endDate - startDate) / 30 ngày
-   * Trả về số thập phân với 2 chữ số
-   */
-  private calculateDuration(startDate: Date, endDate: Date): number {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const diffInMs = end.getTime() - start.getTime()
-    const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-    const durationInMonths = diffInDays / 30
-    // Làm tròn 2 chữ số thập phân
-    return Math.round(durationInMonths * 100) / 100
-  }
-
-  /**
-   * Kiểm tra an toàn khi hard delete (không có instructors và enrollments)
-   */
-  private async validateHardDeleteSafety(subjectId: string): Promise<void> {
-    // Kiểm tra enrollments
-    const enrollmentCount = await this.subjectRepo.countEnrollments(subjectId)
-    if (enrollmentCount > 0) {
-      throw CannotHardDeleteSubjectWithEnrollmentsException
-    }
-
-    // Kiểm tra instructors
-    const instructorCount = await this.subjectRepo.countInstructors(subjectId)
-    if (instructorCount > 0) {
-      throw CannotHardDeleteSubjectWithInstructorsException
-    }
-  }
-
-  // ========================================
-  // TRAINER ASSIGNMENT SERVICE METHODS
-  // ========================================
-
-  /**
-   * Get available trainers in a department for a course
-   */
-  async getAvailableTrainers({
-    departmentId,
-    courseId,
-    roleName
-  }: {
-    departmentId: string
-    courseId: string
-    roleName: string
-  }): Promise<any> {
-    const trainers = await this.subjectRepo.getAvailableTrainersInDepartment({
-      departmentId,
-      courseId
-    })
-
-    return {
-      trainers,
-      totalCount: trainers.length
-    }
-  }
-
-  /**
-   * Assign trainer to subject
-   */
-  async assignTrainer({ subjectId, data, roleName }: { subjectId: string; data: any; roleName: string }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
-    // Validate subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
-    }
-
-    // Check if trainer already assigned
-    const alreadyAssigned = await this.subjectRepo.isTrainerAssignedToSubject({
+    const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId,
       trainerUserId: data.trainerUserId
     })
 
-    if (alreadyAssigned) {
+    if (exists) {
       throw DuplicateInstructorException
     }
 
-    // Assign trainer
     const assignment = await this.subjectRepo.assignTrainerToSubject({
       subjectId,
       trainerUserId: data.trainerUserId,
       roleInSubject: data.roleInSubject
     })
 
-    return {
-      message: 'Trainer assigned successfully',
-      data: assignment
-    }
+    return assignment
   }
 
-  /**
-   * Update trainer assignment - Only allows role update
-   * To change trainer or subject, use remove + assign operations
-   */
   async updateTrainerAssignment({
     currentSubjectId,
     currentTrainerId,
-    data,
-    roleName
+    data
   }: {
     currentSubjectId: string
     currentTrainerId: string
-    data: { roleInSubject: any }
-    roleName: string
-  }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
-    // Validate current assignment exists
+    data: { roleInSubject: SubjectInstructorRoleValue }
+  }): Promise<UpdateTrainerAssignmentResType> {
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId: currentSubjectId,
       trainerUserId: currentTrainerId
@@ -655,36 +345,16 @@ export class SubjectService {
       throw TrainerAssignmentNotFoundException
     }
 
-    // Update only the role - no trainer or subject change allowed
     const updated = await this.subjectRepo.updateTrainerAssignment({
       currentSubjectId,
-      currentTrainerUserId: currentTrainerId,
-      newSubjectId: currentSubjectId, // Keep same subject
-      newTrainerUserId: currentTrainerId, // Keep same trainer
-      newRoleInSubject: data.roleInSubject // Only change role
+      currentTrainerId,
+      newRoleInSubject: data.roleInSubject
     })
 
-    return {
-      message: 'Trainer role updated successfully',
-      data: updated
-    }
+    return updated
   }
 
-  /**
-   * Remove trainer from subject
-   */
-  async removeTrainer({
-    subjectId,
-    trainerId,
-    roleName
-  }: {
-    subjectId: string
-    trainerId: string
-    roleName: string
-  }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
-    // Validate assignment exists
+  async removeTrainer({ subjectId, trainerId }: { subjectId: string; trainerId: string }): Promise<MessageResType> {
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId,
       trainerUserId: trainerId
@@ -699,21 +369,12 @@ export class SubjectService {
       trainerUserId: trainerId
     })
 
-    return {
-      message: 'Trainer removed successfully'
-    }
+    return { message: 'Trainer removed successfully' }
   }
 
-  // ========================================
-  // TRAINEE ASSIGNMENT SERVICE METHODS
-  // ========================================
-
-  /**
-   * Lookup trainees by EID or email
-   */
-  async lookupTrainees({ data }: { data: any }): Promise<any> {
+  async lookupTrainees({ data }: { data: LookupTraineesBodyType }): Promise<LookupTraineesResType> {
     const result = await this.subjectRepo.lookupTrainees({
-      trainees: data.trainees
+      trainees: data.traineesList
     })
 
     return {
@@ -722,50 +383,35 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Assign trainees to subject with comprehensive validation
-   */
   async assignTraineesToSubject({
     subjectId,
-    data,
-    roleName
+    data
   }: {
     subjectId: string
-    data: any
-    roleName: string
-  }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
-    // Validate subject exists
-    const subject = await this.subjectRepo.findById(subjectId)
+    data: AssignTraineesBodyType
+  }): Promise<AssignTraineesResType> {
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
 
-    // // Validation 1: Check course max trainee limit
-    // if (subject.course?.id) {
-    //   const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.course.id)
+    if (subject.startDate) {
+      const now = new Date()
+      const startDate = new Date(subject.startDate)
 
-    //   if (max !== null && current + data.traineeUserIds.length > max) {
-    //     throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
-    //   }
-    // }
+      if (now >= startDate) {
+        throw SubjectEnrollmentWindowClosedException(subject.startDate)
+      }
+    }
+    // Validation 1: Check course max trainee limit
+    if (subject.courseId) {
+      const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.courseId)
 
-    // Validation 2: Check recurrent subject constraints
-    if (subject.type === 'RECURRENT') {
-      for (const traineeId of data.traineeUserIds) {
-        const { canEnroll, reason } = await this.subjectRepo.canEnrollInRecurrentSubject({
-          traineeUserId: traineeId,
-          subjectId
-        })
-
-        if (!canEnroll) {
-          throw CannotEnrollInRecurrentSubjectException(reason)
-        }
+      if (max !== null && current + data.traineeUserIds.length > max) {
+        throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
       }
     }
 
-    // Assign trainees
     const result = await this.subjectRepo.assignTraineesToSubject({
       subjectId,
       traineeUserIds: data.traineeUserIds,
@@ -793,18 +439,19 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Cancel all course enrollments for a trainee in a batch
-   */
+  async getTraineeEnrollments({
+    traineeId,
+    query
+  }: {
+    traineeId: string
+    query: GetTraineeEnrollmentsQueryType
+  }): Promise<GetTraineeEnrollmentsResType> {
+    const { batchCode, status } = query
 
-  /**
-   * Get trainee enrollments
-   */
-  async getTraineeEnrollments({ traineeId, query }: { traineeId: string; query: any }): Promise<any> {
     const result = await this.subjectRepo.getTraineeEnrollments({
       traineeUserId: traineeId,
-      batchCode: query.batchCode,
-      status: query.status
+      batchCode,
+      status
     })
 
     return {
@@ -814,22 +461,41 @@ export class SubjectService {
     }
   }
 
-  /**
-   * Cancel specific subject enrollment
-   */
+  async removeEnrollments({
+    subjectId,
+    data
+  }: {
+    subjectId: string
+    data: RemoveEnrollmentsBodyType
+  }): Promise<RemoveEnrollmentsResType> {
+    // Kiểm tra subject tồn tại
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    const result = await this.subjectRepo.removeEnrollments({
+      subjectId,
+      traineeEids: data.traineeEids
+    })
+
+    return {
+      success: true,
+      removedTrainees: result.removedTrainees,
+      notFoundTrainees: result.notFoundTrainees,
+      message: `Successfully removed ${result.removedTrainees.length} trainees. ${result.notFoundTrainees.length} not found.`
+    }
+  }
+
   async cancelSubjectEnrollment({
     subjectId,
     traineeId,
-    data,
-    roleName
+    data
   }: {
     subjectId: string
     traineeId: string
-    data: any
-    roleName: string
-  }): Promise<any> {
-    this.validateUpdatePermissions(roleName)
-
+    data: CancelSubjectEnrollmentBodyType
+  }): Promise<MessageResType> {
     const success = await this.subjectRepo.cancelSubjectEnrollment({
       subjectId,
       traineeUserId: traineeId,
@@ -840,8 +506,43 @@ export class SubjectService {
       throw CannotCancelSubjectEnrollmentException
     }
 
-    return {
-      message: 'Enrollment cancelled successfully'
+    return { message: 'Enrollment cancelled successfully' }
+  }
+
+  private ensureSubjectWithinCourseRange({
+    courseId,
+    courseStartDate,
+    courseEndDate,
+    subjectStartDate,
+    subjectEndDate
+  }: {
+    courseId: string
+    courseStartDate: Date
+    courseEndDate: Date
+    subjectStartDate: Date
+    subjectEndDate: Date
+  }): void {
+    const subjectStart = new Date(subjectStartDate)
+    const subjectEnd = new Date(subjectEndDate)
+    const courseStart = new Date(courseStartDate)
+    const courseEnd = new Date(courseEndDate)
+
+    if (subjectStart < courseStart || subjectEnd > courseEnd) {
+      throw SubjectDatesOutsideCourseRangeException({
+        courseId,
+        courseStart,
+        courseEnd,
+        subjectStart,
+        subjectEnd
+      })
     }
+  }
+
+  private calculateDuration(startDate: Date, endDate: Date): number {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffInMs = end.getTime() - start.getTime()
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
+    return round(diffInDays / 30, 2)
   }
 }

@@ -4,36 +4,39 @@ import {
   NotFoundPermissionException,
   PermissionAlreadyExistsException
 } from '~/routes/permission/permission.error'
-import { CreatePermissionBodyType, UpdatePermissionBodyType } from '~/routes/permission/permission.model'
+import { PermissionMes } from '~/routes/permission/permission.message'
+import {
+  CreatePermissionBodyType,
+  GetPermissionDetailResType,
+  GetPermissionsResType,
+  UpdatePermissionBodyType
+} from '~/routes/permission/permission.model'
 import { PermissionRepo } from '~/routes/permission/permission.repo'
-import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 
 @Injectable()
 export class PermissionService {
   constructor(private readonly permissionRepo: PermissionRepo) {}
 
-  async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
-    // Chỉ admin mới có thể xem các permission đã bị xóa mềm
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
+  async list({ excludeModules = [] }: { excludeModules?: string[] } = {}): Promise<GetPermissionsResType> {
     return await this.permissionRepo.list({
-      includeDeleted: canViewDeleted ? includeDeleted : false
+      excludeModules
     })
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
-  ) {
-    const canViewDeleted = userRole === RoleName.ADMINISTRATOR
-    const permission = await this.permissionRepo.findById(id, {
-      includeDeleted: canViewDeleted ? includeDeleted : false
-    })
+  async findById(id: string): Promise<GetPermissionDetailResType> {
+    const permission = await this.permissionRepo.findById(id)
     if (!permission) throw NotFoundPermissionException
     return permission
   }
 
-  async create({ data, createdById }: { data: CreatePermissionBodyType; createdById: string }) {
+  async create({
+    data,
+    createdById
+  }: {
+    data: CreatePermissionBodyType
+    createdById: string
+  }): Promise<GetPermissionDetailResType> {
     try {
       return await this.permissionRepo.create({
         createdById,
@@ -45,7 +48,15 @@ export class PermissionService {
     }
   }
 
-  async update({ id, data, updatedById }: { id: string; data: UpdatePermissionBodyType; updatedById: string }) {
+  async update({
+    id,
+    data,
+    updatedById
+  }: {
+    id: string
+    data: UpdatePermissionBodyType
+    updatedById: string
+  }): Promise<GetPermissionDetailResType> {
     try {
       return await this.permissionRepo.update({
         id,
@@ -59,29 +70,28 @@ export class PermissionService {
     }
   }
 
-  async delete({ id, deletedById }: { id: string; deletedById: string }) {
+  async delete({ id, deletedById }: { id: string; deletedById: string }): Promise<{ message: string }> {
     try {
       await this.permissionRepo.delete({
         id,
         deletedById
       })
-      return { message: 'Disable successfully' }
+      return { message: PermissionMes.DELETE_SUCCESS }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
       throw error
     }
   }
 
-  async enable({ id, enabledById }: { id: string; enabledById: string }) {
-    const permission = await this.permissionRepo.findById(id, { includeDeleted: true })
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<{ message: string }> {
+    const permission = await this.permissionRepo.findById(id)
     if (!permission) throw NotFoundPermissionException
 
-    // Business rule: Check if already active
-    if (!permission.deletedAt) throw createPermissionAlreadyActiveError(permission.name)
+    if (!permission.deletedAt && permission.isActive) throw createPermissionAlreadyActiveError(permission.name)
 
     try {
       await this.permissionRepo.enable({ id, enabledById })
-      return { message: 'Enable permission successfully' }
+      return { message: PermissionMes.ENABLE_SUCCESS }
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundPermissionException
       throw error

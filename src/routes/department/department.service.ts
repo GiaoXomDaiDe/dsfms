@@ -1,17 +1,15 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import {
   DepartmentAlreadyActiveException,
   DepartmentAlreadyExistsException,
+  DepartmentHasActiveCoursesException,
+  DepartmentHeadBelongsToAnotherDepartmentException,
   DepartmentHeadMustHaveRoleException,
   DepartmentHeadRoleInactiveException,
   DepartmentHeadUserNotFoundException,
   NotFoundDepartmentException,
-  NoTrainersFoundInDepartmentException,
-  OnlyAdministratorCanEnableDepartmentException,
-  TrainersAlreadyInDepartmentException,
-  TrainersBelongToOtherDepartmentsException,
-  TrainersNotFoundOrInvalidRoleException,
-  TrainersNotInDepartmentException
+  OnlyAdministratorCanEnableDepartmentException
 } from '~/routes/department/department.error'
 import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/department/department.model'
 import { DepartmentRepo } from '~/routes/department/department.repo'
@@ -54,36 +52,97 @@ export class DepartmentService {
   }
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
-    if (data.headUserId) {
-      await this.validateDepartmentHead(data.headUserId)
-    }
+    return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      let validatedHead: { id: string; departmentId: string | null } | null = null
 
-    try {
-      return await this.departmentRepo.create({
-        createdById,
-        data
-      })
-    } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw DepartmentAlreadyExistsException
+      if (data.headUserId) {
+        validatedHead = await this.validateDepartmentHead(data.headUserId)
+        if (validatedHead.departmentId) {
+          throw DepartmentHeadBelongsToAnotherDepartmentException
+        }
       }
+      try {
+        const department = await this.departmentRepo.create(
+          {
+            createdById,
+            data
+          },
+          tx
+        )
 
-      throw error
-    }
+        if (validatedHead && validatedHead.departmentId === null) {
+          await tx.user.update({
+            where: { id: validatedHead.id },
+            data: {
+              departmentId: department.id,
+              updatedById: createdById
+            }
+          })
+        }
+
+        return department
+      } catch (error) {
+        if (isUniqueConstraintPrismaError(error)) {
+          throw DepartmentAlreadyExistsException
+        }
+
+        throw error
+      }
+    })
   }
 
   async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
-    if (data.headUserId) {
-      await this.validateDepartmentHead(data.headUserId)
-    }
-
     try {
-      const department = await this.departmentRepo.update({
-        id,
-        updatedById,
-        data
+      return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const existingDepartment = await tx.department.findUnique({
+          where: {
+            id,
+            deletedAt: null
+          },
+          select: {
+            headUserId: true
+          }
+        })
+
+        if (!existingDepartment) throw NotFoundDepartmentException
+
+        let validatedHead: { id: string; departmentId: string | null } | null = null
+
+        if (data.headUserId) {
+          validatedHead = await this.validateDepartmentHead(data.headUserId, id)
+        }
+
+        const department = await this.departmentRepo.update(
+          {
+            id,
+            updatedById,
+            data
+          },
+          tx
+        )
+
+        if (validatedHead && validatedHead.departmentId === null) {
+          await tx.user.update({
+            where: { id: validatedHead.id },
+            data: {
+              departmentId: null,
+              updatedById
+            }
+          })
+        }
+
+        if (validatedHead && validatedHead.departmentId !== id) {
+          await tx.user.update({
+            where: { id: validatedHead.id },
+            data: {
+              departmentId: id,
+              updatedById
+            }
+          })
+        }
+
+        return department
       })
-      return department
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
         throw NotFoundDepartmentException
@@ -99,6 +158,28 @@ export class DepartmentService {
 
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
     try {
+      const [activeCourseCount, activeSubjectCount] = await Promise.all([
+        this.prisma.course.count({
+          where: {
+            departmentId: id,
+            deletedAt: null
+          }
+        }),
+        this.prisma.subject.count({
+          where: {
+            deletedAt: null,
+            course: {
+              departmentId: id,
+              deletedAt: null
+            }
+          }
+        })
+      ])
+
+      if (activeCourseCount > 0 || activeSubjectCount > 0) {
+        throw DepartmentHasActiveCoursesException
+      }
+
       await this.departmentRepo.delete({
         id,
         deletedById
@@ -181,160 +262,19 @@ export class DepartmentService {
     }
   }
 
-  async addTrainersToDepartment({
-    departmentId,
-    trainerEids,
-    updatedById
-  }: {
-    departmentId: string
-    trainerEids: string[]
-    updatedById: string
-  }) {
-    try {
-      const department = await this.departmentRepo.findById(departmentId)
-      if (!department) {
-        throw NotFoundDepartmentException
-      }
+  private async validateDepartmentHead(headUserId: string, targetDepartmentId?: string) {
+    const user = await this.sharedUserRepo.findUniqueIncludeProfile(headUserId)
 
-      const trainers = await this.prisma.user.findMany({
-        where: {
-          eid: {
-            in: trainerEids
-          },
-          role: {
-            name: RoleName.TRAINER
-          },
-          deletedAt: null
-        }
-      })
-
-      if (trainers.length !== trainerEids.length) {
-        const foundEids = trainers.map((t) => t.eid)
-        const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
-        throw TrainersNotFoundOrInvalidRoleException(notFoundEids)
-      }
-
-      const trainersAlreadyInDepartment = trainers.filter((t) => t.departmentId === departmentId)
-      if (trainersAlreadyInDepartment.length > 0) {
-        const alreadyAssignedEids = trainersAlreadyInDepartment.map((t) => t.eid)
-        throw TrainersAlreadyInDepartmentException(alreadyAssignedEids)
-      }
-
-      const trainersInOtherDepartments = trainers.filter((t) => t.departmentId && t.departmentId !== departmentId)
-      if (trainersInOtherDepartments.length > 0) {
-        const assignedToOtherDeptEids = trainersInOtherDepartments.map((t) => t.eid)
-        throw TrainersBelongToOtherDepartmentsException(assignedToOtherDeptEids)
-      }
-
-      await this.prisma.user.updateMany({
-        where: {
-          id: {
-            in: trainers.map((t) => t.id)
-          }
-        },
-        data: {
-          departmentId,
-          updatedById
-        }
-      })
-
-      return {
-        message: `Successfully added ${trainers.length} trainers to department`,
-        addedTrainers: trainers.map((t) => ({
-          eid: t.eid,
-          name: `${t.firstName} ${t.lastName}`,
-          email: t.email
-        }))
-      }
-    } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundDepartmentException
-      }
-
-      throw error
-    }
-  }
-
-  async removeTrainersFromDepartment({
-    departmentId,
-    trainerEids,
-    updatedById
-  }: {
-    departmentId: string
-    trainerEids: string[]
-    updatedById: string
-  }) {
-    try {
-      const department = await this.departmentRepo.findById(departmentId)
-      if (!department) {
-        throw NotFoundDepartmentException
-      }
-
-      const trainers = await this.prisma.user.findMany({
-        where: {
-          eid: {
-            in: trainerEids
-          },
-          role: {
-            name: RoleName.TRAINER
-          },
-          departmentId,
-          deletedAt: null
-        }
-      })
-
-      if (trainers.length === 0) {
-        throw NoTrainersFoundInDepartmentException
-      }
-
-      if (trainers.length !== trainerEids.length) {
-        const foundEids = trainers.map((t) => t.eid)
-        const notFoundEids = trainerEids.filter((eid) => !foundEids.includes(eid))
-        throw TrainersNotInDepartmentException(notFoundEids)
-      }
-
-      await this.prisma.user.updateMany({
-        where: {
-          id: {
-            in: trainers.map((t) => t.id)
-          }
-        },
-        data: {
-          departmentId: null,
-          updatedById
-        }
-      })
-
-      return {
-        message: `Successfully removed ${trainers.length} trainers from department`,
-        removedTrainers: trainers.map((t) => ({
-          eid: t.eid,
-          name: `${t.firstName} ${t.lastName}`,
-          email: t.email
-        }))
-      }
-    } catch (error) {
-      if (isNotFoundPrismaError(error)) {
-        throw NotFoundDepartmentException
-      }
-
-      throw error
-    }
-  }
-
-  private async validateDepartmentHead(headUserId: string) {
-    const user = await this.sharedUserRepo.findUniqueIncludeProfile({ id: headUserId })
-
-    if (!user) {
-      throw DepartmentHeadUserNotFoundException
+    if (!user) throw DepartmentHeadUserNotFoundException
+    if (user.role.name !== RoleName.DEPARTMENT_HEAD) throw DepartmentHeadMustHaveRoleException
+    if (user.role.isActive === false) throw DepartmentHeadRoleInactiveException
+    if (user.department?.id && user.department?.id !== targetDepartmentId) {
+      throw DepartmentHeadBelongsToAnotherDepartmentException
     }
 
-    if (user.role.name !== RoleName.DEPARTMENT_HEAD) {
-      throw DepartmentHeadMustHaveRoleException
-    }
-
-    if (user.role.isActive === false) {
-      throw DepartmentHeadRoleInactiveException
+    return {
+      id: user.id,
+      departmentId: user.department?.id ?? null
     }
   }
 }

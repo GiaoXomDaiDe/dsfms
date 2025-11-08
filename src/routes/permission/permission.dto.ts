@@ -3,18 +3,16 @@ import {
   CreatePermissionBodySchema,
   GetPermissionDetailResSchema,
   GetPermissionParamsSchema,
-  GetPermissionsQuerySchema,
   GetPermissionsResSchema,
   UpdatePermissionBodySchema
 } from '~/routes/permission/permission.model'
-
-export class GetPermissionsQueryDTO extends createZodDto(GetPermissionsQuerySchema) {}
+import { createResponseDto } from '~/shared/helper'
 
 export class GetPermissionParamsDTO extends createZodDto(GetPermissionParamsSchema) {}
 
-export class GetPermissionsResDTO extends createZodDto(GetPermissionsResSchema) {}
+export class GetPermissionsResDTO extends createResponseDto(GetPermissionsResSchema) {}
 
-export class GetPermissionDetailResDTO extends createZodDto(GetPermissionDetailResSchema) {}
+export class GetPermissionDetailResDTO extends createResponseDto(GetPermissionDetailResSchema) {}
 
 export class CreatePermissionBodyDTO extends createZodDto(CreatePermissionBodySchema) {}
 

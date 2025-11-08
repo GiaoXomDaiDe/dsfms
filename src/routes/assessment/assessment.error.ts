@@ -135,6 +135,16 @@ export const AssessmentAlreadyExistsException = (duplicates: Array<{traineeId: s
     duplicates
   })
 
+export const TraineeAssessmentExistsException = (
+  duplicates: Array<{traineeId: string, traineeName: string, assessmentId: string}>,
+  entityType: 'subject' | 'course'
+) =>
+  new ConflictException({
+    message: `Assessment form already exists for one or more trainees with the same template and occurrence date. Duplicate assessments are not allowed.`,
+    duplicates,
+    entityType
+  })
+
 // ===== PERMISSION ERRORS =====
 
 export const InsufficientPermissionException = new ForbiddenException(
@@ -234,3 +244,80 @@ export const RequiredFieldMissingException = (fieldName: string) =>
       path: fieldName
     }
   ])
+
+// ===== REPOSITORY SPECIFIC ERRORS =====
+
+export const AssessmentSectionNotFoundError = new Error('Assessment section not found')
+
+export const OriginalAssessorOnlyError = new Error('Only the user who originally assessed this section can update the values')
+
+export const SectionDraftStatusOnlyError = new Error('Can only update values for sections in DRAFT status')
+
+export const AssessmentStatusNotAllowedError = new Error('Cannot update values for assessment in this status')
+
+export const TrainerNotAssignedToSubjectError = new Error('Trainer is not assigned to this subject')
+
+export const TrainerNotAssignedToCourseError = new Error('Trainer is not assigned to this course')
+
+export const TraineeNoAssessmentsInSubjectError = new Error('Trainee has no assessments in this subject')
+
+export const TraineeNoAssessmentsInCourseError = new Error('Trainee has no assessments in course')
+
+export const SubjectNotFoundError = new Error('Subject not found')
+
+export const CourseNotFoundError = new Error('Course not found')
+
+export const AccessDeniedError = new Error('Access denied')
+
+export const AssessmentNotReadyToSubmitError = new Error('Assessment is not ready to submit')
+
+export const SubmittableSectionNotCompletedError = new Error('All submittable sections must be completed before submission')
+
+export const OccurrenceDateNotTodayError = new Error('Trainee lock can only be toggled on the occurrence date')
+
+export const TraineeSectionsNotFoundError = new Error('No trainee sections found for this assessment')
+
+// ===== SERVICE SPECIFIC ERRORS =====
+
+export const GetSubjectAssessmentsFailedError = new Error('Failed to get subject assessments')
+
+export const GetCourseAssessmentsFailedError = new Error('Failed to get course assessments')
+
+export const GetAssessmentSectionsFailedError = new Error('Failed to get assessment sections')
+
+export const GetAssessmentSectionFieldsFailedError = new Error('Failed to get assessment section fields')
+
+export const SaveAssessmentValuesFailedError = new Error('Failed to save assessment values')
+
+export const UpdateAssessmentValuesFailedError = new Error('Failed to update assessment values')
+
+export const ToggleTraineeLockFailedError = new Error('Failed to toggle trainee lock')
+
+export const SubmitAssessmentFailedError = new Error('Failed to submit assessment')
+
+export const ConfirmAssessmentParticipationFailedError = new Error('Failed to confirm assessment participation')
+
+// ===== PARTICIPATION CONFIRMATION ERRORS =====
+
+export const OnlyTraineeCanConfirmParticipationError = new ForbiddenException('Only trainees can confirm assessment participation')
+
+export const TraineeNotAssignedToAssessmentError = new ForbiddenException('You can only confirm participation for your own assessments')
+
+export const AssessmentNotInSignaturePendingError = new BadRequestException('Assessment must be in SIGNATURE_PENDING status to confirm participation')
+
+// ===== SECTION PERMISSION ERRORS =====
+
+export const SectionNotAccessibleError = new ForbiddenException('You do not have permission to access this section')
+
+export const SectionEditNotAllowedError = new ForbiddenException('You do not have permission to edit this section')
+
+// ===== VALIDATION ERRORS =====
+
+export const InvalidAssessmentValueIdsError = (invalidIds: string[]) => 
+  new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
+
+// ===== ASSESSMENT STATUS ERRORS =====
+
+export const AssessmentNotInDraftStatusError = new Error('Assessment section must be in DRAFT status for updates')
+
+export const AssessmentFormStatusNotCompatibleError = new Error('Assessment form status does not allow section updates')

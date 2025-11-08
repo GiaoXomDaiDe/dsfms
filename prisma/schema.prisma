@@ -11,7 +11,7 @@ model User {
   id                         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   eid                        String              @unique @db.VarChar(8)
   firstName                  String
-  middleName                 String?
+  middleName                 String?            
   lastName                   String
   address                    String?
   email                      String              @unique @db.Citext
@@ -48,10 +48,13 @@ model User {
   deletedSubjects            Subject[]           @relation("SubjectDeletedBy")
   updatedSubjects            Subject[]           @relation("SubjectUpdatedBy")
   subjectEnrollments         SubjectEnrollment[]
-  subjectInstructions        SubjectInstructor[]
+  subjectInstructors         SubjectInstructor[] @relation("UserSubjectInstructor")
+  courseInstructors          CourseInstructor[]  @relation("UserCourseInstructor")
   createdTemplateFields      TemplateField[]     @relation("TemplateFieldCreatedBy")
   updatedTemplateFields      TemplateField[]     @relation("TemplateFieldUpdatedBy")
   createdTemplateForms       TemplateForm[]      @relation("TemplateFormCreatedBy")
+  updatedTemplateForms       TemplateForm[]      @relation("TemplateFormUpdatedBy")
+  reviewedTemplateForms      TemplateForm[]      @relation("TemplateFormReviewedBy")
   createdTraineeProfiles     TraineeProfile[]    @relation("TraineeCreatedBy")
   deletedTraineeProfiles     TraineeProfile[]    @relation("TraineeDeletedBy")
   updatedTraineeProfiles     TraineeProfile[]    @relation("TraineeUpdatedBy")
@@ -99,7 +102,6 @@ model Role {
   users       User[]
   permissions Permission[] @relation("PermissionToRole")
 
-  @@index([deletedAt])
   @@map("Role")
 }
 
@@ -124,7 +126,6 @@ model Permission {
   updatedBy   User?        @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   roles       Role[]       @relation("PermissionToRole")
 
-  @@index([deletedAt])
   @@map("Permission")
 }
 
@@ -192,7 +193,6 @@ model Department {
   templateForms TemplateForm[]
   users         User[]         @relation("DepartmentMembers")
 
-  @@index([deletedAt])
   @@map("Department")
 }
 
@@ -201,7 +201,7 @@ model Course {
   departmentId    String           @db.Uuid
   name            String
   description     String?
-  code            String           @unique
+  code            String
   maxNumTrainee   Int
   venue           String?
   note            String?
@@ -221,10 +221,12 @@ model Course {
   department      Department       @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedBy       User?            @relation("CourseUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   subjects        Subject[]
+  instructors     CourseInstructor[]  @relation("CourseCourseInstructor")
   assessmentForms AssessmentForm[]
 
   @@index([departmentId])
   @@index([deletedAt])
+  @@unique([departmentId, code])
   @@map("Course")
 }
 
@@ -232,7 +234,7 @@ model Subject {
   id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   courseId        String              @db.Uuid
   name            String
-  code            String              @unique
+  code            String
   description     String?
   method          SubjectMethod
   duration        Float?
@@ -256,25 +258,35 @@ model Subject {
   deletedBy       User?               @relation("SubjectDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy       User?               @relation("SubjectUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   enrollments     SubjectEnrollment[]
-  instructors     SubjectInstructor[]
+  instructors     SubjectInstructor[] @relation("SubjectSubjectInstructor")
   assessmentForms AssessmentForm[]
 
   @@index([courseId])
   @@index([deletedAt])
+  @@unique([courseId, code])
   @@map("Subject")
 }
 
 model SubjectInstructor {
-  trainerUserId String                @db.Uuid
-  subjectId     String                @db.Uuid
-  roleInSubject SubjectInstructorRole
-  createdAt     DateTime              @default(now())
-  subject       Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  trainer       User                  @relation(fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  trainerUserId    String          @db.Uuid
+  subjectId        String          @db.Uuid
+  roleInAssessment RoleInSubject
+  trainer          User            @relation("UserSubjectInstructor", fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subject          Subject         @relation("SubjectSubjectInstructor", fields: [subjectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([trainerUserId, subjectId])
-  @@index([subjectId])
-  @@map("Subject_Instructor")
+  @@map("Subject_Instructors")
+}
+
+model CourseInstructor {
+  trainerUserId    String          @db.Uuid
+  courseId         String          @db.Uuid
+  roleInAssessment RoleInSubject
+  trainer          User            @relation("UserCourseInstructor", fields: [trainerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  course           Course          @relation("CourseCourseInstructor", fields: [courseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([trainerUserId, courseId])
+  @@map("Course_Instructors")
 }
 
 model SubjectEnrollment {
@@ -409,25 +421,35 @@ model GlobalField {
 }
 
 model TemplateForm {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String            @db.VarChar(255)
-  description     String?
-  version         Int               @default(1)
-  departmentId    String            @db.Uuid
-  createdByUserId String            @db.Uuid
-  isActive        Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @default(now()) @updatedAt
-  templateContent String?           @db.VarChar(500)
-  templateSchema  Json?
-  createdByUser   User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  department      Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  sections        TemplateSection[]
-  assessmentForms AssessmentForm[]
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String            @unique @db.VarChar(255)
+  description          String?
+  version              Int               @default(1)
+  departmentId         String?           @db.Uuid
+  createdByUserId      String            @db.Uuid
+  updatedByUserId      String            @db.Uuid
+  reviewedByUserId     String?           @db.Uuid
+  reviewedAt           DateTime?
+  status               TemplateStatus    @default(PENDING)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @default(now()) @updatedAt
+  templateContent      String            @db.VarChar(500)
+  templateConfig       String            @db.VarChar(500)
+  referFirstVersionId  String?           @db.Uuid
+  templateSchema       Json?
+  createdByUser        User              @relation("TemplateFormCreatedBy", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedByUser        User              @relation("TemplateFormUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedByUser       User?             @relation("TemplateFormReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department           Department?       @relation(fields: [departmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  firstVersion         TemplateForm?     @relation("TemplateVersions", fields: [referFirstVersionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  templateVersions     TemplateForm[]    @relation("TemplateVersions")
+  sections             TemplateSection[]
+  assessmentForms      AssessmentForm[]
 
   @@index([departmentId])
   @@index([createdByUserId])
-  @@index([isActive])
+  @@index([status])
+  @@index([referFirstVersionId])
   @@map("Template_Form")
 }
 
@@ -583,9 +605,11 @@ enum AssessmentStatus {
   ON_GOING
   SIGNATURE_PENDING
   DRAFT
+  READY_TO_SUBMIT
   SUBMITTED
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum AssessmentResult {
@@ -639,4 +663,11 @@ enum EditByRole {
 enum RoleInSubject {
   ASSESSMENT_REVIEWER
   EXAMINER
+}
+
+enum TemplateStatus {
+  PENDING
+  PUBLISHED
+  DISABLED
+  REJECTED
 }

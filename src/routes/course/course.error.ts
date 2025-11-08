@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 
 // Lỗi xác thực và tồn tại dữ liệu course
 export const CourseNotFoundException = new NotFoundException('Course not found')
-export const CourseCodeAlreadyExistsException = new BadRequestException('Course code already exists')
+export const CourseCodeAlreadyExistsException = new BadRequestException('Course code already exists in this department')
 export const DepartmentNotFoundException = new NotFoundException('Department not found')
 export const InvalidDateRangeException = new BadRequestException('End date must be after start date')
 
@@ -38,4 +38,52 @@ export const CannotHardDeleteCourseWithActiveSubjectsException = new BadRequestE
 export const CourseIsNotDeletedException = new BadRequestException('Course is not deleted')
 export const CannotRestoreCourseCodeConflictException = new BadRequestException(
   'Cannot restore course: code conflicts with existing active course'
+)
+export const CannotArchiveCourseWithActiveSubjectsException = new BadRequestException(
+  'Cannot archive course while it still has active subjects'
+)
+export const CannotArchiveCourseWithActiveEnrollmentsException = new BadRequestException(
+  'Cannot archive course while it still has active enrollments'
+)
+export const CannotArchiveCourseWithNonCancelledEnrollmentsException = new BadRequestException(
+  'Cannot archive course unless all enrollments are cancelled'
+)
+export const CourseAlreadyArchivedException = new BadRequestException('Course is already archived')
+export const CourseCannotBeArchivedFromCurrentStatusException = new BadRequestException(
+  'Course can only be archived when status is PLANNED or ON_GOING'
+)
+
+export const CourseDateRangeViolationException = (
+  violations: Array<{
+    subjectId: string
+    subjectName: string
+    subjectStart: Date
+    subjectEnd: Date
+  }>
+) =>
+  new BadRequestException({
+    message: 'Course date range cannot exclude existing subjects',
+    subjects: violations.map((item) => ({
+      id: item.subjectId,
+      name: item.subjectName,
+      startDate: item.subjectStart,
+      endDate: item.subjectEnd
+    }))
+  })
+
+export const SubjectDoesNotBelongToCourseException = new BadRequestException('Subject does not belong to this course')
+export const CourseExaminerAlreadyAssignedException = new BadRequestException(
+  'Trainer is already assigned as examiner for this course'
+)
+export const CourseExaminerAlreadyAssignedForSubjectException = new BadRequestException(
+  'Trainer is already assigned as examiner for this subject'
+)
+export const CannotAssignExaminerToArchivedCourseException = new BadRequestException(
+  'Cannot assign examiner to an archived course'
+)
+export const CourseTrainerAlreadyAssignedException = new BadRequestException(
+  'Trainer is already assigned to this course'
+)
+export const CourseTrainerAssignmentNotFoundException = new NotFoundException(
+  'Trainer assignment for this course not found'
 )

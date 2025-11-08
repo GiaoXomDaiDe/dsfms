@@ -30,8 +30,8 @@ export class SharedDepartmentRepository {
    * @param includeDeleted - Whether to include soft deleted departments
    * @returns Promise<Department | null>
    */
-  async findById(departmentId: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}) {
-    const whereClause = includeDeleted ? { id: departmentId } : { id: departmentId, deletedAt: null }
+  async findDepartmentById(departmentId: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}) {
+    const whereClause = includeDeleted ? { id: departmentId } : { id: departmentId, deletedAt: null, isActive: true }
 
     return this.prismaService.department.findUnique({
       where: whereClause,

@@ -6,6 +6,7 @@ import { APIKeyGuard } from '~/shared/guards/api-key.guard'
 import { AuthenticationGuard } from '~/shared/guards/authentication.guard'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
+import { SharedFilterService } from '~/shared/repositories/shared-filter.service'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
@@ -13,6 +14,7 @@ import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.re
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
+import { PdfConverterService } from '~/shared/services/pdf-converter.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { S3Service } from '~/shared/services/s3.service'
 import { TokenService } from '~/shared/services/token.service'
@@ -20,6 +22,7 @@ import { TokenService } from '~/shared/services/token.service'
 const sharedServices = [
   PrismaService,
   HashingService,
+  SharedFilterService,
   SharedUserRepository,
   SharedRoleRepository,
   SharedDepartmentRepository,
@@ -31,7 +34,8 @@ const sharedServices = [
   AccessTokenGuard,
   APIKeyGuard,
   EidService,
-  S3Service
+  S3Service,
+  PdfConverterService
 ]
 @Global()
 @Module({

@@ -15,9 +15,9 @@ export const SubjectSchema = z.object({
   timeSlot: z.string().optional().nullable(),
   isSIM: z.boolean(),
   passScore: z.number().min(0).max(100).optional().nullable(),
-  startDate: z.iso.datetime().transform((value) => new Date(value)),
+  startDate: z.iso.datetime().transform((d) => new Date(d)),
+  endDate: z.iso.datetime().transform((d) => new Date(d)),
   status: z.enum([SubjectStatus.ARCHIVED, SubjectStatus.PLANNED, SubjectStatus.ON_GOING, SubjectStatus.COMPLETED]),
-  endDate: z.iso.datetime().transform((value) => new Date(value)),
   createdAt: z.iso.datetime().transform((d) => new Date(d)),
   updatedAt: z.iso.datetime().transform((d) => new Date(d)),
   deletedAt: z.iso
@@ -26,4 +26,9 @@ export const SubjectSchema = z.object({
     .nullable()
 })
 
+export const SubjectIdParamsSchema = z.object({
+  subjectId: z.uuid()
+})
+
 export type SubjectType = z.infer<typeof SubjectSchema>
+export type SubjectIdParamsType = string

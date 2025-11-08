@@ -1,8 +1,9 @@
-import { createZodDto } from 'nestjs-zod'
-import { z } from 'zod'
+import z from 'zod'
 import {
   CreateTraineeProfileSchema,
+  CreateTraineeProfileType,
   CreateTrainerProfileSchema,
+  CreateTrainerProfileType,
   TraineeProfileSchema,
   TrainerProfileSchema,
   UpdateTraineeProfileSchema,
@@ -13,8 +14,6 @@ import {
   AtLeastOneUserRequiredMessage,
   DepartmentAssignmentNotAllowedMessage,
   DepartmentNotAllowedForRoleMessage,
-  DepartmentRequiredForDepartmentHeadMessage,
-  DepartmentRequiredForTrainerMessage,
   DuplicateEmailInBatchMessage,
   InvalidRoleIdMessage,
   InvalidRoleNameMessage,
@@ -24,16 +23,14 @@ import {
 } from '~/routes/user/user.error'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { validateRoleProfile } from '~/shared/helper'
-import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
 import { UserSchema } from '~/shared/models/shared-user.model'
 
-export const GetUsersQuerySchema = IncludeDeletedQuerySchema.extend({
-  roleName: z.string().optional()
-}).strict()
-
-export { PaginatedUserListSchema as GetUsersResSchema } from '~/shared/models/shared-user-list.model'
-export type { PaginatedUserListType as GetUsersResType } from '~/shared/models/shared-user-list.model'
+export const GetUsersQuerySchema = z
+  .object({
+    roleName: z.string().optional()
+  })
+  .strict()
 
 export const GetUserParamsSchema = z
   .object({
@@ -88,24 +85,8 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
       return
     }
 
-    if (data.role.name === 'DEPARTMENT_HEAD') {
-      if (!data.departmentId) {
-        ctx.addIssue({
-          code: 'custom',
-          message: DepartmentRequiredForDepartmentHeadMessage,
-          path: ['departmentId']
-        })
-      }
-    } else if (data.role.name === 'TRAINER') {
-      if (!data.departmentId) {
-        ctx.addIssue({
-          code: 'custom',
-          message: DepartmentRequiredForTrainerMessage,
-          path: ['departmentId']
-        })
-      }
-    } else {
-      if (data.departmentId) {
+    if (data.role.name !== 'DEPARTMENT_HEAD' && data.role.name !== 'TRAINER') {
+      if (data.departmentId !== undefined && data.departmentId !== null) {
         ctx.addIssue({
           code: 'custom',
           message: DepartmentNotAllowedForRoleMessage(data.role.name),
@@ -301,52 +282,6 @@ export const BulkCreateResultSchema = z.object({
   })
 })
 
-// Bulk Trainee Lookup Schemas
-export const BulkTraineeLookupItemSchema = z.object({
-  eid: z.string().min(1, 'EID is required'),
-  fullName: z.string().min(1, 'Full name is required')
-})
-
-export const BulkTraineeLookupBodySchema = z.object({
-  trainees: z
-    .array(BulkTraineeLookupItemSchema)
-    .min(1, 'At least one trainee is required')
-    .max(100, 'Maximum 100 trainees allowed per request')
-})
-
-export const TraineeLookupResultSchema = z.object({
-  eid: z.string(),
-  fullName: z.string(),
-  found: z.boolean(),
-  user: UserSchema.omit({
-    passwordHash: true,
-    signatureImageUrl: true,
-    roleId: true,
-    departmentId: true
-  })
-    .extend({
-      role: RoleSchema.pick({
-        id: true,
-        name: true
-      }),
-      department: DepartmentSchema.pick({
-        id: true,
-        name: true
-      }).nullable(),
-      traineeProfile: TraineeProfileSchema.nullable().optional()
-    })
-    .nullable()
-})
-
-export const BulkTraineeLookupResSchema = z.object({
-  results: z.array(TraineeLookupResultSchema),
-  summary: z.object({
-    total: z.number(),
-    found: z.number(),
-    notFound: z.number()
-  })
-})
-
 export type GetUsersQueryType = z.infer<typeof GetUsersQuerySchema>
 export type GetUserParamsType = z.infer<typeof GetUserParamsSchema>
 export type CreateUserBodyType = z.infer<typeof CreateUserBodySchema>
@@ -363,14 +298,12 @@ export type CreateUserBodyWithProfileType = z.infer<typeof CreateUserBodyWithPro
 export type UpdateUserBodyWithProfileType = z.infer<typeof UpdateUserBodyWithProfileSchema>
 export type CreateBulkUsersBodyType = z.infer<typeof CreateBulkUsersBodySchema>
 export type BulkCreateResultType = z.infer<typeof BulkCreateResultSchema>
-export type BulkTraineeLookupItemType = z.infer<typeof BulkTraineeLookupItemSchema>
-export type BulkTraineeLookupBodyType = z.infer<typeof BulkTraineeLookupBodySchema>
-export type TraineeLookupResultType = z.infer<typeof TraineeLookupResultSchema>
-export type BulkTraineeLookupResType = z.infer<typeof BulkTraineeLookupResSchema>
 export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
-
-// DTO exports
-export class BulkTraineeLookupBodyDto extends createZodDto(BulkTraineeLookupBodySchema) {}
-export class BulkTraineeLookupResDto extends createZodDto(BulkTraineeLookupResSchema) {}
+export type ExcludeUserResType = z.infer<typeof UpdateUserResSchema>
+export type BulkUserData = CreateUserInternalType & {
+  roleName: string
+  trainerProfile?: CreateTrainerProfileType
+  traineeProfile?: CreateTraineeProfileType
+}

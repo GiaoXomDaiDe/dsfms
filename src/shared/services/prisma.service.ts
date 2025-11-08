@@ -11,14 +11,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     super({
       datasources: {
         db: {
-          url: process.env.DATABASE_URL,
-        },
+          url: process.env.DATABASE_URL
+        }
       },
       transactionOptions: {
         maxWait: 20000, // 20 seconds
-        timeout: 30000, // 30 seconds
+        timeout: 30000 // 30 seconds
       },
-    });
+      errorFormat: 'pretty'
+    })
   }
 
   async onModuleInit() {

@@ -1,4 +1,5 @@
 import { createZodDto } from 'nestjs-zod'
+import { RoleMes } from '~/routes/role/role.message'
 import {
   AddPermissionsToRoleBodySchema,
   AddPermissionsToRoleResSchema,
@@ -6,28 +7,29 @@ import {
   CreateRoleResSchema,
   GetRoleDetailResSchema,
   GetRoleParamsSchema,
-  GetRolesQuerySchema,
   GetRolesResSchema,
+  RemovePermissionsFromRoleBodySchema,
+  RemovePermissionsFromRoleResSchema,
   UpdateRoleBodySchema,
   UpdateRoleResSchema
 } from '~/routes/role/role.model'
-
-export class GetRolesQueryDTO extends createZodDto(GetRolesQuerySchema) {}
-
-export class GetRolesResDTO extends createZodDto(GetRolesResSchema) {}
+import { createResponseDto } from '~/shared/helper'
 
 export class GetRoleParamsDTO extends createZodDto(GetRoleParamsSchema) {}
-
-export class GetRoleDetailResDTO extends createZodDto(GetRoleDetailResSchema) {}
-
 export class CreateRoleBodyDTO extends createZodDto(CreateRoleBodySchema) {}
-
-export class CreateRoleResDTO extends createZodDto(CreateRoleResSchema) {}
-
 export class UpdateRoleBodyDTO extends createZodDto(UpdateRoleBodySchema) {}
-
-export class UpdateRoleResDTO extends createZodDto(UpdateRoleResSchema) {}
-
 export class AddPermissionsToRoleBodyDTO extends createZodDto(AddPermissionsToRoleBodySchema) {}
+export class RemovePermissionsFromRoleBodyDTO extends createZodDto(RemovePermissionsFromRoleBodySchema) {}
 
-export class AddPermissionsToRoleResDTO extends createZodDto(AddPermissionsToRoleResSchema) {}
+export class GetRolesResDTO extends createResponseDto(GetRolesResSchema, RoleMes.LIST_SUCCESS) {}
+export class GetRoleDetailResDTO extends createResponseDto(GetRoleDetailResSchema, RoleMes.DETAIL_SUCCESS) {}
+export class CreateRoleResDTO extends createResponseDto(CreateRoleResSchema, RoleMes.CREATE_SUCCESS) {}
+export class UpdateRoleResDTO extends createResponseDto(UpdateRoleResSchema, RoleMes.UPDATE_SUCCESS) {}
+export class AddPermissionsToRoleResDTO extends createResponseDto(
+  AddPermissionsToRoleResSchema,
+  RoleMes.ADD_PERMISSIONS_SUCCESS
+) {}
+export class RemovePermissionsFromRoleResDTO extends createResponseDto(
+  RemovePermissionsFromRoleResSchema,
+  RoleMes.REMOVE_PERMISSIONS_SUCCESS
+) {}

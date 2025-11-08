@@ -1,12 +1,15 @@
 import {
   Body,
   Controller,
+  Delete,
   FileTypeValidator,
   Get,
+  HttpCode,
   MaxFileSizeValidator,
   NotFoundException,
   Param,
   Post,
+  Query,
   Res,
   UploadedFiles,
   UseInterceptors
@@ -16,9 +19,15 @@ import type { Response } from 'express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import path from 'path'
 import {
+  DeleteMediaObjectBodyDTO,
+  OnlyOfficeCallbackBodyDTO,
+  OnlyOfficeCallbackResDTO,
+  OnlyOfficeDocumentResultDTO,
   PresignedUploadDocBodyDTO,
   PresignedUploadFileBodyDTO,
   PresignedUploadFileResDTO,
+  UploadDocFromUrlBodyDTO,
+  UploadDocFromUrlResDTO,
   UploadFilesResDTO
 } from '~/routes/media/media.dto'
 import { MediaService } from '~/routes/media/media.service'
@@ -26,6 +35,7 @@ import { ParseFilePipeWithUnlink } from '~/routes/media/parse-file-with-unlink.p
 import { UPLOAD_DIR } from '~/shared/constants/default.constant'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
+import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('media')
 export class MediaController {
@@ -106,5 +116,33 @@ export class MediaController {
     files: Express.Multer.File[]
   ) {
     return this.mediaService.uploadDocFile(files, type, userId)
+  }
+
+  @Delete('objects')
+  @ZodSerializerDto(MessageResDTO)
+  async deleteObject(@Body() { key }: DeleteMediaObjectBodyDTO) {
+    await this.mediaService.deleteObject({ key })
+    return { message: 'Deleted successfully' }
+  }
+
+  @IsPublic()
+  @Post('docs/onlyoffice/callback')
+  @HttpCode(200)
+  @ZodSerializerDto(OnlyOfficeCallbackResDTO)
+  handleOnlyOfficeCallback(@Body() body: OnlyOfficeCallbackBodyDTO) {
+    return this.mediaService.handleOnlyOfficeCallback(body)
+  }
+
+  @IsPublic()
+  @Get('docs/onlyoffice/result')
+  @ZodSerializerDto(OnlyOfficeDocumentResultDTO)
+  getOnlyOfficeResult(@Query('key') key: string) {
+    return this.mediaService.getOnlyOfficeResult(key)
+  }
+  @IsPublic()
+  @Post('docs/upload-from-url')
+  @ZodSerializerDto(UploadDocFromUrlResDTO)
+  uploadFromUrl(@Body() { sourceUrl, fileName }: UploadDocFromUrlBodyDTO) {
+    return this.mediaService.uploadDocFromUrl({ sourceUrl, fileName })
   }
 }

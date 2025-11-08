@@ -28,6 +28,16 @@ export const UserAlreadyExistsException = new UnprocessableEntityException([
 // Lỗi khi user không bị disable - dùng khi enable user đã active
 export const UserIsNotDisabledException = new BadRequestException('User is not disabled')
 
+export const TrainerAssignedToOngoingSubjectException = (subjects: Array<{ id: string; code: string; name: string }>) =>
+  new BadRequestException({
+    message: 'Cannot disable trainer while assigned to ongoing subjects',
+    subjects: subjects.map((subject) => ({
+      id: subject.id,
+      code: subject.code,
+      name: subject.name
+    }))
+  })
+
 /* =========================
  * User Self-Operation Protection - Bảo vệ user tự thao tác trên chính mình
  * Phục vụ: Ngăn user tự update/delete chính mình để tránh mất quyền truy cập
@@ -160,6 +170,14 @@ export const BulkTrainerProfileNotAllowedException = (userIndex: number, roleNam
 
 export const BulkTraineeProfileNotAllowedException = (userIndex: number, roleName: string) =>
   `User at index ${userIndex}: Role ${roleName} cannot have traineeProfile. Only TRAINEE role is allowed to have trainee profile.`
+
+export const BulkEidCountMismatchException = (expected: number, actual: number) =>
+  new ConflictException({
+    message: `EID generation mismatch. Expected ${expected} but received ${actual}.`,
+    error: 'BULK_EID_COUNT_MISMATCH',
+    expected,
+    actual
+  })
 
 /* =========================
  * Bulk Error Exception Class - Class exception cho bulk operations

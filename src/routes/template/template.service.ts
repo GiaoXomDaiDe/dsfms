@@ -1,8 +1,42 @@
-import { BadRequestException, Injectable, ForbiddenException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
+import JSZip from 'jszip'
 import { TemplateRepository } from './template.repository'
-import { CreateTemplateFormDto } from './template.dto'
+import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
+import { PdfConverterService } from '~/shared/services/pdf-converter.service'
+import {
+  InvalidFileTypeError,
+  DocxParsingError,
+  TemplateConfigRequiredError,
+  DepartmentNotFoundError,
+  TemplateNameAlreadyExistsError,
+  RoleRequiredMismatchError,
+  SignatureFieldMissingRoleError,
+  PartFieldMissingChildrenError,
+  TemplateCreationFailedError,
+  TemplateNotFoundError,
+  S3DownloadError,
+  S3FetchError,
+  S3DocxParsingError,
+  S3ExtractionError,
+  OriginalTemplateNotFoundError,
+  TemplateHasAssessmentsError,
+  TemplateVersionCreationError
+} from './template.error'
+import {
+  TEMPLATE_PARSED_SUCCESSFULLY,
+  TEMPLATE_FIELDS_EXTRACTED,
+  TEMPLATE_FIELDS_EXTRACTED_FROM_S3,
+  TEMPLATE_CREATED_SUCCESSFULLY,
+  TEMPLATE_RETRIEVED_SUCCESSFULLY,
+  TEMPLATE_SCHEMA_RETRIEVED_SUCCESSFULLY,
+  TEMPLATES_RETRIEVED_SUCCESSFULLY,
+  DEPARTMENT_TEMPLATES_RETRIEVED_SUCCESSFULLY,
+  TEMPLATE_UPDATED_SUCCESSFULLY,
+  TEMPLATE_STATUS_UPDATED_SUCCESSFULLY,
+  TEMPLATE_VERSION_CREATED_SUCCESSFULLY
+} from './template.message'
 
 interface PlaceholderInfo {
   type: 'field' | 'section' | 'condition' | 'inverted'
@@ -12,7 +46,10 @@ interface PlaceholderInfo {
 
 @Injectable()
 export class TemplateService {
-  constructor(private readonly templateRepository: TemplateRepository) {}
+  constructor(
+    private readonly templateRepository: TemplateRepository,
+    private readonly pdfConverterService: PdfConverterService
+  ) {}
   /**
    * Parse DOCX và trích xuất placeholders
    * trả về JSON schema dựa trên các placeholders tìm thấy
@@ -24,9 +61,9 @@ export class TemplateService {
     placeholders: string[]
   }> {
     try {
-      // Validate type của file
+      // Validate type of file
       if (!file.originalname.endsWith('.docx')) {
-        throw new BadRequestException('Only .docx files are allowed')
+        throw new InvalidFileTypeError()
       }
 
       // load bằng pizzip
@@ -59,7 +96,7 @@ export class TemplateService {
 
       return {
         success: true,
-        message: 'Template parsed successfully',
+        message: TEMPLATE_PARSED_SUCCESSFULLY,
         schema,
         placeholders
       }
@@ -73,11 +110,11 @@ export class TemplateService {
             return `${err.name}: ${err.message} at ${err.part}`
           })
           .join('; ')
-        throw new BadRequestException(`Failed to parse template: ${errorMessages}`)
+        throw new DocxParsingError(errorMessages)
       }
 
       // xử lí 400
-      throw new BadRequestException(`Failed to parse template: ${error.message || 'Unknown error'}`)
+      throw new DocxParsingError(error.message || 'Unknown error')
     }
   }
 
@@ -165,23 +202,146 @@ export class TemplateService {
   }
 
   /**
-   * Parse DOCX and extract only field names (placeholders)
-   * Returns a flat list of fields without template or section structure
-   * This is useful for users to see what fields are in the document before organizing them
+   * Helper method to parse placeholders into structured fields
+   */
+  private parseStructuredFields(tags: string[]): Array<{
+    fieldName: string
+    fieldType: string
+    displayOrder: number
+    parentTempId: string | null
+    tempId?: string
+  }> {
+    // tags parameter is already passed to this method
+    const fields: Array<{
+      fieldName: string
+      fieldType: string
+      displayOrder: number
+      parentTempId: string | null
+      tempId?: string
+    }> = []
+    
+    let displayOrder = 1
+    let currentParent: string | null = null
+    const processedSections = new Set<string>()
+    const processedToggles = new Set<string>()
+    // Track processed fields per section context to allow same field names in different sections
+    const processedFieldsByContext = new Map<string, Set<string>>()
+    
+    // First pass: identify which # tags are conditions (have corresponding ^ tags)
+    const conditionNames = new Set<string>()
+    for (const tag of tags) {
+      const cleaned = tag.replace(/[{}]/g, '')
+      if (cleaned.startsWith('^')) {
+        const conditionName = cleaned.substring(1)
+        conditionNames.add(conditionName)
+      }
+    }
+    
+    // Second pass: process tags in order as they appear in the document
+    for (const tag of tags) {
+      const cleaned = tag.replace(/[{}]/g, '')
+      
+      // Skip operators
+      if (this.hasOperator(cleaned)) {
+        continue
+      }
+      
+      // Handle section start tags (#sectionName)
+      if (cleaned.startsWith('#')) {
+        const sectionName = cleaned.substring(1)
+        
+        // Check if this is a condition (has corresponding ^ tag)
+        if (conditionNames.has(sectionName)) {
+          // This is a condition, skip it - we'll handle it when we encounter the ^ tag
+          continue
+        } else {
+          // This is a regular PART section
+          if (!processedSections.has(sectionName)) {
+            const tempId = `${sectionName}-parent`
+            fields.push({
+              fieldName: sectionName,
+              fieldType: 'PART',
+              displayOrder: displayOrder++,
+              parentTempId: null,
+              tempId: tempId
+            })
+            currentParent = tempId
+            processedSections.add(sectionName)
+            // Initialize field tracking for this section
+            processedFieldsByContext.set(tempId, new Set<string>())
+          } else {
+            // If section already exists, just set current parent
+            currentParent = `${sectionName}-parent`
+          }
+        }
+        continue
+      }
+      
+      // Handle section end tags {/sectionName}
+      if (cleaned.startsWith('/')) {
+        const endingSectionName = cleaned.substring(1)
+        // Only reset currentParent if we're ending the current section
+        if (currentParent && currentParent === `${endingSectionName}-parent`) {
+          currentParent = null
+        }
+        continue
+      }
+      
+      // Handle inverted sections {^sectionName} - indicates toggle/condition
+      if (cleaned.startsWith('^')) {
+        const sectionName = cleaned.substring(1)
+        
+        if (!processedToggles.has(sectionName)) {
+          fields.push({
+            fieldName: sectionName,
+            fieldType: 'TOGGLE',
+            displayOrder: displayOrder++,
+            parentTempId: currentParent
+          })
+          processedToggles.add(sectionName)
+        }
+        continue
+      }
+      
+      // Regular fields - allow same field names in different sections
+      const contextKey = currentParent || 'global'
+      const contextFields = processedFieldsByContext.get(contextKey) || new Set<string>()
+      
+      if (!contextFields.has(cleaned)) {
+        fields.push({
+          fieldName: cleaned,
+          fieldType: 'TEXT',
+          displayOrder: displayOrder++,
+          parentTempId: currentParent
+        })
+        contextFields.add(cleaned)
+        processedFieldsByContext.set(contextKey, contextFields)
+      }
+    }
+    
+    return fields
+  }
+
+  /**
+   * Parse DOCX and extract structured fields for create template format
+   * Returns fields in the same structure as create template API
    */
   async extractFieldsFromDocx(file: any): Promise<{
     success: boolean
     message: string
     fields: Array<{
       fieldName: string
-      placeholder: string
+      fieldType: string
+      displayOrder: number
+      parentTempId: string | null
+      tempId?: string
     }>
     totalFields: number
   }> {
     try {
       // Validate file type
       if (!file.originalname.endsWith('.docx')) {
-        throw new BadRequestException('Only .docx files are allowed')
+        throw new InvalidFileTypeError()
       }
 
       // Load file with pizzip
@@ -199,64 +359,14 @@ export class TemplateService {
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
       
-      // Process placeholders to get unique field names and detect parent sections
-      const fieldSet = new Set<string>()
-      const parentSections = new Set<string>()
-      const fields: Array<{ fieldName: string; placeholder: string }> = []
-
-      // First pass: identify section start tags (parent PART fields)
-      for (const tag of tags) {
-        const cleaned = tag.replace(/[{}]/g, '')
-        
-        // Detect section start tags (#sectionName)
-        if (cleaned.startsWith('#')) {
-          const sectionName = cleaned.substring(1)
-          parentSections.add(sectionName)
-        }
-      }
-
-      // Second pass: process all fields and include parent sections
-      for (const tag of tags) {
-        const cleaned = tag.replace(/[{}]/g, '')
-        
-        // Skip section control tags (^, /) but NOT start tags (#)
-        if (cleaned.startsWith('^') || cleaned.startsWith('/')) {
-          continue
-        }
-
-        // Handle section start tags (#sectionName) - these become PART fields
-        if (cleaned.startsWith('#')) {
-          const sectionName = cleaned.substring(1)
-          if (!fieldSet.has(sectionName)) {
-            fieldSet.add(sectionName)
-            fields.push({
-              fieldName: sectionName,
-              placeholder: `{${sectionName}}` // Convert to standard placeholder format
-            })
-          }
-          continue
-        }
-
-        // Skip fields with operators (calculated fields)
-        if (this.hasOperator(cleaned)) {
-          continue
-        }
-
-        // Add unique regular fields only
-        if (!fieldSet.has(cleaned)) {
-          fieldSet.add(cleaned)
-          fields.push({
-            fieldName: cleaned,
-            placeholder: tag
-          })
-        }
-      }
+      // Use the structured field parser
+      const structuredFields = this.parseStructuredFields(tags)
 
       return {
         success: true,
-        message: `Extracted ${fields.length} unique fields from document`,
-        fields,
-        totalFields: fields.length
+        message: TEMPLATE_FIELDS_EXTRACTED(structuredFields.length),
+        fields: structuredFields,
+        totalFields: structuredFields.length
       }
     } catch (error) {
       // Handle docxtemplater errors
@@ -266,31 +376,143 @@ export class TemplateService {
             return `${err.name}: ${err.message} at ${err.part}`
           })
           .join('; ')
-        throw new BadRequestException(`Failed to parse template: ${errorMessages}`)
+        throw new DocxParsingError(errorMessages)
       }
 
       // Handle other errors
-      throw new BadRequestException(`Failed to parse template: ${error.message || 'Unknown error'}`)
+      throw new DocxParsingError(error.message || 'Unknown error')
+    }
+  }
+
+  /**
+   * Extract field names from DOCX file hosted on S3
+   * Downloads the file from S3 URL and processes it similar to extractFieldsFromDocx
+   */
+  async extractFieldsFromS3Url(s3Url: string): Promise<{
+    success: boolean
+    message: string
+    fields: Array<{
+      fieldName: string
+      fieldType: string
+      displayOrder: number
+      parentTempId: string | null
+      tempId?: string
+    }>
+    totalFields: number
+  }> {
+    try {
+      // Download file from S3 URL
+      const response = await fetch(s3Url)
+      
+      if (!response.ok) {
+        throw new S3DownloadError(response.status, response.statusText)
+      }
+
+      // Get the buffer from the response
+      const buffer = await response.arrayBuffer()
+      const fileBuffer = Buffer.from(buffer)
+
+      // Load file with pizzip
+      const zip = new PizZip(fileBuffer)
+
+      // Use docxtemplater to extract placeholders
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true
+      })
+
+      // Get full text from the DOCX file
+      const fullText = doc.getFullText()
+
+      // Extract all placeholders using regex
+      const tags = fullText.match(/\{[^}]+\}/g) || []
+      
+      // Use the structured field parser
+      const structuredFields = this.parseStructuredFields(tags)
+
+      return {
+        success: true,
+        message: TEMPLATE_FIELDS_EXTRACTED_FROM_S3(structuredFields.length),
+        fields: structuredFields,
+        totalFields: structuredFields.length
+      }
+    } catch (error) {
+      // Handle fetch errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new S3FetchError(error.message)
+      }
+
+      // Handle docxtemplater errors
+      if (error.properties && error.properties.errors instanceof Array) {
+        const errorMessages = error.properties.errors
+          .map((err: any) => {
+            return `${err.name}: ${err.message} at ${err.part}`
+          })
+          .join('; ')
+        throw new S3DocxParsingError(errorMessages)
+      }
+
+      // Handle other errors
+      throw new S3ExtractionError(error.message || 'Unknown error')
     }
   }
 
   /**
    * Create a complete template with sections and fields
-   * Only ADMINISTRATOR role can create templates
+   * Role validation is handled by RBAC guards
    */
-  async createTemplate(templateData: CreateTemplateFormDto, currentUser: any) {
-    // Check if user has ADMINISTRATOR role
-    if (currentUser.roleName !== 'ADMINISTRATOR') {
-      throw new ForbiddenException('Only ADMINISTRATOR role can create templates')
+  async createTemplate(templateData: CreateTemplateFormDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
+    // Validate required fields
+    if (!templateData.templateConfig) {
+      throw new TemplateConfigRequiredError()
     }
 
     // Validate department exists
     const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
     if (!departmentExists) {
-      throw new BadRequestException(`Department with ID '${templateData.departmentId}' does not exist`)
+      throw new DepartmentNotFoundError(templateData.departmentId)
+    }
+
+    // Check if template name already exists
+    const nameExists = await this.templateRepository.templateNameExists(templateData.name)
+    if (nameExists) {
+      throw new TemplateNameAlreadyExistsError(templateData.name)
     }
 
     try {
+      // Validate that any field-level role requirement (roleRequired) matches the section's editBy
+      for (const section of templateData.sections) {
+        if (!section.fields || !Array.isArray(section.fields)) continue
+        for (const field of section.fields) {
+          // Only validate when roleRequired is explicitly provided
+          if (field.roleRequired !== undefined && field.roleRequired !== null) {
+            // Compare values directly (do not hardcode 'TRAINER' or 'TRAINEE')
+            if (String(field.roleRequired) !== String(section.editBy)) {
+              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+            }
+          }
+
+          // Validate that signature fields must have roleRequired set
+          if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+            if (!field.roleRequired) {
+              throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
+            }
+          }
+
+          // Check if PART field has at least one child field
+          if (field.fieldType === 'PART') {
+            const hasChildFields = section.fields.some(childField => 
+              childField.parentTempId === field.tempId || 
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            )
+            if (!hasChildFields) {
+              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+            }
+          }
+        }
+      }
+
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
@@ -298,17 +520,17 @@ export class TemplateService {
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
         templateData,
-        currentUser.userId,
+        userContext.userId,
         templateSchema
       )
 
       return {
         success: true,
         data: result,
-        message: 'Template created successfully'
+        message: TEMPLATE_CREATED_SUCCESSFULLY
       }
     } catch (error) {
-      throw new BadRequestException(`Failed to create template: ${error.message}`)
+      throw new TemplateCreationFailedError(error.message)
     }
   }
 
@@ -319,13 +541,13 @@ export class TemplateService {
     const template = await this.templateRepository.findTemplateById(id)
 
     if (!template) {
-      throw new BadRequestException('Template not found')
+      throw new TemplateNotFoundError()
     }
 
     return {
       success: true,
       data: template,
-      message: 'Template retrieved successfully'
+      message: TEMPLATE_RETRIEVED_SUCCESSFULLY
     }
   }
 
@@ -337,7 +559,7 @@ export class TemplateService {
     const template = await this.templateRepository.findTemplateById(id)
 
     if (!template) {
-      throw new BadRequestException('Template not found')
+      throw new TemplateNotFoundError()
     }
 
     // Transform the template data to match the create template format for FE editing
@@ -367,13 +589,13 @@ export class TemplateService {
       metadata: {
         templateId: template.id,
         version: template.version,
-        isActive: template.isActive,
+        status: template.status,
         createdAt: template.createdAt,
         updatedAt: template.updatedAt,
         department: template.department,
         createdByUser: template.createdByUser
       },
-      message: 'Template schema retrieved successfully'
+      message: TEMPLATE_SCHEMA_RETRIEVED_SUCCESSFULLY
     }
   }
 
@@ -460,29 +682,110 @@ export class TemplateService {
   }
 
   /**
-   * Get all templates
+   * Get all templates with optional status filtering
    */
-  async getAllTemplates() {
-    const templates = await this.templateRepository.findAllTemplates()
+  async getAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const templates = await this.templateRepository.findAllTemplates(status)
 
     return {
       success: true,
       data: templates,
-      message: 'Templates retrieved successfully'
+      message: TEMPLATES_RETRIEVED_SUCCESSFULLY
     }
   }
 
   /**
-   * Get templates by department
+   * Get templates by department with optional status filtering
    */
-  async getTemplatesByDepartment(departmentId: string) {
-    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId)
+  async getTemplatesByDepartment(departmentId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
+    const templates = await this.templateRepository.findTemplatesByDepartment(departmentId, status)
 
     return {
       success: true,
       data: templates,
-      message: 'Department templates retrieved successfully'
+      message: DEPARTMENT_TEMPLATES_RETRIEVED_SUCCESSFULLY
     };
+  }
+
+  /**
+   * Change template status
+   */
+  async changeTemplateStatus(
+    templateId: string, 
+    newStatus: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new TemplateNotFoundError()
+    }
+
+    // Xem coi đây phải là review action hay không
+    const isReviewAction = existingTemplate.status === 'PENDING' && 
+                          (newStatus === 'PUBLISHED' || newStatus === 'REJECTED')
+
+    // Update
+    const updatedTemplate = await this.templateRepository.updateTemplateStatus(
+      templateId, 
+      newStatus, 
+      userContext.userId,
+      isReviewAction
+    )
+
+    return {
+      success: true,
+      data: updatedTemplate,
+      message: TEMPLATE_STATUS_UPDATED_SUCCESSFULLY(newStatus)
+    }
+  }
+
+  /**
+   * Update template basic information (name, description, departmentId)
+   */
+  async updateTemplateForm(
+    templateId: string,
+    updateData: UpdateTemplateFormDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new TemplateNotFoundError()
+    }
+
+    // Check if name is being updated and if it's unique
+    if (updateData.name && updateData.name !== existingTemplate.name) {
+      const nameExists = await this.templateRepository.templateNameExists(updateData.name, templateId)
+      if (nameExists) {
+        throw new TemplateNameAlreadyExistsError(updateData.name)
+      }
+    }
+
+    // If trying to change department, check if template has been used in assessments
+    if (updateData.departmentId && updateData.departmentId !== existingTemplate.departmentId) {
+      const hasAssessments = await this.templateRepository.templateHasAssessments(templateId)
+      if (hasAssessments) {
+        throw new TemplateHasAssessmentsError()
+      }
+    }
+
+    // If departmentId is being updated, validate that the new department exists
+    if (updateData.departmentId) {
+      const departmentExists = await this.templateRepository.validateDepartmentExists(updateData.departmentId)
+      if (!departmentExists) {
+        throw new DepartmentNotFoundError(updateData.departmentId)
+      }
+    }
+
+    // Update template
+    const updatedTemplate = await this.templateRepository.updateTemplateBasicInfo(templateId, updateData, userContext.userId)
+
+    return {
+      success: true,
+      data: updatedTemplate,
+      message: TEMPLATE_UPDATED_SUCCESSFULLY
+    }
   }
 
   /**
@@ -600,6 +903,95 @@ export class TemplateService {
   }
 
   /**
+   * Create a new version of an existing template
+   */
+  async createTemplateVersion(templateVersionData: CreateTemplateVersionDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
+    // Check if original template exists
+    const originalTemplate = await this.templateRepository.findTemplateById(templateVersionData.originalTemplateId)
+    if (!originalTemplate) {
+      throw new OriginalTemplateNotFoundError()
+    }
+
+    // Validate that any field-level role requirement (roleRequired) matches the section's editBy
+    for (const section of templateVersionData.sections) {
+      if (!section.fields || !Array.isArray(section.fields)) continue
+      for (const field of section.fields) {
+        // Only validate when roleRequired is explicitly provided
+        if (field.roleRequired !== undefined && field.roleRequired !== null) {
+          // Compare values directly
+          if (String(field.roleRequired) !== String(section.editBy)) {
+            throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+          }
+        }
+
+        // Validate that signature fields must have roleRequired set
+        if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+          if (!field.roleRequired) {
+            throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
+          }
+        }
+
+        // Check if PART field has at least one child field
+        if (field.fieldType === 'PART') {
+          const hasChildFields = section.fields.some(childField => 
+            childField.parentTempId === field.tempId || 
+            childField.parentTempId === field.fieldName ||
+            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          )
+          if (!hasChildFields) {
+            throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+          }
+        }
+      }
+    }
+
+    // Generate appropriate name for the new version
+    let finalTemplateName = templateVersionData.name
+    
+    // Check if template name already exists
+    const nameExists = await this.templateRepository.templateNameExists(templateVersionData.name)
+    if (nameExists) {
+      // Get the version number that will be assigned to automatically generate versioned name
+      // First determine the first version ID for this template group
+      const firstVersionId = originalTemplate.referFirstVersionId || templateVersionData.originalTemplateId
+      
+      // Get max version and calculate new version number
+      const maxVersion = await this.templateRepository.getMaxVersionForTemplate(firstVersionId)
+      const newVersion = maxVersion + 1
+      
+      // Append version suffix to the name
+      finalTemplateName = `${templateVersionData.name} v.${newVersion}`
+    }
+
+    try {
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections);
+
+      // Create new template version with all nested data
+      const result = await this.templateRepository.createTemplateVersion(
+        templateVersionData.originalTemplateId,
+        {
+          name: finalTemplateName,
+          description: templateVersionData.description,
+          templateContent: templateVersionData.templateContent,
+          templateConfig: templateVersionData.templateConfig,
+          sections: templateVersionData.sections
+        },
+        userContext.userId,
+        templateSchema
+      )
+
+      return {
+        success: true,
+        data: result,
+        message: TEMPLATE_VERSION_CREATED_SUCCESSFULLY
+      }
+    } catch (error) {
+      throw new TemplateVersionCreationError(error.message)
+    }
+  }
+
+  /**
    * Generate basic schema from field names (legacy method)
    */
   private generateSchemaFromFieldNames(fieldNames: string[]): Record<string, any> {
@@ -620,6 +1012,109 @@ export class TemplateService {
       type: 'object',
       properties: schema,
       additionalProperties: false
+    }
+  }
+
+  /**
+   * Get template PDF from template_content S3 URL
+   */
+  async getTemplatePdf(templateFormId: string): Promise<Buffer> {
+    try {
+      // Get template form from database
+      const templateForm = await this.templateRepository.findTemplateById(templateFormId)
+      if (!templateForm) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (!templateForm.templateContent) {
+        throw new Error('Template content URL not found')
+      }
+
+      // Convert DOCX to PDF using the shared service
+      const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateContent)
+      return pdfBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template PDF: ${error.message}`)
+    }
+  }
+
+  /**
+   * Get template config PDF from template_config S3 URL
+   */
+  async getTemplateConfigPdf(templateFormId: string): Promise<Buffer> {
+    try {
+      // Get template form from database
+      const templateForm = await this.templateRepository.findTemplateById(templateFormId)
+      if (!templateForm) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (!templateForm.templateConfig) {
+        throw new Error('Template config URL not found')
+      }
+
+      // Convert DOCX to PDF using the shared service
+      const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateConfig)
+      return pdfBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template config PDF: ${error.message}`)
+    }
+  }
+
+  /**
+   * Get both template and config PDFs as a ZIP file
+   */
+  async getTemplateBothPdf(templateFormId: string): Promise<Buffer> {
+    try {
+      // Get template form from database
+      const templateForm = await this.templateRepository.findTemplateById(templateFormId)
+      if (!templateForm) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (!templateForm.templateContent && !templateForm.templateConfig) {
+        throw new Error('No template URLs found')
+      }
+
+      const zip = new JSZip()
+      
+      // Add template content PDF if exists
+      if (templateForm.templateContent) {
+        try {
+          const templatePdf = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateContent)
+          zip.file('template-content.pdf', templatePdf)
+        } catch (error) {
+          console.warn('Failed to convert template content:', error.message)
+        }
+      }
+
+      // Add template config PDF if exists
+      if (templateForm.templateConfig) {
+        try {
+          const configPdf = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateConfig)
+          zip.file('template-config.pdf', configPdf)
+        } catch (error) {
+          console.warn('Failed to convert template config:', error.message)
+        }
+      }
+
+      // Generate ZIP buffer
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
+      return zipBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template ZIP: ${error.message}`)
     }
   }
 

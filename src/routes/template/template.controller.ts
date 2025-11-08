@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Param, Body, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
+import type { Response } from 'express'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
-import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto } from './template.dto'
+import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
+import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
 import { TemplateService } from './template.service'
 
 @Controller('templates')
@@ -52,19 +54,54 @@ export class TemplateController {
   }
 
   /**
+   * POST /templates/extract-fields-from-url
+   * Extract field names from DOCX file hosted on S3
+   */
+  @Post('extract-fields-from-url')
+  @IsPublic()
+  @ZodSerializerDto(ExtractFieldsResponseDTO)
+  async extractFieldsFromUrl(@Body() body: { url: string }) {
+    if (!body.url) {
+      throw new BadRequestException('URL is required')
+    }
+
+    if (!body.url.endsWith('.docx')) {
+      throw new BadRequestException('URL must point to a .docx file')
+    }
+
+    // Validate S3 URL format (optional but recommended)
+    const s3UrlPattern = /^https:\/\/.*\.s3\..*\.amazonaws\.com\/.*\.docx$/
+    if (!s3UrlPattern.test(body.url)) {
+      throw new BadRequestException('Invalid S3 URL format')
+    }
+
+    return await this.templateService.extractFieldsFromS3Url(body.url)
+  }
+
+  /**
    * POST /templates
    * Requires ADMINISTRATOR role authentication
    */
   @Post()
-  async createTemplate(@Body() createTemplateDto: CreateTemplateFormDto, @ActiveUser() currentUser: any) {
-    return await this.templateService.createTemplate(createTemplateDto, currentUser)
+  async createTemplate(
+    @Body() createTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.createTemplate(createTemplateDto, userContext)
   }
 
   /**
    * GET /templates/:id
    */
   @Get(':id')
-  @IsPublic()
   async getTemplateById(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateById(id)
@@ -79,7 +116,6 @@ export class TemplateController {
    * Useful for editing or cloning templates
    */
   @Get(':id/schema')
-  @IsPublic()
   async getTemplateSchema(@Param('id') id: string) {
     try {
       return await this.templateService.getTemplateSchemaById(id)
@@ -89,28 +125,145 @@ export class TemplateController {
   }
 
   /**
-   * GET /templates
+   * GET /templates?status=PUBLISHED
+   * Get all templates with optional status filtering
    */
   @Get()
-  @IsPublic()
-  async getAllTemplates() {
+  async getAllTemplates(@Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     try {
-      return await this.templateService.getAllTemplates()
+      return await this.templateService.getAllTemplates(status)
     } catch (error) {
       throw error
     }
   }
 
   /**
-   * GET /templates/department/:departmentId
+   * GET /templates/department/:departmentId?status=PUBLISHED
+   * Get templates by department with optional status filtering
    */
   @Get('department/:departmentId')
-  @IsPublic()
-  async getTemplatesByDepartment(@Param('departmentId') departmentId: string) {
+  async getTemplatesByDepartment(
+    @Param('departmentId') departmentId: string,
+    @Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED'
+  ) {
     try {
-      return await this.templateService.getTemplatesByDepartment(departmentId)
+      return await this.templateService.getTemplatesByDepartment(departmentId, status)
     } catch (error) {
       throw error
     }
+  }
+
+  /**
+   * PATCH /templates/:id/status
+   * Change template status
+   */
+  @Patch(':id/status')
+  async changeTemplateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.changeTemplateStatus(id, body.status, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PATCH /templates/:id
+   * Update template basic information (name, description, departmentId)
+   */
+  @Patch(':id')
+  async updateTemplateForm(
+    @Param('id') id: string,
+    @Body() updateData: UpdateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateTemplateForm(id, updateData, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * POST /templates/create-version
+   * Create a new version of an existing template
+   */
+  @Post('create-version')
+  async createTemplateVersion(
+    @Body() createVersionDto: CreateTemplateVersionDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.createTemplateVersion(createVersionDto, userContext)
+  }
+
+  @Get('pdf/:templateFormId')
+  @Header('Content-Type', 'application/pdf')
+  async getTemplatePdf(
+    @Param('templateFormId') templateFormId: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const pdfBuffer = await this.templateService.getTemplatePdf(templateFormId)
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="template-${templateFormId}.pdf"`,
+    })
+    res.send(pdfBuffer)
+  }
+
+  @Get('pdf-config/:templateFormId')
+  @Header('Content-Type', 'application/pdf')
+  async getTemplateConfigPdf(
+    @Param('templateFormId') templateFormId: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const pdfBuffer = await this.templateService.getTemplateConfigPdf(templateFormId)
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="template-config-${templateFormId}.pdf"`,
+    })
+    res.send(pdfBuffer)
+  }
+
+  @Get('pdf-both/:templateFormId')
+  async getTemplateBothPdf(
+    @Param('templateFormId') templateFormId: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const zipBuffer = await this.templateService.getTemplateBothPdf(templateFormId)
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="template-${templateFormId}.zip"`,
+    })
+    res.send(zipBuffer)
   }
 }

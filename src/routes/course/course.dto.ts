@@ -1,6 +1,11 @@
 import { createZodDto } from 'nestjs-zod'
 import {
+  AssignCourseExaminerBodySchema,
+  AssignCourseExaminerResSchema,
+  AssignCourseTrainerBodySchema,
+  AssignCourseTrainerResSchema,
   CancelCourseEnrollmentsBodySchema,
+  CourseTrainerParamsSchema,
   CreateCourseBodySchema,
   CreateCourseResSchema,
   GetCourseParamsSchema,
@@ -9,9 +14,10 @@ import {
   GetCoursesResSchema,
   GetCourseTraineesQuerySchema,
   GetCourseTraineesResSchema,
-  GetTraineeEnrollmentsResSchema,
   UpdateCourseBodySchema,
-  UpdateCourseResSchema
+  UpdateCourseResSchema,
+  UpdateCourseTrainerAssignmentBodySchema,
+  UpdateCourseTrainerAssignmentResSchema
 } from '~/routes/course/course.model'
 
 export class GetCoursesQueryDto extends createZodDto(GetCoursesQuerySchema) {}
@@ -25,4 +31,10 @@ export class UpdateCourseResDto extends createZodDto(UpdateCourseResSchema) {}
 export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQuerySchema) {}
 export class GetCourseTraineesResDto extends createZodDto(GetCourseTraineesResSchema) {}
 export class CancelCourseEnrollmentsBodyDto extends createZodDto(CancelCourseEnrollmentsBodySchema) {}
-export class GetTraineeEnrollmentsResDto extends createZodDto(GetTraineeEnrollmentsResSchema) {}
+export class AssignCourseExaminerBodyDto extends createZodDto(AssignCourseExaminerBodySchema) {}
+export class AssignCourseExaminerResDto extends createZodDto(AssignCourseExaminerResSchema) {}
+export class CourseTrainerParamsDto extends createZodDto(CourseTrainerParamsSchema) {}
+export class AssignCourseTrainerBodyDto extends createZodDto(AssignCourseTrainerBodySchema) {}
+export class AssignCourseTrainerResDto extends createZodDto(AssignCourseTrainerResSchema) {}
+export class UpdateCourseTrainerAssignmentBodyDto extends createZodDto(UpdateCourseTrainerAssignmentBodySchema) {}
+export class UpdateCourseTrainerAssignmentResDto extends createZodDto(UpdateCourseTrainerAssignmentResSchema) {}

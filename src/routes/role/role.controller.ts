@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   AddPermissionsToRoleBodyDTO,
@@ -7,13 +7,14 @@ import {
   CreateRoleResDTO,
   GetRoleDetailResDTO,
   GetRoleParamsDTO,
-  GetRolesQueryDTO,
   GetRolesResDTO,
+  RemovePermissionsFromRoleBodyDTO,
+  RemovePermissionsFromRoleResDTO,
   UpdateRoleBodyDTO,
   UpdateRoleResDTO
 } from '~/routes/role/role.dto'
+import { RoleMes } from '~/routes/role/role.message'
 import { RoleService } from '~/routes/role/role.service'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
@@ -24,43 +25,53 @@ export class RoleController {
 
   @Get()
   @ZodSerializerDto(GetRolesResDTO)
-  list(@Query() { includeDeleted }: GetRolesQueryDTO, @ActiveRolePermissions('name') roleName: string) {
-    return this.roleService.list({
-      includeDeleted,
-      userRole: roleName
-    })
+  async list() {
+    const result = await this.roleService.list()
+    return {
+      message: RoleMes.LIST_SUCCESS,
+      data: result
+    }
   }
 
   @Get(':roleId')
   @ZodSerializerDto(GetRoleDetailResDTO)
-  findById(
-    @Param() params: GetRoleParamsDTO,
-    @Query() query: GetRolesQueryDTO,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    return this.roleService.findById(params.roleId, {
-      includeDeleted: query.includeDeleted,
-      userRole: roleName
-    })
+  async findById(@Param() { roleId }: GetRoleParamsDTO) {
+    const role = await this.roleService.findById(roleId)
+    return {
+      message: RoleMes.DETAIL_SUCCESS,
+      data: role
+    }
   }
 
   @Post()
   @ZodSerializerDto(CreateRoleResDTO)
-  create(@Body() body: CreateRoleBodyDTO, @ActiveUser('userId') userId: string) {
-    return this.roleService.create({
+  async create(@Body() body: CreateRoleBodyDTO, @ActiveUser('userId') userId: string) {
+    const role = await this.roleService.create({
       data: body,
       createdById: userId
     })
+    return {
+      message: RoleMes.CREATE_SUCCESS,
+      data: role
+    }
   }
 
   @Put(':roleId')
   @ZodSerializerDto(UpdateRoleResDTO)
-  update(@Body() body: UpdateRoleBodyDTO, @Param() params: GetRoleParamsDTO, @ActiveUser('userId') userId: string) {
-    return this.roleService.update({
+  async update(
+    @Body() body: UpdateRoleBodyDTO,
+    @Param() { roleId }: GetRoleParamsDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    const role = await this.roleService.update({
       data: body,
-      id: params.roleId,
+      id: roleId,
       updatedById: userId
     })
+    return {
+      message: RoleMes.UPDATE_SUCCESS,
+      data: role
+    }
   }
 
   @Delete(':roleId')
@@ -87,15 +98,38 @@ export class RoleController {
   @Patch(':roleId/add-permissions')
   @IsPublic()
   @ZodSerializerDto(AddPermissionsToRoleResDTO)
-  addPermissions(
-    @Param() params: GetRoleParamsDTO,
+  async addPermissions(
+    @Param() { roleId }: GetRoleParamsDTO,
     @Body() body: AddPermissionsToRoleBodyDTO,
     @ActiveUser('userId') userId: string
   ) {
-    return this.roleService.addPermissions({
-      roleId: params.roleId,
+    const result = await this.roleService.addPermissions({
+      roleId,
       permissionIds: body.permissionIds,
       updatedById: userId
     })
+    return {
+      message: RoleMes.ADD_PERMISSIONS_SUCCESS,
+      data: result
+    }
+  }
+
+  @Patch(':roleId/remove-permissions')
+  @IsPublic()
+  @ZodSerializerDto(RemovePermissionsFromRoleResDTO)
+  async removePermissions(
+    @Param() { roleId }: GetRoleParamsDTO,
+    @Body() body: RemovePermissionsFromRoleBodyDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    const result = await this.roleService.removePermissions({
+      roleId,
+      permissionIds: body.permissionIds,
+      updatedById: userId
+    })
+    return {
+      message: RoleMes.REMOVE_PERMISSIONS_SUCCESS,
+      data: result
+    }
   }
 }
