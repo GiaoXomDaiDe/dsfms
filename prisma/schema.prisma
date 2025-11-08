@@ -201,7 +201,7 @@ model Course {
   departmentId    String           @db.Uuid
   name            String
   description     String?
-  code            String           @unique
+  code            String
   maxNumTrainee   Int
   venue           String?
   note            String?
@@ -226,6 +226,7 @@ model Course {
 
   @@index([departmentId])
   @@index([deletedAt])
+  @@unique([departmentId, code])
   @@map("Course")
 }
 
@@ -233,7 +234,7 @@ model Subject {
   id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   courseId        String              @db.Uuid
   name            String
-  code            String              @unique
+  code            String
   description     String?
   method          SubjectMethod
   duration        Float?
@@ -262,6 +263,7 @@ model Subject {
 
   @@index([courseId])
   @@index([deletedAt])
+  @@unique([courseId, code])
   @@map("Subject")
 }
 

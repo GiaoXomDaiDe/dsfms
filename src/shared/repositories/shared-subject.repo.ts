@@ -36,9 +36,10 @@ export class SharedSubjectRepository {
     return subject
   }
 
-  async checkCodeExists(code: string, excludeId?: string): Promise<boolean> {
+  async checkCodeExists(code: string, courseId: string, excludeId?: string): Promise<boolean> {
     const where: Prisma.SubjectWhereInput = {
       code,
+      courseId,
       deletedAt: null,
       ...(excludeId && {
         id: {
