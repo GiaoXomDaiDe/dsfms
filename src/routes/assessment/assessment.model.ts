@@ -248,6 +248,49 @@ export const GetAssessmentsQuerySchema = z.object({
 
 export type GetAssessmentsQueryType = z.infer<typeof GetAssessmentsQuerySchema>
 
+export const GetDepartmentAssessmentsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  templateId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  traineeId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+  search: z.string().optional(),
+  includeDeleted: z.coerce.boolean().default(false).optional()
+}).strict()
+
+export type GetDepartmentAssessmentsQueryType = z.infer<typeof GetDepartmentAssessmentsQuerySchema>
+
+// Department Assessment Item with custom trainee field
+export const DepartmentAssessmentItemSchema = AssessmentFormResSchema.extend({
+  trainee: z.object({
+    id: z.string(),
+    eid: z.string(),
+    fullName: z.string(), // Custom field combining first, middle, last names
+    email: z.string()
+  })
+})
+
+export type DepartmentAssessmentItemType = z.infer<typeof DepartmentAssessmentItemSchema>
+
+export const GetDepartmentAssessmentsResSchema = z.object({
+  assessments: z.array(DepartmentAssessmentItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  departmentInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    code: z.string()
+  }).optional()
+})
+
+export type GetDepartmentAssessmentsResType = z.infer<typeof GetDepartmentAssessmentsResSchema>
+
 export const GetAssessmentParamsSchema = z.object({
   assessmentId: z.string().uuid('Assessment ID must be a valid UUID')
 }).strict()
@@ -573,3 +616,32 @@ export const ConfirmAssessmentParticipationResSchema = z.object({
 })
 
 export type ConfirmAssessmentParticipationResType = z.infer<typeof ConfirmAssessmentParticipationResSchema>
+
+// ===== APPROVE/REJECT ASSESSMENT SCHEMAS =====
+
+export const ApproveRejectAssessmentBodySchema = z.object({
+  action: z.enum(['APPROVED', 'REJECTED'], {
+    message: 'Action must be either APPROVED or REJECTED'
+  }),
+  comment: z.string()
+    .max(1000, 'Comment must not exceed 1000 characters')
+    .optional()
+})
+
+export const ApproveRejectAssessmentResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    assessmentFormId: z.string().uuid(),
+    status: z.nativeEnum(AssessmentStatus),
+    previousStatus: z.nativeEnum(AssessmentStatus),
+    comment: z.string().nullable(),
+    approvedById: z.string().uuid().nullable(),
+    approvedAt: z.coerce.date().nullable(),
+    processedAt: z.coerce.date(),
+    processedBy: z.string().uuid()
+  })
+})
+
+export type ApproveRejectAssessmentBodyType = z.infer<typeof ApproveRejectAssessmentBodySchema>
+export type ApproveRejectAssessmentResType = z.infer<typeof ApproveRejectAssessmentResSchema>

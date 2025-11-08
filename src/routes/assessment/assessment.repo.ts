@@ -7,7 +7,10 @@ import {
   CreateAssessmentBodyType,
   GetAssessmentDetailResType,
   GetAssessmentsQueryType,
-  GetAssessmentsResType
+  GetAssessmentsResType,
+  GetDepartmentAssessmentsQueryType,
+  GetDepartmentAssessmentsResType,
+  DepartmentAssessmentItemType
 } from './assessment.model'
 import { 
   AssessmentSectionNotFoundError,
@@ -1275,6 +1278,221 @@ export class AssessmentRepo {
   }
 
   /**
+   * Get assessments for a department (for Department Head)
+   * Permanently blocks access to assessments in early stages (NOT_STARTED, ON_GOING, SIGNATURE_PENDING, DRAFT, READY_TO_SUBMIT)
+   * Only allows access to completed workflow assessments (SUBMITTED, APPROVED, REJECTED, CANCELLED)
+   * Blocked statuses cannot be accessed even when explicitly queried
+   */
+  async getDepartmentAssessments(
+    departmentId: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: AssessmentStatus,
+    templateId?: string,
+    subjectId?: string,
+    courseId?: string,
+    traineeId?: string,
+    fromDate?: Date,
+    toDate?: Date,
+    search?: string
+  ): Promise<GetDepartmentAssessmentsResType> {
+    let whereClause: Prisma.AssessmentFormWhereInput = {
+      OR: [
+        // Assessments in subjects that belong to courses in this department
+        {
+          subject: {
+            course: {
+              departmentId
+            }
+          }
+        },
+        // Assessments in courses directly in this department
+        {
+          course: {
+            departmentId
+          }
+        }
+      ],
+      // Exclude assessments with these statuses
+      status: {
+        notIn: [
+          AssessmentStatus.NOT_STARTED,
+          AssessmentStatus.ON_GOING,
+          AssessmentStatus.SIGNATURE_PENDING,
+          AssessmentStatus.DRAFT,
+          AssessmentStatus.READY_TO_SUBMIT
+        ]
+      }
+    }
+
+    // Apply status filter only if it's not in the excluded list
+    if (status) {
+      const excludedStatuses: AssessmentStatus[] = [
+        AssessmentStatus.NOT_STARTED,
+        AssessmentStatus.ON_GOING,
+        AssessmentStatus.SIGNATURE_PENDING,
+        AssessmentStatus.DRAFT,
+        AssessmentStatus.READY_TO_SUBMIT
+      ]
+      
+      if (excludedStatuses.includes(status)) {
+        // If trying to query an excluded status, return empty result
+        whereClause.status = 'INVALID_STATUS' as any // This will match nothing
+      } else {
+        whereClause.status = status
+      }
+    }
+    if (templateId) whereClause.templateId = templateId
+    if (subjectId) whereClause.subjectId = subjectId
+    if (courseId) whereClause.courseId = courseId
+    if (traineeId) whereClause.traineeId = traineeId
+
+    if (fromDate || toDate) {
+      whereClause.occuranceDate = {}
+      if (fromDate) whereClause.occuranceDate.gte = fromDate
+      if (toDate) whereClause.occuranceDate.lte = toDate
+    }
+
+    // Add search functionality
+    if (search) {
+      const existingAnd = Array.isArray(whereClause.AND) ? whereClause.AND : whereClause.AND ? [whereClause.AND] : []
+      whereClause.AND = [
+        ...existingAnd,
+        {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { trainee: { firstName: { contains: search, mode: 'insensitive' } } },
+            { trainee: { lastName: { contains: search, mode: 'insensitive' } } },
+            { trainee: { eid: { contains: search, mode: 'insensitive' } } }
+          ]
+        }
+      ]
+    }
+
+    const skip = (page - 1) * limit
+
+    // Get total count
+    const totalItems = await this.prisma.assessmentForm.count({
+      where: whereClause
+    })
+
+    // Get assessments with all related info
+    const assessments = await this.prisma.assessmentForm.findMany({
+      where: whereClause,
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        subject: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            course: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true
+          }
+        },
+        approvedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      },
+      skip,
+      take: limit
+    })
+
+    // Get department info
+    const department = await this.prisma.department.findUnique({
+      where: { id: departmentId },
+      select: {
+        id: true,
+        name: true,
+        code: true
+      }
+    })
+
+    const totalPages = Math.ceil(totalItems / limit)
+
+    // Transform data to match the expected format
+    const transformedAssessments = assessments.map((assessment) => ({
+      ...assessment,
+      trainee: {
+        id: assessment.trainee.id,
+        eid: assessment.trainee.eid,
+        fullName:
+          `${assessment.trainee.firstName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.lastName}`.trim(),
+        email: assessment.trainee.email
+      }
+    })) as DepartmentAssessmentItemType[]
+
+    return {
+      assessments: transformedAssessments,
+      totalItems,
+      page,
+      limit,
+      totalPages,
+      departmentInfo: department || undefined
+    }
+  }
+
+  /**
    * Get assessment sections that a user can assess based on their role permissions
    */
   async getAssessmentSections(assessmentId: string, userId: string) {
@@ -2095,6 +2313,93 @@ export class AssessmentRepo {
       data: {
         status: AssessmentStatus.READY_TO_SUBMIT,
         updatedAt: new Date()
+      }
+    })
+  }
+
+  /**
+   * Check if user has access to an assessment based on department
+   */
+  async checkUserAssessmentAccess(
+    assessmentId: string, 
+    userId: string, 
+    departmentId: string
+  ): Promise<boolean> {
+    const assessment = await this.prisma.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      select: {
+        template: {
+          select: {
+            departmentId: true
+          }
+        }
+      }
+    })
+
+    if (!assessment) return false
+
+    // Check if the assessment's template belongs to the user's department
+    return assessment.template.departmentId === departmentId
+  }
+
+  /**
+   * Get assessment with detailed information for email notifications
+   */
+  async getAssessmentWithDetails(assessmentId: string) {
+    return await this.prisma.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      select: {
+        id: true,
+        name: true,
+        submittedAt: true,
+        trainee: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        template: {
+          select: {
+            name: true
+          }
+        },
+        subject: {
+          select: {
+            name: true
+          }
+        },
+        course: {
+          select: {
+            name: true
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Approve or reject a SUBMITTED assessment form
+   */
+  async approveRejectAssessment(
+    assessmentId: string,
+    action: 'APPROVED' | 'REJECTED',
+    comment: string | undefined,
+    approvedById: string
+  ) {
+    const now = new Date()
+
+    return await this.prisma.assessmentForm.update({
+      where: { 
+        id: assessmentId,
+        status: AssessmentStatus.SUBMITTED
+      },
+      data: {
+        status: action === 'APPROVED' ? AssessmentStatus.APPROVED : AssessmentStatus.REJECTED,
+        comment: comment || null,
+        approvedById: action === 'APPROVED' ? approvedById : null,
+        approvedAt: action === 'APPROVED' ? now : null,
+        updatedAt: now
       }
     })
   }

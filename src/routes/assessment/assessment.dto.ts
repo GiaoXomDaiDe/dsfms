@@ -28,7 +28,11 @@ import {
   SubmitAssessmentResSchema,
   UpdateAssessmentValuesBodySchema,
   UpdateAssessmentValuesResSchema,
-  ConfirmAssessmentParticipationResSchema
+  ConfirmAssessmentParticipationResSchema,
+  GetDepartmentAssessmentsQuerySchema,
+  GetDepartmentAssessmentsResSchema,
+  ApproveRejectAssessmentBodySchema,
+  ApproveRejectAssessmentResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -40,6 +44,8 @@ export class CreateBulkAssessmentBodyDTO extends createZodDto(CreateBulkAssessme
 export class GetAssessmentsQueryDTO extends createZodDto(GetAssessmentsQuerySchema) {}
 
 export class GetAssessmentParamsDTO extends createZodDto(GetAssessmentParamsSchema) {}
+
+export class GetDepartmentAssessmentsQueryDTO extends createZodDto(GetDepartmentAssessmentsQuerySchema) {}
 
 // ===== RESPONSE DTOs =====
 
@@ -102,6 +108,14 @@ export class UpdateAssessmentValuesBodyDTO extends createZodDto(UpdateAssessment
 export class UpdateAssessmentValuesResDTO extends createZodDto(UpdateAssessmentValuesResSchema) {}
 
 export class ConfirmAssessmentParticipationResDTO extends createZodDto(ConfirmAssessmentParticipationResSchema) {}
+
+export class GetDepartmentAssessmentsResDTO extends createZodDto(GetDepartmentAssessmentsResSchema) {}
+
+// ===== APPROVE/REJECT ASSESSMENT DTOs =====
+
+export class ApproveRejectAssessmentBodyDTO extends createZodDto(ApproveRejectAssessmentBodySchema) {}
+
+export class ApproveRejectAssessmentResDTO extends createZodDto(ApproveRejectAssessmentResSchema) {}
 
 // ===== TYPE EXPORTS =====
 

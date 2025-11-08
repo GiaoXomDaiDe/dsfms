@@ -253,4 +253,67 @@ This account was created on ${creationDate}.`
       results
     }
   }
+
+  /**
+   * Send rejected assessment email notification
+   */
+  async sendRejectedAssessmentEmail(
+    traineeEmail: string,
+    traineeName: string,
+    assessmentName: string,
+    subjectOrCourseName: string,
+    templateName: string,
+    submissionDate: string,
+    reviewerName: string,
+    reviewDate: string,
+    rejectionComment: string,
+    assessmentUrl?: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Read email template
+      const { readFileSync } = await import('fs')
+      const { join } = await import('path')
+      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'rejected-assessment.txt')
+      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+
+      // Replace placeholders in template
+      htmlTemplate = htmlTemplate.replace('[Your_Logo_URL]', 'https://via.placeholder.com/150x50?text=DSFMS')
+      htmlTemplate = htmlTemplate.replace(/\[TRAINEE_NAME\]/g, traineeName)
+      htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_NAME\]/g, assessmentName)
+      htmlTemplate = htmlTemplate.replace(/\[SUBJECT_OR_COURSE_NAME\]/g, subjectOrCourseName)
+      htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_NAME\]/g, templateName)
+      htmlTemplate = htmlTemplate.replace(/\[SUBMISSION_DATE\]/g, submissionDate)
+      htmlTemplate = htmlTemplate.replace(/\[REVIEWER_NAME\]/g, reviewerName)
+      htmlTemplate = htmlTemplate.replace(/\[REVIEW_DATE\]/g, reviewDate)
+      htmlTemplate = htmlTemplate.replace(/\[REJECTION_COMMENT\]/g, rejectionComment || 'No specific comment provided.')
+      htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_URL\]/g, assessmentUrl || '#')
+
+      const emailData = {
+        to: traineeEmail,
+        subject: `Assessment Rejected - ${assessmentName}`,
+        html: htmlTemplate,
+        text: `Your assessment "${assessmentName}" has been rejected. Reason: ${rejectionComment}. Please review and resubmit.`
+      }
+
+      const result = await this.sendEmail(emailData)
+
+      if (result.success) {
+        return {
+          success: true,
+          message: 'Rejection notification email sent successfully'
+        }
+      } else {
+        return {
+          success: false,
+          message: `Failed to send rejection notification email: ${result.error}`
+        }
+      }
+    } catch (error) {
+      console.error('Error sending rejected assessment email:', error)
+      return {
+        success: false,
+        message: `Error sending rejection notification email: ${error.message}`
+      }
+    }
+  }
 }

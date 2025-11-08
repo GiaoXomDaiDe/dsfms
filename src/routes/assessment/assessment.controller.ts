@@ -22,7 +22,11 @@ import {
   SubmitAssessmentResDTO,
   UpdateAssessmentValuesBodyDTO,
   UpdateAssessmentValuesResDTO,
-  ConfirmAssessmentParticipationResDTO
+  ConfirmAssessmentParticipationResDTO,
+  GetDepartmentAssessmentsQueryDTO,
+  GetDepartmentAssessmentsResDTO,
+  ApproveRejectAssessmentBodyDTO,
+  ApproveRejectAssessmentResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -114,6 +118,27 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.getCourseAssessments(query, userContext)
+  }
+
+  /**
+   * GET /assessments/department
+   * List all assessments for a department (for Department Head)
+   */
+  @Get('department')
+  @ZodSerializerDto(GetDepartmentAssessmentsResDTO)
+  async getDepartmentAssessments(
+    @Query() query: GetDepartmentAssessmentsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getDepartmentAssessments(query, userContext)
   }
 
   /**
@@ -318,6 +343,32 @@ export class AssessmentController {
 
     return await this.assessmentService.confirmAssessmentParticipation(
       params.assessmentId,
+      userContext
+    )
+  }
+
+  /**
+   * PUT /assessments/:assessmentId/approve-reject
+   * Approve or reject a SUBMITTED assessment form
+   */
+  @Put(':assessmentId/approve-reject')
+  @ZodSerializerDto(ApproveRejectAssessmentResDTO)
+  async approveRejectAssessment(
+    @Param() params: GetAssessmentParamsDTO,
+    @Body() body: ApproveRejectAssessmentBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.approveRejectAssessment(
+      params.assessmentId,
+      body,
       userContext
     )
   }
