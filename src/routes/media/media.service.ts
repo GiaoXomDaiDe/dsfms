@@ -75,6 +75,8 @@ export class MediaService {
   }
 
   async uploadDocFile(files: Array<Express.Multer.File>, type: string, userId: string) {
+    this.logger.debug(`uploadDocFile invoked with ${files.length} file(s) for type=${type} userId=${userId}`)
+
     const uploads = files.map(async (file, index) => {
       const extension = path.extname(file.originalname)
       const controlledFilename = this.generateControlledFilename(
@@ -84,6 +86,13 @@ export class MediaService {
       )
       const key = `docs/${controlledFilename}`
 
+      this.logger.debug(`Uploading doc file`, {
+        originalName: file.originalname,
+        key,
+        tempPath: file.path,
+        index
+      })
+
       try {
         const uploadResult = await this.s3Service.uploadedFile({
           filename: key,
@@ -91,19 +100,45 @@ export class MediaService {
           contentType: file.mimetype
         })
 
-        return {
+        const resolved = {
           id: uploadResult.Key ?? key,
           url: uploadResult.Location ?? this.s3Service.getObjectUrl(key)
         }
+
+        this.logger.debug(`Upload succeeded`, resolved)
+
+        return resolved
+      } catch (error) {
+        this.logger.error(
+          `Upload failed for ${file.originalname} -> ${key}: ${error instanceof Error ? error.message : error}`,
+          error instanceof Error ? error.stack : undefined
+        )
+        throw error
       } finally {
-        await unlink(file.path)
+        try {
+          await unlink(file.path)
+        } catch (cleanupError) {
+          this.logger.warn(
+            `Failed to remove temp file ${file.path}: ${
+              cleanupError instanceof Error ? cleanupError.message : cleanupError
+            }`
+          )
+        }
       }
     })
 
-    const result = await Promise.all(uploads)
-
-    return {
-      data: result
+    try {
+      const result = await Promise.all(uploads)
+      this.logger.debug(`uploadDocFile completed with ${result.length} item(s)`)
+      return {
+        data: result
+      }
+    } catch (error) {
+      this.logger.error(
+        `uploadDocFile encountered an error: ${error instanceof Error ? error.message : error}`,
+        error instanceof Error ? error.stack : undefined
+      )
+      throw error
     }
   }
 
