@@ -273,7 +273,10 @@ export class MediaService {
 
   private async uploadFromSourceUrl(sourceUrl: string, key: string, overrideContentType?: string) {
     const response = await this.httpService.axiosRef.get<Readable>(sourceUrl, { responseType: 'stream' })
-    console.log('Response from source URL:', JSON.stringify(response.data, null, 2))
+    this.logger.debug(
+      `Fetched source URL ${sourceUrl} with status ${response.status}`,
+      typeof response.headers === 'object' ? { 'content-type': response.headers['content-type'] } : undefined
+    )
     try {
       const headerContentType = this.extractContentType(response.headers?.['content-type'])
       const contentType = overrideContentType ?? headerContentType ?? (mime.lookup(key) || 'application/octet-stream')
