@@ -8,7 +8,7 @@ config()
 const envPath = path.resolve('.env')
 
 if (process.env.NODE_ENV !== 'test' && !fs.existsSync(envPath)) {
-  console.warn('Không tìm thấy file .env, sử dụng biến môi trường hiện có')
+  console.warn('No .env file found, using existing environment variables')
 }
 
 //Schema kiểm tra biến môi trường có đủ ko
@@ -48,7 +48,9 @@ const configSchema = z.object({
   ACADEMIC_DEPARTMENT_PASSWORD: z.string(),
   ACADEMIC_DEPARTMENT_FIRST_NAME: z.string(),
   ACADEMIC_DEPARTMENT_LAST_NAME: z.string(),
-  ACADEMIC_DEPARTMENT_MIDDLE_NAME: z.string()
+  ACADEMIC_DEPARTMENT_MIDDLE_NAME: z.string(),
+  ONLYOFFICE_COMMAND_SERVICE_URL: z.url().optional(),
+  ONLYOFFICE_JWT_SECRET: z.string().optional()
 })
 
 const configServer = configSchema.safeParse(process.env)

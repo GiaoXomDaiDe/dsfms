@@ -11,14 +11,19 @@ import {
   CreateSubjectBodyDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
+  GetSubjectEnrollmentBatchesResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
   GetTraineeEnrollmentsQueryDto,
   GetTraineeEnrollmentsResDto,
   LookupTraineesBodyDto,
   LookupTraineesResDto,
+  RemoveCourseTraineeEnrollmentsBodyDto,
+  RemoveCourseTraineeEnrollmentsResDto,
   RemoveEnrollmentsBodyDto,
+  RemoveEnrollmentsByBatchResDto,
   RemoveEnrollmentsResDto,
+  SubjectBatchParamsDto,
   SubjectIdParamsDto,
   SubjectSchemaDto,
   SubjectTraineeParamsDto,
@@ -54,6 +59,12 @@ export class SubjectController {
   @ZodSerializerDto(GetAvailableTrainersResDto)
   async getAvailableTrainers(@Param('courseId') { courseId }: CourseIdParamsDto) {
     return await this.subjectService.getAvailableTrainers(courseId)
+  }
+
+  @Get(':subjectId/enrollments/batches')
+  @ZodSerializerDto(GetSubjectEnrollmentBatchesResDto)
+  async getSubjectEnrollmentBatches(@Param() { subjectId }: SubjectIdParamsDto) {
+    return await this.subjectService.getSubjectEnrollmentBatches({ subjectId })
   }
 
   @Post()
@@ -139,6 +150,15 @@ export class SubjectController {
     })
   }
 
+  @Delete(':subjectId/enrollments/batches/:batchCode')
+  @ZodSerializerDto(RemoveEnrollmentsByBatchResDto)
+  async removeEnrollmentsByBatch(@Param() { subjectId, batchCode }: SubjectBatchParamsDto) {
+    return await this.subjectService.removeEnrollmentsByBatch({
+      subjectId,
+      batchCode
+    })
+  }
+
   @Get('trainees/:traineeId/enrollments')
   @ZodSerializerDto(GetTraineeEnrollmentsResDto)
   async getTraineeEnrollments(
@@ -155,6 +175,14 @@ export class SubjectController {
   @ZodSerializerDto(LookupTraineesResDto)
   async lookupTrainees(@Body() body: LookupTraineesBodyDto) {
     return await this.subjectService.lookupTrainees({
+      data: body
+    })
+  }
+
+  @Delete('courses/trainees/enrollments')
+  @ZodSerializerDto(RemoveCourseTraineeEnrollmentsResDto)
+  async removeCourseEnrollmentsForTrainee(@Body() body: RemoveCourseTraineeEnrollmentsBodyDto) {
+    return await this.subjectService.removeCourseEnrollmentsForTrainee({
       data: body
     })
   }
