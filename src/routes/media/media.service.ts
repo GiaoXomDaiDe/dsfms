@@ -284,9 +284,14 @@ export class MediaService {
       const tokenPayload = { payload: { ...basePayload } }
       const token = jwtService.sign(tokenPayload)
       requestBody.token = token
-      headers.Authorization = `Bearer ${token}`
+      const authHeaderName = envConfig.ONLYOFFICE_AUTH_HEADER ?? 'Authorization'
+      const headerKey = authHeaderName.trim() || 'Authorization'
+      const normalizedHeaderKey = headerKey.toLowerCase()
+      headers[headerKey] = normalizedHeaderKey === 'authorizationjwt' ? token : `Bearer ${token}`
       this.logger.debug('JWT token attached to OnlyOffice command request', {
-        tokenPayloadKeys: Object.keys(basePayload)
+        tokenPayloadKeys: Object.keys(basePayload),
+        headerKey,
+        bearerPrefix: normalizedHeaderKey !== 'authorizationjwt'
       })
     }
 

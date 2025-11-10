@@ -50,7 +50,8 @@ const configSchema = z.object({
   ACADEMIC_DEPARTMENT_LAST_NAME: z.string(),
   ACADEMIC_DEPARTMENT_MIDDLE_NAME: z.string(),
   ONLYOFFICE_COMMAND_SERVICE_URL: z.url().optional(),
-  ONLYOFFICE_JWT_SECRET: z.string().optional()
+  ONLYOFFICE_JWT_SECRET: z.string().optional(),
+  ONLYOFFICE_AUTH_HEADER: z.string().optional()
 })
 
 const configServer = configSchema.safeParse(process.env)
