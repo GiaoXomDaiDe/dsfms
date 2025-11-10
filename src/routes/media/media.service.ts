@@ -257,6 +257,7 @@ export class MediaService {
     })
 
     const commandUrl = envConfig.ONLYOFFICE_COMMAND_SERVICE_URL
+    console.log('CommandUrl', commandUrl)
 
     if (!commandUrl) {
       this.logger.error('ONLYOFFICE_COMMAND_SERVICE_URL environment variable is not configured')
