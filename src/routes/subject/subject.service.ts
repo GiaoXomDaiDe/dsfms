@@ -8,9 +8,9 @@ import {
   isNotFoundPrismaError,
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
+import { MessageResType } from '~/shared/models/response.model'
 import { CourseIdParamsType } from '~/shared/models/shared-course.model'
 import { SubjectIdParamsType, SubjectType } from '~/shared/models/shared-subject.model'
-import { MessageResType } from '~/shared/models/response.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import {
@@ -41,13 +41,17 @@ import {
   CreateSubjectBodyType,
   GetAvailableTrainersResType,
   GetSubjectDetailResType,
+  GetSubjectEnrollmentBatchesResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetTraineeEnrollmentsQueryType,
   GetTraineeEnrollmentsResType,
   LookupTraineesBodyType,
   LookupTraineesResType,
+  RemoveCourseTraineeEnrollmentsBodyType,
+  RemoveCourseTraineeEnrollmentsResType,
   RemoveEnrollmentsBodyType,
+  RemoveEnrollmentsByBatchResType,
   RemoveEnrollmentsResType,
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
@@ -421,12 +425,17 @@ export class SubjectService {
     if (result.duplicates.length > 0) {
       const duplicateDetails = result.duplicates.map((item) => ({
         eid: item.eid,
+        fullName: item.fullName,
         email: item.email,
         batchCode: item.batchCode,
         enrolledAt: item.enrolledAt
       }))
 
-      throw DuplicateTraineeEnrollmentException(duplicateDetails)
+      throw DuplicateTraineeEnrollmentException({
+        duplicates: duplicateDetails,
+        subjectName: subject.name,
+        subjectCode: subject.code
+      })
     }
 
     if (result.invalid.length > 0) {
@@ -461,6 +470,20 @@ export class SubjectService {
     }
   }
 
+  async getSubjectEnrollmentBatches({ subjectId }: { subjectId: string }): Promise<GetSubjectEnrollmentBatchesResType> {
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    const batches = await this.subjectRepo.getSubjectEnrollmentBatches(subjectId)
+
+    return {
+      subjectId,
+      batches
+    }
+  }
+
   async removeEnrollments({
     subjectId,
     data
@@ -487,6 +510,36 @@ export class SubjectService {
     }
   }
 
+  async removeEnrollmentsByBatch({
+    subjectId,
+    batchCode
+  }: {
+    subjectId: string
+    batchCode: string
+  }): Promise<RemoveEnrollmentsByBatchResType> {
+    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    const result = await this.subjectRepo.removeEnrollmentsByBatch({
+      subjectId,
+      batchCode
+    })
+
+    const message =
+      result.removedCount > 0
+        ? `Removed ${result.removedCount} enrollments from batch ${batchCode}`
+        : `No enrollments found for batch ${batchCode}`
+
+    return {
+      batchCode,
+      removedCount: result.removedCount,
+      removedTraineeEids: result.removedTraineeEids,
+      message
+    }
+  }
+
   async cancelSubjectEnrollment({
     subjectId,
     traineeId,
@@ -507,6 +560,28 @@ export class SubjectService {
     }
 
     return { message: 'Enrollment cancelled successfully' }
+  }
+
+  async removeCourseEnrollmentsForTrainee({
+    data
+  }: {
+    data: RemoveCourseTraineeEnrollmentsBodyType
+  }): Promise<RemoveCourseTraineeEnrollmentsResType> {
+    const result = await this.subjectRepo.removeCourseEnrollmentsForTrainee({
+      traineeEid: data.traineeEid,
+      courseCode: data.courseCode
+    })
+
+    const message =
+      result.removedEnrollmentsCount > 0
+        ? `Removed ${result.removedEnrollmentsCount} enrollments for trainee ${data.traineeEid} from course ${data.courseCode}`
+        : 'No enrollments found for this trainee in the course'
+
+    return {
+      message,
+      removedEnrollmentsCount: result.removedEnrollmentsCount,
+      affectedSubjectCodes: result.affectedSubjectCodes
+    }
   }
 
   private ensureSubjectWithinCourseRange({

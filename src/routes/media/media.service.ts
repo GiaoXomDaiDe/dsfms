@@ -192,7 +192,7 @@ export class MediaService {
   }
 
   async handleOnlyOfficeCallback(payload: OnlyOfficeCallbackBodyType): Promise<OnlyOfficeCallbackResType> {
-    console.log('Payload come from callback:', JSON.stringify(payload, null, 2))
+    console.log('Payload received from OnlyOffice callback:', JSON.stringify(payload, null, 2))
     if (!MediaService.ONLYOFFICE_SAVE_STATUSES.has(payload.status) || !payload.url) {
       return { error: 0 }
     }
@@ -310,13 +310,13 @@ export class MediaService {
     const record = this.onlyOfficeResults.get(documentKey)
 
     if (!record) {
-      throw new NotFoundException('Không tìm thấy kết quả lưu cho tài liệu này')
+      throw new NotFoundException('No saved result found for this document')
     }
 
     const isExpired = record.savedAt + MediaService.ONLYOFFICE_RESULT_TTL_MS < Date.now()
     if (isExpired) {
       this.onlyOfficeResults.delete(documentKey)
-      throw new NotFoundException('Kết quả lưu đã hết hạn, vui lòng lưu lại tài liệu')
+      throw new NotFoundException('Saved result has expired, please save the document again')
     }
 
     return {

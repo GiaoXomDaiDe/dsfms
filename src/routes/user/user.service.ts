@@ -162,10 +162,10 @@ export class UserService {
 
         await this.nodemailerService.sendNewUserAccountEmail(data.email, eid, plainPassword, fullName, targetRole.name)
 
-        console.log(`Gửi email chào mừng thành công tới ${data.email}`)
+        console.log(`Welcome email sent successfully to ${data.email}`)
       } catch (emailError) {
         // Nếu gửi email lỗi thì chỉ log, không throw
-        console.error(`Gửi email chào mừng thất bại tới ${data.email}:`, emailError)
+        console.error(`Failed to send welcome email to ${data.email}:`, emailError)
       }
       return this.formatUserProfileForRole(userWithProfile)
     } catch (error) {

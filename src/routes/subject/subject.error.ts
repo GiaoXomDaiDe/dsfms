@@ -55,18 +55,32 @@ export const CourseAtCapacityException = (current: number, max: number, attempti
 export const CannotEnrollInRecurrentSubjectException = (reason?: string) =>
   new BadRequestException(reason ?? 'Cannot enroll in recurrent subject')
 
-export const DuplicateTraineeEnrollmentException = (
+export const DuplicateTraineeEnrollmentException = ({
+  duplicates,
+  subjectName,
+  subjectCode
+}: {
   duplicates: Array<{
     eid: string
+    fullName: string
     email: string
     batchCode: string
     enrolledAt: string
   }>
-) =>
-  new BadRequestException({
-    message: 'Duplicate trainee enrollments detected',
-    duplicates
+  subjectName: string
+  subjectCode: string
+}) => {
+  const traineeNames = duplicates.map((d) => `${d.fullName} (${d.eid})`).join(', ')
+
+  return new BadRequestException({
+    message: `The following trainee(s) have already been enrolled in subject "${subjectName}" (${subjectCode}): ${traineeNames}`,
+    duplicates,
+    subject: {
+      name: subjectName,
+      code: subjectCode
+    }
   })
+}
 
 export const InvalidTraineeSubmissionException = (
   invalid: Array<{
