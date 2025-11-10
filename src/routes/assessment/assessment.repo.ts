@@ -10,7 +10,12 @@ import {
   GetAssessmentsResType,
   GetDepartmentAssessmentsQueryType,
   GetDepartmentAssessmentsResType,
-  DepartmentAssessmentItemType
+  DepartmentAssessmentItemType,
+  GetAssessmentEventsQueryType,
+  GetAssessmentEventsResType,
+  UpdateAssessmentEventBodyType,
+  UpdateAssessmentEventParamsType,
+  UpdateAssessmentEventResType
 } from './assessment.model'
 import { 
   AssessmentSectionNotFoundError,
@@ -2402,5 +2407,291 @@ export class AssessmentRepo {
         updatedAt: now
       }
     })
+  }
+
+  /**
+   * Get assessment events - grouped assessment forms by name, subject/course, and occurrence date
+   */
+  async getAssessmentEvents(
+    page: number = 1,
+    limit: number = 20,
+    status?: AssessmentStatus,
+    subjectId?: string,
+    courseId?: string,
+    templateId?: string,
+    fromDate?: Date,
+    toDate?: Date,
+    search?: string
+  ) {
+    const skip = (page - 1) * limit
+
+    // Build where conditions
+    const whereConditions: any = {}
+
+    if (status) {
+      whereConditions.status = status
+    }
+
+    if (subjectId) {
+      whereConditions.subjectId = subjectId
+    }
+
+    if (courseId) {
+      whereConditions.courseId = courseId
+    }
+
+    if (templateId) {
+      whereConditions.templateId = templateId
+    }
+
+    if (fromDate || toDate) {
+      whereConditions.occuranceDate = {}
+      if (fromDate) {
+        whereConditions.occuranceDate.gte = fromDate
+      }
+      if (toDate) {
+        whereConditions.occuranceDate.lte = toDate
+      }
+    }
+
+    if (search) {
+      whereConditions.name = {
+        contains: search,
+        mode: 'insensitive'
+      }
+    }
+
+    // Get grouped assessment forms with aggregation
+    const events = await this.prisma.assessmentForm.groupBy({
+      by: ['name', 'subjectId', 'courseId', 'occuranceDate', 'status', 'templateId'],
+      where: whereConditions,
+      _count: {
+        id: true
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      },
+      skip,
+      take: limit
+    })
+
+    // Get total count for pagination
+    const totalEventsResult = await this.prisma.assessmentForm.groupBy({
+      by: ['name', 'subjectId', 'courseId', 'occuranceDate'],
+      where: whereConditions,
+      _count: {
+        id: true
+      }
+    })
+    
+    const total = totalEventsResult.length
+
+    // Enrich events with subject/course and template information
+    const enrichedEvents = await Promise.all(
+      events.map(async (event) => {
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course' } | null = null
+
+        // Get subject or course info
+        if (event.subjectId) {
+          const subject = await this.prisma.subject.findUnique({
+            where: { id: event.subjectId },
+            select: { id: true, name: true, code: true }
+          })
+          if (subject) {
+            entityInfo = {
+              id: subject.id,
+              name: subject.name,
+              code: subject.code,
+              type: 'subject'
+            }
+          }
+        } else if (event.courseId) {
+          const course = await this.prisma.course.findUnique({
+            where: { id: event.courseId },
+            select: { id: true, name: true, code: true }
+          })
+          if (course) {
+            entityInfo = {
+              id: course.id,
+              name: course.name,
+              code: course.code,
+              type: 'course'
+            }
+          }
+        }
+
+        // Get template info
+        const template = await this.prisma.templateForm.findUnique({
+          where: { id: event.templateId },
+          select: { id: true, name: true, status: true }
+        })
+
+        return {
+          name: event.name,
+          subjectId: event.subjectId,
+          courseId: event.courseId,
+          occuranceDate: event.occuranceDate,
+          status: event.status,
+          totalTrainees: event._count.id,
+          entityInfo: entityInfo || {
+            id: '',
+            name: 'Unknown',
+            code: 'UNKNOWN',
+            type: event.subjectId ? 'subject' : 'course'
+          },
+          templateInfo: template ? {
+            id: template.id,
+            name: template.name,
+            isActive: template.status === 'PUBLISHED'
+          } : {
+            id: event.templateId,
+            name: 'Unknown Template',
+            isActive: false
+          }
+        }
+      })
+    )
+
+    const totalPages = Math.ceil(total / limit)
+
+    return {
+      success: true,
+      message: 'Assessment events retrieved successfully',
+      data: {
+        events: enrichedEvents,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      }
+    }
+  }
+
+  /**
+   * Update assessment event (name and/or occurrence date for all matching assessment forms)
+   */
+  async updateAssessmentEvent(
+    currentName: string,
+    subjectId: string | undefined,
+    courseId: string | undefined,
+    currentOccuranceDate: Date,
+    templateId: string,
+    updates: {
+      name?: string
+      occuranceDate?: Date
+    }
+  ) {
+    // Validate that event exists and is in NOT_STARTED status
+    const existingAssessments = await this.prisma.assessmentForm.findMany({
+      where: {
+        name: currentName,
+        ...(subjectId ? { subjectId } : { courseId }),
+        occuranceDate: currentOccuranceDate,
+        templateId: templateId,
+        status: AssessmentStatus.NOT_STARTED
+      }
+    })
+
+    if (existingAssessments.length === 0) {
+      throw new Error('No assessment forms found with NOT_STARTED status for this event, or occurrence date has already passed')
+    }
+
+    // Check if occurrence date is in the future (for existing and new date)
+    const now = new Date()
+    now.setHours(0, 0, 0, 0) // Set to beginning of today
+
+    if (currentOccuranceDate <= now) {
+      throw new Error('Cannot update assessment event - occurrence date has already passed or is today')
+    }
+
+    if (updates.occuranceDate && updates.occuranceDate <= now) {
+      throw new Error('New occurrence date must be in the future')
+    }
+
+    // Build update data
+    const updateData: any = {}
+    if (updates.name) {
+      updateData.name = updates.name
+    }
+    if (updates.occuranceDate) {
+      updateData.occuranceDate = updates.occuranceDate
+    }
+
+    // Update all matching assessment forms
+    const result = await this.prisma.assessmentForm.updateMany({
+      where: {
+        name: currentName,
+        ...(subjectId ? { subjectId } : { courseId }),
+        occuranceDate: currentOccuranceDate,
+        templateId: templateId,
+        status: AssessmentStatus.NOT_STARTED
+      },
+      data: updateData
+    })
+
+    return {
+      success: true,
+      message: `Successfully updated ${result.count} assessment form(s)`,
+      data: {
+        updatedCount: result.count,
+        eventInfo: {
+          name: updates.name || currentName,
+          subjectId: subjectId || null,
+          courseId: courseId || null,
+          occuranceDate: updates.occuranceDate || currentOccuranceDate,
+          templateId: templateId,
+          totalAssessmentForms: result.count
+        }
+      }
+    }
+  }
+
+  /**
+   * Update assessment status to ON_GOING when occurrence date arrives
+   * This should be called by a scheduled job or when the occurrence date is reached
+   */
+  async updateAssessmentStatusOnOccurrenceDate(
+    name: string,
+    subjectId: string | undefined,
+    courseId: string | undefined,
+    occuranceDate: Date,
+    templateId: string
+  ) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const targetDate = new Date(occuranceDate)
+    targetDate.setHours(0, 0, 0, 0)
+
+    // Only update if the occurrence date is today or past
+    if (targetDate > today) {
+      throw new Error('Cannot update status - occurrence date has not arrived yet')
+    }
+
+    const result = await this.prisma.assessmentForm.updateMany({
+      where: {
+        name,
+        ...(subjectId ? { subjectId } : { courseId }),
+        occuranceDate,
+        templateId,
+        status: AssessmentStatus.NOT_STARTED
+      },
+      data: {
+        status: AssessmentStatus.ON_GOING
+      }
+    })
+
+    return {
+      success: true,
+      message: `Successfully updated ${result.count} assessment form(s) to ON_GOING status`,
+      data: {
+        updatedCount: result.count,
+        newStatus: AssessmentStatus.ON_GOING
+      }
+    }
   }
 }

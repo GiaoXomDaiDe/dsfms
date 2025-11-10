@@ -26,7 +26,12 @@ import {
   GetDepartmentAssessmentsQueryDTO,
   GetDepartmentAssessmentsResDTO,
   ApproveRejectAssessmentBodyDTO,
-  ApproveRejectAssessmentResDTO
+  ApproveRejectAssessmentResDTO,
+  GetAssessmentEventsQueryDTO,
+  GetAssessmentEventsResDTO,
+  UpdateAssessmentEventBodyDTO,
+  UpdateAssessmentEventParamsDTO,
+  UpdateAssessmentEventResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -139,6 +144,51 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.getDepartmentAssessments(query, userContext)
+  }
+
+  /**
+   * GET /assessments/events
+   * Get assessment events - grouped assessment forms by name, subject/course, occurrence date, and templateId
+   */
+  @Get('events')
+  @ZodSerializerDto(GetAssessmentEventsResDTO)
+  async getAssessmentEvents(
+    @Query() query: GetAssessmentEventsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getAssessmentEvents(query, userContext)
+  }
+
+  /**
+   * PUT /assessments/events/update
+   * Update assessment event basic info (name and/or occurrence date)
+   * URL format: /assessments/events/update?subjectId=xxx&occuranceDate=2024-12-01&name=EventName&templateId=xxx
+   * OR: /assessments/events/update?courseId=xxx&occuranceDate=2024-12-01&name=EventName&templateId=xxx
+   */
+  @Put('events/update')
+  @ZodSerializerDto(UpdateAssessmentEventResDTO)
+  async updateAssessmentEvent(
+    @Query() params: UpdateAssessmentEventParamsDTO,
+    @Body() body: UpdateAssessmentEventBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.updateAssessmentEvent(params, body, userContext)
   }
 
   /**

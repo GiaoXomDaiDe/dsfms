@@ -645,3 +645,106 @@ export const ApproveRejectAssessmentResSchema = z.object({
 
 export type ApproveRejectAssessmentBodyType = z.infer<typeof ApproveRejectAssessmentBodySchema>
 export type ApproveRejectAssessmentResType = z.infer<typeof ApproveRejectAssessmentResSchema>
+
+// ===== ASSESSMENT EVENT SCHEMAS =====
+
+export const AssessmentEventItemSchema = z.object({
+  name: z.string().max(255),
+  subjectId: z.string().uuid().nullable(),
+  courseId: z.string().uuid().nullable(),
+  occuranceDate: z.coerce.date(),
+  status: z.nativeEnum(AssessmentStatus),
+  totalTrainees: z.number().int().min(0),
+  // Additional info about the subject/course
+  entityInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    code: z.string(),
+    type: z.enum(['subject', 'course'])
+  }),
+  // Basic template info
+  templateInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    isActive: z.boolean()
+  })
+})
+
+export const GetAssessmentEventsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  subjectId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  templateId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+  search: z.string().max(100).optional()
+})
+
+export const GetAssessmentEventsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    events: z.array(AssessmentEventItemSchema),
+    pagination: z.object({
+      page: z.number().int(),
+      limit: z.number().int(), 
+      total: z.number().int(),
+      totalPages: z.number().int(),
+      hasNext: z.boolean(),
+      hasPrev: z.boolean()
+    })
+  })
+})
+
+export const UpdateAssessmentEventBodySchema = z.object({
+  name: z.string()
+    .min(1, 'Name is required')
+    .max(255, 'Name must not exceed 255 characters')
+    .optional(),
+  occuranceDate: z.coerce.date()
+    .refine((date) => date > new Date(), {
+      message: 'Occurrence date must be in the future'
+    })
+    .optional()
+}).refine((data) => data.name || data.occuranceDate, {
+  message: 'At least one field (name or occuranceDate) must be provided'
+})
+
+export const UpdateAssessmentEventParamsSchema = z.object({
+  subjectId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  occuranceDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Invalid occurrence date format'
+  }).transform((val) => new Date(val)),
+  name: z.string().min(1).max(255),
+  templateId: z.string().uuid()
+}).refine((data) => data.subjectId || data.courseId, {
+  message: 'Either subjectId or courseId must be provided'
+}).refine((data) => !(data.subjectId && data.courseId), {
+  message: 'Cannot provide both subjectId and courseId'
+})
+
+export const UpdateAssessmentEventResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    updatedCount: z.number().int().min(0),
+    eventInfo: z.object({
+      name: z.string(),
+      subjectId: z.string().uuid().nullable(),
+      courseId: z.string().uuid().nullable(),
+      occuranceDate: z.coerce.date(),
+      templateId: z.string().uuid(),
+      totalAssessmentForms: z.number().int().min(0)
+    })
+  })
+})
+
+export type AssessmentEventItemType = z.infer<typeof AssessmentEventItemSchema>
+export type GetAssessmentEventsQueryType = z.infer<typeof GetAssessmentEventsQuerySchema>
+export type GetAssessmentEventsResType = z.infer<typeof GetAssessmentEventsResSchema>
+export type UpdateAssessmentEventBodyType = z.infer<typeof UpdateAssessmentEventBodySchema>
+export type UpdateAssessmentEventParamsType = z.infer<typeof UpdateAssessmentEventParamsSchema>
+export type UpdateAssessmentEventResType = z.infer<typeof UpdateAssessmentEventResSchema>
