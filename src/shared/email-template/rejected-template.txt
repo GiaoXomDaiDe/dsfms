@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Rejected - DSFMS</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; color: #333;">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; margin: 40px auto; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <tr>
+            <td style="padding: 20px 0; text-align: center; background-color: #d3d3d3;">
+                <img src="https://dsfms.s3.ap-southeast-1.amazonaws.com/images/logo_344422e4-4d55-4775-9bab-09fdd2a39abe.png" alt="DSFMS System Logo" style="max-width: 150px; height: auto;">
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 30px;">
+                <h2 style="color: #e74c3c; margin: 0 0 20px; font-size: 24px; text-align: center;">Template Rejected</h2>
+                <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+                    Hello <strong>[CREATOR_NAME]</strong>,<br><br>
+                    We regret to inform you that your template <strong>"[TEMPLATE_NAME]"</strong> has been reviewed and unfortunately cannot be approved at this time.
+                </p>
+                
+                <div style="background-color: #fff5f5; border-left: 4px solid #e74c3c; padding: 15px; margin: 20px 0;">
+                    <h3 style="color: #c0392b; margin: 0 0 10px; font-size: 16px;">Template Details:</h3>
+                    <ul style="color: #666; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                        <li><strong>Template Name:</strong> [TEMPLATE_NAME]</li>
+                        <li><strong>Version:</strong> [TEMPLATE_VERSION]</li>
+                        <li><strong>Department:</strong> [DEPARTMENT_NAME]</li>
+                        <li><strong>Created Date:</strong> [CREATION_DATE]</li>
+                        <li><strong>Review Date:</strong> [REVIEW_DATE]</li>
+                    </ul>
+                </div>
+
+                <div style="background-color: #fef9e7; border-left: 4px solid #f39c12; padding: 15px; margin: 20px 0;">
+                    <h3 style="color: #d68910; margin: 0 0 10px; font-size: 16px;">Reviewer Comments:</h3>
+                    <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 0; font-style: italic;">
+                        "[REJECTION_COMMENT]"
+                    </p>
+                </div>
+
+                <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 20px 0;">
+                    <strong>Next Steps:</strong><br>
+                    Please review the comments above and make the necessary revisions to your template. You can create a new version of the template with the required changes and submit it for review again.
+                </p>
+
+                <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0 0;">
+                    If you have any questions about this rejection or need clarification on the feedback, please contact the review team or the system administrator.
+                </p>
+                
+                <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0 0;">
+                    Best regards,<br>
+                    The DSFMS Team
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 20px; text-align: center; background-color: #d3d3d3; color: #666; font-size: 12px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                <p style="margin: 0;">© 2025 DSFMS. All rights reserved.</p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

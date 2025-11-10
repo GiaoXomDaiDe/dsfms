@@ -3,8 +3,9 @@ import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import JSZip from 'jszip'
 import { TemplateRepository } from './template.repository'
-import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
+import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto, ReviewTemplateBodyType, ReviewTemplateResType } from './template.dto'
 import { PdfConverterService } from '~/shared/services/pdf-converter.service'
+import { NodemailerService } from '../email/nodemailer.service'
 import {
   InvalidFileTypeError,
   DocxParsingError,
@@ -48,6 +49,7 @@ interface PlaceholderInfo {
 export class TemplateService {
   constructor(
     private readonly templateRepository: TemplateRepository,
+    private readonly nodemailerService: NodemailerService,
     private readonly pdfConverterService: PdfConverterService
   ) {}
   /**
@@ -737,6 +739,119 @@ export class TemplateService {
       success: true,
       data: updatedTemplate,
       message: TEMPLATE_STATUS_UPDATED_SUCCESSFULLY(newStatus)
+    }
+  }
+
+  /**
+   * Review template - approve or reject a PENDING template with email notification
+   */
+  async reviewTemplate(
+    templateId: string,
+    body: ReviewTemplateBodyType,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<ReviewTemplateResType> {
+    try {
+      // Check if template exists and is in PENDING status
+      const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+      if (!existingTemplate) {
+        throw new TemplateNotFoundError()
+      }
+
+      if (existingTemplate.status !== 'PENDING') {
+        throw new Error('Template must be in PENDING status to be reviewed')
+      }
+
+      // Get template creator details for email notification
+      const templateWithCreator = await this.templateRepository.getTemplateWithCreator(templateId)
+      if (!templateWithCreator) {
+        throw new TemplateNotFoundError()
+      }
+
+      // Get reviewer details
+      const reviewerInfo = await this.templateRepository.getUserById(userContext.userId)
+      if (!reviewerInfo) {
+        throw new Error('Reviewer information not found')
+      }
+
+      // Get department info
+      const departmentInfo = templateWithCreator.department
+      const departmentName = departmentInfo?.name || 'Unknown Department'
+
+      // Update template status
+      const updatedTemplate = await this.templateRepository.updateTemplateStatus(
+        templateId,
+        body.action,
+        userContext.userId,
+        true // isReviewAction
+      )
+
+      // Prepare email notification
+      const creatorName = `${templateWithCreator.createdByUser.firstName} ${templateWithCreator.createdByUser.lastName}`.trim()
+      const reviewerName = `${reviewerInfo.firstName} ${reviewerInfo.lastName}`.trim()
+      const creationDate = new Date(templateWithCreator.createdAt).toLocaleDateString()
+      const reviewDate = new Date().toLocaleDateString()
+
+      // Send email notification
+      let emailSent = false
+      try {
+        if (body.action === 'PUBLISHED') {
+          const emailResult = await this.nodemailerService.sendApprovedTemplateEmail(
+            templateWithCreator.createdByUser.email,
+            creatorName,
+            templateWithCreator.name,
+            templateWithCreator.version,
+            departmentName,
+            creationDate,
+            reviewerName,
+            reviewDate
+          )
+          emailSent = emailResult.success
+        } else if (body.action === 'REJECTED') {
+          const emailResult = await this.nodemailerService.sendRejectedTemplateEmail(
+            templateWithCreator.createdByUser.email,
+            creatorName,
+            templateWithCreator.name,
+            templateWithCreator.version,
+            departmentName,
+            creationDate,
+            reviewerName,
+            reviewDate,
+            body.comment || 'No specific comment provided'
+          )
+          emailSent = emailResult.success
+        }
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError)
+        // Don't fail the entire operation if email fails
+      }
+
+      return {
+        success: true,
+        message: `Template ${body.action.toLowerCase()} successfully${emailSent ? ' and notification email sent' : ''}`,
+        data: {
+          templateId: updatedTemplate.id,
+          templateName: updatedTemplate.name,
+          status: body.action,
+          previousStatus: 'PENDING',
+          reviewedBy: userContext.userId,
+          reviewedAt: new Date(),
+          comment: body.comment || null,
+          emailSent
+        }
+      }
+
+    } catch (error) {
+      console.error('Template review failed:', error)
+      
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      
+      if (error.message?.includes('PENDING status')) {
+        throw new Error('Template must be in PENDING status to be reviewed')
+      }
+
+      throw new Error(`Failed to review template: ${error.message}`)
     }
   }
 
