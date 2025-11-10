@@ -91,6 +91,18 @@ export const OnlyOfficeDocumentResultSchema = z.object({
   savedAt: z.string()
 })
 
+export const OnlyOfficeForceSaveBodySchema = z
+  .object({
+    key: z.string().min(1),
+    userdata: z.string().optional()
+  })
+  .strict()
+
+export const OnlyOfficeForceSaveResSchema = z.object({
+  error: z.union([z.literal(0), z.literal(4)]),
+  message: z.string()
+})
+
 export type PresignedUploadFileBodyType = z.infer<typeof PresignedUploadFileBodySchema>
 export type PresignedUploadDocBodyType = z.infer<typeof PresignedUploadDocBodySchema>
 export type DeleteMediaObjectBodyType = z.infer<typeof DeleteMediaObjectBodySchema>
@@ -99,3 +111,5 @@ export type UploadDocFromUrlResType = z.infer<typeof UploadDocFromUrlResSchema>
 export type OnlyOfficeCallbackBodyType = z.infer<typeof OnlyOfficeCallbackBodySchema>
 export type OnlyOfficeCallbackResType = z.infer<typeof OnlyOfficeCallbackResSchema>
 export type OnlyOfficeDocumentResultType = z.infer<typeof OnlyOfficeDocumentResultSchema>
+export type OnlyOfficeForceSaveBodyType = z.infer<typeof OnlyOfficeForceSaveBodySchema>
+export type OnlyOfficeForceSaveResType = z.infer<typeof OnlyOfficeForceSaveResSchema>

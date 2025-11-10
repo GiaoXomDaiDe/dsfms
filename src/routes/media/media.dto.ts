@@ -4,6 +4,8 @@ import {
   OnlyOfficeCallbackBodySchema,
   OnlyOfficeCallbackResSchema,
   OnlyOfficeDocumentResultSchema,
+  OnlyOfficeForceSaveBodySchema,
+  OnlyOfficeForceSaveResSchema,
   PresignedUploadDocBodySchema,
   PresignedUploadFileBodySchema,
   PresignedUploadFileResSchema,
@@ -30,3 +32,7 @@ export class OnlyOfficeCallbackBodyDTO extends createZodDto(OnlyOfficeCallbackBo
 export class OnlyOfficeCallbackResDTO extends createZodDto(OnlyOfficeCallbackResSchema) {}
 
 export class OnlyOfficeDocumentResultDTO extends createZodDto(OnlyOfficeDocumentResultSchema) {}
+
+export class OnlyOfficeForceSaveBodyDTO extends createZodDto(OnlyOfficeForceSaveBodySchema) {}
+
+export class OnlyOfficeForceSaveResDTO extends createZodDto(OnlyOfficeForceSaveResSchema) {}

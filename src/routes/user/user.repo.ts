@@ -13,13 +13,12 @@ import {
   BulkUserData,
   CreateUserInternalType,
   GetUserProfileResType,
-  GetUsersQueryType,
-  UserType
+  GetUsersQueryType
 } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { GetUsersResType } from '~/shared/models/shared-user.model'
+import { GetUsersResType, UserType } from '~/shared/models/shared-user.model'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 const roleNameSelect = {
