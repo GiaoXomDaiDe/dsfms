@@ -120,7 +120,7 @@ export const ChangePasswordBodySchema = UserSchema.pick({
     if (newPassword !== confirmNewPassword) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp',
+        message: 'New password and confirmation do not match',
         path: ['confirmNewPassword']
       })
     }
@@ -136,11 +136,11 @@ export const ResetPasswordBodySchema = z
   })
   .strict()
   .superRefine(({ confirmNewPassword, newPassword }, ctx) => {
-    // Kiểm tra confirmNewPassword có khớp với newPassword không
+    // Check whether confirmNewPassword matches newPassword
     if (newPassword !== confirmNewPassword) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp',
+        message: 'New password and confirmation do not match',
         path: ['confirmNewPassword']
       })
     }

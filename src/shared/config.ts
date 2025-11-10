@@ -8,7 +8,7 @@ config()
 const envPath = path.resolve('.env')
 
 if (process.env.NODE_ENV !== 'test' && !fs.existsSync(envPath)) {
-  console.warn('Không tìm thấy file .env, sử dụng biến môi trường hiện có')
+  console.warn('No .env file found, using existing environment variables')
 }
 
 //Schema kiểm tra biến môi trường có đủ ko
