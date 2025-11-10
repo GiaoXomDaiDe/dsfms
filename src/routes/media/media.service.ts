@@ -1,5 +1,13 @@
 import { HttpService } from '@nestjs/axios'
-import { Injectable, Logger, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException
+} from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
+import type { AxiosError } from 'axios'
 import { unlink } from 'fs/promises'
 import mime from 'mime-types'
 import path from 'path'
@@ -8,11 +16,14 @@ import {
   DeleteMediaObjectBodyType,
   OnlyOfficeCallbackBodyType,
   OnlyOfficeCallbackResType,
+  OnlyOfficeForceSaveBodyType,
+  OnlyOfficeForceSaveResType,
   PresignedUploadDocBodyType,
   PresignedUploadFileBodyType,
   UploadDocFromUrlBodyType,
   UploadDocFromUrlResType
 } from '~/routes/media/media.model'
+import envConfig from '~/shared/config'
 import { S3Service } from '~/shared/services/s3.service'
 
 @Injectable()
@@ -232,6 +243,99 @@ export class MediaService {
         error instanceof Error ? error.stack : undefined
       )
       return { error: 1 }
+    }
+  }
+
+  async forceSaveOnlyOfficeDocument(
+    { key, userdata }: OnlyOfficeForceSaveBodyType,
+    userId?: string
+  ): Promise<OnlyOfficeForceSaveResType> {
+    this.logger.debug('Force save request received', {
+      key,
+      hasExplicitUserdata: Boolean(userdata),
+      resolvedUserId: userId
+    })
+
+    const commandUrl = envConfig.ONLYOFFICE_COMMAND_SERVICE_URL
+
+    if (!commandUrl) {
+      this.logger.error('ONLYOFFICE_COMMAND_SERVICE_URL environment variable is not configured')
+      throw new InternalServerErrorException('OnlyOffice command service is not configured')
+    }
+
+    const effectiveUserData = userdata ?? userId
+    const basePayload: Record<string, unknown> = { c: 'forcesave', key }
+
+    if (effectiveUserData) {
+      basePayload.userdata = effectiveUserData
+    }
+
+    const requestBody: Record<string, unknown> = { ...basePayload }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    }
+
+    const jwtSecret = envConfig.ONLYOFFICE_JWT_SECRET
+
+    if (jwtSecret) {
+      const jwtService = new JwtService({ secret: jwtSecret })
+      const tokenPayload = { payload: { ...basePayload } }
+      const token = jwtService.sign(tokenPayload)
+      requestBody.token = token
+      headers.Authorization = `Bearer ${token}`
+      this.logger.debug('JWT token attached to OnlyOffice command request', {
+        tokenPayloadKeys: Object.keys(basePayload)
+      })
+    }
+
+    try {
+      this.logger.debug('Sending force save command to OnlyOffice', {
+        commandUrl,
+        payloadKeys: Object.keys(requestBody)
+      })
+
+      const { data } = await this.httpService.axiosRef.post(commandUrl, requestBody, {
+        headers
+      })
+
+      const errorCode = typeof data?.error === 'number' ? data.error : undefined
+
+      this.logger.debug('OnlyOffice command response received', {
+        key,
+        errorCode,
+        rawResponse: data
+      })
+
+      if (errorCode === 0) {
+        return { error: 0, message: 'Force save completed successfully' }
+      }
+
+      if (errorCode === 4) {
+        return { error: 4, message: 'No changes detected, skipping force save' }
+      }
+
+      this.logger.error(`Unexpected OnlyOffice response for key=${key}`, {
+        errorCode,
+        data
+      })
+
+      throw new BadRequestException(`OnlyOffice force save failed with error code ${errorCode ?? 'unknown'}`)
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error
+      }
+
+      const axiosError = error as AxiosError
+      const status = axiosError?.response?.status
+      const responseData = axiosError?.response?.data
+
+      this.logger.error(
+        `OnlyOffice force save request failed for key=${key} (status=${status ?? 'n/a'})`,
+        typeof responseData === 'object' ? responseData : { response: responseData }
+      )
+
+      throw new InternalServerErrorException('Failed to trigger OnlyOffice force save')
     }
   }
 

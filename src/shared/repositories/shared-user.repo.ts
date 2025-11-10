@@ -7,10 +7,11 @@ import {
   UpdateTrainerProfileType
 } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
-import { GetUserProfileResType, UpdateUserInternalType, UserType } from '~/routes/user/user.model'
+import { GetUserProfileResType, UpdateUserInternalType } from '~/routes/user/user.model'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
+import { UserType } from '~/shared/models/shared-user.model'
 import { EidService } from '~/shared/services/eid.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 

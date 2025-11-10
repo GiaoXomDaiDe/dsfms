@@ -23,6 +23,8 @@ import {
   OnlyOfficeCallbackBodyDTO,
   OnlyOfficeCallbackResDTO,
   OnlyOfficeDocumentResultDTO,
+  OnlyOfficeForceSaveBodyDTO,
+  OnlyOfficeForceSaveResDTO,
   PresignedUploadDocBodyDTO,
   PresignedUploadFileBodyDTO,
   PresignedUploadFileResDTO,
@@ -138,6 +140,12 @@ export class MediaController {
   @ZodSerializerDto(OnlyOfficeDocumentResultDTO)
   getOnlyOfficeResult(@Query('key') key: string) {
     return this.mediaService.getOnlyOfficeResult(key)
+  }
+
+  @Post('docs/onlyoffice/forcesave')
+  @ZodSerializerDto(OnlyOfficeForceSaveResDTO)
+  forceSaveOnlyOfficeDocument(@Body() body: OnlyOfficeForceSaveBodyDTO, @ActiveUser('userId') userId: string) {
+    return this.mediaService.forceSaveOnlyOfficeDocument(body, userId)
   }
   @IsPublic()
   @Post('docs/upload-from-url')

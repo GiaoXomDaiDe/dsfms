@@ -298,10 +298,8 @@ export type CreateUserBodyWithProfileType = z.infer<typeof CreateUserBodyWithPro
 export type UpdateUserBodyWithProfileType = z.infer<typeof UpdateUserBodyWithProfileSchema>
 export type CreateBulkUsersBodyType = z.infer<typeof CreateBulkUsersBodySchema>
 export type BulkCreateResultType = z.infer<typeof BulkCreateResultSchema>
-export type UserType = z.infer<typeof UserSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
-export type ExcludeUserResType = z.infer<typeof UpdateUserResSchema>
 export type BulkUserData = CreateUserInternalType & {
   roleName: string
   trainerProfile?: CreateTrainerProfileType
