@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import * as nodemailer from 'nodemailer'
 import { Transporter } from 'nodemailer'
+import * as path from 'path'
+import { promises as fs } from 'fs'
 import envConfig from '~/shared/config'
 
 export interface NodemailerEmailOptions {
@@ -313,6 +315,122 @@ This account was created on ${creationDate}.`
       return {
         success: false,
         message: `Error sending rejection notification email: ${error.message}`
+      }
+    }
+  }
+
+  /**
+   * Send email notification for approved template
+   */
+  async sendApprovedTemplateEmail(
+    creatorEmail: string,
+    creatorName: string,
+    templateName: string,
+    templateVersion: number,
+    departmentName: string,
+    creationDate: string,
+    reviewerName: string,
+    reviewDate: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const { readFileSync } = await import('fs')
+      const { join } = await import('path')
+      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'approved-template.txt')
+      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+
+      // Replace placeholders with actual data
+      htmlTemplate = htmlTemplate.replace(/\[CREATOR_NAME\]/g, creatorName)
+      htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_NAME\]/g, templateName)
+      htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_VERSION\]/g, templateVersion.toString())
+      htmlTemplate = htmlTemplate.replace(/\[DEPARTMENT_NAME\]/g, departmentName)
+      htmlTemplate = htmlTemplate.replace(/\[CREATION_DATE\]/g, creationDate)
+      htmlTemplate = htmlTemplate.replace(/\[REVIEWER_NAME\]/g, reviewerName)
+      htmlTemplate = htmlTemplate.replace(/\[REVIEW_DATE\]/g, reviewDate)
+
+      const emailData = {
+        to: creatorEmail,
+        subject: `Template Approved - ${templateName}`,
+        html: htmlTemplate,
+        text: `Great news! Your template "${templateName}" has been approved and is now published for use.`
+      }
+
+      const result = await this.sendEmail(emailData)
+
+      if (result.success) {
+        return {
+          success: true,
+          message: 'Template approval notification email sent successfully'
+        }
+      } else {
+        return {
+          success: false,
+          message: `Failed to send template approval notification email: ${result.error}`
+        }
+      }
+    } catch (error) {
+      console.error('Error sending approved template email:', error)
+      return {
+        success: false,
+        message: `Error sending template approval notification email: ${error.message}`
+      }
+    }
+  }
+
+  /**
+   * Send email notification for rejected template
+   */
+  async sendRejectedTemplateEmail(
+    creatorEmail: string,
+    creatorName: string,
+    templateName: string,
+    templateVersion: number,
+    departmentName: string,
+    creationDate: string,
+    reviewerName: string,
+    reviewDate: string,
+    rejectionComment: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const { readFileSync } = await import('fs')
+      const { join } = await import('path')
+      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'rejected-template.txt')
+      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+
+      // Replace placeholders with actual data
+      htmlTemplate = htmlTemplate.replace(/\[CREATOR_NAME\]/g, creatorName)
+      htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_NAME\]/g, templateName)
+      htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_VERSION\]/g, templateVersion.toString())
+      htmlTemplate = htmlTemplate.replace(/\[DEPARTMENT_NAME\]/g, departmentName)
+      htmlTemplate = htmlTemplate.replace(/\[CREATION_DATE\]/g, creationDate)
+      htmlTemplate = htmlTemplate.replace(/\[REVIEWER_NAME\]/g, reviewerName)
+      htmlTemplate = htmlTemplate.replace(/\[REVIEW_DATE\]/g, reviewDate)
+      htmlTemplate = htmlTemplate.replace(/\[REJECTION_COMMENT\]/g, rejectionComment || 'No specific comment provided.')
+
+      const emailData = {
+        to: creatorEmail,
+        subject: `Template Rejected - ${templateName}`,
+        html: htmlTemplate,
+        text: `Your template "${templateName}" has been rejected. Reason: ${rejectionComment}. Please review the feedback and make necessary revisions.`
+      }
+
+      const result = await this.sendEmail(emailData)
+
+      if (result.success) {
+        return {
+          success: true,
+          message: 'Template rejection notification email sent successfully'
+        }
+      } else {
+        return {
+          success: false,
+          message: `Failed to send template rejection notification email: ${result.error}`
+        }
+      }
+    } catch (error) {
+      console.error('Error sending rejected template email:', error)
+      return {
+        success: false,
+        message: `Error sending template rejection notification email: ${error.message}`
       }
     }
   }

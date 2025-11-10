@@ -822,4 +822,44 @@ export class TemplateRepository {
       }
     )
   }
+
+  /**
+   * Get template with creator information for email notifications
+   */
+  async getTemplateWithCreator(templateId: string) {
+    return await this.prismaService.templateForm.findUnique({
+      where: { id: templateId },
+      include: {
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Get user by ID for reviewer information
+   */
+  async getUserById(userId: string) {
+    return await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true
+      }
+    })
+  }
 }

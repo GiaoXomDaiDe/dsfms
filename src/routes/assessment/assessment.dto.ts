@@ -32,7 +32,12 @@ import {
   GetDepartmentAssessmentsQuerySchema,
   GetDepartmentAssessmentsResSchema,
   ApproveRejectAssessmentBodySchema,
-  ApproveRejectAssessmentResSchema
+  ApproveRejectAssessmentResSchema,
+  GetAssessmentEventsQuerySchema,
+  GetAssessmentEventsResSchema,
+  UpdateAssessmentEventBodySchema,
+  UpdateAssessmentEventParamsSchema,
+  UpdateAssessmentEventResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -116,6 +121,18 @@ export class GetDepartmentAssessmentsResDTO extends createZodDto(GetDepartmentAs
 export class ApproveRejectAssessmentBodyDTO extends createZodDto(ApproveRejectAssessmentBodySchema) {}
 
 export class ApproveRejectAssessmentResDTO extends createZodDto(ApproveRejectAssessmentResSchema) {}
+
+// ===== ASSESSMENT EVENT DTOs =====
+
+export class GetAssessmentEventsQueryDTO extends createZodDto(GetAssessmentEventsQuerySchema) {}
+
+export class GetAssessmentEventsResDTO extends createZodDto(GetAssessmentEventsResSchema) {}
+
+export class UpdateAssessmentEventBodyDTO extends createZodDto(UpdateAssessmentEventBodySchema) {}
+
+export class UpdateAssessmentEventParamsDTO extends createZodDto(UpdateAssessmentEventParamsSchema) {}
+
+export class UpdateAssessmentEventResDTO extends createZodDto(UpdateAssessmentEventResSchema) {}
 
 // ===== TYPE EXPORTS =====
 

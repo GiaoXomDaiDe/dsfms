@@ -222,3 +222,43 @@ export class TemplateFormResponseDto {
   templateSchema?: any
   sections: TemplateSectionResponseDto[]
 }
+
+// ===== TEMPLATE REVIEW SCHEMAS =====
+
+export const ReviewTemplateBodySchema = z.object({
+  action: z.enum(['PUBLISHED', 'REJECTED'], {
+    message: 'Action must be either PUBLISHED or REJECTED'
+  }),
+  comment: z.string()
+    .max(1000, 'Comment must not exceed 1000 characters')
+    .optional()
+}).refine((data) => {
+  if (data.action === 'REJECTED' && !data.comment) {
+    return false
+  }
+  return true
+}, {
+  message: 'Comment is required for rejection',
+  path: ['comment']
+})
+
+export const ReviewTemplateResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    templateId: z.string().uuid(),
+    templateName: z.string(),
+    status: z.enum(['PUBLISHED', 'REJECTED']),
+    previousStatus: z.string(),
+    reviewedBy: z.string().uuid(),
+    reviewedAt: z.coerce.date(),
+    comment: z.string().nullable(),
+    emailSent: z.boolean()
+  })
+})
+
+export class ReviewTemplateBodyDTO extends createZodDto(ReviewTemplateBodySchema) {}
+export class ReviewTemplateResDTO extends createZodDto(ReviewTemplateResSchema) {}
+
+export type ReviewTemplateBodyType = z.infer<typeof ReviewTemplateBodySchema>
+export type ReviewTemplateResType = z.infer<typeof ReviewTemplateResSchema>

@@ -5,7 +5,7 @@ import type { Response } from 'express'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
-import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
+import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto, ReviewTemplateBodyDTO, ReviewTemplateResDTO } from './template.dto'
 import { TemplateService } from './template.service'
 
 @Controller('templates')
@@ -221,6 +221,28 @@ export class TemplateController {
     }
 
     return await this.templateService.createTemplateVersion(createVersionDto, userContext)
+  }
+
+  /**
+   * PUT /templates/:id/review
+   * Review template - approve or reject a PENDING template with email notification
+   */
+  @Patch(':id/review')
+  @ZodSerializerDto(ReviewTemplateResDTO)
+  async reviewTemplate(
+    @Param('id') id: string,
+    @Body() body: ReviewTemplateBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.reviewTemplate(id, body, userContext)
   }
 
   @Get('pdf/:templateFormId')

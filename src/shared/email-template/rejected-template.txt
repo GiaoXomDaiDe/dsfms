@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assessment Rejected - DSFMS</title>
+    <title>Template Rejected - DSFMS</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; color: #333;">
     <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; margin: 40px auto; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -14,20 +14,19 @@
         </tr>
         <tr>
             <td style="padding: 30px;">
-                <h2 style="color: #e74c3c; margin: 0 0 20px; font-size: 24px; text-align: center;">Assessment Rejected</h2>
+                <h2 style="color: #e74c3c; margin: 0 0 20px; font-size: 24px; text-align: center;">Template Rejected</h2>
                 <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-                    Hello <strong>[TRAINEE_NAME]</strong>,<br><br>
-                    We regret to inform you that your assessment <strong>"[ASSESSMENT_NAME]"</strong> submitted on <strong>[SUBMISSION_DATE]</strong> has been rejected by your Department Head.
+                    Hello <strong>[CREATOR_NAME]</strong>,<br><br>
+                    We regret to inform you that your template <strong>"[TEMPLATE_NAME]"</strong> has been reviewed and unfortunately cannot be approved at this time.
                 </p>
                 
                 <div style="background-color: #fff5f5; border-left: 4px solid #e74c3c; padding: 15px; margin: 20px 0;">
-                    <h3 style="color: #c0392b; margin: 0 0 10px; font-size: 16px;">Assessment Details:</h3>
+                    <h3 style="color: #c0392b; margin: 0 0 10px; font-size: 16px;">Template Details:</h3>
                     <ul style="color: #666; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
-                        <li><strong>Assessment Name:</strong> [ASSESSMENT_NAME]</li>
-                        <li><strong>Subject/Course:</strong> [SUBJECT_OR_COURSE_NAME]</li>
-                        <li><strong>Template:</strong> [TEMPLATE_NAME]</li>
-                        <li><strong>Submission Date:</strong> [SUBMISSION_DATE]</li>
-                        <li><strong>Reviewed By:</strong> [REVIEWER_NAME]</li>
+                        <li><strong>Template Name:</strong> [TEMPLATE_NAME]</li>
+                        <li><strong>Version:</strong> [TEMPLATE_VERSION]</li>
+                        <li><strong>Department:</strong> [DEPARTMENT_NAME]</li>
+                        <li><strong>Created Date:</strong> [CREATION_DATE]</li>
                         <li><strong>Review Date:</strong> [REVIEW_DATE]</li>
                     </ul>
                 </div>
@@ -41,11 +40,11 @@
 
                 <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 20px 0;">
                     <strong>Next Steps:</strong><br>
-                    Please review the comments above and make the necessary revisions to your assessment. You may resubmit your assessment after addressing the feedback provided.
+                    Please review the comments above and make the necessary revisions to your template. You can create a new version of the template with the required changes and submit it for review again.
                 </p>
 
                 <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0 0;">
-                    If you have any questions about this rejection or need clarification on the feedback, please contact your Department Head, report to your SQA support or the assessment department.
+                    If you have any questions about this rejection or need clarification on the feedback, please contact the review team or the system administrator.
                 </p>
                 
                 <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0 0;">

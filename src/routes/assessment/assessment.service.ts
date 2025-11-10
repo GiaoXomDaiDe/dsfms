@@ -27,7 +27,12 @@ import {
   GetDepartmentAssessmentsQueryType,
   GetDepartmentAssessmentsResType,
   ApproveRejectAssessmentBodyType,
-  ApproveRejectAssessmentResType
+  ApproveRejectAssessmentResType,
+  GetAssessmentEventsQueryType,
+  GetAssessmentEventsResType,
+  UpdateAssessmentEventBodyType,
+  UpdateAssessmentEventParamsType,
+  UpdateAssessmentEventResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -1302,4 +1307,76 @@ export class AssessmentService {
       throw new BadRequestException('Failed to process assessment approval/rejection')
     }
   }
+
+  /**
+   * Get assessment events - grouped assessment forms by name, subject/course, and occurrence date
+   */
+  async getAssessmentEvents(
+    query: GetAssessmentEventsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetAssessmentEventsResType> {
+    try {
+      const result = await this.assessmentRepo.getAssessmentEvents(
+        query.page,
+        query.limit,
+        query.status,
+        query.subjectId,
+        query.courseId,
+        query.templateId,
+        query.fromDate,
+        query.toDate,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get assessment events failed:', error)
+
+      if (error instanceof NotFoundException) {
+        throw error
+      }
+
+      throw new BadRequestException('Failed to get assessment events')
+    }
+  }
+
+  /**
+   * Update assessment event basic info (name and/or occurrence date)
+   */
+  async updateAssessmentEvent(
+    params: UpdateAssessmentEventParamsType,
+    body: UpdateAssessmentEventBodyType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<UpdateAssessmentEventResType> {
+    try {
+      const result = await this.assessmentRepo.updateAssessmentEvent(
+        params.name,
+        params.subjectId,
+        params.courseId,
+        params.occuranceDate,
+        params.templateId,
+        body
+      )
+
+      return result
+    } catch (error: any) {
+      // Handle specific known errors
+      if (error instanceof NotFoundException ||
+          error instanceof BadRequestException) {
+        throw error
+      }
+
+      // Handle custom repository errors
+      if (error.message?.includes('NOT_STARTED status') ||
+          error.message?.includes('occurrence date has already passed') ||
+          error.message?.includes('must be in the future')) {
+        throw new BadRequestException(error.message)
+      }
+
+      console.error('Update assessment event failed:', error)
+      throw new BadRequestException('Failed to update assessment event')
+    }
+  }
+
+
 }

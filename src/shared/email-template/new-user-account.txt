@@ -146,7 +146,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <img src="[LOGO_URL]" alt="DSFMS Logo">
+            <img src="https://dsfms.s3.ap-southeast-1.amazonaws.com/images/logo_344422e4-4d55-4775-9bab-09fdd2a39abe.png" alt="DSFMS Logo">
             <h1>Welcome to DSFMS System</h1>
         </div>
         
