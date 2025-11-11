@@ -18,6 +18,8 @@ import {
   OnlyOfficeCallbackResType,
   OnlyOfficeForceSaveBodyType,
   OnlyOfficeForceSaveResType,
+  OnlyOfficeSubmitBodyType,
+  OnlyOfficeSubmitResType,
   PresignedUploadDocBodyType,
   PresignedUploadFileBodyType,
   UploadDocFromUrlBodyType,
@@ -308,6 +310,39 @@ export class MediaService {
         error instanceof Error ? error.stack : undefined
       )
       return { error: 1 }
+    }
+  }
+
+  async submitOnlyOfficeDocument(
+    { downloadUrl, fileName, templateId, documentKey, metadata }: OnlyOfficeSubmitBodyType,
+    userId: string
+  ): Promise<OnlyOfficeSubmitResType> {
+    const metadataKeys = metadata ? Object.keys(metadata) : []
+    this.logger.debug(`Submitting OnlyOffice document snapshot`, {
+      downloadUrl,
+      fileName,
+      templateId: templateId ?? null,
+      documentKey: documentKey ?? null,
+      userId,
+      hasMetadata: metadataKeys.length > 0,
+      metadataKeys
+    })
+
+    const uploadResult = await this.uploadDocFromUrl({ sourceUrl: downloadUrl, fileName })
+    const uploadedDoc = uploadResult.data[0]
+
+    this.logger.debug(`OnlyOffice document snapshot stored`, {
+      s3Key: uploadedDoc?.id ?? null,
+      s3Url: uploadedDoc?.url ?? null,
+      templateId: templateId ?? null,
+      documentKey: documentKey ?? null,
+      metadataKeys
+    })
+
+    return {
+      ...uploadResult,
+      templateId,
+      documentKey
     }
   }
 
