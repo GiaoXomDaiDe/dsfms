@@ -12,7 +12,7 @@ import {
   ValidateNested
 } from 'class-validator'
 import { Type } from 'class-transformer'
-import { EditByRole, RoleInSubject, FieldType, RoleRequired } from '@prisma/client'
+import { EditByRole, RoleInSubject, FieldType, RoleRequired, TemplateStatus } from '@prisma/client'
 
 // Response schema for parseTemplate (full schema with sections)
 export const ParseTemplateResponseSchema = z.object({
@@ -123,6 +123,12 @@ export class CreateTemplateFormDto {
   @IsNotEmpty()
   @IsUUID()
   departmentId: string
+
+  @IsOptional()
+  @IsEnum(['DRAFT', 'PENDING'], {
+    message: 'Status must be either DRAFT or PENDING'
+  })
+  status?: Extract<TemplateStatus, 'DRAFT' | 'PENDING'>
 
   @IsNotEmpty()
   @IsString()

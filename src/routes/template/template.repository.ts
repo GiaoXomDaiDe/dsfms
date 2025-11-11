@@ -110,7 +110,7 @@ export class TemplateRepository {
             departmentId: templateData.departmentId || undefined,
             createdByUserId,
             updatedByUserId: createdByUserId,
-            status: 'PENDING',
+            status: (templateData as any).status || 'DRAFT',
             templateContent: templateData.templateContent || '',
             templateConfig: templateData.templateConfig,
             referFirstVersionId: null,
@@ -240,7 +240,7 @@ export class TemplateRepository {
           departmentId: templateData.departmentId,
           createdByUserId,
           updatedByUserId: createdByUserId,
-          status: 'PENDING',
+          status: (templateData as any).status || 'DRAFT',
           templateContent: templateData.templateContent || '',
           templateConfig: templateData.templateConfig,
           referFirstVersionId: null,
@@ -532,7 +532,7 @@ export class TemplateRepository {
 
   async updateTemplateStatus(
     id: string, 
-    status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
     updatedByUserId: string,
     isReviewAction: boolean = false
   ) {

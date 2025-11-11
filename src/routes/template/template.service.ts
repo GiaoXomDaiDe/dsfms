@@ -518,10 +518,17 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
+      // Set default status to DRAFT if not provided
+      const status = templateData.status || 'DRAFT'
+      const templateDataWithStatus = {
+        ...templateData,
+        status
+      } as CreateTemplateFormDto & { status: 'DRAFT' | 'PENDING' }
+
       // Create template with all nested data
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
-        templateData,
+        templateDataWithStatus,
         userContext.userId,
         templateSchema
       )
@@ -714,7 +721,7 @@ export class TemplateService {
    */
   async changeTemplateStatus(
     templateId: string, 
-    newStatus: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    newStatus: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
     userContext: { userId: string; roleName: string; departmentId?: string }
   ) {
     // Check if template exists

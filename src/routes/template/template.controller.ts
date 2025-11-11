@@ -80,7 +80,8 @@ export class TemplateController {
 
   /**
    * POST /templates
-   * Requires ADMINISTRATOR role authentication
+   * Create Template Form and its Template Sections and Fields
+   * Status: Optional field, defaults to DRAFT if not provided. Only DRAFT and PENDING are allowed during creation.
    */
   @Post()
   async createTemplate(
@@ -160,7 +161,7 @@ export class TemplateController {
   @Patch(':id/status')
   async changeTemplateStatus(
     @Param('id') id: string,
-    @Body() body: { status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
+    @Body() body: { status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
     @ActiveUser() currentUser: { userId: string; departmentId?: string }
