@@ -117,8 +117,11 @@ export class PdfConverterService {
       const tempDocxPath = path.join(tempDir, `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.docx`)
       
       try {
-        // Write DOCX buffer to temporary file
-        fs.writeFileSync(tempDocxPath, docxBuffer)
+        // Process DOCX to remove/replace problematic placeholders
+        const processedBuffer = await this.preprocessDocxBuffer(docxBuffer)
+        
+        // Write processed DOCX buffer to temporary file
+        fs.writeFileSync(tempDocxPath, processedBuffer)
         
         // Read the file back as buffer for LibreOffice
         const docxFileBuffer = fs.readFileSync(tempDocxPath)
@@ -171,6 +174,57 @@ export class PdfConverterService {
     } catch {
       return 'document.docx'
     }
+  }
+
+  /**
+   * Preprocess DOCX buffer to handle placeholders that might cause PDF conversion issues
+   */
+  private async preprocessDocxBuffer(docxBuffer: Buffer): Promise<Buffer> {
+    try {
+      const JSZip = require('jszip')
+      const zip = new JSZip()
+      
+      // Load the DOCX file (which is a ZIP archive)
+      const docxZip = await zip.loadAsync(docxBuffer)
+      
+      // Process document.xml (main document content)
+      const documentXml = docxZip.file('word/document.xml')
+      if (documentXml) {
+        let content = await documentXml.async('text')
+        
+        // Replace problematic placeholders with placeholder text
+        // This prevents LibreOffice from having issues with curly braces
+        content = this.replacePlaceholdersForPdf(content)
+        
+        // Update the document.xml in the ZIP
+        docxZip.file('word/document.xml', content)
+      }
+      
+      // Generate new DOCX buffer
+      return await docxZip.generateAsync({ type: 'nodebuffer' })
+    } catch (error) {
+      console.warn('Failed to preprocess DOCX, using original:', error.message)
+      // If preprocessing fails, return original buffer
+      return docxBuffer
+    }
+  }
+
+  /**
+   * Replace placeholders in XML content for better PDF conversion
+   */
+  private replacePlaceholdersForPdf(xmlContent: string): string {
+    // Replace field placeholders like {field_name} with [FIELD_NAME]
+    let processedContent = xmlContent.replace(/\{([^}]+)\}/g, (match, fieldName) => {
+      // Convert to uppercase and replace underscores with spaces for better readability
+      const displayName = fieldName.toUpperCase().replace(/_/g, ' ')
+      return `[${displayName}]`
+    })
+    
+    // Also handle any escaped brackets or problematic characters
+    processedContent = processedContent.replace(/\&lt;\{/g, '[')
+    processedContent = processedContent.replace(/\}\&gt;/g, ']')
+    
+    return processedContent
   }
 
   /**

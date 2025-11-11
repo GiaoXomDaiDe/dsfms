@@ -23,7 +23,8 @@ import {
   S3ExtractionError,
   OriginalTemplateNotFoundError,
   TemplateHasAssessmentsError,
-  TemplateVersionCreationError
+  TemplateVersionCreationError,
+  InvalidTemplateStatusForUpdateError
 } from './template.error'
 import {
   TEMPLATE_PARSED_SUCCESSFULLY,
@@ -859,6 +860,97 @@ export class TemplateService {
       }
 
       throw new Error(`Failed to review template: ${error.message}`)
+    }
+  }
+
+  /**
+   * Update a REJECTED template with new content
+   * Recreates the template while preserving original metadata
+   * Only works on templates with REJECTED status
+   */
+  async updateRejectedTemplate(
+    templateId: string,
+    templateData: CreateTemplateFormDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists and is REJECTED
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new TemplateNotFoundError()
+    }
+
+    if (existingTemplate.status !== 'REJECTED') {
+      throw new InvalidTemplateStatusForUpdateError(existingTemplate.status)
+    }
+
+    // Validate required fields
+    if (!templateData.templateConfig) {
+      throw new TemplateConfigRequiredError()
+    }
+
+    // Validate department exists
+    const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
+    if (!departmentExists) {
+      throw new DepartmentNotFoundError(templateData.departmentId)
+    }
+
+    // Check if template name already exists (excluding current template)
+    const nameExists = await this.templateRepository.templateNameExists(templateData.name, templateId)
+    if (nameExists) {
+      throw new TemplateNameAlreadyExistsError(templateData.name)
+    }
+
+    try {
+      // Validate field relationships (same as create template)
+      for (const section of templateData.sections) {
+        if (!section.fields || !Array.isArray(section.fields)) continue
+        for (const field of section.fields) {
+          // Only validate when roleRequired is explicitly provided
+          if (field.roleRequired !== undefined && field.roleRequired !== null) {
+            if (String(field.roleRequired) !== String(section.editBy)) {
+              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+            }
+          }
+
+          // Validate that signature fields must have roleRequired set
+          if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+            if (!field.roleRequired) {
+              throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
+            }
+          }
+
+          // Check if PART field has at least one child field
+          if (field.fieldType === 'PART') {
+            const hasChildFields = section.fields.some(childField => 
+              childField.parentTempId === field.tempId || 
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            )
+            if (!hasChildFields) {
+              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+            }
+          }
+        }
+      }
+
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+
+      // Update rejected template (recreate with preserved metadata)
+      const result = await this.templateRepository.updateRejectedTemplate(
+        templateId,
+        templateData,
+        userContext.userId,
+        templateSchema
+      )
+
+      return {
+        success: true,
+        data: result,
+        message: 'Rejected template updated successfully and status changed to PENDING'
+      }
+    } catch (error) {
+      throw new TemplateCreationFailedError(error.message)
     }
   }
 
