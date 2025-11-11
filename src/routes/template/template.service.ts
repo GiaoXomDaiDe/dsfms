@@ -1004,23 +1004,31 @@ export class TemplateService {
 
   /**
    * Generate nested schema based on field hierarchy (parent-child relationships)
+   * Fields are ordered by displayOrder within each section
    */
   private generateNestedSchemaFromSections(sections: any[]): Record<string, any> {
     const schema: Record<string, any> = {};
     
-    sections.forEach(section => {
+    // Sort sections by displayOrder first
+    const sortedSections = [...sections].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    
+    sortedSections.forEach(section => {
+      // Sort fields by displayOrder within each section
+      const sortedFields = [...section.fields].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      
       // Build field maps for parent-child relationships
       const fieldByTempId = new Map<string, any>();
       const fieldByName = new Map<string, any>();
       const rootFields: any[] = [];
       
       // First pass: create field maps and identify parent fields
-      section.fields.forEach((field: any) => {
+      sortedFields.forEach((field: any) => {
         const fieldObj = {
           name: field.fieldName,
           tempId: field.tempId,
           parentTempId: field.parentTempId,
           type: this.getSchemaTypeFromFieldType(field.fieldType),
+          displayOrder: field.displayOrder || 0,
           children: [] as any[]
         };
         
@@ -1037,7 +1045,7 @@ export class TemplateService {
       });
       
       // Second pass: build parent-child relationships using tempId references
-      section.fields.forEach((field: any) => {
+      sortedFields.forEach((field: any) => {
         if (field.parentTempId) {
           const parentField = fieldByTempId.get(field.parentTempId);
           const currentField = fieldByName.get(field.fieldName);
@@ -1048,6 +1056,9 @@ export class TemplateService {
         }
       });
       
+      // Sort root fields by displayOrder
+      rootFields.sort((a, b) => a.displayOrder - b.displayOrder);
+      
       // Build nested schema structure
       this.buildNestedSchemaFromFields(rootFields, schema);
     });
@@ -1057,19 +1068,23 @@ export class TemplateService {
   
   /**
    * Recursively build nested schema structure from field hierarchy
+   * Children are also sorted by displayOrder
    */
   private buildNestedSchemaFromFields(fields: any[], target: Record<string, any>): void {
     fields.forEach(field => {
       if (field.children && field.children.length > 0) {
+        // Sort children by displayOrder before processing
+        const sortedChildren = [...field.children].sort((a, b) => a.displayOrder - b.displayOrder);
+        
         // This field has children - create an object
         // For PART type fields, use the field name as the object key
         if (field.type === 'part') {
           target[field.name] = {};
-          this.buildNestedSchemaFromFields(field.children, target[field.name]);
+          this.buildNestedSchemaFromFields(sortedChildren, target[field.name]);
         } else {
           // Non-part field with children (shouldn't happen but handle anyway)
           target[field.name] = {};
-          this.buildNestedSchemaFromFields(field.children, target[field.name]);
+          this.buildNestedSchemaFromFields(sortedChildren, target[field.name]);
         }
       } else {
         // Leaf field - set default value based on type

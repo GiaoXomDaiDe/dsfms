@@ -352,46 +352,46 @@ export class AssessmentRepo {
   /**
    * Check if assessments already exist for the given trainees on the specified date
    */
-  async checkDuplicateAssessments(
-    traineeIds: string[],
-    templateId: string,
-    occuranceDate: Date,
-    subjectId?: string,
-    courseId?: string
-  ): Promise<Array<{ traineeId: string; traineeName: string }>> {
-    const whereClause: Prisma.AssessmentFormWhereInput = {
-      traineeId: { in: traineeIds },
-      templateId,
-      occuranceDate
-    }
+  // async checkDuplicateAssessments(
+  //   traineeIds: string[],
+  //   templateId: string,
+  //   occuranceDate: Date,
+  //   subjectId?: string,
+  //   courseId?: string
+  // ): Promise<Array<{ traineeId: string; traineeName: string }>> {
+  //   const whereClause: Prisma.AssessmentFormWhereInput = {
+  //     traineeId: { in: traineeIds },
+  //     templateId,
+  //     occuranceDate
+  //   }
 
-    if (subjectId) {
-      whereClause.subjectId = subjectId
-    }
-    if (courseId) {
-      whereClause.courseId = courseId
-    }
+  //   if (subjectId) {
+  //     whereClause.subjectId = subjectId
+  //   }
+  //   if (courseId) {
+  //     whereClause.courseId = courseId
+  //   }
 
-    const existingAssessments = await this.prisma.assessmentForm.findMany({
-      where: whereClause,
-      select: {
-        traineeId: true,
-        trainee: {
-          select: {
-            firstName: true,
-            lastName: true,
-            middleName: true
-          }
-        }
-      }
-    })
+  //   const existingAssessments = await this.prisma.assessmentForm.findMany({
+  //     where: whereClause,
+  //     select: {
+  //       traineeId: true,
+  //       trainee: {
+  //         select: {
+  //           firstName: true,
+  //           lastName: true,
+  //           middleName: true
+  //         }
+  //       }
+  //     }
+  //   })
 
-    return existingAssessments.map((assessment) => ({
-      traineeId: assessment.traineeId,
-      traineeName:
-        `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
-    }))
-  }
+  //   return existingAssessments.map((assessment) => ({
+  //     traineeId: assessment.traineeId,
+  //     traineeName:
+  //       `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
+  //   }))
+  // }
 
   /**
    * Check if any assessment form already exists for trainee with the same template and occurrence date
@@ -2693,5 +2693,72 @@ export class AssessmentRepo {
         newStatus: AssessmentStatus.ON_GOING
       }
     }
+  }
+
+  /**
+   * Get assessment form with template and all values for PDF generation
+   */
+  async getAssessmentWithTemplateAndValues(assessmentId: string) {
+    return await this.prisma.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true,
+            templateSchema: true,
+            templateConfig: true,
+            templateContent: true
+          }
+        },
+        sections: {
+          include: {
+            values: {
+              include: {
+                templateField: {
+                  select: {
+                    id: true,
+                    fieldName: true,
+                    fieldType: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Get all assessment values for an assessment
+   */
+  async getAssessmentValues(assessmentId: string) {
+    return await this.prisma.assessmentValue.findMany({
+      where: {
+        assessmentSection: {
+          assessmentFormId: assessmentId
+        }
+      },
+      include: {
+        templateField: {
+          select: {
+            id: true,
+            fieldName: true,
+            fieldType: true
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Update assessment form PDF URL
+   */
+  async updateAssessmentPdfUrl(assessmentId: string, pdfUrl: string) {
+    return await this.prisma.assessmentForm.update({
+      where: { id: assessmentId },
+      data: { pdfUrl: pdfUrl }
+    })
   }
 }

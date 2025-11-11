@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { Injectable, NotFoundException } from '@nestjs/common'
@@ -96,6 +96,54 @@ export class S3Service {
     return {
       key: resolvedKey,
       url: location
+    }
+  }
+
+  async uploadBuffer({ key, body, contentType }: { key: string; body: Buffer; contentType?: string }) {
+    const uploader = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: envConfig.AWS_S3_BUCKET_NAME,
+        Key: key,
+        Body: body,
+        ContentType: contentType ?? 'application/octet-stream'
+      },
+      queueSize: 4,
+      partSize: 1024 * 1024 * 5,
+      leavePartsOnError: false
+    })
+
+    const result = (await uploader.done()) as { Key?: string; Location?: string }
+    const resolvedKey = result?.Key ?? key
+    const location = result?.Location ?? this.getObjectUrl(resolvedKey)
+
+    return {
+      key: resolvedKey,
+      url: location
+    }
+  }
+
+  async getObject(key: string): Promise<Readable> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: envConfig.AWS_S3_BUCKET_NAME,
+        Key: key
+      })
+      
+      const response = await this.s3.send(command)
+      
+      if (!response.Body) {
+        throw new NotFoundException('Object body not found')
+      }
+      
+      return response.Body as Readable
+    } catch (error: any) {
+      const statusCode = error?.$metadata?.httpStatusCode
+      const errorName = error?.name
+      if (statusCode === 404 || errorName === 'NotFound' || errorName === 'NoSuchKey') {
+        throw new NotFoundException('Object not found on S3')
+      }
+      throw error
     }
   }
 }
