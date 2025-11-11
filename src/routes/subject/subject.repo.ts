@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import { CourseStatus, Prisma } from '@prisma/client'
 import { map } from 'lodash'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import {
@@ -28,6 +28,7 @@ import {
 } from './subject.error'
 import {
   AssignTrainerResType,
+  CourseEnrollmentBatchSummaryType,
   CreateSubjectBodyType,
   GetAvailableTrainersResType,
   GetSubjectDetailResType,
@@ -40,7 +41,6 @@ import {
   SubjectDetailEnrollmentsByBatchType,
   SubjectDetailInstructorType,
   SubjectDetailTraineeType,
-  SubjectEnrollmentBatchSummaryType,
   TraineeAssignmentDuplicateType,
   TraineeAssignmentIssueType,
   TraineeAssignmentUserType,
@@ -761,14 +761,36 @@ export class SubjectRepo {
     }
   }
 
-  async getSubjectEnrollmentBatches(subjectId: string): Promise<SubjectEnrollmentBatchSummaryType[]> {
-    const enrollments = await this.prisma.subjectEnrollment.findMany({
+  async getCourseEnrollmentBatches(courseId: string): Promise<CourseEnrollmentBatchSummaryType[]> {
+    const enrollments: Prisma.SubjectEnrollmentGetPayload<{
+      select: {
+        batchCode: true
+        status: true
+        subject: {
+          select: {
+            id: true
+            code: true
+            name: true
+          }
+        }
+      }
+    }>[] = await this.prisma.subjectEnrollment.findMany({
       where: {
-        subjectId
+        subject: {
+          courseId,
+          deletedAt: null
+        }
       },
       select: {
         batchCode: true,
-        status: true
+        status: true,
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        }
       }
     })
 
@@ -781,7 +803,22 @@ export class SubjectRepo {
 
     type StatusCounts = ReturnType<typeof createEmptyStatusCounts>
 
-    const summaryMap = new Map<string, { total: number; statusCounts: StatusCounts }>()
+    type BatchAccumulator = {
+      totalTrainees: number
+      statusCounts: StatusCounts
+      subjects: Map<
+        string,
+        {
+          subjectId: string
+          subjectCode: string
+          subjectName: string
+          totalTrainees: number
+          statusCounts: StatusCounts
+        }
+      >
+    }
+
+    const batchesMap = new Map<string, BatchAccumulator>()
 
     enrollments.forEach((enrollment) => {
       const batchCode = enrollment.batchCode
@@ -789,42 +826,108 @@ export class SubjectRepo {
         return
       }
 
-      const existing = summaryMap.get(batchCode)
-      const summary = existing ?? { total: 0, statusCounts: createEmptyStatusCounts() }
+      const summary = batchesMap.get(batchCode) ?? {
+        totalTrainees: 0,
+        statusCounts: createEmptyStatusCounts(),
+        subjects: new Map()
+      }
 
-      summary.total += 1
+      summary.totalTrainees += 1
 
       const status = enrollment.status as SubjectEnrollmentStatusValue
       if (status && summary.statusCounts[status] !== undefined) {
         summary.statusCounts[status] += 1
       }
 
-      summaryMap.set(batchCode, summary)
+      const subject = enrollment.subject
+      if (subject) {
+        const subjectSummary = summary.subjects.get(subject.id) ?? {
+          subjectId: subject.id,
+          subjectCode: subject.code,
+          subjectName: subject.name,
+          totalTrainees: 0,
+          statusCounts: createEmptyStatusCounts()
+        }
+
+        subjectSummary.totalTrainees += 1
+
+        if (status && subjectSummary.statusCounts[status] !== undefined) {
+          subjectSummary.statusCounts[status] += 1
+        }
+
+        summary.subjects.set(subject.id, subjectSummary)
+      }
+
+      batchesMap.set(batchCode, summary)
     })
 
-    return Array.from(summaryMap.entries())
+    const mapStatusCountsToActive = (counts: StatusCounts) => counts.ENROLLED + counts.ON_GOING
+
+    return Array.from(batchesMap.entries())
       .sort(([batchA], [batchB]) => batchA.localeCompare(batchB))
       .map(([batchCode, summary]) => ({
         batchCode,
-        totalTrainees: summary.total,
-        activeTrainees: summary.statusCounts.ENROLLED + summary.statusCounts.ON_GOING,
-        statusCounts: { ...summary.statusCounts }
+        totalTrainees: summary.totalTrainees,
+        activeTrainees: mapStatusCountsToActive(summary.statusCounts),
+        statusCounts: { ...summary.statusCounts },
+        subjects: Array.from(summary.subjects.values())
+          .sort((subjectA, subjectB) => subjectA.subjectCode.localeCompare(subjectB.subjectCode))
+          .map((subjectSummary) => ({
+            ...subjectSummary,
+            activeTrainees: mapStatusCountsToActive(subjectSummary.statusCounts)
+          }))
       }))
   }
 
-  async removeEnrollmentsByBatch({
-    subjectId,
-    batchCode
-  }: {
-    subjectId: string
-    batchCode: string
-  }): Promise<{ removedCount: number; removedTraineeEids: string[] }> {
-    const enrollments = await this.prisma.subjectEnrollment.findMany({
+  async removeCourseEnrollmentsByBatch(params: { courseId: string; batchCode: string }): Promise<{
+    removedCount: number
+    removedSubjects: Array<{
+      subjectId: string
+      subjectCode: string
+      subjectName: string
+      removedCount: number
+      removedTraineeEids: string[]
+    }>
+  }> {
+    const { courseId, batchCode } = params
+
+    const enrollments: Prisma.SubjectEnrollmentGetPayload<{
+      select: {
+        subjectId: true
+        traineeUserId: true
+        status: true
+        subject: {
+          select: {
+            id: true
+            code: true
+            name: true
+          }
+        }
+        trainee: {
+          select: {
+            eid: true
+          }
+        }
+      }
+    }>[] = await this.prisma.subjectEnrollment.findMany({
       where: {
-        subjectId,
-        batchCode
+        batchCode,
+        subject: {
+          courseId,
+          deletedAt: null
+        }
       },
       select: {
+        subjectId: true,
+        traineeUserId: true,
+        status: true,
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        },
         trainee: {
           select: {
             eid: true
@@ -833,22 +936,80 @@ export class SubjectRepo {
       }
     })
 
-    const removedTraineeEids = enrollments
-      .map((enrollment) => enrollment.trainee?.eid)
-      .filter((eid): eid is string => Boolean(eid))
-
-    if (removedTraineeEids.length > 0) {
-      await this.prisma.subjectEnrollment.deleteMany({
-        where: {
-          subjectId,
-          batchCode
-        }
-      })
+    if (enrollments.length === 0) {
+      return {
+        removedCount: 0,
+        removedSubjects: []
+      }
     }
 
+    const subjectSummaries = new Map<
+      string,
+      {
+        subjectId: string
+        subjectCode: string
+        subjectName: string
+        removedCount: number
+        removedTraineeEids: string[]
+      }
+    >()
+
+    const affectedEnrollmentIds: Array<{ subjectId: string; traineeUserId: string }> = []
+
+    enrollments.forEach((enrollment) => {
+      const subject = enrollment.subject
+      if (!subject) {
+        return
+      }
+
+      if (enrollment.status === SubjectEnrollmentStatus.CANCELLED) {
+        return
+      }
+
+      const summary = subjectSummaries.get(subject.id) ?? {
+        subjectId: subject.id,
+        subjectCode: subject.code,
+        subjectName: subject.name,
+        removedCount: 0,
+        removedTraineeEids: [] as string[]
+      }
+
+      summary.removedCount += 1
+
+      const eid = enrollment.trainee?.eid
+      if (eid) {
+        summary.removedTraineeEids.push(eid)
+      }
+
+      subjectSummaries.set(subject.id, summary)
+
+      affectedEnrollmentIds.push({ subjectId: enrollment.subjectId, traineeUserId: enrollment.traineeUserId })
+    })
+
+    if (affectedEnrollmentIds.length === 0) {
+      return {
+        removedCount: 0,
+        removedSubjects: []
+      }
+    }
+
+    await this.prisma.subjectEnrollment.updateMany({
+      where: {
+        OR: affectedEnrollmentIds
+      },
+      data: {
+        status: SubjectEnrollmentStatus.CANCELLED,
+        updatedAt: new Date()
+      }
+    })
+
+    const removedSubjects = Array.from(subjectSummaries.values()).sort((a, b) =>
+      a.subjectCode.localeCompare(b.subjectCode)
+    )
+
     return {
-      removedCount: removedTraineeEids.length,
-      removedTraineeEids
+      removedCount: affectedEnrollmentIds.length,
+      removedSubjects
     }
   }
 
@@ -932,7 +1093,10 @@ export class SubjectRepo {
     const course = await this.prisma.course.findFirst({
       where: {
         code: courseCode,
-        deletedAt: null
+        deletedAt: null,
+        status: {
+          not: CourseStatus.ARCHIVED
+        }
       },
       select: {
         id: true
@@ -987,14 +1151,19 @@ export class SubjectRepo {
 
     const affectedSubjectIds = Array.from(new Set(enrollments.map((enrollment) => enrollment.subjectId)))
 
-    // Delete ENROLLED enrollments
-    await this.prisma.subjectEnrollment.deleteMany({
+    // Cancel ENROLLED enrollments instead of hard delete
+    const now = new Date()
+    const { count } = await this.prisma.subjectEnrollment.updateMany({
       where: {
         subjectId: {
           in: affectedSubjectIds
         },
         traineeUserId: trainee.id,
         status: SubjectEnrollmentStatus.ENROLLED
+      },
+      data: {
+        status: SubjectEnrollmentStatus.CANCELLED,
+        updatedAt: now
       }
     })
 
@@ -1003,7 +1172,7 @@ export class SubjectRepo {
     const affectedSubjectCodes = affectedSubjects.map((subject) => subject.code)
 
     return {
-      removedEnrollmentsCount: enrollments.length,
+      removedEnrollmentsCount: count,
       affectedSubjectCodes
     }
   }

@@ -88,7 +88,7 @@ export class MediaService {
   }
 
   async uploadDocFile(files: Array<Express.Multer.File>, type: string, userId: string) {
-    this.logger.debug(`uploadDocFile invoked with ${files.length} file(s) for type=${type} userId=${userId}`)
+    // this.logger.debug(`uploadDocFile invoked with ${files.length} file(s) for type=${type} userId=${userId}`)
 
     const uploads = files.map(async (file, index) => {
       const extension = path.extname(file.originalname)
@@ -99,12 +99,12 @@ export class MediaService {
       )
       const key = `docs/${controlledFilename}`
 
-      this.logger.debug(`Uploading doc file`, {
-        originalName: file.originalname,
-        key,
-        tempPath: file.path,
-        index
-      })
+      // this.logger.debug(`Uploading doc file`, {
+      //   originalName: file.originalname,
+      //   key,
+      //   tempPath: file.path,
+      //   index
+      // })
 
       try {
         const uploadResult = await this.s3Service.uploadedFile({
@@ -118,7 +118,7 @@ export class MediaService {
           url: uploadResult.Location ?? this.s3Service.getObjectUrl(key)
         }
 
-        this.logger.debug(`Upload succeeded`, resolved)
+        // this.logger.debug(`Upload succeeded`, resolved)
 
         return resolved
       } catch (error) {
@@ -142,7 +142,7 @@ export class MediaService {
 
     try {
       const result = await Promise.all(uploads)
-      this.logger.debug(`uploadDocFile completed with ${result.length} item(s)`)
+      // this.logger.debug(`uploadDocFile completed with ${result.length} item(s)`)
       return {
         data: result
       }
@@ -203,9 +203,58 @@ export class MediaService {
   }
 
   async handleOnlyOfficeCallback(payload: OnlyOfficeCallbackBodyType): Promise<OnlyOfficeCallbackResType> {
-    console.log('Payload received from OnlyOffice callback:', JSON.stringify(payload, null, 2))
+    const callbackSnapshot = {
+      status: payload.status,
+      key: payload.key,
+      hasUrl: Boolean(payload.url),
+      hasChangesUrl: Boolean(payload.changesurl),
+      hasFormsDataUrl: Boolean(payload.formsdataurl),
+      forcesaveType: payload.forcesavetype ?? null,
+      historyProvided: Boolean(payload.history),
+      userCount: payload.users?.length ?? 0,
+      actionTypes: payload.actions?.map((action) => action.type) ?? []
+    }
+
+    this.logger.debug(`OnlyOffice callback payload received: ${JSON.stringify(callbackSnapshot)}`)
+
     if (!MediaService.ONLYOFFICE_SAVE_STATUSES.has(payload.status) || !payload.url) {
+      const ignoreSnapshot = {
+        status: payload.status,
+        key: payload.key
+      }
+      this.logger.debug(
+        `Ignoring OnlyOffice callback - unsupported status or missing url: ${JSON.stringify(ignoreSnapshot)}`
+      )
       return { error: 0 }
+    }
+
+    switch (payload.status) {
+      case 2:
+        this.logger.debug(
+          `Processing OnlyOffice status 2 (document saved): ${JSON.stringify({ key: payload.key, changesUrl: payload.changesurl ?? null })}`
+        )
+        break
+      case 6:
+        this.logger.debug(
+          `Processing OnlyOffice status 6 (force save): ${JSON.stringify({
+            key: payload.key,
+            forcesaveType: payload.forcesavetype ?? null,
+            changesUrl: payload.changesurl ?? null
+          })}`
+        )
+        break
+      case 7:
+        this.logger.debug(
+          `Processing OnlyOffice status 7 (forms submitted): ${JSON.stringify({
+            key: payload.key,
+            formsDataUrl: payload.formsdataurl ?? null
+          })}`
+        )
+        break
+      default:
+        this.logger.debug(
+          `Processing OnlyOffice save status: ${JSON.stringify({ status: payload.status, key: payload.key })}`
+        )
     }
 
     const timestamp = Date.now()
@@ -220,10 +269,19 @@ export class MediaService {
       )
 
       if (payload.changesurl) {
+        this.logger.debug(
+          `Downloading OnlyOffice changes archive: ${JSON.stringify({ key: payload.key, changesUrl: payload.changesurl })}`
+        )
         await this.uploadFromSourceUrl(payload.changesurl, `${keyPrefix}_${timestamp}-changes.zip`)
       }
 
       if (payload.formsdataurl) {
+        this.logger.debug(
+          `Downloading OnlyOffice forms data payload: ${JSON.stringify({
+            key: payload.key,
+            formsDataUrl: payload.formsdataurl
+          })}`
+        )
         await this.uploadFromSourceUrl(payload.formsdataurl, `${keyPrefix}_${timestamp}-forms.json`, 'application/json')
       }
 
@@ -233,7 +291,14 @@ export class MediaService {
         url: uploadedObjectUrl,
         savedAt: Date.now()
       })
-      this.logger.debug(`Stored OnlyOffice save result for key=${payload.key} -> ${uploadedObjectKey}`)
+      this.logger.debug(
+        `Stored OnlyOffice save result: ${JSON.stringify({
+          key: payload.key,
+          s3ObjectKey: uploadedObjectKey,
+          saveStatus: payload.status,
+          forcesaveType: payload.forcesavetype ?? null
+        })}`
+      )
 
       return { error: 0 }
     } catch (error) {
@@ -250,14 +315,14 @@ export class MediaService {
     { key, userdata }: OnlyOfficeForceSaveBodyType,
     userId?: string
   ): Promise<OnlyOfficeForceSaveResType> {
-    this.logger.debug('Force save request received', {
-      key,
-      hasExplicitUserdata: Boolean(userdata),
-      resolvedUserId: userId
-    })
+    // this.logger.debug('Force save request received', {
+    //   key,
+    //   hasExplicitUserdata: Boolean(userdata),
+    //   resolvedUserId: userId
+    // })
 
     const commandUrl = envConfig.ONLYOFFICE_COMMAND_SERVICE_URL
-    console.log('CommandUrl', commandUrl)
+    // console.log('CommandUrl', commandUrl)
 
     if (!commandUrl) {
       this.logger.error('ONLYOFFICE_COMMAND_SERVICE_URL environment variable is not configured')
@@ -288,18 +353,18 @@ export class MediaService {
       const headerKey = authHeaderName.trim() || 'Authorization'
       const normalizedHeaderKey = headerKey.toLowerCase()
       headers[headerKey] = normalizedHeaderKey === 'authorizationjwt' ? token : `Bearer ${token}`
-      this.logger.debug('JWT token attached to OnlyOffice command request', {
-        tokenPayloadKeys: Object.keys(basePayload),
-        headerKey,
-        bearerPrefix: normalizedHeaderKey !== 'authorizationjwt'
-      })
+      // this.logger.debug('JWT token attached to OnlyOffice command request', {
+      //   tokenPayloadKeys: Object.keys(basePayload),
+      //   headerKey,
+      //   bearerPrefix: normalizedHeaderKey !== 'authorizationjwt'
+      // })
     }
 
     try {
-      this.logger.debug('Sending force save command to OnlyOffice', {
-        commandUrl,
-        payloadKeys: Object.keys(requestBody)
-      })
+      // this.logger.debug('Sending force save command to OnlyOffice', {
+      //   commandUrl,
+      //   payloadKeys: Object.keys(requestBody)
+      // })
 
       const { data } = await this.httpService.axiosRef.post(commandUrl, requestBody, {
         headers
@@ -307,11 +372,11 @@ export class MediaService {
 
       const errorCode = typeof data?.error === 'number' ? data.error : undefined
 
-      this.logger.debug('OnlyOffice command response received', {
-        key,
-        errorCode,
-        rawResponse: data
-      })
+      // this.logger.debug('OnlyOffice command response received', {
+      //   key,
+      //   errorCode,
+      //   rawResponse: data
+      // })
 
       if (errorCode === 0) {
         return { error: 0, message: 'Force save completed successfully' }

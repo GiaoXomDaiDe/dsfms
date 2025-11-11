@@ -8,21 +8,21 @@ import {
   BulkCreateSubjectsResSchema,
   CancelCourseEnrollmentsResSchema,
   CancelSubjectEnrollmentBodySchema,
+  CourseBatchParamsSchema,
   CreateSubjectBodySchema,
   GetAvailableTrainersResSchema,
+  GetCourseEnrollmentBatchesResSchema,
   GetSubjectDetailResSchema,
-  GetSubjectEnrollmentBatchesResSchema,
   GetSubjectsQuerySchema,
   GetSubjectsResSchema,
   GetTraineeEnrollmentsQuerySchema,
   GetTraineeEnrollmentsResSchema,
   LookupTraineesBodySchema,
+  RemoveCourseEnrollmentsByBatchResSchema,
   RemoveCourseTraineeEnrollmentsBodySchema,
   RemoveCourseTraineeEnrollmentsResSchema,
   RemoveEnrollmentsBodySchema,
-  RemoveEnrollmentsByBatchResSchema,
   RemoveEnrollmentsResSchema,
-  SubjectBatchParamsSchema,
   SubjectTraineeParamsSchema,
   SubjectTrainerParamsSchema,
   TraineeIdParamsSchema,
@@ -61,8 +61,8 @@ export class GetTraineeEnrollmentsResDto extends createZodDto(GetTraineeEnrollme
 export class RemoveEnrollmentsBodyDto extends createZodDto(RemoveEnrollmentsBodySchema) {}
 export class BulkCreateSubjectsResDto extends createZodDto(BulkCreateSubjectsResSchema) {}
 export class RemoveEnrollmentsResDto extends createZodDto(RemoveEnrollmentsResSchema) {}
-export class GetSubjectEnrollmentBatchesResDto extends createZodDto(GetSubjectEnrollmentBatchesResSchema) {}
-export class SubjectBatchParamsDto extends createZodDto(SubjectBatchParamsSchema) {}
-export class RemoveEnrollmentsByBatchResDto extends createZodDto(RemoveEnrollmentsByBatchResSchema) {}
+export class GetCourseEnrollmentBatchesResDto extends createZodDto(GetCourseEnrollmentBatchesResSchema) {}
+export class CourseBatchParamsDto extends createZodDto(CourseBatchParamsSchema) {}
+export class RemoveCourseEnrollmentsByBatchResDto extends createZodDto(RemoveCourseEnrollmentsByBatchResSchema) {}
 export class RemoveCourseTraineeEnrollmentsBodyDto extends createZodDto(RemoveCourseTraineeEnrollmentsBodySchema) {}
 export class RemoveCourseTraineeEnrollmentsResDto extends createZodDto(RemoveCourseTraineeEnrollmentsResSchema) {}
