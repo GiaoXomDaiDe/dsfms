@@ -666,6 +666,7 @@ enum RoleInSubject {
 }
 
 enum TemplateStatus {
+  DRAFT
   PENDING
   PUBLISHED
   DISABLED
