@@ -40,18 +40,18 @@ import {
   CancelSubjectEnrollmentBodyType,
   CreateSubjectBodyType,
   GetAvailableTrainersResType,
+  GetCourseEnrollmentBatchesResType,
   GetSubjectDetailResType,
-  GetSubjectEnrollmentBatchesResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetTraineeEnrollmentsQueryType,
   GetTraineeEnrollmentsResType,
   LookupTraineesBodyType,
   LookupTraineesResType,
+  RemoveCourseEnrollmentsByBatchResType,
   RemoveCourseTraineeEnrollmentsBodyType,
   RemoveCourseTraineeEnrollmentsResType,
   RemoveEnrollmentsBodyType,
-  RemoveEnrollmentsByBatchResType,
   RemoveEnrollmentsResType,
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
@@ -470,16 +470,16 @@ export class SubjectService {
     }
   }
 
-  async getSubjectEnrollmentBatches({ subjectId }: { subjectId: string }): Promise<GetSubjectEnrollmentBatchesResType> {
-    const subject = await this.sharedSubjectRepository.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
+  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
+    const course = await this.sharedCourseRepository.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
     }
 
-    const batches = await this.subjectRepo.getSubjectEnrollmentBatches(subjectId)
+    const batches = await this.subjectRepo.getCourseEnrollmentBatches(courseId)
 
     return {
-      subjectId,
+      courseId,
       batches
     }
   }
@@ -510,32 +510,33 @@ export class SubjectService {
     }
   }
 
-  async removeEnrollmentsByBatch({
-    subjectId,
+  async removeCourseEnrollmentsByBatch({
+    courseId,
     batchCode
   }: {
-    subjectId: string
+    courseId: string
     batchCode: string
-  }): Promise<RemoveEnrollmentsByBatchResType> {
-    const subject = await this.sharedSubjectRepository.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
+  }): Promise<RemoveCourseEnrollmentsByBatchResType> {
+    const course = await this.sharedCourseRepository.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
     }
 
-    const result = await this.subjectRepo.removeEnrollmentsByBatch({
-      subjectId,
+    const result = await this.subjectRepo.removeCourseEnrollmentsByBatch({
+      courseId,
       batchCode
     })
 
     const message =
       result.removedCount > 0
-        ? `Removed ${result.removedCount} enrollments from batch ${batchCode}`
-        : `No enrollments found for batch ${batchCode}`
+        ? `Removed ${result.removedCount} enrollments from batch ${batchCode} across ${result.removedSubjects.length} subject(s)`
+        : `No enrollments found for batch ${batchCode} in this course`
 
     return {
+      courseId,
       batchCode,
       removedCount: result.removedCount,
-      removedTraineeEids: result.removedTraineeEids,
+      removedSubjects: result.removedSubjects,
       message
     }
   }

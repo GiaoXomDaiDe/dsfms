@@ -11,7 +11,6 @@ import {
   CreateSubjectBodyDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
-  GetSubjectEnrollmentBatchesResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
   GetTraineeEnrollmentsQueryDto,
@@ -21,9 +20,7 @@ import {
   RemoveCourseTraineeEnrollmentsBodyDto,
   RemoveCourseTraineeEnrollmentsResDto,
   RemoveEnrollmentsBodyDto,
-  RemoveEnrollmentsByBatchResDto,
   RemoveEnrollmentsResDto,
-  SubjectBatchParamsDto,
   SubjectIdParamsDto,
   SubjectSchemaDto,
   SubjectTraineeParamsDto,
@@ -59,12 +56,6 @@ export class SubjectController {
   @ZodSerializerDto(GetAvailableTrainersResDto)
   async getAvailableTrainers(@Param('courseId') { courseId }: CourseIdParamsDto) {
     return await this.subjectService.getAvailableTrainers(courseId)
-  }
-
-  @Get(':subjectId/enrollments/batches')
-  @ZodSerializerDto(GetSubjectEnrollmentBatchesResDto)
-  async getSubjectEnrollmentBatches(@Param() { subjectId }: SubjectIdParamsDto) {
-    return await this.subjectService.getSubjectEnrollmentBatches({ subjectId })
   }
 
   @Post()
@@ -147,15 +138,6 @@ export class SubjectController {
     return await this.subjectService.removeEnrollments({
       subjectId,
       data: body
-    })
-  }
-
-  @Delete(':subjectId/enrollments/batches/:batchCode')
-  @ZodSerializerDto(RemoveEnrollmentsByBatchResDto)
-  async removeEnrollmentsByBatch(@Param() { subjectId, batchCode }: SubjectBatchParamsDto) {
-    return await this.subjectService.removeEnrollmentsByBatch({
-      subjectId,
-      batchCode
     })
   }
 
