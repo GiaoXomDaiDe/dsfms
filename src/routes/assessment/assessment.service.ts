@@ -1,7 +1,12 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common'
 import { CourseStatus, SubjectStatus } from '@prisma/client'
+import PizZip = require('pizzip')
+import Docxtemplater = require('docxtemplater')
 import { AssessmentRepo } from './assessment.repo'
 import { NodemailerService } from '../email/nodemailer.service'
+import { MediaService } from '../media/media.service'
+import { PdfConverterService } from '~/shared/services/pdf-converter.service'
+import { S3Service } from '~/shared/services/s3.service'
 import {
   CreateAssessmentBodyType,
   CreateBulkAssessmentBodyType,
@@ -65,7 +70,10 @@ import { isNotFoundPrismaError } from '~/shared/helper'
 export class AssessmentService {
   constructor(
     private readonly assessmentRepo: AssessmentRepo,
-    private readonly nodemailerService: NodemailerService
+    private readonly nodemailerService: NodemailerService,
+    private readonly mediaService: MediaService,
+    private readonly pdfConverterService: PdfConverterService,
+    private readonly s3Service: S3Service
   ) {}
 
   /**
@@ -1277,6 +1285,17 @@ export class AssessmentService {
         }
       }
 
+      // Generate PDF when assessment is approved
+      if (body.action === 'APPROVED') {
+        try {
+          await this.renderAssessmentToPdf(assessmentId)
+          console.log(`PDF generated successfully for assessment ${assessmentId}`)
+        } catch (pdfError) {
+          // Log PDF generation error but don't fail the approval
+          console.error('Failed to generate PDF for approved assessment:', pdfError)
+        }
+      }
+
       const actionMessage = body.action === 'APPROVED' ? 'approved' : 'rejected'
 
       return {
@@ -1305,6 +1324,256 @@ export class AssessmentService {
       // Handle any other unexpected errors
       console.error('Approve/reject assessment failed:', error)
       throw new BadRequestException('Failed to process assessment approval/rejection')
+    }
+  }
+
+  /**
+   * Get assessment PDF URL
+   */
+  async getAssessmentPdfUrl(
+    assessmentId: string,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    try {
+      // Validate assessment exists and get PDF URL
+      const assessmentForm = await this.assessmentRepo.findById(assessmentId)
+
+      if (!assessmentForm) {
+        throw new NotFoundException('Assessment form not found')
+      }
+
+      // Check if user has access to this assessment (same department)
+      if (userContext.departmentId) {
+        const hasAccess = await this.assessmentRepo.checkUserAssessmentAccess(
+          assessmentId, 
+          userContext.userId, 
+          userContext.departmentId
+        )
+        if (!hasAccess) {
+          throw new ForbiddenException('You do not have access to this assessment')
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          assessmentFormId: assessmentId,
+          pdfUrl: assessmentForm.pdfUrl,
+          status: assessmentForm.status,
+          hasPdf: !!assessmentForm.pdfUrl
+        },
+        message: 'Assessment PDF URL retrieved successfully'
+      }
+
+    } catch (error: any) {
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException) {
+        throw error
+      }
+
+      console.error('Get assessment PDF URL failed:', error)
+      throw new BadRequestException('Failed to get assessment PDF URL')
+    }
+  }
+
+  /**
+   * Render assessment data into DOCX template and convert to PDF
+   * Called after assessment is approved
+   */
+  private async renderAssessmentToPdf(assessmentId: string): Promise<string> {
+    try {
+      // Get assessment with all related data
+      const assessmentForm = await this.assessmentRepo.getAssessmentWithTemplateAndValues(assessmentId)
+      
+      if (!assessmentForm || !(assessmentForm as any).template) {
+        throw new NotFoundException('Assessment form or template not found')
+      }
+
+      // Get template schema and config URL
+      const template = (assessmentForm as any).template
+      const templateSchema = template.templateSchema as Record<string, any>
+      const templateConfigUrl = template.templateConfig
+      
+      if (!templateConfigUrl) {
+        throw new BadRequestException('Template config URL not found')
+      }
+
+      // Download DOCX template from S3
+      const templateBuffer = await this.downloadFileFromS3(templateConfigUrl)
+      
+      // Build data object from assessment values
+      const assessmentData = await this.buildAssessmentDataFromValues(assessmentId, templateSchema)
+      
+      // Render DOCX with data
+      const renderedDocxBuffer = await this.renderDocxTemplate(templateBuffer, assessmentData)
+      
+      // Convert DOCX to PDF
+      const pdfBuffer = await this.pdfConverterService['convertDocxBufferToPdf'](renderedDocxBuffer)
+      
+      // Upload PDF to S3
+      const pdfUrl = await this.uploadPdfToS3(pdfBuffer, assessmentId)
+      console.log(`PDF uploaded to S3 with URL: ${pdfUrl}`)
+      
+      // Update assessment form with PDF URL
+      const updatedAssessment = await this.assessmentRepo.updateAssessmentPdfUrl(assessmentId, pdfUrl)
+      console.log(`Assessment form updated with PDF URL. Assessment ID: ${assessmentId}`)
+      
+      return pdfUrl
+    } catch (error) {
+      console.error('Failed to render assessment to PDF:', error)
+      throw new BadRequestException('Failed to generate assessment PDF')
+    }
+  }
+
+  /**
+   * Download file from S3 URL
+   */
+  private async downloadFileFromS3(url: string): Promise<Buffer> {
+    try {
+      // Extract S3 key from URL
+      const urlParts = new URL(url)
+      const key = urlParts.pathname.substring(1) // Remove leading slash
+      
+      // Download file from S3
+      const fileStream = await this.s3Service.getObject(key)
+      
+      // Convert stream to buffer
+      const chunks: Buffer[] = []
+      return new Promise((resolve, reject) => {
+        fileStream.on('data', (chunk) => chunks.push(chunk))
+        fileStream.on('end', () => resolve(Buffer.concat(chunks)))
+        fileStream.on('error', reject)
+      })
+    } catch (error) {
+      console.error('Failed to download file from S3:', error)
+      throw new BadRequestException('Failed to download template file')
+    }
+  }
+
+  /**
+   * Build assessment data object from assessment values matching template schema structure
+   */
+  private async buildAssessmentDataFromValues(
+    assessmentId: string, 
+    templateSchema: Record<string, any>
+  ): Promise<Record<string, any>> {
+    // Get all assessment values for this assessment
+    const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
+    
+    // Create a map of fieldName -> value for quick lookup
+    const valueMap = new Map<string, any>()
+    assessmentValues.forEach(value => {
+      if (value.templateField && value.templateField.fieldName) {
+        // Pass the raw answerValue (can be null) to parseAssessmentValue
+        valueMap.set(value.templateField.fieldName, this.parseAssessmentValue(value.answerValue, value.templateField.fieldType))
+      }
+    })
+    
+    // Recursively build data object matching schema structure
+    return this.buildDataFromSchema(templateSchema, valueMap)
+  }
+
+  /**
+   * Recursively build data object from template schema structure
+   */
+  private buildDataFromSchema(
+    schema: Record<string, any>, 
+    valueMap: Map<string, any>
+  ): Record<string, any> {
+    const result: Record<string, any> = {}
+    
+    for (const [key, value] of Object.entries(schema)) {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // Nested object - recurse
+        result[key] = this.buildDataFromSchema(value, valueMap)
+      } else {
+        // Leaf field - get value from map, if exists use it (even if null), otherwise use schema default
+        if (valueMap.has(key)) {
+          result[key] = valueMap.get(key) // This can be null, which is what we want
+        } else {
+          result[key] = value // Use schema default only if no assessment value exists
+        }
+      }
+    }
+    
+    return result
+  }
+
+  /**
+   * Parse assessment value based on field type
+   * If value is null/undefined, return null (don't convert to empty string)
+   */
+  private parseAssessmentValue(value: string | null | undefined, fieldType?: string): any {
+    // If value is null or undefined, return null (preserve null values)
+    if (value === null || value === undefined) return null
+    
+    // If value is empty string, also return null
+    if (value === '') return null
+    
+    switch (fieldType) {
+      case 'TOGGLE':
+        return value.toLowerCase() === 'true'
+      case 'NUMBER':
+        const num = Number(value)
+        return isNaN(num) ? null : num
+      default:
+        return value
+    }
+  }
+
+  /**
+   * Render DOCX template with data using docxtemplater
+   */
+  private async renderDocxTemplate(templateBuffer: Buffer, data: Record<string, any>): Promise<Buffer> {
+    try {
+      // Load template with PizZip
+      const zip = new PizZip(templateBuffer)
+      
+      // Create docxtemplater instance
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true
+      })
+      
+      // Set data
+      doc.setData(data)
+      
+      // Render document
+      doc.render()
+      
+      // Generate buffer
+      const buffer = doc.getZip().generate({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+        compressionOptions: {
+          level: 9
+        }
+      })
+      
+      return buffer
+    } catch (error) {
+      console.error('Failed to render DOCX template:', error)
+      throw new BadRequestException('Failed to render document template')
+    }
+  }
+
+  /**
+   * Upload PDF to S3 and return URL
+   */
+  private async uploadPdfToS3(pdfBuffer: Buffer, assessmentId: string): Promise<string> {
+    try {
+      const key = `assessments/pdf/assessment_${assessmentId}_${Date.now()}.pdf`
+      
+      const uploadResult = await this.s3Service.uploadBuffer({
+        key,
+        body: pdfBuffer,
+        contentType: 'application/pdf'
+      })
+      
+      return uploadResult.url || this.s3Service.getObjectUrl(key)
+    } catch (error) {
+      console.error('Failed to upload PDF to S3:', error)
+      throw new BadRequestException('Failed to upload PDF file')
     }
   }
 

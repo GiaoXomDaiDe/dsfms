@@ -23,7 +23,8 @@ import {
   S3ExtractionError,
   OriginalTemplateNotFoundError,
   TemplateHasAssessmentsError,
-  TemplateVersionCreationError
+  TemplateVersionCreationError,
+  InvalidTemplateStatusForUpdateError
 } from './template.error'
 import {
   TEMPLATE_PARSED_SUCCESSFULLY,
@@ -518,10 +519,17 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
+      // Set default status to DRAFT if not provided
+      const status = templateData.status || 'DRAFT'
+      const templateDataWithStatus = {
+        ...templateData,
+        status
+      } as CreateTemplateFormDto & { status: 'DRAFT' | 'PENDING' }
+
       // Create template with all nested data
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
-        templateData,
+        templateDataWithStatus,
         userContext.userId,
         templateSchema
       )
@@ -714,7 +722,7 @@ export class TemplateService {
    */
   async changeTemplateStatus(
     templateId: string, 
-    newStatus: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    newStatus: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
     userContext: { userId: string; roleName: string; departmentId?: string }
   ) {
     // Check if template exists
@@ -856,6 +864,97 @@ export class TemplateService {
   }
 
   /**
+   * Update a REJECTED template with new content
+   * Recreates the template while preserving original metadata
+   * Only works on templates with REJECTED status
+   */
+  async updateRejectedTemplate(
+    templateId: string,
+    templateData: CreateTemplateFormDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists and is REJECTED
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new TemplateNotFoundError()
+    }
+
+    if (existingTemplate.status !== 'REJECTED') {
+      throw new InvalidTemplateStatusForUpdateError(existingTemplate.status)
+    }
+
+    // Validate required fields
+    if (!templateData.templateConfig) {
+      throw new TemplateConfigRequiredError()
+    }
+
+    // Validate department exists
+    const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
+    if (!departmentExists) {
+      throw new DepartmentNotFoundError(templateData.departmentId)
+    }
+
+    // Check if template name already exists (excluding current template)
+    const nameExists = await this.templateRepository.templateNameExists(templateData.name, templateId)
+    if (nameExists) {
+      throw new TemplateNameAlreadyExistsError(templateData.name)
+    }
+
+    try {
+      // Validate field relationships (same as create template)
+      for (const section of templateData.sections) {
+        if (!section.fields || !Array.isArray(section.fields)) continue
+        for (const field of section.fields) {
+          // Only validate when roleRequired is explicitly provided
+          if (field.roleRequired !== undefined && field.roleRequired !== null) {
+            if (String(field.roleRequired) !== String(section.editBy)) {
+              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+            }
+          }
+
+          // Validate that signature fields must have roleRequired set
+          if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+            if (!field.roleRequired) {
+              throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
+            }
+          }
+
+          // Check if PART field has at least one child field
+          if (field.fieldType === 'PART') {
+            const hasChildFields = section.fields.some(childField => 
+              childField.parentTempId === field.tempId || 
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            )
+            if (!hasChildFields) {
+              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+            }
+          }
+        }
+      }
+
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+
+      // Update rejected template (recreate with preserved metadata)
+      const result = await this.templateRepository.updateRejectedTemplate(
+        templateId,
+        templateData,
+        userContext.userId,
+        templateSchema
+      )
+
+      return {
+        success: true,
+        data: result,
+        message: 'Rejected template updated successfully and status changed to PENDING'
+      }
+    } catch (error) {
+      throw new TemplateCreationFailedError(error.message)
+    }
+  }
+
+  /**
    * Update template basic information (name, description, departmentId)
    */
   async updateTemplateForm(
@@ -905,23 +1004,31 @@ export class TemplateService {
 
   /**
    * Generate nested schema based on field hierarchy (parent-child relationships)
+   * Fields are ordered by displayOrder within each section
    */
   private generateNestedSchemaFromSections(sections: any[]): Record<string, any> {
     const schema: Record<string, any> = {};
     
-    sections.forEach(section => {
+    // Sort sections by displayOrder first
+    const sortedSections = [...sections].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    
+    sortedSections.forEach(section => {
+      // Sort fields by displayOrder within each section
+      const sortedFields = [...section.fields].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      
       // Build field maps for parent-child relationships
       const fieldByTempId = new Map<string, any>();
       const fieldByName = new Map<string, any>();
       const rootFields: any[] = [];
       
       // First pass: create field maps and identify parent fields
-      section.fields.forEach((field: any) => {
+      sortedFields.forEach((field: any) => {
         const fieldObj = {
           name: field.fieldName,
           tempId: field.tempId,
           parentTempId: field.parentTempId,
           type: this.getSchemaTypeFromFieldType(field.fieldType),
+          displayOrder: field.displayOrder || 0,
           children: [] as any[]
         };
         
@@ -938,7 +1045,7 @@ export class TemplateService {
       });
       
       // Second pass: build parent-child relationships using tempId references
-      section.fields.forEach((field: any) => {
+      sortedFields.forEach((field: any) => {
         if (field.parentTempId) {
           const parentField = fieldByTempId.get(field.parentTempId);
           const currentField = fieldByName.get(field.fieldName);
@@ -949,6 +1056,9 @@ export class TemplateService {
         }
       });
       
+      // Sort root fields by displayOrder
+      rootFields.sort((a, b) => a.displayOrder - b.displayOrder);
+      
       // Build nested schema structure
       this.buildNestedSchemaFromFields(rootFields, schema);
     });
@@ -958,19 +1068,23 @@ export class TemplateService {
   
   /**
    * Recursively build nested schema structure from field hierarchy
+   * Children are also sorted by displayOrder
    */
   private buildNestedSchemaFromFields(fields: any[], target: Record<string, any>): void {
     fields.forEach(field => {
       if (field.children && field.children.length > 0) {
+        // Sort children by displayOrder before processing
+        const sortedChildren = [...field.children].sort((a, b) => a.displayOrder - b.displayOrder);
+        
         // This field has children - create an object
         // For PART type fields, use the field name as the object key
         if (field.type === 'part') {
           target[field.name] = {};
-          this.buildNestedSchemaFromFields(field.children, target[field.name]);
+          this.buildNestedSchemaFromFields(sortedChildren, target[field.name]);
         } else {
           // Non-part field with children (shouldn't happen but handle anyway)
           target[field.name] = {};
-          this.buildNestedSchemaFromFields(field.children, target[field.name]);
+          this.buildNestedSchemaFromFields(sortedChildren, target[field.name]);
         }
       } else {
         // Leaf field - set default value based on type

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Put, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import type { Response } from 'express'
@@ -80,7 +80,8 @@ export class TemplateController {
 
   /**
    * POST /templates
-   * Requires ADMINISTRATOR role authentication
+   * Create Template Form and its Template Sections and Fields
+   * Status: Optional field, defaults to DRAFT if not provided. Only DRAFT and PENDING are allowed during creation.
    */
   @Post()
   async createTemplate(
@@ -100,6 +101,7 @@ export class TemplateController {
 
   /**
    * GET /templates/:id
+   * Get template by ID, especially to use for update Template, show this on the FRONT END
    */
   @Get(':id')
   async getTemplateById(@Param('id') id: string) {
@@ -160,7 +162,7 @@ export class TemplateController {
   @Patch(':id/status')
   async changeTemplateStatus(
     @Param('id') id: string,
-    @Body() body: { status: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
+    @Body() body: { status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
     @ActiveUser() currentUser: { userId: string; departmentId?: string }
@@ -245,6 +247,36 @@ export class TemplateController {
     return await this.templateService.reviewTemplate(id, body, userContext)
   }
 
+  /**
+   * PUT /templates/:id/update-rejected
+   * Update a REJECTED template with new content, resetting status to PENDING
+   * Preserves original metadata (createdAt, createdBy, version, referFirstVersionId)
+   */
+  @Put(':id/update-rejected')
+  async updateRejectedTemplate(
+    @Param('id') id: string,
+    @Body() updateTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateRejectedTemplate(id, updateTemplateDto, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * GET /templates/pdf/:templateFormId
+   * convert Docx to PDF for Template Content (Template without Fields)
+   */
   @Get('pdf/:templateFormId')
   @Header('Content-Type', 'application/pdf')
   async getTemplatePdf(
@@ -260,6 +292,10 @@ export class TemplateController {
     res.send(pdfBuffer)
   }
 
+  /**
+   * GET /templates/pdf-config/:templateFormId
+   * convert Docx to PDF for Template Configuration (Template with Fields)
+   */
   @Get('pdf-config/:templateFormId')
   @Header('Content-Type', 'application/pdf')
   async getTemplateConfigPdf(
@@ -275,6 +311,10 @@ export class TemplateController {
     res.send(pdfBuffer)
   }
 
+  /**
+   * GET /templates/pdf-both/:templateFormId
+   * convert Docx to PDF for both Template Content and Template Configuration(Template without Fields)
+   */
   @Get('pdf-both/:templateFormId')
   async getTemplateBothPdf(
     @Param('templateFormId') templateFormId: string, 

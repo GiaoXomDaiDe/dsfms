@@ -422,4 +422,24 @@ export class AssessmentController {
       userContext
     )
   }
+
+  /**
+   * GET /assessments/:assessmentId/pdf-url
+   * Get PDF URL of an approved assessment
+   */
+  @Get(':assessmentId/pdf-url')
+  async getAssessmentPdfUrl(
+    @Param() params: GetAssessmentParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getAssessmentPdfUrl(params.assessmentId, userContext)
+  }
 }

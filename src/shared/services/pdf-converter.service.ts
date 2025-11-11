@@ -108,6 +108,13 @@ export class PdfConverterService {
   }
 
   /**
+   * Convert DOCX buffer to PDF using LibreOffice - public method
+   */
+  async convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
+    return this.convertDocxBufferToPdf(docxBuffer)
+  }
+
+  /**
    * Convert DOCX buffer to PDF using LibreOffice
    */
   private async convertDocxBufferToPdf(docxBuffer: Buffer): Promise<Buffer> {

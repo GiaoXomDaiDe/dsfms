@@ -119,3 +119,17 @@ export class PartFieldMissingChildrenError extends BadRequestException {
     super(`PART field '${fieldName}' in section '${sectionLabel}' must have at least one child field`)
   }
 }
+
+// ==================== Template Status Errors ====================
+
+export class InvalidTemplateStatusForUpdateError extends BadRequestException {
+  constructor(currentStatus: string) {
+    super(`Only REJECTED templates can be updated using this endpoint. Current status: ${currentStatus}`)
+  }
+}
+
+export class TemplateInUseCannotUpdateError extends BadRequestException {
+  constructor() {
+    super('Cannot update template that has been used to create assessment forms. Template is currently being used in active assessments.')
+  }
+}
