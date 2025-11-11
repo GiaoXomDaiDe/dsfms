@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import { CourseStatus, Prisma } from '@prisma/client'
 import { map } from 'lodash'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import {
@@ -895,6 +895,7 @@ export class SubjectRepo {
       select: {
         subjectId: true
         traineeUserId: true
+        status: true
         subject: {
           select: {
             id: true
@@ -919,6 +920,7 @@ export class SubjectRepo {
       select: {
         subjectId: true,
         traineeUserId: true,
+        status: true,
         subject: {
           select: {
             id: true,
@@ -952,9 +954,15 @@ export class SubjectRepo {
       }
     >()
 
+    const affectedEnrollmentIds: Array<{ subjectId: string; traineeUserId: string }> = []
+
     enrollments.forEach((enrollment) => {
       const subject = enrollment.subject
       if (!subject) {
+        return
+      }
+
+      if (enrollment.status === SubjectEnrollmentStatus.CANCELLED) {
         return
       }
 
@@ -974,14 +982,24 @@ export class SubjectRepo {
       }
 
       subjectSummaries.set(subject.id, summary)
+
+      affectedEnrollmentIds.push({ subjectId: enrollment.subjectId, traineeUserId: enrollment.traineeUserId })
     })
 
-    const deleteResult = await this.prisma.subjectEnrollment.deleteMany({
+    if (affectedEnrollmentIds.length === 0) {
+      return {
+        removedCount: 0,
+        removedSubjects: []
+      }
+    }
+
+    await this.prisma.subjectEnrollment.updateMany({
       where: {
-        OR: enrollments.map((enrollment) => ({
-          subjectId: enrollment.subjectId,
-          traineeUserId: enrollment.traineeUserId
-        }))
+        OR: affectedEnrollmentIds
+      },
+      data: {
+        status: SubjectEnrollmentStatus.CANCELLED,
+        updatedAt: new Date()
       }
     })
 
@@ -990,7 +1008,7 @@ export class SubjectRepo {
     )
 
     return {
-      removedCount: deleteResult.count,
+      removedCount: affectedEnrollmentIds.length,
       removedSubjects
     }
   }
@@ -1075,7 +1093,10 @@ export class SubjectRepo {
     const course = await this.prisma.course.findFirst({
       where: {
         code: courseCode,
-        deletedAt: null
+        deletedAt: null,
+        status: {
+          not: CourseStatus.ARCHIVED
+        }
       },
       select: {
         id: true
@@ -1130,14 +1151,19 @@ export class SubjectRepo {
 
     const affectedSubjectIds = Array.from(new Set(enrollments.map((enrollment) => enrollment.subjectId)))
 
-    // Delete ENROLLED enrollments
-    await this.prisma.subjectEnrollment.deleteMany({
+    // Cancel ENROLLED enrollments instead of hard delete
+    const now = new Date()
+    const { count } = await this.prisma.subjectEnrollment.updateMany({
       where: {
         subjectId: {
           in: affectedSubjectIds
         },
         traineeUserId: trainee.id,
         status: SubjectEnrollmentStatus.ENROLLED
+      },
+      data: {
+        status: SubjectEnrollmentStatus.CANCELLED,
+        updatedAt: now
       }
     })
 
@@ -1146,7 +1172,7 @@ export class SubjectRepo {
     const affectedSubjectCodes = affectedSubjects.map((subject) => subject.code)
 
     return {
-      removedEnrollmentsCount: enrollments.length,
+      removedEnrollmentsCount: count,
       affectedSubjectCodes
     }
   }

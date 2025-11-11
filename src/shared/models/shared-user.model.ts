@@ -3,18 +3,40 @@ import { RoleSchema } from '~/routes/role/role.model'
 import { GenderStatus, UserStatus } from '~/shared/constants/auth.constant'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
 
-const NAME_REGEX = /^[\p{L}\p{P}]+$/u
+const NAME_ALLOWED_CHARS_REGEX = /^[\p{L}\p{P}\s]+$/u
+const NAME_CONTAINS_LETTER_REGEX = /\p{L}/u
 
 const nameRegexMessage = 'Name must contain only alphabetic characters'
 
-const nameSchema = z.string().trim().max(100).regex(NAME_REGEX, nameRegexMessage)
+const normalizeName = (value: string): string => value.replace(/\s+/g, ' ').trim()
+
+const normalizedNameSchema = z.string().transform((value) => normalizeName(value))
+
+const validatedNameSchema = z
+  .string()
+  .min(1, nameRegexMessage)
+  .max(100)
+  .regex(NAME_ALLOWED_CHARS_REGEX, nameRegexMessage)
+  .refine((value) => NAME_CONTAINS_LETTER_REGEX.test(value), { message: nameRegexMessage })
+
+const nameSchema = normalizedNameSchema.pipe(validatedNameSchema)
 
 export const UserSchema = z.object({
   id: z.uuid(),
   eid: z.string().max(8),
   firstName: nameSchema,
   lastName: nameSchema,
-  middleName: nameSchema.nullable().refine((value) => value === null || NAME_REGEX.test(value), nameRegexMessage),
+  middleName: z
+    .union([z.string(), z.null()])
+    .transform((value) => {
+      if (value === null) {
+        return null
+      }
+
+      const normalized = normalizeName(value)
+      return normalized.length === 0 ? null : normalized
+    })
+    .pipe(z.union([validatedNameSchema, z.null()])),
   address: z.string().max(255).nullable(),
   email: z.email().min(5).max(255),
   passwordHash: z.string().min(6).max(100),
