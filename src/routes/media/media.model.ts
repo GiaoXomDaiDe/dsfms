@@ -50,6 +50,21 @@ export const UploadDocFromUrlBodySchema = z.object({
 
 export const UploadDocFromUrlResSchema = UploadFilesResSchema
 
+export const OnlyOfficeSubmitBodySchema = z
+  .object({
+    downloadUrl: z.url(),
+    fileName: z.string().min(1),
+    templateId: z.string().min(1).optional(),
+    documentKey: z.string().min(1).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional()
+  })
+  .strict()
+
+export const OnlyOfficeSubmitResSchema = UploadFilesResSchema.extend({
+  templateId: z.string().optional(),
+  documentKey: z.string().optional()
+})
+
 export const OnlyOfficeCallbackActionSchema = z
   .object({
     type: z.number(),
@@ -108,6 +123,8 @@ export type PresignedUploadDocBodyType = z.infer<typeof PresignedUploadDocBodySc
 export type DeleteMediaObjectBodyType = z.infer<typeof DeleteMediaObjectBodySchema>
 export type UploadDocFromUrlBodyType = z.infer<typeof UploadDocFromUrlBodySchema>
 export type UploadDocFromUrlResType = z.infer<typeof UploadDocFromUrlResSchema>
+export type OnlyOfficeSubmitBodyType = z.infer<typeof OnlyOfficeSubmitBodySchema>
+export type OnlyOfficeSubmitResType = z.infer<typeof OnlyOfficeSubmitResSchema>
 export type OnlyOfficeCallbackBodyType = z.infer<typeof OnlyOfficeCallbackBodySchema>
 export type OnlyOfficeCallbackResType = z.infer<typeof OnlyOfficeCallbackResSchema>
 export type OnlyOfficeDocumentResultType = z.infer<typeof OnlyOfficeDocumentResultSchema>
