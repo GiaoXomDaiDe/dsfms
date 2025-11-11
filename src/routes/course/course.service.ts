@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common'
+import {
+  GetCourseEnrollmentBatchesResType,
+  GetTraineeEnrollmentsQueryType,
+  GetTraineeEnrollmentsResType,
+  RemoveCourseEnrollmentsByBatchResType
+} from '~/routes/subject/subject.model'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
+import { SubjectService } from '../subject/subject.service'
 import {
   CannotAssignExaminerToArchivedCourseException,
   CourseAlreadyArchivedException,
@@ -43,7 +50,8 @@ import { CourseRepo } from './course.repo'
 export class CourseService {
   constructor(
     private readonly courseRepo: CourseRepo,
-    private readonly sharedDepartmentRepo: SharedDepartmentRepository
+    private readonly sharedDepartmentRepo: SharedDepartmentRepository,
+    private readonly subjectService: SubjectService
   ) {}
 
   async list({
@@ -359,5 +367,35 @@ export class CourseService {
 
       throw error
     }
+  }
+
+  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
+    return await this.subjectService.getCourseEnrollmentBatches({ courseId })
+  }
+
+  async removeCourseEnrollmentsByBatch({
+    courseId,
+    batchCode
+  }: {
+    courseId: string
+    batchCode: string
+  }): Promise<RemoveCourseEnrollmentsByBatchResType> {
+    return await this.subjectService.removeCourseEnrollmentsByBatch({
+      courseId,
+      batchCode
+    })
+  }
+
+  async getTraineeEnrollments({
+    traineeId,
+    query
+  }: {
+    traineeId: string
+    query: GetTraineeEnrollmentsQueryType
+  }): Promise<GetTraineeEnrollmentsResType> {
+    return await this.subjectService.getTraineeEnrollments({
+      traineeId,
+      query
+    })
   }
 }

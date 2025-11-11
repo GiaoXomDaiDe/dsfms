@@ -62,16 +62,28 @@ export const SubjectDetailEnrollmentsByBatchSchema = z.object({
   trainees: z.array(SubjectDetailTraineeSchema)
 })
 
-export const SubjectEnrollmentBatchSummarySchema = z.object({
+const StatusCountSchema = z.object({
+  ENROLLED: z.number().int().default(0),
+  ON_GOING: z.number().int().default(0),
+  CANCELLED: z.number().int().default(0),
+  FINISHED: z.number().int().default(0)
+})
+
+export const CourseEnrollmentBatchSubjectSchema = z.object({
+  subjectId: z.uuid(),
+  subjectCode: z.string(),
+  subjectName: z.string(),
+  totalTrainees: z.number().int(),
+  activeTrainees: z.number().int(),
+  statusCounts: StatusCountSchema
+})
+
+export const CourseEnrollmentBatchSummarySchema = z.object({
   batchCode: z.string(),
   totalTrainees: z.number().int(),
   activeTrainees: z.number().int(),
-  statusCounts: z.object({
-    ENROLLED: z.number().int().default(0),
-    ON_GOING: z.number().int().default(0),
-    CANCELLED: z.number().int().default(0),
-    FINISHED: z.number().int().default(0)
-  })
+  statusCounts: StatusCountSchema,
+  subjects: z.array(CourseEnrollmentBatchSubjectSchema)
 })
 
 // Schema cho course trong subject detail
@@ -98,9 +110,9 @@ export const GetSubjectDetailResSchema = SubjectSchema.omit({
   enrollmentsByBatch: z.array(SubjectDetailEnrollmentsByBatchSchema).default([])
 })
 
-export const GetSubjectEnrollmentBatchesResSchema = z.object({
-  subjectId: z.uuid(),
-  batches: z.array(SubjectEnrollmentBatchSummarySchema)
+export const GetCourseEnrollmentBatchesResSchema = z.object({
+  courseId: z.uuid(),
+  batches: z.array(CourseEnrollmentBatchSummarySchema)
 })
 
 export const AvailableTrainerSchema = UserSchema.pick({
@@ -260,14 +272,24 @@ export const CancelSubjectEnrollmentBodySchema = z.object({
   batchCode: z.string().min(1)
 })
 
-export const SubjectBatchParamsSchema = SubjectIdParamsSchema.extend({
+export const CourseBatchParamsSchema = z.object({
+  courseId: z.uuid(),
   batchCode: z.string().min(1)
 })
 
-export const RemoveEnrollmentsByBatchResSchema = z.object({
+export const RemoveCourseEnrollmentsByBatchResSchema = z.object({
+  courseId: z.uuid(),
   batchCode: z.string(),
   removedCount: z.number().int(),
-  removedTraineeEids: z.array(z.string()),
+  removedSubjects: z.array(
+    z.object({
+      subjectId: z.uuid(),
+      subjectCode: z.string(),
+      subjectName: z.string(),
+      removedCount: z.number().int(),
+      removedTraineeEids: z.array(z.string())
+    })
+  ),
   message: z.string()
 })
 
@@ -303,9 +325,9 @@ export type LookupTraineesResType = z.infer<typeof LookupTraineesResSchema>
 export type AssignTraineesBodyType = z.infer<typeof AssignTraineesBodySchema>
 export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
-export type GetSubjectEnrollmentBatchesResType = z.infer<typeof GetSubjectEnrollmentBatchesResSchema>
-export type SubjectBatchParamsType = z.infer<typeof SubjectBatchParamsSchema>
-export type RemoveEnrollmentsByBatchResType = z.infer<typeof RemoveEnrollmentsByBatchResSchema>
+export type GetCourseEnrollmentBatchesResType = z.infer<typeof GetCourseEnrollmentBatchesResSchema>
+export type CourseBatchParamsType = z.infer<typeof CourseBatchParamsSchema>
+export type RemoveCourseEnrollmentsByBatchResType = z.infer<typeof RemoveCourseEnrollmentsByBatchResSchema>
 export type RemoveCourseTraineeEnrollmentsBodyType = z.infer<typeof RemoveCourseTraineeEnrollmentsBodySchema>
 export type RemoveCourseTraineeEnrollmentsResType = z.infer<typeof RemoveCourseTraineeEnrollmentsResSchema>
 
@@ -314,7 +336,8 @@ type SubjectDetailInstructorType = z.infer<typeof SubjectDetailInstructorSchema>
 export type SubjectDetailTraineeType = z.infer<typeof SubjectDetailTraineeSchema>
 export type SubjectDetailEnrollmentsByBatchType = z.infer<typeof SubjectDetailEnrollmentsByBatchSchema>
 export type SubjectDetailCourseType = z.infer<typeof SubjectDetailCourseSchema>
-export type SubjectEnrollmentBatchSummaryType = z.infer<typeof SubjectEnrollmentBatchSummarySchema>
+export type CourseEnrollmentBatchSubjectType = z.infer<typeof CourseEnrollmentBatchSubjectSchema>
+export type CourseEnrollmentBatchSummaryType = z.infer<typeof CourseEnrollmentBatchSummarySchema>
 
 // Remove Enrollments Body Schema
 export const RemoveEnrollmentsBodySchema = z.object({

@@ -23,21 +23,19 @@ import {
 import { CourseService } from '~/routes/course/course.service'
 import {
   CancelCourseEnrollmentsResDto,
+  CourseBatchParamsDto,
+  GetCourseEnrollmentBatchesResDto,
   GetTraineeEnrollmentsQueryDto,
-  GetTraineeEnrollmentsResDto
+  GetTraineeEnrollmentsResDto,
+  RemoveCourseEnrollmentsByBatchResDto
 } from '~/routes/subject/subject.dto'
-
-import { SubjectService } from '~/routes/subject/subject.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('courses')
 export class CourseController {
-  constructor(
-    private readonly courseService: CourseService,
-    private readonly subjectService: SubjectService
-  ) {}
+  constructor(private readonly courseService: CourseService) {}
 
   @Get()
   @ZodSerializerDto(GetCoursesResDto)
@@ -53,6 +51,14 @@ export class CourseController {
   async getCourseById(@Param() params: GetCourseParamsDto, @Query() { includeDeleted }: GetCoursesQueryDto) {
     return await this.courseService.findById(params.courseId, {
       includeDeleted
+    })
+  }
+
+  @Get(':courseId/enrollments/batches')
+  @ZodSerializerDto(GetCourseEnrollmentBatchesResDto)
+  async getCourseEnrollmentBatches(@Param() params: GetCourseParamsDto) {
+    return await this.courseService.getCourseEnrollmentBatches({
+      courseId: params.courseId
     })
   }
 
@@ -163,10 +169,19 @@ export class CourseController {
     })
   }
 
+  @Delete(':courseId/enrollments/batches/:batchCode')
+  @ZodSerializerDto(RemoveCourseEnrollmentsByBatchResDto)
+  async removeCourseEnrollmentsByBatch(@Param() params: CourseBatchParamsDto) {
+    return await this.courseService.removeCourseEnrollmentsByBatch({
+      courseId: params.courseId,
+      batchCode: params.batchCode
+    })
+  }
+
   @Get('trainees/:traineeId/enrollments')
   @ZodSerializerDto(GetTraineeEnrollmentsResDto)
   async getTraineeEnrollments(@Param('traineeId') traineeId: string, @Query() query: GetTraineeEnrollmentsQueryDto) {
-    return await this.subjectService.getTraineeEnrollments({
+    return await this.courseService.getTraineeEnrollments({
       traineeId,
       query
     })
