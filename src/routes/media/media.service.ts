@@ -203,9 +203,51 @@ export class MediaService {
   }
 
   async handleOnlyOfficeCallback(payload: OnlyOfficeCallbackBodyType): Promise<OnlyOfficeCallbackResType> {
-    console.log('Payload received from OnlyOffice callback:', JSON.stringify(payload, null, 2))
+    this.logger.debug('OnlyOffice callback payload received', {
+      status: payload.status,
+      key: payload.key,
+      hasUrl: Boolean(payload.url),
+      hasChangesUrl: Boolean(payload.changesurl),
+      hasFormsDataUrl: Boolean(payload.formsdataurl),
+      forcesaveType: payload.forcesavetype ?? null,
+      historyProvided: Boolean(payload.history),
+      userCount: payload.users?.length ?? 0,
+      actionTypes: payload.actions?.map((action) => action.type) ?? []
+    })
+
     if (!MediaService.ONLYOFFICE_SAVE_STATUSES.has(payload.status) || !payload.url) {
+      this.logger.debug('Ignoring OnlyOffice callback - unsupported status or missing url', {
+        status: payload.status,
+        key: payload.key
+      })
       return { error: 0 }
+    }
+
+    switch (payload.status) {
+      case 2:
+        this.logger.debug('Processing OnlyOffice status 2 (document saved)', {
+          key: payload.key,
+          changesUrl: payload.changesurl ?? null
+        })
+        break
+      case 6:
+        this.logger.debug('Processing OnlyOffice status 6 (force save)', {
+          key: payload.key,
+          forcesaveType: payload.forcesavetype ?? null,
+          changesUrl: payload.changesurl ?? null
+        })
+        break
+      case 7:
+        this.logger.debug('Processing OnlyOffice status 7 (forms submitted)', {
+          key: payload.key,
+          formsDataUrl: payload.formsdataurl ?? null
+        })
+        break
+      default:
+        this.logger.debug('Processing OnlyOffice save status', {
+          status: payload.status,
+          key: payload.key
+        })
     }
 
     const timestamp = Date.now()
@@ -220,10 +262,18 @@ export class MediaService {
       )
 
       if (payload.changesurl) {
+        this.logger.debug('Downloading OnlyOffice changes archive', {
+          key: payload.key,
+          changesUrl: payload.changesurl
+        })
         await this.uploadFromSourceUrl(payload.changesurl, `${keyPrefix}_${timestamp}-changes.zip`)
       }
 
       if (payload.formsdataurl) {
+        this.logger.debug('Downloading OnlyOffice forms data payload', {
+          key: payload.key,
+          formsDataUrl: payload.formsdataurl
+        })
         await this.uploadFromSourceUrl(payload.formsdataurl, `${keyPrefix}_${timestamp}-forms.json`, 'application/json')
       }
 
@@ -233,7 +283,12 @@ export class MediaService {
         url: uploadedObjectUrl,
         savedAt: Date.now()
       })
-      this.logger.debug(`Stored OnlyOffice save result for key=${payload.key} -> ${uploadedObjectKey}`)
+      this.logger.debug('Stored OnlyOffice save result', {
+        key: payload.key,
+        s3ObjectKey: uploadedObjectKey,
+        saveStatus: payload.status,
+        forcesaveType: payload.forcesavetype ?? null
+      })
 
       return { error: 0 }
     } catch (error) {
