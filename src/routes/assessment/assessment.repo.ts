@@ -1635,7 +1635,9 @@ export class AssessmentRepo {
         } else if (section.templateSection.editBy === 'TRAINEE') {
           // Section requires trainee access
           roleRequirement = 'TRAINEE'
-          canAssess = userMainRole === 'TRAINEE' && assessment.traineeId === userId
+          canAssess = userMainRole === 'TRAINEE' && 
+                     assessment.traineeId === userId && 
+                     !assessment.isTraineeLocked
         }
 
         return {
