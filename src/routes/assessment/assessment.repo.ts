@@ -1635,7 +1635,9 @@ export class AssessmentRepo {
         } else if (section.templateSection.editBy === 'TRAINEE') {
           // Section requires trainee access
           roleRequirement = 'TRAINEE'
-          canAssess = userMainRole === 'TRAINEE' && assessment.traineeId === userId
+          canAssess = userMainRole === 'TRAINEE' && 
+                     assessment.traineeId === userId && 
+                     !assessment.isTraineeLocked
         }
 
         return {
@@ -2709,6 +2711,28 @@ export class AssessmentRepo {
             templateSchema: true,
             templateConfig: true,
             templateContent: true
+          }
+        },
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true
           }
         },
         sections: {

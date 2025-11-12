@@ -124,6 +124,28 @@ export class AssessmentService {
         throw new Error('Either subjectId or courseId must be provided')
       }
 
+      // Step 2.1: Validate template fields compatibility with subject/course scoring requirements
+      const entity = subject || course
+      const entityType = data.subjectId ? 'Subject' : 'Course'
+      const entityPassScore = entity!.passScore
+      
+      // Check if template has FINAL_SCORE_NUM field
+      const hasFinalScoreNumField = template.sections.some(section => 
+        section.fields.some(field => field.fieldType === 'FINAL_SCORE_NUM')
+      )
+      
+      if (entityPassScore === null || entityPassScore === undefined) {
+        // Entity doesn't use score - template should not require score
+        if (hasFinalScoreNumField) {
+          throw new Error(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+        }
+      } else {
+        // Entity uses score - template must have score field
+        if (!hasFinalScoreNumField) {
+          throw new Error(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+        }
+      }
+
       // Step 3: Validate department consistency
       if (template.departmentId !== entityDepartmentId) {
         throw TemplateDepartmentMismatchException
@@ -317,6 +339,28 @@ export class AssessmentService {
       } else {
         // This should not happen due to Zod validation, but keeping for safety
         throw new Error('Either subjectId or courseId must be provided')
+      }
+
+      // Step 2.1: Validate template fields compatibility with subject/course scoring requirements
+      const entity = subject || course
+      const entityType = data.subjectId ? 'Subject' : 'Course'
+      const entityPassScore = entity!.passScore
+      
+      // Check if template has FINAL_SCORE_NUM field
+      const hasFinalScoreNumField = template.sections.some(section => 
+        section.fields.some(field => field.fieldType === 'FINAL_SCORE_NUM')
+      )
+      
+      if (entityPassScore === null || entityPassScore === undefined) {
+        // Entity doesn't use score - template should not require score
+        if (hasFinalScoreNumField) {
+          throw new Error(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+        }
+      } else {
+        // Entity uses score - template must have score field
+        if (!hasFinalScoreNumField) {
+          throw new Error(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+        }
       }
 
       // Step 3: Check if any trainees are enrolled
@@ -1410,8 +1454,8 @@ export class AssessmentService {
       // Convert DOCX to PDF
       const pdfBuffer = await this.pdfConverterService['convertDocxBufferToPdf'](renderedDocxBuffer)
       
-      // Upload PDF to S3
-      const pdfUrl = await this.uploadPdfToS3(pdfBuffer, assessmentId)
+      // Upload PDF to S3 with proper filename
+      const pdfUrl = await this.uploadPdfToS3(pdfBuffer, assessmentForm)
       console.log(`PDF uploaded to S3 with URL: ${pdfUrl}`)
       
       // Update assessment form with PDF URL
@@ -1451,118 +1495,158 @@ export class AssessmentService {
   }
 
   /**
-   * Build assessment data object from assessment values matching template schema structure
+   * Build assessment data object from assessment values using template schema as base structure
    */
   private async buildAssessmentDataFromValues(
     assessmentId: string, 
     templateSchema: Record<string, any>
   ): Promise<Record<string, any>> {
-    // Get all assessment values for this assessment
+    // Get all assessment values with field names
     const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
     
-    // Create a map of fieldName -> value for quick lookup
+    // Create a map of fieldName -> parsed value for quick lookup
     const valueMap = new Map<string, any>()
-    assessmentValues.forEach(value => {
-      if (value.templateField && value.templateField.fieldName) {
-        // Pass the raw answerValue (can be null) to parseAssessmentValue
-        valueMap.set(value.templateField.fieldName, this.parseAssessmentValue(value.answerValue, value.templateField.fieldType))
+    assessmentValues.forEach(assessmentValue => {
+      if (assessmentValue.templateField && assessmentValue.templateField.fieldName) {
+        const parsedValue = this.parseAssessmentValue(
+          assessmentValue.answerValue, 
+          assessmentValue.templateField.fieldType
+        )
+        valueMap.set(assessmentValue.templateField.fieldName, parsedValue)
       }
     })
     
-    // Recursively build data object matching schema structure
-    return this.buildDataFromSchema(templateSchema, valueMap)
+    // Use template schema as base structure and replace values based on fieldName
+    return this.populateSchemaWithAssessmentValues(templateSchema, valueMap)
   }
 
   /**
-   * Recursively build data object from template schema structure
+   * Populate template schema with assessment values based on fieldName matching
    */
-  private buildDataFromSchema(
+  private populateSchemaWithAssessmentValues(
     schema: Record<string, any>, 
     valueMap: Map<string, any>
   ): Record<string, any> {
-    const result: Record<string, any> = {}
+    // Deep clone the template schema to avoid modifying the original
+    const result = JSON.parse(JSON.stringify(schema))
     
-    for (const [key, value] of Object.entries(schema)) {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        // Nested object - recurse
-        result[key] = this.buildDataFromSchema(value, valueMap)
-      } else {
-        // Leaf field - get value from map, if exists use it (even if null), otherwise use schema default
-        if (valueMap.has(key)) {
-          result[key] = valueMap.get(key) // This can be null, which is what we want
-        } else {
-          result[key] = value // Use schema default only if no assessment value exists
-        }
-      }
-    }
+    // Recursively populate the schema with assessment values
+    this.populateObjectWithValues(result, valueMap)
     
     return result
   }
 
   /**
-   * Parse assessment value based on field type
-   * If value is null/undefined, return null (don't convert to empty string)
+   * Recursively populate object with values from valueMap based on fieldName
+   */
+  private populateObjectWithValues(obj: any, valueMap: Map<string, any>): void {
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // Nested object - recurse
+        this.populateObjectWithValues(value, valueMap)
+      } else {
+        // Leaf field - check if we have a value for this fieldName
+        if (valueMap.has(key)) {
+          const assessmentValue = valueMap.get(key)
+          // Explicitly set the value, even if it's null
+          obj[key] = assessmentValue
+        }
+        // If no value found, keep the default value from schema
+      }
+    }
+  }
+
+  /**
+   * Parse assessment value based on field type and auto-detect data types
+   * IMPORTANT: If value is null/undefined, return null (preserve null values for JSON)
+   * This ensures null values appear as "fieldName": null in the final JSON
    */
   private parseAssessmentValue(value: string | null | undefined, fieldType?: string): any {
-    // If value is null or undefined, return null (preserve null values)
+    // CRITICAL: Preserve null values - if answerValue is null, return null
+    // This will result in "fieldName": null in the JSON output for docxtemplater
     if (value === null || value === undefined) return null
     
     // If value is empty string, also return null
     if (value === '') return null
     
-    switch (fieldType) {
-      case 'TOGGLE':
-        return value.toLowerCase() === 'true'
-      case 'NUMBER':
-        const num = Number(value)
-        return isNaN(num) ? null : num
-      default:
-        return value
+    // Handle specific field types first
+    if (fieldType === 'TOGGLE') {
+      return value.toLowerCase() === 'true'
     }
+    
+    if (fieldType === 'NUMBER') {
+      const num = Number(value)
+      return isNaN(num) ? null : num
+    }
+    
+    // Auto-detect data types for other cases
+    // Check for boolean values
+    if (value.toLowerCase() === 'true') return true
+    if (value.toLowerCase() === 'false') return false
+    
+    // Check for numeric values (integer or decimal, including negative numbers)
+    if (/^-?\d+$/.test(value)) {
+      // Integer (positive or negative)
+      return parseInt(value, 10)
+    }
+    
+    if (/^-?\d+\.\d+$/.test(value)) {
+      // Decimal number (positive or negative)
+      return parseFloat(value)
+    }
+    
+    // Return as string for everything else
+    return value
   }
 
   /**
    * Render DOCX template with data using docxtemplater
+   * Following official documentation: https://docxtemplater.com/docs/get-started-node/
    */
   private async renderDocxTemplate(templateBuffer: Buffer, data: Record<string, any>): Promise<Buffer> {
     try {
-      // Load template with PizZip
+      // Load template with PizZip (unzip the content of the file)
       const zip = new PizZip(templateBuffer)
       
-      // Create docxtemplater instance
+      // Parse the template - this throws an error if template is invalid
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true
       })
       
-      // Set data
-      doc.setData(data)
+      // Render the document with data
+      doc.render(data)
       
-      // Render document
-      doc.render()
-      
-      // Generate buffer
-      const buffer = doc.getZip().generate({
-        type: 'nodebuffer',
-        compression: 'DEFLATE',
-        compressionOptions: {
-          level: 9
-        }
-      })
+      // Get the output document as Node.js buffer (recommended method since v3.62.0)
+      const buffer = doc.toBuffer()
       
       return buffer
     } catch (error) {
       console.error('Failed to render DOCX template:', error)
+      
+      // Handle specific docxtemplater errors
+      if (error.properties && error.properties.errors instanceof Array) {
+        const errorMessages = error.properties.errors
+          .map((err: any) => `${err.name}: ${err.message}`)
+          .join('; ')
+        throw new BadRequestException(`Template rendering failed: ${errorMessages}`)
+      }
+      
       throw new BadRequestException('Failed to render document template')
     }
   }
 
   /**
-   * Upload PDF to S3 and return URL
+   * Upload PDF to S3 with proper filename format and return URL
+   * Format: Final Assessment_traineeEid_courseCode/subjectCode_occurenceDate
    */
-  private async uploadPdfToS3(pdfBuffer: Buffer, assessmentId: string): Promise<string> {
+  private async uploadPdfToS3(pdfBuffer: Buffer, assessmentForm: any): Promise<string> {
     try {
-      const key = `assessments/pdf/assessment_${assessmentId}_${Date.now()}.pdf`
+      // Generate filename based on assessment data
+      const filename = this.generateAssessmentPdfFilename(assessmentForm)
+      const key = `assessments/pdf/${filename}`
+      
+      console.log(`Uploading PDF with filename: ${filename}`)
       
       const uploadResult = await this.s3Service.uploadBuffer({
         key,
@@ -1574,6 +1658,43 @@ export class AssessmentService {
     } catch (error) {
       console.error('Failed to upload PDF to S3:', error)
       throw new BadRequestException('Failed to upload PDF file')
+    }
+  }
+
+  /**
+   * Generate PDF filename based on assessment form data
+   * Format: Final Assessment_traineeEid_courseCode/subjectCode_occurenceDate.pdf
+   */
+  private generateAssessmentPdfFilename(assessmentForm: any): string {
+    try {
+      // Get trainee EID
+      const traineeEid = (assessmentForm as any).trainee?.eid || 'UNKNOWN'
+      
+      // Get course/subject code (prioritize subject over course)
+      let scopeCode = 'UNKNOWN'
+      if (assessmentForm.subjectId && (assessmentForm as any).subject?.code) {
+        scopeCode = (assessmentForm as any).subject.code
+      } else if (assessmentForm.courseId && (assessmentForm as any).course?.code) {
+        scopeCode = (assessmentForm as any).course.code
+      }
+      
+      // Format occurrence date (YYYY-MM-DD)
+      let formattedDate = 'UNKNOWN'
+      if (assessmentForm.occuranceDate) {
+        const date = new Date(assessmentForm.occuranceDate)
+        formattedDate = date.toISOString().split('T')[0] // YYYY-MM-DD format
+      }
+      
+      // Generate filename with timestamp to avoid overwrite
+      const timestamp = Date.now()
+      const filename = `Final Assessment_${traineeEid}_${scopeCode}_${formattedDate}_${timestamp}.pdf`
+      
+      // Sanitize filename (remove invalid characters)
+      return filename.replace(/[<>:"/\\|?*]/g, '_')
+    } catch (error) {
+      console.error('Error generating PDF filename:', error)
+      // Fallback filename
+      return `Final_Assessment_${Date.now()}.pdf`
     }
   }
 

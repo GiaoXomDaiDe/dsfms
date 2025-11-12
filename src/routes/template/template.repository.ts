@@ -692,6 +692,7 @@ export class TemplateRepository {
       templateContent: string
       templateConfig: string
       sections: any[]
+      status?: 'DRAFT' | 'PENDING'
     },
     createdByUserId: string,
     templateSchema?: any
@@ -730,7 +731,7 @@ export class TemplateRepository {
             updatedByUserId: createdByUserId,
             reviewedByUserId: null, // Reset review fields
             reviewedAt: null,
-            status: 'PENDING', // Always starts as pending
+            status: templateData.status || 'DRAFT', // Use provided status or default to DRAFT
             templateContent: templateData.templateContent,
             templateConfig: templateData.templateConfig,
             referFirstVersionId: firstVersionId, // Reference to first version
