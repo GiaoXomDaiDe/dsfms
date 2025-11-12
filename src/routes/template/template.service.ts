@@ -1433,6 +1433,33 @@ export class TemplateService {
     if (finalScoreTextFields.length > 1) {
       throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
     }
+    
+    // 5. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
+    if (finalScoreTextFields.length > 0) {
+      const finalScoreTextField = finalScoreTextFields[0]
+      const hasFinalScoreNum = finalScoreNumFields.length > 0
+      
+      if (!hasFinalScoreNum) {
+        // If only FINAL_SCORE_TEXT exists (no FINAL_SCORE_NUM), options are required
+        if (!finalScoreTextField.options) {
+          throw new Error('FINAL_SCORE_TEXT field must have options when FINAL_SCORE_NUM field is not present')
+        }
+        
+        // Validate options format
+        try {
+          const options = typeof finalScoreTextField.options === 'string' 
+            ? JSON.parse(finalScoreTextField.options) 
+            : finalScoreTextField.options
+            
+          if (!options.items || !Array.isArray(options.items) || options.items.length === 0) {
+            throw new Error('FINAL_SCORE_TEXT field options must have "items" array with at least one value when FINAL_SCORE_NUM field is not present')
+          }
+        } catch (parseError) {
+          throw new Error('FINAL_SCORE_TEXT field options must be valid JSON with "items" array when FINAL_SCORE_NUM field is not present')
+        }
+      }
+      // If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist, options are optional for FINAL_SCORE_TEXT
+    }
   }
 
 }
