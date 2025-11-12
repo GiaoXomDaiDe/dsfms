@@ -11,6 +11,8 @@ export const RoleName = {
   SQA_AUDITOR: 'SQA AUDITOR'
 } as const
 
+export type RoleNameType = (typeof RoleName)[keyof typeof RoleName]
+
 export const GenderStatus = {
   MALE: 'MALE',
   FEMALE: 'FEMALE'

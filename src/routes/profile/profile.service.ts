@@ -10,8 +10,11 @@ import {
   UserNotFoundException
 } from '~/routes/profile/profile.error'
 import { ResetPasswordBodyType, UpdateProfileBodyType } from '~/routes/profile/profile.model'
+import type { GetUserProfileResType } from '~/routes/user/user.model'
+import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
+import type { MessageResType } from '~/shared/models/response.model'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { HashingService } from '~/shared/services/hashing.service'
 
@@ -22,7 +25,7 @@ export class ProfileService {
     private readonly hashingService: HashingService
   ) {}
 
-  async getProfile(userId: string) {
+  async getProfile(userId: string): Promise<GetUserProfileResType> {
     const user = await this.sharedUserRepository.findUniqueIncludeProfile(userId)
 
     if (!user) {
@@ -31,7 +34,13 @@ export class ProfileService {
     return user
   }
 
-  async updateProfile({ userId, body }: { userId: string; body: UpdateProfileBodyType }) {
+  async updateProfile({
+    userId,
+    body
+  }: {
+    userId: string
+    body: UpdateProfileBodyType
+  }): Promise<GetUserProfileResType> {
     try {
       const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(userId)
       if (!currentUser) {
@@ -40,7 +49,6 @@ export class ProfileService {
 
       const { trainerProfile, traineeProfile, ...userBasicInfo } = body
 
-      // Validate profile data based on current user role
       if (trainerProfile && currentUser.role.name !== RoleName.TRAINER) {
         throw CannotUpdateTrainerProfileException
       }
@@ -49,7 +57,6 @@ export class ProfileService {
         throw CannotUpdateTraineeProfileException
       }
 
-      // Ensure only the correct profile type is provided
       if (currentUser.role.name === RoleName.TRAINER && traineeProfile) {
         throw TrainerCannotHaveTraineeProfileException
       }
@@ -58,16 +65,18 @@ export class ProfileService {
         throw TraineeCannotHaveTrainerProfileException
       }
 
-      return await this.sharedUserRepository.updateWithProfile(
+      const updated = await this.sharedUserRepository.updateWithProfile(
         { id: userId },
         {
           updatedById: userId,
           userData: userBasicInfo,
-          newRoleName: currentUser.role.name, // Keep current role, no role change
+          newRoleName: currentUser.role.name as RoleNameType,
           trainerProfile: currentUser.role.name === RoleName.TRAINER ? trainerProfile : undefined,
           traineeProfile: currentUser.role.name === RoleName.TRAINEE ? traineeProfile : undefined
         }
       )
+
+      return updated
     } catch (error) {
       if (isUniqueConstraintPrismaError(error)) {
         throw EmailAlreadyExistsException
@@ -76,10 +85,15 @@ export class ProfileService {
     }
   }
 
-  async resetPassword({ userId, body }: { userId: string; body: Omit<ResetPasswordBodyType, 'confirmNewPassword'> }) {
+  async resetPassword({
+    userId,
+    body
+  }: {
+    userId: string
+    body: Omit<ResetPasswordBodyType, 'confirmNewPassword'>
+  }): Promise<MessageResType> {
     const { oldPassword, newPassword } = body
 
-    // Tìm user hiện tại
     const user = await this.sharedUserRepository.findUnique({
       id: userId
     })
@@ -87,13 +101,11 @@ export class ProfileService {
       throw UserNotFoundException
     }
 
-    // Validate mật khẩu cũ có đúng không
     const isOldPasswordValid = await this.hashingService.comparePassword(oldPassword, user.passwordHash)
     if (!isOldPasswordValid) {
       throw OldPasswordIncorrectException
     }
 
-    // Hash mật khẩu mới và cập nhật
     const hashedPassword = await this.hashingService.hashPassword(newPassword)
 
     await this.sharedUserRepository.update(

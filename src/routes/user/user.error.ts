@@ -235,14 +235,6 @@ export const InvalidRoleNameMessage = 'Invalid Role Name'
 export const InvalidRoleNameUpdateMessage = 'Invalid role name'
 
 // Messages cho department assignment rules
-export const DepartmentRequiredForDepartmentHeadMessage = 'Department ID is required for DEPARTMENT_HEAD role'
-export const DepartmentRequiredForTrainerMessage = 'Department ID is required for TRAINER role'
-
-export const DepartmentAssignmentNotAllowedMessage = (roleName: string) =>
-  `Department assignment is not allowed for ${roleName} role. Only TRAINER and DEPARTMENT_HEAD roles can be assigned to a department.`
-
-export const DepartmentNotAllowedForRoleMessage = (roleName: string) =>
-  `Department ID is not allowed for ${roleName} role. Only TRAINER and DEPARTMENT_HEAD roles can be assigned to a department.`
 
 // Message cho profile validation
 export const ProfileNotAllowedForRoleMessage = (profile: string, roleName: string) =>
@@ -269,10 +261,6 @@ export const BulkDepartmentHeadAlreadyExistsAtIndexException = (
   `User at index ${index}: Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
 
 // Lỗi khi department head không có departmentId
-export const DepartmentHeadRequiresDepartmentException = new BadRequestException(
-  'Department Head must be assigned to a department'
-)
-
 // Lỗi khi cố gắng đổi role của department head đang active
 export const CannotChangeRoleOfActiveDepartmentHeadException = (departmentName: string, eid: string) =>
   new ForbiddenException(

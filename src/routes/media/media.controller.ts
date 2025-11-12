@@ -159,6 +159,7 @@ export class MediaController {
   @Post('docs/upload-from-url')
   @ZodSerializerDto(UploadDocFromUrlResDTO)
   uploadFromUrl(@Body() { sourceUrl, fileName }: UploadDocFromUrlBodyDTO) {
+    console.log({ sourceUrl, fileName })
     return this.mediaService.uploadDocFromUrl({ sourceUrl, fileName })
   }
 }

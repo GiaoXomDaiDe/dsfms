@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import {
   CreateTraineeProfileType,
   CreateTrainerProfileType,
@@ -8,6 +8,7 @@ import {
 } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
 import { GetUserProfileResType, UpdateUserInternalType } from '~/routes/user/user.model'
+import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
@@ -334,36 +335,38 @@ export class SharedUserRepository {
     }: {
       updatedById: string
       userData: UpdateUserInternalType
-      newRoleName: string
+      newRoleName: RoleNameType
       trainerProfile?: UpdateTrainerProfileType
       traineeProfile?: UpdateTraineeProfileType
       includeDeleted?: boolean
     }
-  ): Promise<GetUserProfileResType | null> {
+  ): Promise<GetUserProfileResType> {
     return this.prismaService.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: {
           id: where.id,
           deletedAt: includeDeleted ? undefined : null
         },
-        include: {
-          role: { select: { id: true, name: true, description: true, isActive: true } },
-          department: { select: { id: true, name: true, isActive: true } },
-          trainerProfile: { where: { deletedAt: null } },
-          traineeProfile: { where: { deletedAt: null } }
-        }
+        include: userProfileInclude
       })
       if (!currentUser) throw UserNotFoundException
 
-      const isRoleChanging = newRoleName !== currentUser?.role.name
+      const hasExistingTrainerProfile = Array.isArray(currentUser.trainerProfile)
+        ? currentUser.trainerProfile.length > 0
+        : !!currentUser.trainerProfile
+      const hasExistingTraineeProfile = Array.isArray(currentUser.traineeProfile)
+        ? currentUser.traineeProfile.length > 0
+        : !!currentUser.traineeProfile
+
+      const isRoleChanging = newRoleName !== currentUser.role.name
       let newEid = currentUser.eid
 
       if (isRoleChanging) {
         const shouldGenerateNewEid = this.shouldGenerateNewEid(
           currentUser.eid,
           newRoleName,
-          currentUser.trainerProfile,
-          currentUser.traineeProfile
+          hasExistingTrainerProfile,
+          hasExistingTraineeProfile
         )
 
         if (shouldGenerateNewEid) {
@@ -371,7 +374,6 @@ export class SharedUserRepository {
         }
       }
 
-      //Bước 1: Cập nhật user base
       const updatedUser = await tx.user.update({
         where: {
           ...where,
@@ -386,66 +388,52 @@ export class SharedUserRepository {
       if (!updatedUser) {
         throw UserNotFoundException
       }
-      // Bước 2: Xử lý profiles
       await this.handleProfileUpdates(tx, {
         userId: where.id,
         newRoleName,
-        currentRoleName: currentUser.role.name,
+        currentRoleName: currentUser.role.name as RoleNameType,
         trainerProfile,
         traineeProfile,
         updatedById,
-        hasExistingTrainerProfile: !!currentUser.trainerProfile,
-        hasExistingTraineeProfile: !!currentUser.traineeProfile
+        hasExistingTrainerProfile,
+        hasExistingTraineeProfile
       })
 
-      // Bước 3: Trả về user mới với profile
-      return await tx.user.findUnique({
+      const refreshedUser = await tx.user.findUnique({
         where: { id: where.id },
-        include: {
-          role: {
-            select: { id: true, name: true, description: true, isActive: true }
-          },
-          department: {
-            select: { id: true, name: true, isActive: true }
-          },
-          trainerProfile: newRoleName === RoleName.TRAINER,
-          traineeProfile: newRoleName === RoleName.TRAINEE
-        }
+        include: userProfileInclude
       })
+
+      if (!refreshedUser) {
+        throw UserNotFoundException
+      }
+
+      return refreshedUser as GetUserProfileResType
     })
   }
-
-  /**
-   * Xác định có cần generate EID mới không
-   */
   private shouldGenerateNewEid(
     currentEid: string,
-    newRoleName: string,
-    existingTrainerProfile: any,
-    existingTraineeProfile: any
+    newRoleName: RoleNameType,
+    hasTrainerProfile: boolean,
+    hasTraineeProfile: boolean
   ): boolean {
-    // Nếu EID hiện tại không match với role mới
     if (!this.eidService.isEidMatchingRole(currentEid, newRoleName)) {
       return true
     }
 
-    // Trường hợp đặc biệt: lần đầu thành trainer/trainee
-    if (newRoleName === RoleName.TRAINER && !existingTrainerProfile) {
+    if (newRoleName === RoleName.TRAINER && !hasTrainerProfile) {
       return true
     }
 
-    if (newRoleName === RoleName.TRAINEE && !existingTraineeProfile) {
+    if (newRoleName === RoleName.TRAINEE && !hasTraineeProfile) {
       return true
     }
 
     return false
   }
 
-  /**
-   * Xử lý việc tạo/cập nhật/xóa profiles
-   */
   private async handleProfileUpdates(
-    tx: any,
+    tx: Prisma.TransactionClient,
     {
       userId,
       newRoleName,
@@ -457,125 +445,73 @@ export class SharedUserRepository {
       hasExistingTraineeProfile
     }: {
       userId: string
-      newRoleName: string
-      currentRoleName: string
+      newRoleName: RoleNameType
+      currentRoleName: RoleNameType
       trainerProfile?: UpdateTrainerProfileType
       traineeProfile?: UpdateTraineeProfileType
       updatedById: string
       hasExistingTrainerProfile: boolean
       hasExistingTraineeProfile: boolean
     }
-  ) {
+  ): Promise<void> {
     const isRoleChanging = newRoleName !== currentRoleName
 
     if (isRoleChanging) {
-      // Đổi role: disable profiles không phù hợp, enable profile phù hợp
       if (newRoleName === RoleName.TRAINER) {
-        // Disable trainee profile nếu có
         if (hasExistingTraineeProfile) {
-          await tx.traineeProfile.updateMany({
-            where: { userId, deletedAt: null },
-            data: { deletedAt: new Date(), updatedById }
-          })
+          await this.softDeleteTraineeProfile(tx, userId, updatedById)
         }
 
-        // Enable/create trainer profile
-        await tx.trainerProfile.upsert({
-          where: { userId },
-          create: {
-            userId,
-            ...(trainerProfile as CreateTrainerProfileType),
-            createdById: updatedById,
-            updatedById,
-            deletedAt: null
-          },
-          update: {
-            ...trainerProfile,
-            updatedById,
-            deletedAt: null
-          }
+        await this.upsertTrainerProfile(tx, {
+          userId,
+          updatedById,
+          trainerProfile
         })
-      } else if (newRoleName === RoleName.TRAINEE) {
-        // Disable trainer profile nếu có
+        return
+      }
+
+      if (newRoleName === RoleName.TRAINEE) {
         if (hasExistingTrainerProfile) {
-          await tx.trainerProfile.updateMany({
-            where: { userId, deletedAt: null },
-            data: { deletedAt: new Date(), updatedById }
-          })
+          await this.softDeleteTrainerProfile(tx, userId, updatedById)
         }
 
-        // Enable/create trainee profile
-        await tx.traineeProfile.upsert({
-          where: { userId },
-          create: {
-            userId,
-            ...(traineeProfile as CreateTraineeProfileType),
-            createdById: updatedById,
-            updatedById,
-            deletedAt: null
-          },
-          update: {
-            ...traineeProfile,
-            updatedById,
-            deletedAt: null
-          }
+        await this.upsertTraineeProfile(tx, {
+          userId,
+          updatedById,
+          traineeProfile
         })
-      } else {
-        // Role khác: disable tất cả profiles
-        if (hasExistingTrainerProfile) {
-          await tx.trainerProfile.updateMany({
-            where: { userId, deletedAt: null },
-            data: { deletedAt: new Date(), updatedById }
-          })
-        }
-
-        if (hasExistingTraineeProfile) {
-          await tx.traineeProfile.updateMany({
-            where: { userId, deletedAt: null },
-            data: { deletedAt: new Date(), updatedById }
-          })
-        }
-      }
-    } else {
-      // Không đổi role: chỉ update profile nếu có data
-      if (newRoleName === RoleName.TRAINER && trainerProfile) {
-        await tx.trainerProfile.upsert({
-          where: { userId },
-          create: {
-            userId,
-            ...(trainerProfile as CreateTrainerProfileType),
-            createdById: updatedById,
-            updatedById,
-            deletedAt: null
-          },
-          update: {
-            ...trainerProfile,
-            updatedById,
-            deletedAt: null
-          }
-        })
+        return
       }
 
-      if (newRoleName === RoleName.TRAINEE && traineeProfile) {
-        await tx.traineeProfile.upsert({
-          where: { userId },
-          create: {
-            userId,
-            ...(traineeProfile as CreateTraineeProfileType),
-            createdById: updatedById,
-            updatedById,
-            deletedAt: null
-          },
-          update: {
-            ...traineeProfile,
-            updatedById,
-            deletedAt: null
-          }
-        })
+      if (hasExistingTrainerProfile) {
+        await this.softDeleteTrainerProfile(tx, userId, updatedById)
       }
+
+      if (hasExistingTraineeProfile) {
+        await this.softDeleteTraineeProfile(tx, userId, updatedById)
+      }
+
+      return
+    }
+
+    if (newRoleName === RoleName.TRAINER && trainerProfile) {
+      await this.upsertTrainerProfile(tx, {
+        userId,
+        updatedById,
+        trainerProfile
+      })
+    }
+
+    if (newRoleName === RoleName.TRAINEE && traineeProfile) {
+      await this.upsertTraineeProfile(tx, {
+        userId,
+        updatedById,
+        traineeProfile
+      })
     }
   }
-  async update(where: { id: string }, data: Partial<UserType>): Promise<UserType | null> {
+
+  async update(where: { id: string }, data: Partial<UserType>): Promise<UserType> {
     return this.prismaService.user.update({
       where: {
         ...where,
@@ -604,5 +540,105 @@ export class SharedUserRepository {
         ...(excludeUserId && { id: { not: excludeUserId } })
       }
     })
+  }
+
+  private async upsertTrainerProfile(
+    tx: Prisma.TransactionClient,
+    {
+      userId,
+      updatedById,
+      trainerProfile
+    }: {
+      userId: string
+      updatedById: string
+      trainerProfile?: UpdateTrainerProfileType
+    }
+  ): Promise<void> {
+    if (this.hasProfilePayload(trainerProfile)) {
+      await tx.trainerProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          ...(trainerProfile as CreateTrainerProfileType),
+          createdById: updatedById,
+          updatedById,
+          deletedAt: null
+        },
+        update: {
+          ...trainerProfile,
+          updatedById,
+          deletedAt: null
+        }
+      })
+      return
+    }
+
+    await tx.trainerProfile.updateMany({
+      where: { userId },
+      data: { deletedAt: null, updatedById }
+    })
+  }
+
+  private async upsertTraineeProfile(
+    tx: Prisma.TransactionClient,
+    {
+      userId,
+      updatedById,
+      traineeProfile
+    }: {
+      userId: string
+      updatedById: string
+      traineeProfile?: UpdateTraineeProfileType
+    }
+  ): Promise<void> {
+    if (this.hasProfilePayload(traineeProfile)) {
+      await tx.traineeProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          ...(traineeProfile as CreateTraineeProfileType),
+          createdById: updatedById,
+          updatedById,
+          deletedAt: null
+        },
+        update: {
+          ...traineeProfile,
+          updatedById,
+          deletedAt: null
+        }
+      })
+      return
+    }
+
+    await tx.traineeProfile.updateMany({
+      where: { userId },
+      data: { deletedAt: null, updatedById }
+    })
+  }
+
+  private async softDeleteTrainerProfile(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    updatedById: string
+  ): Promise<void> {
+    await tx.trainerProfile.updateMany({
+      where: { userId, deletedAt: null },
+      data: { deletedAt: new Date(), updatedById }
+    })
+  }
+
+  private async softDeleteTraineeProfile(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    updatedById: string
+  ): Promise<void> {
+    await tx.traineeProfile.updateMany({
+      where: { userId, deletedAt: null },
+      data: { deletedAt: new Date(), updatedById }
+    })
+  }
+
+  private hasProfilePayload<T extends Record<string, unknown> | undefined>(payload?: T): payload is T {
+    return !!payload && Object.keys(payload).length > 0
   }
 }

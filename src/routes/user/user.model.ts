@@ -12,8 +12,6 @@ import {
 import { RoleSchema } from '~/routes/role/role.model'
 import {
   AtLeastOneUserRequiredMessage,
-  DepartmentAssignmentNotAllowedMessage,
-  DepartmentNotAllowedForRoleMessage,
   DuplicateEmailInBatchMessage,
   InvalidRoleIdMessage,
   InvalidRoleNameMessage,
@@ -83,16 +81,6 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
         path: ['roleId']
       })
       return
-    }
-
-    if (data.role.name !== 'DEPARTMENT_HEAD' && data.role.name !== 'TRAINER') {
-      if (data.departmentId !== undefined && data.departmentId !== null) {
-        ctx.addIssue({
-          code: 'custom',
-          message: DepartmentNotAllowedForRoleMessage(data.role.name),
-          path: ['departmentId']
-        })
-      }
     }
 
     validateRoleProfile(data.role.name, data, ctx)
@@ -177,22 +165,6 @@ export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.omit({
           path: ['role', 'name']
         })
         return
-      }
-
-      // Validate department assignment chỉ khi có role và departmentId được cung cấp
-      if (data.departmentId !== undefined) {
-        if (data.role.name === 'DEPARTMENT_HEAD' || data.role.name === 'TRAINER') {
-          // Các role này được phép có departmentId (có thể null để remove)
-        } else {
-          // Các role khác không được có departmentId (phải null hoặc undefined)
-          if (data.departmentId !== null) {
-            ctx.addIssue({
-              code: 'custom',
-              message: DepartmentAssignmentNotAllowedMessage(data.role.name),
-              path: ['departmentId']
-            })
-          }
-        }
       }
 
       const rules = ROLE_PROFILE_RULES[data.role.name as keyof typeof ROLE_PROFILE_RULES]

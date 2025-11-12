@@ -5,7 +5,7 @@ export const DepartmentSchema = z.object({
   name: z.string().min(1).max(255),
   code: z.string().min(1).max(50),
   description: z.string().max(1000).nullable(),
-  headUserId: z.uuid().nullable(),
+  headUserId: z.uuid().nullable().optional(),
   isActive: z.boolean().default(true),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),

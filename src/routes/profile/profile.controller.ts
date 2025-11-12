@@ -12,30 +12,29 @@ export class ProfileController {
 
   @Get()
   @ZodSerializerDto(GetUserProfileResDTO)
-  getProfile(@ActiveUser('userId') userId: string) {
-    return this.profileService.getProfile(userId).then((profile) => ({
-      data: profile
-    }))
+  async getProfile(@ActiveUser('userId') userId: string) {
+    const profile = await this.profileService.getProfile(userId)
+    return { data: profile }
   }
 
   @Put()
   @ZodSerializerDto(UpdateUserResDTO)
-  updateProfile(@Body() body: UpdateProfileBodyDTO, @ActiveUser('userId') userId: string) {
-    return this.profileService.updateProfile({
+  async updateProfile(@Body() body: UpdateProfileBodyDTO, @ActiveUser('userId') userId: string) {
+    const updated = await this.profileService.updateProfile({
       userId,
       body
     })
+    return { data: updated }
   }
 
   @Put('reset-password')
   @ZodSerializerDto(MessageResDTO)
-  resetPassword(@Body() body: ResetPasswordBodyDTO, @ActiveUser('userId') userId: string) {
-    // Sau khi validate ở tầng model (confirmNewPassword khớp với newPassword),
-    // chỉ truyền oldPassword và newPassword xuống service
+  async resetPassword(@Body() body: ResetPasswordBodyDTO, @ActiveUser('userId') userId: string) {
     const { oldPassword, newPassword } = body
-    return this.profileService.resetPassword({
+    const result = await this.profileService.resetPassword({
       userId,
       body: { oldPassword, newPassword }
     })
+    return result
   }
 }
