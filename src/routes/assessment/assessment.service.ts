@@ -124,6 +124,28 @@ export class AssessmentService {
         throw new Error('Either subjectId or courseId must be provided')
       }
 
+      // Step 2.1: Validate template fields compatibility with subject/course scoring requirements
+      const entity = subject || course
+      const entityType = data.subjectId ? 'Subject' : 'Course'
+      const entityPassScore = entity!.passScore
+      
+      // Check if template has FINAL_SCORE_NUM field
+      const hasFinalScoreNumField = template.sections.some(section => 
+        section.fields.some(field => field.fieldType === 'FINAL_SCORE_NUM')
+      )
+      
+      if (entityPassScore === null || entityPassScore === undefined) {
+        // Entity doesn't use score - template should not require score
+        if (hasFinalScoreNumField) {
+          throw new Error(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+        }
+      } else {
+        // Entity uses score - template must have score field
+        if (!hasFinalScoreNumField) {
+          throw new Error(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+        }
+      }
+
       // Step 3: Validate department consistency
       if (template.departmentId !== entityDepartmentId) {
         throw TemplateDepartmentMismatchException
@@ -317,6 +339,28 @@ export class AssessmentService {
       } else {
         // This should not happen due to Zod validation, but keeping for safety
         throw new Error('Either subjectId or courseId must be provided')
+      }
+
+      // Step 2.1: Validate template fields compatibility with subject/course scoring requirements
+      const entity = subject || course
+      const entityType = data.subjectId ? 'Subject' : 'Course'
+      const entityPassScore = entity!.passScore
+      
+      // Check if template has FINAL_SCORE_NUM field
+      const hasFinalScoreNumField = template.sections.some(section => 
+        section.fields.some(field => field.fieldType === 'FINAL_SCORE_NUM')
+      )
+      
+      if (entityPassScore === null || entityPassScore === undefined) {
+        // Entity doesn't use score - template should not require score
+        if (hasFinalScoreNumField) {
+          throw new Error(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+        }
+      } else {
+        // Entity uses score - template must have score field
+        if (!hasFinalScoreNumField) {
+          throw new Error(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+        }
       }
 
       // Step 3: Check if any trainees are enrolled

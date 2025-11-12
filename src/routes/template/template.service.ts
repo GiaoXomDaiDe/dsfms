@@ -1418,19 +1418,17 @@ export class TemplateService {
       throw new MissingSignatureFieldError()
     }
     
-    // 4. Check exactly one FINAL_SCORE_NUM field
+    // 4. Check at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field
     const finalScoreNumFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_NUM')
-    if (finalScoreNumFields.length === 0) {
-      throw new MissingFinalScoreFieldsError('FINAL_SCORE_NUM')
-    }
-    if (finalScoreNumFields.length > 1) {
-      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_NUM')
+    const finalScoreTextFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_TEXT')
+    
+    if (finalScoreNumFields.length === 0 && finalScoreTextFields.length === 0) {
+      throw new Error('Template must have at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field')
     }
     
-    // 5. Check exactly one FINAL_SCORE_TEXT field
-    const finalScoreTextFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_TEXT')
-    if (finalScoreTextFields.length === 0) {
-      throw new MissingFinalScoreFieldsError('FINAL_SCORE_TEXT')
+    // Check maximum one of each type
+    if (finalScoreNumFields.length > 1) {
+      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_NUM')
     }
     if (finalScoreTextFields.length > 1) {
       throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
