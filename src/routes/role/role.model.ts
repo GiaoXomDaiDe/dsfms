@@ -4,33 +4,27 @@ import {
   AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE,
   PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE
 } from '~/routes/role/role.error'
+import { ROLE_NAME_REGEX, optionalAlphabeticCharacter, requiredText } from '~/shared/constants/validation.constant'
 
 export const RoleSchema = z.object({
   id: z.uuid(),
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Role name is required')
-    .max(500)
-    .regex(/^[A-Za-z\s]+$/, 'Role name must contain only alphabetic characters and spaces'),
-  description: z
-    .string()
-    .trim()
-    .max(500)
-    .nullable()
-    .refine((value) => value === null || value === '' || /[A-Za-z]/.test(value), {
-      message: 'Description must include at least one alphabetic character'
-    }),
+  name: requiredText('Role name', 500, {
+    pattern: ROLE_NAME_REGEX,
+    message: 'Role name must contain only alphabetic characters and spaces'
+  }),
+  description: z.string().trim().max(500).nullable().refine(optionalAlphabeticCharacter, {
+    message: 'Description must include at least one alphabetic character'
+  }),
   isActive: z.boolean().default(true),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
   deletedAt: z.iso
     .datetime()
-    .transform((d) => new Date(d))
+    .transform((value) => new Date(value))
     .nullable(),
-  createdAt: z.iso.datetime().transform((d) => new Date(d)),
-  updatedAt: z.iso.datetime().transform((d) => new Date(d))
+  createdAt: z.iso.datetime().transform((value) => new Date(value)),
+  updatedAt: z.iso.datetime().transform((value) => new Date(value))
 })
 
 export const RoleWithUserCountSchema = RoleSchema.extend({

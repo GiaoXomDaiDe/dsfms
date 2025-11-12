@@ -1,16 +1,16 @@
 import z from 'zod'
 import { RoleSchema } from '~/routes/role/role.model'
 import { GenderStatus, UserStatus } from '~/shared/constants/auth.constant'
+import {
+  NAME_ALLOWED_CHARS_REGEX,
+  NAME_CONTAINS_LETTER_REGEX,
+  normalizeWhitespace
+} from '~/shared/constants/validation.constant'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
-
-const NAME_ALLOWED_CHARS_REGEX = /^[\p{L}\p{P}\s]+$/u
-const NAME_CONTAINS_LETTER_REGEX = /\p{L}/u
 
 const nameRegexMessage = 'Name must contain only alphabetic characters'
 
-const normalizeName = (value: string): string => value.replace(/\s+/g, ' ').trim()
-
-const normalizedNameSchema = z.string().transform((value) => normalizeName(value))
+const normalizedNameSchema = z.string().transform((value) => normalizeWhitespace(value))
 
 const validatedNameSchema = z
   .string()
@@ -33,7 +33,7 @@ export const UserSchema = z.object({
         return null
       }
 
-      const normalized = normalizeName(value)
+      const normalized = normalizeWhitespace(value)
       return normalized.length === 0 ? null : normalized
     })
     .pipe(z.union([validatedNameSchema, z.null()])),
@@ -60,10 +60,10 @@ export const UserSchema = z.object({
   deletedById: z.uuid().nullable(),
   deletedAt: z.iso
     .datetime()
-    .transform((d) => new Date(d))
+    .transform((value) => new Date(value))
     .nullable(),
-  createdAt: z.iso.datetime().transform((d) => new Date(d)),
-  updatedAt: z.iso.datetime().transform((d) => new Date(d))
+  createdAt: z.iso.datetime().transform((value) => new Date(value)),
+  updatedAt: z.iso.datetime().transform((value) => new Date(value))
 })
 
 export const UserListItemSchema = UserSchema.omit({
