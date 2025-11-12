@@ -37,6 +37,7 @@ import {
 } from '~/routes/user/user.model'
 import { UserRepo } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
+import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { ROLE_PROFILE_VIOLATION_TYPES } from '~/shared/constants/user.constant'
 import {
@@ -54,7 +55,7 @@ import { HashingService } from '~/shared/services/hashing.service'
 
 interface ProcessRoleChangeResult {
   newRoleId: string
-  newRoleName: string
+  newRoleName: RoleNameType
   roleIdForPermissionCheck: string
 }
 
@@ -627,7 +628,7 @@ export class UserService {
 
       return {
         newRoleId: currentUser.role.id,
-        newRoleName: currentUser.role.name,
+        newRoleName: currentUser.role.name as RoleNameType,
         roleIdForPermissionCheck: currentUser.role.id
       }
     }
@@ -674,7 +675,7 @@ export class UserService {
 
     return {
       newRoleId: inputRole.id,
-      newRoleName: newRole.name,
+      newRoleName: newRole.name as RoleNameType,
       roleIdForPermissionCheck: inputRole.id
     }
   }
@@ -789,7 +790,6 @@ export class UserService {
     if (violations.length === 0) {
       return
     }
-
     const violation = violations[0]
     const { profileKey, message: violationMessage } = violation
 

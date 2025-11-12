@@ -67,13 +67,27 @@ export class CourseRepo {
               code: true,
               description: true
             }
+          },
+          _count: {
+            select: {
+              subjects: {
+                where: {
+                  deletedAt: null
+                }
+              }
+            }
           }
         }
       })
     ])
 
+    const formattedCourses = courses.map(({ _count, ...course }) => ({
+      ...course,
+      totalSubjects: _count.subjects
+    }))
+
     return {
-      courses,
+      courses: formattedCourses,
       totalItems
     }
   }

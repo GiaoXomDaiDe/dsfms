@@ -45,7 +45,8 @@ export const GetCoursesResSchema = z.object({
         name: true,
         code: true,
         description: true
-      })
+      }),
+      totalSubjects: z.number().int().nonnegative().default(0)
     })
   ),
   totalItems: z.number()

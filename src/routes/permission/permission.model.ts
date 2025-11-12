@@ -1,21 +1,8 @@
 import { HttpMethod } from '@prisma/client'
 import z from 'zod'
+import { hasAlphabeticCharacter, optionalAlphabeticCharacter } from '~/shared/constants/validation.constant'
 
 const HAS_ALPHABETIC_MESSAGE = 'Must include at least one alphabetic character'
-
-const ALPHABETIC_REGEX = /\p{L}/u
-
-const hasAlphabeticCharacter = (value: string) => ALPHABETIC_REGEX.test(value)
-
-const optionalAlphabeticCharacter = (value: string | null | undefined) => {
-  if (value === null || value === undefined) {
-    return true
-  }
-
-  const normalized = value.trim()
-
-  return normalized.length === 0 || hasAlphabeticCharacter(normalized)
-}
 
 export const PermissionSchema = z.object({
   id: z.uuid(),
@@ -79,10 +66,10 @@ export const PermissionSchema = z.object({
   deletedById: z.uuid().nullable(),
   deletedAt: z.iso
     .datetime()
-    .transform((d) => new Date(d))
+    .transform((value) => new Date(value))
     .nullable(),
-  createdAt: z.iso.datetime().transform((d) => new Date(d)),
-  updatedAt: z.iso.datetime().transform((d) => new Date(d))
+  createdAt: z.iso.datetime().transform((value) => new Date(value)),
+  updatedAt: z.iso.datetime().transform((value) => new Date(value))
 })
 
 export const PermissionListItemSchema = PermissionSchema.pick({
