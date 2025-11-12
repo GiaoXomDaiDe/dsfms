@@ -26,7 +26,8 @@ const storage = multer.diskStorage({
     HttpModule
   ],
   controllers: [MediaController],
-  providers: [MediaService]
+  providers: [MediaService],
+  exports: [MediaService]
 })
 export class MediaModule {
   constructor() {
