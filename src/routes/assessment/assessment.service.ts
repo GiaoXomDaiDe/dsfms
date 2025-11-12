@@ -1451,74 +1451,108 @@ export class AssessmentService {
   }
 
   /**
-   * Build assessment data object from assessment values matching template schema structure
+   * Build assessment data object from assessment values using template schema as base structure
    */
   private async buildAssessmentDataFromValues(
     assessmentId: string, 
     templateSchema: Record<string, any>
   ): Promise<Record<string, any>> {
-    // Get all assessment values for this assessment
+    // Get all assessment values with field names
     const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
     
-    // Create a map of fieldName -> value for quick lookup
+    // Create a map of fieldName -> parsed value for quick lookup
     const valueMap = new Map<string, any>()
-    assessmentValues.forEach(value => {
-      if (value.templateField && value.templateField.fieldName) {
-        // Pass the raw answerValue (can be null) to parseAssessmentValue
-        valueMap.set(value.templateField.fieldName, this.parseAssessmentValue(value.answerValue, value.templateField.fieldType))
+    assessmentValues.forEach(assessmentValue => {
+      if (assessmentValue.templateField && assessmentValue.templateField.fieldName) {
+        const parsedValue = this.parseAssessmentValue(
+          assessmentValue.answerValue, 
+          assessmentValue.templateField.fieldType
+        )
+        valueMap.set(assessmentValue.templateField.fieldName, parsedValue)
       }
     })
     
-    // Recursively build data object matching schema structure
-    return this.buildDataFromSchema(templateSchema, valueMap)
+    // Use template schema as base structure and replace values based on fieldName
+    return this.populateSchemaWithAssessmentValues(templateSchema, valueMap)
   }
 
   /**
-   * Recursively build data object from template schema structure
+   * Populate template schema with assessment values based on fieldName matching
    */
-  private buildDataFromSchema(
+  private populateSchemaWithAssessmentValues(
     schema: Record<string, any>, 
     valueMap: Map<string, any>
   ): Record<string, any> {
-    const result: Record<string, any> = {}
+    // Deep clone the template schema to avoid modifying the original
+    const result = JSON.parse(JSON.stringify(schema))
     
-    for (const [key, value] of Object.entries(schema)) {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        // Nested object - recurse
-        result[key] = this.buildDataFromSchema(value, valueMap)
-      } else {
-        // Leaf field - get value from map, if exists use it (even if null), otherwise use schema default
-        if (valueMap.has(key)) {
-          result[key] = valueMap.get(key) // This can be null, which is what we want
-        } else {
-          result[key] = value // Use schema default only if no assessment value exists
-        }
-      }
-    }
+    // Recursively populate the schema with assessment values
+    this.populateObjectWithValues(result, valueMap)
     
     return result
   }
 
   /**
-   * Parse assessment value based on field type
-   * If value is null/undefined, return null (don't convert to empty string)
+   * Recursively populate object with values from valueMap based on fieldName
+   */
+  private populateObjectWithValues(obj: any, valueMap: Map<string, any>): void {
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // Nested object - recurse
+        this.populateObjectWithValues(value, valueMap)
+      } else {
+        // Leaf field - check if we have a value for this fieldName
+        if (valueMap.has(key)) {
+          const assessmentValue = valueMap.get(key)
+          // Explicitly set the value, even if it's null
+          obj[key] = assessmentValue
+        }
+        // If no value found, keep the default value from schema
+      }
+    }
+  }
+
+  /**
+   * Parse assessment value based on field type and auto-detect data types
+   * IMPORTANT: If value is null/undefined, return null (preserve null values for JSON)
+   * This ensures null values appear as "fieldName": null in the final JSON
    */
   private parseAssessmentValue(value: string | null | undefined, fieldType?: string): any {
-    // If value is null or undefined, return null (preserve null values)
+    // CRITICAL: Preserve null values - if answerValue is null, return null
+    // This will result in "fieldName": null in the JSON output for docxtemplater
     if (value === null || value === undefined) return null
     
     // If value is empty string, also return null
     if (value === '') return null
     
-    switch (fieldType) {
-      case 'TOGGLE':
-        return value.toLowerCase() === 'true'
-      case 'NUMBER':
-        const num = Number(value)
-        return isNaN(num) ? null : num
-      default:
-        return value
+    // Handle specific field types first
+    if (fieldType === 'TOGGLE') {
+      return value.toLowerCase() === 'true'
     }
+    
+    if (fieldType === 'NUMBER') {
+      const num = Number(value)
+      return isNaN(num) ? null : num
+    }
+    
+    // Auto-detect data types for other cases
+    // Check for boolean values
+    if (value.toLowerCase() === 'true') return true
+    if (value.toLowerCase() === 'false') return false
+    
+    // Check for numeric values (integer or decimal, including negative numbers)
+    if (/^-?\d+$/.test(value)) {
+      // Integer (positive or negative)
+      return parseInt(value, 10)
+    }
+    
+    if (/^-?\d+\.\d+$/.test(value)) {
+      // Decimal number (positive or negative)
+      return parseFloat(value)
+    }
+    
+    // Return as string for everything else
+    return value
   }
 
   /**

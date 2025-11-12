@@ -24,7 +24,13 @@ import {
   OriginalTemplateNotFoundError,
   TemplateHasAssessmentsError,
   TemplateVersionCreationError,
-  InvalidTemplateStatusForUpdateError
+  InvalidTemplateStatusForUpdateError,
+  ToggleDependentSectionMissingControlError,
+  ValueListFieldMissingOptionsError,
+  ValueListFieldInvalidOptionsError,
+  MissingSignatureFieldError,
+  MissingFinalScoreFieldsError,
+  DuplicateFinalScoreFieldsError
 } from './template.error'
 import {
   TEMPLATE_PARSED_SUCCESSFULLY,
@@ -516,15 +522,20 @@ export class TemplateService {
         }
       }
 
-      // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
-
       // Set default status to DRAFT if not provided
       const status = templateData.status || 'DRAFT'
       const templateDataWithStatus = {
         ...templateData,
         status
       } as CreateTemplateFormDto & { status: 'DRAFT' | 'PENDING' }
+
+      // Validate business rules only if status is PENDING
+      if (status === 'PENDING') {
+        this.validateTemplateBusinessRules(templateData.sections)
+      }
+
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
       // Create template with all nested data
       // Use alternative method for large templates if needed
@@ -933,6 +944,9 @@ export class TemplateService {
         }
       }
 
+      // Validate business rules - updated template status will be changed to PENDING
+      this.validateTemplateBusinessRules(templateData.sections)
+
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
@@ -1174,6 +1188,14 @@ export class TemplateService {
       }
     }
 
+    // Set default status to DRAFT if not provided
+    const status = templateVersionData.status || 'DRAFT'
+
+    // Validate business rules only if status is PENDING
+    if (status === 'PENDING') {
+      this.validateTemplateBusinessRules(templateVersionData.sections)
+    }
+
     // Generate appropriate name for the new version
     let finalTemplateName = templateVersionData.name
     
@@ -1204,7 +1226,8 @@ export class TemplateService {
           description: templateVersionData.description,
           templateContent: templateVersionData.templateContent,
           templateConfig: templateVersionData.templateConfig,
-          sections: templateVersionData.sections
+          sections: templateVersionData.sections,
+          status: status
         },
         userContext.userId,
         templateSchema
@@ -1344,6 +1367,73 @@ export class TemplateService {
         throw error
       }
       throw new Error(`Failed to generate template ZIP: ${error.message}`)
+    }
+  }
+
+  /**
+   * Validate template business rules
+   */
+  private validateTemplateBusinessRules(sections: any[]) {
+    // Collect all fields from all sections
+    const allFields: any[] = []
+    
+    for (const section of sections) {
+      if (!section.fields || !Array.isArray(section.fields)) continue
+      
+      // 1. Check toggle dependent sections
+      if (section.isToggleDependent === true) {
+        const hasControlToggle = section.fields.some((field: any) => field.fieldType === 'SECTION_CONTROL_TOGGLE')
+        if (!hasControlToggle) {
+          throw new ToggleDependentSectionMissingControlError(section.label)
+        }
+      }
+      
+      // 2. Check VALUE_LIST fields have options
+      for (const field of section.fields) {
+        if (field.fieldType === 'VALUE_LIST') {
+          if (!field.options) {
+            throw new ValueListFieldMissingOptionsError(field.fieldName, section.label)
+          }
+          
+          // Validate options format
+          try {
+            const options = typeof field.options === 'string' ? JSON.parse(field.options) : field.options
+            if (!options.items || !Array.isArray(options.items)) {
+              throw new ValueListFieldInvalidOptionsError(field.fieldName, section.label)
+            }
+          } catch (error) {
+            throw new ValueListFieldInvalidOptionsError(field.fieldName, section.label)
+          }
+        }
+        
+        allFields.push(field)
+      }
+    }
+    
+    // 3. Check at least one signature field
+    const hasSignatureField = allFields.some((field: any) => 
+      field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG'
+    )
+    if (!hasSignatureField) {
+      throw new MissingSignatureFieldError()
+    }
+    
+    // 4. Check exactly one FINAL_SCORE_NUM field
+    const finalScoreNumFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_NUM')
+    if (finalScoreNumFields.length === 0) {
+      throw new MissingFinalScoreFieldsError('FINAL_SCORE_NUM')
+    }
+    if (finalScoreNumFields.length > 1) {
+      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_NUM')
+    }
+    
+    // 5. Check exactly one FINAL_SCORE_TEXT field
+    const finalScoreTextFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_TEXT')
+    if (finalScoreTextFields.length === 0) {
+      throw new MissingFinalScoreFieldsError('FINAL_SCORE_TEXT')
+    }
+    if (finalScoreTextFields.length > 1) {
+      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
     }
   }
 

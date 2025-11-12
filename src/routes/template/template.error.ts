@@ -133,3 +133,41 @@ export class TemplateInUseCannotUpdateError extends BadRequestException {
     super('Cannot update template that has been used to create assessment forms. Template is currently being used in active assessments.')
   }
 }
+
+// ==================== New Field Validation Errors ====================
+
+export class ToggleDependentSectionMissingControlError extends BadRequestException {
+  constructor(sectionLabel: string) {
+    super(`Section '${sectionLabel}' has isToggleDependent=true but missing required SECTION_CONTROL_TOGGLE field`)
+  }
+}
+
+export class ValueListFieldMissingOptionsError extends BadRequestException {
+  constructor(fieldName: string, sectionLabel: string) {
+    super(`Field '${fieldName}' in section '${sectionLabel}' has fieldType=VALUE_LIST but missing required options field`)
+  }
+}
+
+export class ValueListFieldInvalidOptionsError extends BadRequestException {
+  constructor(fieldName: string, sectionLabel: string) {
+    super(`Field '${fieldName}' in section '${sectionLabel}' has invalid options format. Expected: {"items": ["value1", "value2"]}`)
+  }
+}
+
+export class MissingSignatureFieldError extends BadRequestException {
+  constructor() {
+    super('Template must have at least one field with fieldType SIGNATURE_DRAW or SIGNATURE_IMG')
+  }
+}
+
+export class MissingFinalScoreFieldsError extends BadRequestException {
+  constructor(missingType: 'FINAL_SCORE_NUM' | 'FINAL_SCORE_TEXT') {
+    super(`Template must have exactly one field with fieldType ${missingType}`)
+  }
+}
+
+export class DuplicateFinalScoreFieldsError extends BadRequestException {
+  constructor(fieldType: 'FINAL_SCORE_NUM' | 'FINAL_SCORE_TEXT') {
+    super(`Template can only have one field with fieldType ${fieldType}`)
+  }
+}

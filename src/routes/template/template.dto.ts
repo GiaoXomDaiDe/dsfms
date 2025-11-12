@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -178,6 +179,11 @@ export class CreateTemplateVersionDto {
   @IsNotEmpty()
   @IsString()
   templateConfig: string
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['DRAFT', 'PENDING'])
+  status?: 'DRAFT' | 'PENDING'
 
   @IsArray()
   @ValidateNested({ each: true })
