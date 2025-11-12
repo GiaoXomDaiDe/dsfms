@@ -2711,6 +2711,28 @@ export class AssessmentRepo {
             templateContent: true
           }
         },
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        },
         sections: {
           include: {
             values: {

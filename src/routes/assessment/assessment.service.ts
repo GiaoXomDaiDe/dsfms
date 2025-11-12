@@ -1410,8 +1410,8 @@ export class AssessmentService {
       // Convert DOCX to PDF
       const pdfBuffer = await this.pdfConverterService['convertDocxBufferToPdf'](renderedDocxBuffer)
       
-      // Upload PDF to S3
-      const pdfUrl = await this.uploadPdfToS3(pdfBuffer, assessmentId)
+      // Upload PDF to S3 with proper filename
+      const pdfUrl = await this.uploadPdfToS3(pdfBuffer, assessmentForm)
       console.log(`PDF uploaded to S3 with URL: ${pdfUrl}`)
       
       // Update assessment form with PDF URL
@@ -1558,11 +1558,16 @@ export class AssessmentService {
   }
 
   /**
-   * Upload PDF to S3 and return URL
+   * Upload PDF to S3 with proper filename format and return URL
+   * Format: Final Assessment_traineeEid_courseCode/subjectCode_occurenceDate
    */
-  private async uploadPdfToS3(pdfBuffer: Buffer, assessmentId: string): Promise<string> {
+  private async uploadPdfToS3(pdfBuffer: Buffer, assessmentForm: any): Promise<string> {
     try {
-      const key = `assessments/pdf/assessment_${assessmentId}_${Date.now()}.pdf`
+      // Generate filename based on assessment data
+      const filename = this.generateAssessmentPdfFilename(assessmentForm)
+      const key = `assessments/pdf/${filename}`
+      
+      console.log(`Uploading PDF with filename: ${filename}`)
       
       const uploadResult = await this.s3Service.uploadBuffer({
         key,
@@ -1574,6 +1579,43 @@ export class AssessmentService {
     } catch (error) {
       console.error('Failed to upload PDF to S3:', error)
       throw new BadRequestException('Failed to upload PDF file')
+    }
+  }
+
+  /**
+   * Generate PDF filename based on assessment form data
+   * Format: Final Assessment_traineeEid_courseCode/subjectCode_occurenceDate.pdf
+   */
+  private generateAssessmentPdfFilename(assessmentForm: any): string {
+    try {
+      // Get trainee EID
+      const traineeEid = (assessmentForm as any).trainee?.eid || 'UNKNOWN'
+      
+      // Get course/subject code (prioritize subject over course)
+      let scopeCode = 'UNKNOWN'
+      if (assessmentForm.subjectId && (assessmentForm as any).subject?.code) {
+        scopeCode = (assessmentForm as any).subject.code
+      } else if (assessmentForm.courseId && (assessmentForm as any).course?.code) {
+        scopeCode = (assessmentForm as any).course.code
+      }
+      
+      // Format occurrence date (YYYY-MM-DD)
+      let formattedDate = 'UNKNOWN'
+      if (assessmentForm.occuranceDate) {
+        const date = new Date(assessmentForm.occuranceDate)
+        formattedDate = date.toISOString().split('T')[0] // YYYY-MM-DD format
+      }
+      
+      // Generate filename with timestamp to avoid overwrite
+      const timestamp = Date.now()
+      const filename = `Final Assessment_${traineeEid}_${scopeCode}_${formattedDate}_${timestamp}.pdf`
+      
+      // Sanitize filename (remove invalid characters)
+      return filename.replace(/[<>:"/\\|?*]/g, '_')
+    } catch (error) {
+      console.error('Error generating PDF filename:', error)
+      // Fallback filename
+      return `Final_Assessment_${Date.now()}.pdf`
     }
   }
 
