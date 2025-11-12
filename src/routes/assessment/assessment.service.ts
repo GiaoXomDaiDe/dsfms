@@ -1557,36 +1557,37 @@ export class AssessmentService {
 
   /**
    * Render DOCX template with data using docxtemplater
+   * Following official documentation: https://docxtemplater.com/docs/get-started-node/
    */
   private async renderDocxTemplate(templateBuffer: Buffer, data: Record<string, any>): Promise<Buffer> {
     try {
-      // Load template with PizZip
+      // Load template with PizZip (unzip the content of the file)
       const zip = new PizZip(templateBuffer)
       
-      // Create docxtemplater instance
+      // Parse the template - this throws an error if template is invalid
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true
       })
       
-      // Set data
-      doc.setData(data)
+      // Render the document with data
+      doc.render(data)
       
-      // Render document
-      doc.render()
-      
-      // Generate buffer
-      const buffer = doc.getZip().generate({
-        type: 'nodebuffer',
-        compression: 'DEFLATE',
-        compressionOptions: {
-          level: 9
-        }
-      })
+      // Get the output document as Node.js buffer (recommended method since v3.62.0)
+      const buffer = doc.toBuffer()
       
       return buffer
     } catch (error) {
       console.error('Failed to render DOCX template:', error)
+      
+      // Handle specific docxtemplater errors
+      if (error.properties && error.properties.errors instanceof Array) {
+        const errorMessages = error.properties.errors
+          .map((err: any) => `${err.name}: ${err.message}`)
+          .join('; ')
+        throw new BadRequestException(`Template rendering failed: ${errorMessages}`)
+      }
+      
       throw new BadRequestException('Failed to render document template')
     }
   }

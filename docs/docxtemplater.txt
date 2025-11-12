@@ -1,0 +1,110 @@
+This tutorial will guide you through writing a JavaScript file to process a template and generate a document locally on your machine using the Docxtemplater library and a Node.js environment.
+
+It's an excellent starting point to explore Docxtemplater and create your first document with tags.
+
+Prerequisites
+Basic familiarity with the command line.
+On your computer or server, you will need:
+
+Node.js. An open-source, cross-platform JavaScript runtime environment that lets you run JavaScript code outside of a browser.
+The Node.js Package Manager (npm) which comes preinstalled when you install nodejs.
+Check
+You can test that all commands work correctly by opening a terminal and run :
+
+node --version
+This should return v20.19.3 or v22.17.1 or any other version number.
+
+Then, run :
+
+npm --version
+This should return 10.9.0 or any other version number.
+
+If one of these doesn't return a version, try to reinstall Node.js.
+
+Installation
+The first step is to install Docxtemplater and PizZip via npm.
+
+Both libraries are developed by our team.
+
+npm install --save docxtemplater pizzip
+This command installs Docxtemplater and PizZip in your Node.js environment.
+
+DOCX/PPTX/XLSX files are zipped files. PizZip is required to load the
+template into memory for Docxtemplater to process it.
+
+Usage
+First, download the input.docx file and place it in a folder. This file serves as your "template" and includes two tags: {last_name} and {first_name}.
+
+Next, create a new file named your_script_name.js in the same folder as the template. This file will contain the script that generates the document.
+
+Copy the following code into your_script_name.js:
+
+// Load our library that generates the document
+const Docxtemplater = require("docxtemplater");
+// Load PizZip library to load the docx/pptx/xlsx file in memory
+const PizZip = require("pizzip");
+
+// Builtin file system utilities
+const fs = require("fs");
+const path = require("path");
+
+// Load the docx file as binary content
+const content = fs.readFileSync(
+    path.resolve(__dirname, "input.docx"),
+    "binary"
+);
+
+// Unzip the content of the file
+const zip = new PizZip(content);
+
+/*
+ * Parse the template.
+ * This function throws an error if the template is invalid,
+ * for example, if the template is "Hello {user" (missing closing tag)
+ */
+const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+});
+
+/*
+ * Render the document : Replaces :
+ * - {first_name} with John
+ * - {last_name} with Doe,
+ * ...
+ */
+doc.render({
+    first_name: "John",
+    last_name: "Doe",
+    phone: "+33666666",
+    description: "The Acme Product",
+});
+
+/*
+ * Get the output document and export it as a Node.js buffer
+ * This method is available since docxtemplater@3.62.0
+ */
+const buf = doc.toBuffer();
+
+// Write the Buffer to a file
+fs.writeFileSync(path.resolve(__dirname, "output.docx"), buf);
+/*
+ * Instead of writing it to a file, you could also
+ * let the user download it, store it in a database,
+ * on AWS S3, ...
+ */
+This code uses sample data for the {first_name} and
+{last_name}placeholders.
+
+Navigate to the folder containing your script using the command line and run your_script_name.js with Node.js:
+
+node your_script_name.js
+After running this command, you will find an output.docx file in the same folder, with the {first_name} tag replaced by "John" and the {last_name} tag replaced by "Doe".
+
+Congratulations!
+
+To go further
+View how you can create conditions, loops, or read more about docxtemplater's syntax.
+
+Explore more functionalities of Docxtemplater with our various demos that explore the different functionalities of docxtemplater. These demos showcase how to create more complex templates and scripts.
+
