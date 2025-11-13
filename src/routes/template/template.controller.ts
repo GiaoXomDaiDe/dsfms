@@ -274,6 +274,32 @@ export class TemplateController {
   }
 
   /**
+   * PUT /templates/:id/update-draft
+   * Update a DRAFT template with new content, allowing status change to DRAFT or PENDING
+   * Preserves original metadata (createdAt, createdBy, version, referFirstVersionId)
+   */
+  @Put(':id/update-draft')
+  async updateDraftTemplate(
+    @Param('id') id: string,
+    @Body() updateTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateDraftTemplate(id, updateTemplateDto, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
    * GET /templates/pdf/:templateFormId
    * convert Docx to PDF for Template Content (Template without Fields)
    */
