@@ -25,6 +25,7 @@ import {
   TemplateHasAssessmentsError,
   TemplateVersionCreationError,
   InvalidTemplateStatusForUpdateError,
+  InvalidDraftTemplateStatusError,
   ToggleDependentSectionMissingControlError,
   ValueListFieldMissingOptionsError,
   ValueListFieldInvalidOptionsError,
@@ -985,7 +986,7 @@ export class TemplateService {
     }
 
     if (existingTemplate.status !== 'DRAFT') {
-      throw new Error(`Cannot update template with status '${existingTemplate.status}'. Only DRAFT templates can be updated using this endpoint.`)
+      throw new InvalidDraftTemplateStatusError(existingTemplate.status)
     }
 
     // Validate required fields
@@ -1054,7 +1055,7 @@ export class TemplateService {
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
       // Update draft template (recreate with preserved metadata)
-      const result = await this.templateRepository.updateRejectedTemplate(
+      const result = await this.templateRepository.updateDraftTemplate(
         templateId,
         templateDataWithStatus,
         userContext.userId,

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { CreateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
-import { TemplateNotFoundError, InvalidTemplateStatusForUpdateError, TemplateInUseCannotUpdateError } from './template.error'
+import { TemplateNotFoundError, InvalidTemplateStatusForUpdateError, TemplateInUseCannotUpdateError, InvalidDraftTemplateStatusError } from './template.error'
 
 @Injectable()
 export class TemplateRepository {
@@ -1062,6 +1062,251 @@ export class TemplateRepository {
         }
 
         // 7. Return updated template with sections and fields
+        return await tx.templateForm.findUnique({
+          where: { id: templateId },
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            },
+            createdByUser: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            },
+            sections: {
+              select: {
+                id: true,
+                templateId: true,
+                label: true,
+                displayOrder: true,
+                editBy: true,
+                roleInSubject: true,
+                isSubmittable: true,
+                isToggleDependent: true,
+                fields: {
+                  select: {
+                    id: true,
+                    sectionId: true,
+                    label: true,
+                    fieldName: true,
+                    fieldType: true,
+                    roleRequired: true,
+                    options: true,
+                    displayOrder: true,
+                    parentId: true
+                  },
+                  orderBy: {
+                    displayOrder: 'asc'
+                  }
+                }
+              },
+              orderBy: {
+                displayOrder: 'asc'
+              }
+            }
+          }
+        })
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000
+      }
+    )
+  }
+
+  /**
+   * Update a draft template by recreating it with new data while preserving metadata
+   */
+  async updateDraftTemplate(
+    templateId: string,
+    templateData: CreateTemplateFormDto,
+    updatedByUserId: string,
+    templateSchema?: any
+  ) {
+    return this.prismaService.$transaction(
+      async (tx) => {
+        // 1. Get existing template to preserve metadata
+        const existingTemplate = await tx.templateForm.findUnique({
+          where: { id: templateId },
+          select: {
+            id: true,
+            version: true,
+            status: true,
+            createdByUserId: true,
+            createdAt: true,
+            reviewedByUserId: true,
+            reviewedAt: true,
+            referFirstVersionId: true
+          }
+        })
+
+        if (!existingTemplate) {
+          throw new TemplateNotFoundError(templateId)
+        }
+
+        // Check if template status is DRAFT
+        if (existingTemplate.status !== 'DRAFT') {
+          throw new InvalidDraftTemplateStatusError(existingTemplate.status)
+        }
+
+        // 2. Check if template is being used in assessments
+        const assessmentCount = await tx.assessmentForm.count({
+          where: { templateId }
+        })
+
+        if (assessmentCount > 0) {
+          throw new TemplateInUseCannotUpdateError()
+        }
+
+        // 3. Delete existing sections and fields (cascade delete should handle fields)
+        await tx.templateSection.deleteMany({
+          where: { templateId }
+        })
+
+        // 4. Update template form with new data but preserve metadata
+        const updatedTemplateForm = await tx.templateForm.update({
+          where: { id: templateId },
+          data: {
+            name: templateData.name,
+            description: templateData.description,
+            departmentId: templateData.departmentId || undefined,
+            updatedByUserId,
+            status: templateData.status || 'DRAFT', // Keep as DRAFT or set to PENDING if specified
+            templateContent: templateData.templateContent || '',
+            templateConfig: templateData.templateConfig,
+            templateSchema: templateSchema || null,
+            // Preserve these fields from existing template
+            version: existingTemplate.version,
+            createdByUserId: existingTemplate.createdByUserId,
+            createdAt: existingTemplate.createdAt,
+            referFirstVersionId: existingTemplate.referFirstVersionId,
+            // Only reset review fields if changing to PENDING
+            reviewedByUserId: templateData.status === 'PENDING' ? null : existingTemplate.reviewedByUserId,
+            reviewedAt: templateData.status === 'PENDING' ? null : existingTemplate.reviewedAt
+          }
+        })
+
+        // 5. Create new sections (batch operation)
+        const sectionsToCreate = templateData.sections.map((sectionData) => ({
+          templateId: updatedTemplateForm.id,
+          label: sectionData.label,
+          displayOrder: sectionData.displayOrder,
+          editBy: sectionData.editBy,
+          roleInSubject: sectionData.roleInSubject,
+          isSubmittable: sectionData.isSubmittable || false,
+          isToggleDependent: sectionData.isToggleDependent || false
+        }))
+
+        const createdSections = await tx.templateSection.createManyAndReturn({
+          data: sectionsToCreate,
+          select: {
+            id: true,
+            templateId: true,
+            label: true,
+            displayOrder: true,
+            editBy: true,
+            roleInSubject: true,
+            isSubmittable: true,
+            isToggleDependent: true
+          }
+        })
+
+        // 6. Prepare fields data for batch creation
+        const allFieldsData: any[] = []
+        const sectionIdMap = new Map<number, string>()
+
+        // Create section mapping by display order
+        createdSections.forEach(section => {
+          const originalSection = templateData.sections.find(s => s.displayOrder === section.displayOrder)
+          if (originalSection) {
+            sectionIdMap.set(section.displayOrder, section.id)
+          }
+        })
+
+        // Build all fields data
+        templateData.sections.forEach((sectionData) => {
+          const sectionId = sectionIdMap.get(sectionData.displayOrder)
+          if (!sectionId || !sectionData.fields) return
+
+          sectionData.fields.forEach((fieldData) => {
+            // Handle parent-child relationships
+            let parentId: string | null = null
+            if (fieldData.parentTempId) {
+              // Find parent field within the same section by tempId or fieldName
+              const parentField = sectionData.fields.find(f => 
+                f.tempId === fieldData.parentTempId || 
+                f.fieldName === fieldData.parentTempId
+              )
+              if (parentField) {
+                // We'll resolve this after creating the parent field
+                parentId = fieldData.parentTempId
+              }
+            }
+
+            allFieldsData.push({
+              sectionId,
+              label: fieldData.label,
+              fieldName: fieldData.fieldName,
+              fieldType: fieldData.fieldType,
+              roleRequired: fieldData.roleRequired || null,
+              options: fieldData.options ? JSON.stringify(fieldData.options) : null,
+              displayOrder: fieldData.displayOrder,
+              createdById: updatedByUserId,
+              parentTempId: parentId
+            })
+          })
+        })
+
+        // 7. Create fields in batches, handling parent-child relationships
+        const createdFieldsMap = new Map<string, string>() // tempId -> actual field id
+        const fieldsToUpdateParent: { fieldId: string; parentTempId: string }[] = []
+
+        // First pass: create all fields
+        for (const fieldData of allFieldsData) {
+          const createdField = await tx.templateField.create({
+            data: {
+              sectionId: fieldData.sectionId,
+              label: fieldData.label,
+              fieldName: fieldData.fieldName,
+              fieldType: fieldData.fieldType,
+              roleRequired: fieldData.roleRequired,
+              options: fieldData.options,
+              displayOrder: fieldData.displayOrder,
+              createdById: fieldData.createdById,
+              parentId: null // Set to null initially
+            }
+          })
+
+          // Map fieldName to actual ID for parent resolution
+          createdFieldsMap.set(fieldData.fieldName, createdField.id)
+          
+          // If this field has a parent, queue it for update
+          if (fieldData.parentTempId) {
+            fieldsToUpdateParent.push({
+              fieldId: createdField.id,
+              parentTempId: fieldData.parentTempId
+            })
+          }
+        }
+
+        // Second pass: update parent relationships
+        for (const { fieldId, parentTempId } of fieldsToUpdateParent) {
+          const parentFieldId = createdFieldsMap.get(parentTempId)
+          if (parentFieldId) {
+            await tx.templateField.update({
+              where: { id: fieldId },
+              data: { parentId: parentFieldId }
+            })
+          }
+        }
+
+        // 8. Return updated template with sections and fields
         return await tx.templateForm.findUnique({
           where: { id: templateId },
           include: {
