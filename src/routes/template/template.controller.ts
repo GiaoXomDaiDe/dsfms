@@ -100,33 +100,6 @@ export class TemplateController {
   }
 
   /**
-   * GET /templates/:id
-   * Get template by ID, especially to use for update Template, show this on the FRONT END
-   */
-  @Get(':id')
-  async getTemplateById(@Param('id') id: string) {
-    try {
-      return await this.templateService.getTemplateById(id)
-    } catch (error) {
-      throw error
-    }
-  }
-
-  /**
-   * GET /templates/:id/schema
-   * Get template in the same format as create template API
-   * Useful for editing or cloning templates
-   */
-  @Get(':id/schema')
-  async getTemplateSchema(@Param('id') id: string) {
-    try {
-      return await this.templateService.getTemplateSchemaById(id)
-    } catch (error) {
-      throw error
-    }
-  }
-
-  /**
    * GET /templates?status=PUBLISHED
    * Get all templates with optional status filtering
    */
@@ -150,150 +123,6 @@ export class TemplateController {
   ) {
     try {
       return await this.templateService.getTemplatesByDepartment(departmentId, status)
-    } catch (error) {
-      throw error
-    }
-  }
-
-  /**
-   * PATCH /templates/:id/status
-   * Change template status
-   */
-  @Patch(':id/status')
-  async changeTemplateStatus(
-    @Param('id') id: string,
-    @Body() body: { status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
-  ) {
-    const userContext = {
-      userId,
-      roleName: rolePermissions.name,
-      departmentId: currentUser.departmentId
-    }
-
-    try {
-      return await this.templateService.changeTemplateStatus(id, body.status, userContext)
-    } catch (error) {
-      throw error
-    }
-  }
-
-  /**
-   * PATCH /templates/:id
-   * Update template basic information (name, description, departmentId)
-   */
-  @Patch(':id')
-  async updateTemplateForm(
-    @Param('id') id: string,
-    @Body() updateData: UpdateTemplateFormDto,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
-  ) {
-    const userContext = {
-      userId,
-      roleName: rolePermissions.name,
-      departmentId: currentUser.departmentId
-    }
-
-    try {
-      return await this.templateService.updateTemplateForm(id, updateData, userContext)
-    } catch (error) {
-      throw error
-    }
-  }
-
-  /**
-   * POST /templates/create-version
-   * Create a new version of an existing template
-   */
-  @Post('create-version')
-  async createTemplateVersion(
-    @Body() createVersionDto: CreateTemplateVersionDto,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
-  ) {
-    const userContext = {
-      userId,
-      roleName: rolePermissions.name,
-      departmentId: currentUser.departmentId
-    }
-
-    return await this.templateService.createTemplateVersion(createVersionDto, userContext)
-  }
-
-  /**
-   * PUT /templates/:id/review
-   * Review template - approve or reject a PENDING template with email notification
-   */
-  @Patch(':id/review')
-  @ZodSerializerDto(ReviewTemplateResDTO)
-  async reviewTemplate(
-    @Param('id') id: string,
-    @Body() body: ReviewTemplateBodyDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
-  ) {
-    const userContext = {
-      userId,
-      roleName: rolePermissions.name,
-      departmentId: currentUser.departmentId
-    }
-
-    return await this.templateService.reviewTemplate(id, body, userContext)
-  }
-
-  /**
-   * PUT /templates/:id/update-rejected
-   * Update a REJECTED template with new content, resetting status to PENDING
-   * Preserves original metadata (createdAt, createdBy, version, referFirstVersionId)
-   */
-  @Put(':id/update-rejected')
-  async updateRejectedTemplate(
-    @Param('id') id: string,
-    @Body() updateTemplateDto: CreateTemplateFormDto,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
-  ) {
-    const userContext = {
-      userId,
-      roleName: rolePermissions.name,
-      departmentId: currentUser.departmentId
-    }
-
-    try {
-      return await this.templateService.updateRejectedTemplate(id, updateTemplateDto, userContext)
-    } catch (error) {
-      throw error
-    }
-  }
-
-  /**
-   * PUT /templates/:id/update-draft
-   * Update a DRAFT template with new content, allowing status change to DRAFT or PENDING
-   * Preserves original metadata (createdAt, createdBy, version, referFirstVersionId)
-   */
-  @Put(':id/update-draft')
-  async updateDraftTemplate(
-    @Param('id') id: string,
-    @Body() updateTemplateDto: CreateTemplateFormDto,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
-  ) {
-    const userContext = {
-      userId,
-      roleName: rolePermissions.name,
-      departmentId: currentUser.departmentId
-    }
-
-    try {
-      return await this.templateService.updateDraftTemplate(id, updateTemplateDto, userContext)
     } catch (error) {
       throw error
     }
@@ -353,5 +182,178 @@ export class TemplateController {
       'Content-Disposition': `attachment; filename="template-${templateFormId}.zip"`,
     })
     res.send(zipBuffer)
+  }
+
+  /**
+   * GET /templates/:id/schema
+   * Get template in the same format as create template API
+   * Useful for editing or cloning templates
+   */
+  @Get(':id/schema')
+  async getTemplateSchema(@Param('id') id: string) {
+    try {
+      return await this.templateService.getTemplateSchemaById(id)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * GET /templates/:id
+   * Get template by ID, especially to use for update Template, show this on the FRONT END
+   */
+  @Get(':id')
+  async getTemplateById(@Param('id') id: string) {
+    try {
+      return await this.templateService.getTemplateById(id)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PATCH /templates/:id/status
+   * Change template status
+   */
+  @Patch(':id/status')
+  async changeTemplateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' },
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.changeTemplateStatus(id, body.status, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PATCH /templates/:id/review
+   * Review template - approve or reject a PENDING template with email notification
+   */
+  @Patch(':id/review')
+  @ZodSerializerDto(ReviewTemplateResDTO)
+  async reviewTemplate(
+    @Param('id') id: string,
+    @Body() body: ReviewTemplateBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.reviewTemplate(id, body, userContext)
+  }
+
+  /**
+   * PATCH /templates/:id
+   * Update template basic information (name, description, departmentId)
+   */
+  @Patch(':id')
+  async updateTemplateForm(
+    @Param('id') id: string,
+    @Body() updateData: UpdateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateTemplateForm(id, updateData, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * POST /templates/create-version
+   * Create a new version of an existing template
+   */
+  @Post('create-version')
+  async createTemplateVersion(
+    @Body() createVersionDto: CreateTemplateVersionDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.templateService.createTemplateVersion(createVersionDto, userContext)
+  }
+
+
+
+  /**
+   * PUT /templates/update-draft/:id
+   * Update a DRAFT template with new content, allowing status change to DRAFT or PENDING
+   * Preserves original metadata (createdAt, createdBy, version, referFirstVersionId)
+   */
+  @Put('update-draft/:id')
+  async updateDraftTemplate(
+    @Param('id') id: string,
+    @Body() updateTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateDraftTemplate(id, updateTemplateDto, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * PUT /templates/update-rejected/:id
+   * Update a REJECTED template with new content, resetting status to PENDING
+   * Preserves original metadata (createdAt, createdBy, version, referFirstVersionId)
+   */
+  @Put('update-rejected/:id')
+  async updateRejectedTemplate(
+    @Param('id') id: string,
+    @Body() updateTemplateDto: CreateTemplateFormDto,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      return await this.templateService.updateRejectedTemplate(id, updateTemplateDto, userContext)
+    } catch (error) {
+      throw error
+    }
   }
 }

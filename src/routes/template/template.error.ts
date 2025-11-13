@@ -134,6 +134,12 @@ export class TemplateInUseCannotUpdateError extends BadRequestException {
   }
 }
 
+export class InvalidDraftTemplateStatusError extends BadRequestException {
+  constructor(currentStatus: string) {
+    super(`Cannot update template with status '${currentStatus}'. Only DRAFT templates can be updated using this endpoint.`)
+  }
+}
+
 // ==================== New Field Validation Errors ====================
 
 export class ToggleDependentSectionMissingControlError extends BadRequestException {
