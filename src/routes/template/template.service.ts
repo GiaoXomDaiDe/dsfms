@@ -969,6 +969,109 @@ export class TemplateService {
   }
 
   /**
+   * Update a DRAFT template with new content
+   * Recreates the template while preserving original metadata
+   * Only works on templates with DRAFT status
+   */
+  async updateDraftTemplate(
+    templateId: string,
+    templateData: CreateTemplateFormDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    // Check if template exists and is DRAFT
+    const existingTemplate = await this.templateRepository.findTemplateById(templateId)
+    if (!existingTemplate) {
+      throw new TemplateNotFoundError()
+    }
+
+    if (existingTemplate.status !== 'DRAFT') {
+      throw new Error(`Cannot update template with status '${existingTemplate.status}'. Only DRAFT templates can be updated using this endpoint.`)
+    }
+
+    // Validate required fields
+    if (!templateData.templateConfig) {
+      throw new TemplateConfigRequiredError()
+    }
+
+    // Validate department exists
+    const departmentExists = await this.templateRepository.validateDepartmentExists(templateData.departmentId)
+    if (!departmentExists) {
+      throw new DepartmentNotFoundError(templateData.departmentId)
+    }
+
+    // Check if template name already exists (excluding current template)
+    const nameExists = await this.templateRepository.templateNameExists(templateData.name, templateId)
+    if (nameExists) {
+      throw new TemplateNameAlreadyExistsError(templateData.name)
+    }
+
+    try {
+      // Validate field relationships (same as create template)
+      for (const section of templateData.sections) {
+        if (!section.fields || !Array.isArray(section.fields)) continue
+        for (const field of section.fields) {
+          // Only validate when roleRequired is explicitly provided
+          if (field.roleRequired !== undefined && field.roleRequired !== null) {
+            if (String(field.roleRequired) !== String(section.editBy)) {
+              throw new Error(`Field '${field.fieldName}' in section '${section.label}' has roleRequired '${field.roleRequired}' but section editBy is '${section.editBy}'. They must match.`)
+            }
+          }
+
+          // Validate that signature fields must have roleRequired set
+          if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
+            if (!field.roleRequired) {
+              throw new Error(`Signature field '${field.fieldName}' in section '${section.label}' must have roleRequired set`)
+            }
+          }
+
+          // Check if PART field has at least one child field
+          if (field.fieldType === 'PART') {
+            const hasChildFields = section.fields.some(childField => 
+              childField.parentTempId === field.tempId || 
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            )
+            if (!hasChildFields) {
+              throw new Error(`PART field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
+            }
+          }
+        }
+      }
+
+      // Set default status to DRAFT if not provided
+      const status = templateData.status || 'DRAFT'
+      const templateDataWithStatus = {
+        ...templateData,
+        status
+      } as CreateTemplateFormDto & { status: 'DRAFT' | 'PENDING' }
+
+      // Validate business rules only if status is PENDING
+      if (status === 'PENDING') {
+        this.validateTemplateBusinessRules(templateData.sections)
+      }
+
+      // Generate nested template schema from sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+
+      // Update draft template (recreate with preserved metadata)
+      const result = await this.templateRepository.updateRejectedTemplate(
+        templateId,
+        templateDataWithStatus,
+        userContext.userId,
+        templateSchema
+      )
+
+      return {
+        success: true,
+        data: result,
+        message: `Draft template updated successfully and status changed to ${status}`
+      }
+    } catch (error) {
+      throw new TemplateCreationFailedError(error.message)
+    }
+  }
+
+  /**
    * Update template basic information (name, description, departmentId)
    */
   async updateTemplateForm(
