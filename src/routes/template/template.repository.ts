@@ -1235,20 +1235,6 @@ export class TemplateRepository {
           if (!sectionId || !sectionData.fields) return
 
           sectionData.fields.forEach((fieldData) => {
-            // Handle parent-child relationships
-            let parentId: string | null = null
-            if (fieldData.parentTempId) {
-              // Find parent field within the same section by tempId or fieldName
-              const parentField = sectionData.fields.find(f => 
-                f.tempId === fieldData.parentTempId || 
-                f.fieldName === fieldData.parentTempId
-              )
-              if (parentField) {
-                // We'll resolve this after creating the parent field
-                parentId = fieldData.parentTempId
-              }
-            }
-
             allFieldsData.push({
               sectionId,
               label: fieldData.label,
@@ -1258,7 +1244,8 @@ export class TemplateRepository {
               options: fieldData.options || null,
               displayOrder: fieldData.displayOrder,
               createdById: updatedByUserId,
-              parentTempId: parentId
+              tempId: fieldData.tempId, // Store tempId for mapping
+              parentTempId: fieldData.parentTempId || null // Store original parentTempId
             })
           })
         })
@@ -1283,8 +1270,10 @@ export class TemplateRepository {
             }
           })
 
-          // Map fieldName to actual ID for parent resolution
-          createdFieldsMap.set(fieldData.fieldName, createdField.id)
+          // Map tempId to actual ID for parent resolution (if tempId exists)
+          if (fieldData.tempId) {
+            createdFieldsMap.set(fieldData.tempId, createdField.id)
+          }
           
           // If this field has a parent, queue it for update
           if (fieldData.parentTempId) {
