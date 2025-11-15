@@ -1758,6 +1758,26 @@ export class AssessmentRepo {
   }
 
   /**
+   * Filter fields based on FINAL_SCORE field logic:
+   * - If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist: only show FINAL_SCORE_NUM
+   * - If only FINAL_SCORE_TEXT exists: show normally  
+   * - If only FINAL_SCORE_NUM exists: show normally
+   */
+  private filterFinalScoreFields(fields: any[]): any[] {
+    // Check if both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist
+    const hasFinalScoreNum = fields.some(field => field.templateField.fieldType === 'FINAL_SCORE_NUM')
+    const hasFinalScoreText = fields.some(field => field.templateField.fieldType === 'FINAL_SCORE_TEXT')
+
+    // Case 1: Both exist - only show FINAL_SCORE_NUM, hide FINAL_SCORE_TEXT
+    if (hasFinalScoreNum && hasFinalScoreText) {
+      return fields.filter(field => field.templateField.fieldType !== 'FINAL_SCORE_TEXT')
+    }
+
+    // Case 2 & 3: Only one exists or neither exists - show all fields normally
+    return fields
+  }
+
+  /**
    * Get all fields of an assessment section with their template field information and assessment values
    */
   async getAssessmentSectionFields(assessmentSectionId: string, userId?: string) {
@@ -1978,6 +1998,9 @@ export class AssessmentRepo {
       }
     })
 
+    // Filter fields based on FINAL_SCORE field logic
+    const filteredFields = this.filterFinalScoreFields(fieldsWithValues)
+
     return {
       success: true,
       message: 'Assessment section fields retrieved successfully',
@@ -1996,8 +2019,8 @@ export class AssessmentRepo {
           isToggleDependent: assessmentSection.templateSection.isToggleDependent
         }
       },
-      fields: fieldsWithValues,
-      totalFields: fieldsWithValues.length
+      fields: filteredFields,
+      totalFields: filteredFields.length
     }
   }
 
