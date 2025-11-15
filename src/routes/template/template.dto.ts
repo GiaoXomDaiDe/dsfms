@@ -66,7 +66,7 @@ export class CreateTemplateFieldDto {
   roleRequired?: RoleRequired
 
   @IsOptional()
-  options?: any // JSONB
+  options?: any // JSONB - For VALUE_LIST fields: {"items": ["Pass", "Fail", "N/A"]}, for other fields: null or undefined
 
   @IsNotEmpty()
   @IsNumber()

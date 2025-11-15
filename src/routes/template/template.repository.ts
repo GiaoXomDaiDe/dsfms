@@ -1010,7 +1010,7 @@ export class TemplateRepository {
               fieldName: fieldData.fieldName,
               fieldType: fieldData.fieldType,
               roleRequired: fieldData.roleRequired,
-              options: fieldData.options ? JSON.stringify(fieldData.options) : null,
+              options: fieldData.options || null,
               displayOrder: fieldData.displayOrder,
               createdById: existingTemplate.createdByUserId, // Preserve original creator
               parentTempId: parentId // Temporary storage
@@ -1255,7 +1255,7 @@ export class TemplateRepository {
               fieldName: fieldData.fieldName,
               fieldType: fieldData.fieldType,
               roleRequired: fieldData.roleRequired || null,
-              options: fieldData.options ? JSON.stringify(fieldData.options) : null,
+              options: fieldData.options || null,
               displayOrder: fieldData.displayOrder,
               createdById: updatedByUserId,
               parentTempId: parentId

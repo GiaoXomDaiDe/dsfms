@@ -878,13 +878,9 @@ export class AssessmentRepo {
         },
         course: {
           select: {
-            subjects: {
+            instructors: {
               select: {
-                instructors: {
-                  select: {
-                    trainerUserId: true
-                  }
-                }
+                trainerUserId: true
               }
             }
           }
@@ -906,15 +902,15 @@ export class AssessmentRepo {
 
     // Trainer can access if assigned to the subject or course
     if (userRole === 'TRAINER') {
-      // Check if trainer is assigned to the specific subject (for subject-level assessments)
-      if (assessment.subject?.instructors.some((inst) => inst.trainerUserId === userId)) {
+      // For subject-level assessments (subjectId is not null)
+      if (assessment.subjectId && assessment.subject?.instructors.some((inst) => inst.trainerUserId === userId)) {
         return true
       }
 
-      // Check if trainer is assigned to any subject in the course (for course-level assessments)
-      if (
-        assessment.course?.subjects.some((subject) => subject.instructors.some((inst) => inst.trainerUserId === userId))
-      ) {
+      // For course-level assessments (courseId is not null, subjectId is null)
+      // Check if trainer is directly assigned as course instructor
+      if (assessment.courseId && !assessment.subjectId && 
+          assessment.course?.instructors.some((inst) => inst.trainerUserId === userId)) {
         return true
       }
     }
@@ -1864,7 +1860,8 @@ export class AssessmentRepo {
           eid: true,
           firstName: true,
           middleName: true,
-          lastName: true
+          lastName: true,
+          signatureImageUrl: true
         }
       })
     }
@@ -1954,9 +1951,14 @@ export class AssessmentRepo {
       // Check if this is a system field and auto-populate if no value exists
       let finalAnswerValue = existingValue?.answerValue
       if (!finalAnswerValue) {
-        const systemValue = getSystemFieldValue(templateField.fieldName)
-        if (systemValue) {
-          finalAnswerValue = systemValue
+        // Check for SIGNATURE_IMG field type and auto-populate with user's signatureImageUrl
+        if (templateField.fieldType === 'SIGNATURE_IMG' && currentUser?.signatureImageUrl) {
+          finalAnswerValue = currentUser.signatureImageUrl
+        } else {
+          const systemValue = getSystemFieldValue(templateField.fieldName)
+          if (systemValue) {
+            finalAnswerValue = systemValue
+          }
         }
       }
 

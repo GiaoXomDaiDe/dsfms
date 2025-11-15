@@ -1,5 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common'
-import { CourseStatus, SubjectStatus } from '@prisma/client'
+import { CourseStatus, SubjectStatus, AssessmentResult } from '@prisma/client'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import { AssessmentRepo } from './assessment.repo'
@@ -1011,7 +1011,8 @@ export class AssessmentService {
 
       // Handle custom application errors from repository
       if (error.message.includes('occurrence date') || 
-          error.message.includes('trainee sections')) {
+          error.message.includes('trainee sections') ||
+          error.message.includes('assessed at least one section')) {
         throw new BadRequestException(error.message)
       }
 
@@ -1433,6 +1434,9 @@ export class AssessmentService {
         throw new NotFoundException('Assessment form or template not found')
       }
 
+      // Process assessment result based on final score fields before rendering
+      await this.processAssessmentResult(assessmentId, assessmentForm)
+
       // Get template schema and config URL
       const template = (assessmentForm as any).template
       const templateSchema = template.templateSchema as Record<string, any>
@@ -1445,7 +1449,7 @@ export class AssessmentService {
       // Download DOCX template from S3
       const templateBuffer = await this.downloadFileFromS3(templateConfigUrl)
       
-      // Build data object from assessment values
+      // Build data object from assessment values (refresh after processing result)
       const assessmentData = await this.buildAssessmentDataFromValues(assessmentId, templateSchema)
       
       // Render DOCX with data
@@ -1466,6 +1470,93 @@ export class AssessmentService {
     } catch (error) {
       console.error('Failed to render assessment to PDF:', error)
       throw new BadRequestException('Failed to generate assessment PDF')
+    }
+  }
+
+  /**
+   * Process assessment result based on FINAL_SCORE fields and update AssessmentForm
+   * This method handles 3 cases:
+   * 1. Both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist
+   * 2. Only FINAL_SCORE_TEXT exists  
+   * 3. Only FINAL_SCORE_NUM exists
+   */
+  private async processAssessmentResult(assessmentId: string, assessmentForm: any): Promise<void> {
+    try {
+      // Get all assessment values with field types
+      const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
+      
+      // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT fields
+      const finalScoreNumValue = assessmentValues.find(av => 
+        av.templateField?.fieldType === 'FINAL_SCORE_NUM'
+      )
+      const finalScoreTextValue = assessmentValues.find(av => 
+        av.templateField?.fieldType === 'FINAL_SCORE_TEXT'
+      )
+
+      // Get pass score from subject or course
+      let passScore: number | null = null
+      if (assessmentForm.subjectId && (assessmentForm as any).subject?.passScore !== null) {
+        passScore = (assessmentForm as any).subject.passScore
+      } else if (assessmentForm.courseId && (assessmentForm as any).course?.passScore !== null) {
+        passScore = (assessmentForm as any).course.passScore
+      }
+
+      let resultScore: number | null = null
+      let resultText: AssessmentResult = AssessmentResult.NOT_APPLICABLE
+
+      // Case 1: Both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist
+      if (finalScoreNumValue && finalScoreTextValue && passScore !== null) {
+        const scoreValue = parseFloat(finalScoreNumValue.answerValue || '0')
+        resultScore = scoreValue
+        
+        // Determine PASS/FAIL based on pass score
+        const isPassed = scoreValue >= passScore
+        resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
+        
+        // Update FINAL_SCORE_TEXT field with PASS/FAIL
+        await this.assessmentRepo.prismaClient.assessmentValue.update({
+          where: { id: finalScoreTextValue.id },
+          data: { 
+            answerValue: resultText
+          }
+        })
+
+        console.log(`Updated FINAL_SCORE_TEXT field to: ${resultText} for assessment ${assessmentId}`)
+      }
+      // Case 2: Only FINAL_SCORE_TEXT exists
+      else if (finalScoreTextValue && !finalScoreNumValue) {
+        // User manually enters text, keep resultScore as null
+        resultScore = null
+        resultText = AssessmentResult.NOT_APPLICABLE
+        
+        console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - keeping resultScore as null`)
+      }
+      // Case 3: Only FINAL_SCORE_NUM exists
+      else if (finalScoreNumValue && !finalScoreTextValue && passScore !== null) {
+        const scoreValue = parseFloat(finalScoreNumValue.answerValue || '0')
+        resultScore = scoreValue
+        
+        // Determine PASS/FAIL based on pass score
+        const isPassed = scoreValue >= passScore
+        resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
+        
+        console.log(`Assessment ${assessmentId} has only FINAL_SCORE_NUM field - score: ${scoreValue}, result: ${resultText}`)
+      }
+
+      // Update AssessmentForm with calculated results
+      await this.assessmentRepo.prismaClient.assessmentForm.update({
+        where: { id: assessmentId },
+        data: {
+          resultScore: resultScore,
+          resultText: resultText
+        }
+      })
+
+      console.log(`Updated AssessmentForm ${assessmentId} - resultScore: ${resultScore}, resultText: ${resultText}`)
+
+    } catch (error) {
+      console.error('Failed to process assessment result:', error)
+      throw new BadRequestException('Failed to process assessment result')
     }
   }
 
@@ -1608,10 +1699,17 @@ export class AssessmentService {
       // Load template with PizZip (unzip the content of the file)
       const zip = new PizZip(templateBuffer)
       
+      // Custom nullGetter to return empty string instead of "undefined" for null/undefined values
+      const nullGetter = (part: any, scopeManager: any) => {
+        // For all cases (simple tags, raw XML, etc.), return empty string
+        return ""
+      }
+      
       // Parse the template - this throws an error if template is invalid
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
-        linebreaks: true
+        linebreaks: true,
+        nullGetter: nullGetter
       })
       
       // Render the document with data
