@@ -1220,8 +1220,10 @@ export class TemplateService {
   private getSchemaTypeFromFieldType(fieldType: string): string {
     switch (fieldType) {
       case 'TOGGLE':
+      case 'SECTION_CONTROL_TOGGLE':
         return 'boolean';
       case 'NUMBER':
+      case 'FINAL_SCORE_NUM':
         return 'number';
       case 'PART':
         return 'part'; // Special type for parent/section fields
@@ -1229,6 +1231,8 @@ export class TemplateService {
       case 'IMAGE':
       case 'SIGNATURE_DRAW':
       case 'SIGNATURE_IMG':
+      case 'VALUE_LIST':
+      case 'CHECK_BOX':
       default:
         return 'string';
     }

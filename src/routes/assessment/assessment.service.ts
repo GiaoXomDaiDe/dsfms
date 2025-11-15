@@ -1608,10 +1608,17 @@ export class AssessmentService {
       // Load template with PizZip (unzip the content of the file)
       const zip = new PizZip(templateBuffer)
       
+      // Custom nullGetter to return empty string instead of "undefined" for null/undefined values
+      const nullGetter = (part: any, scopeManager: any) => {
+        // For all cases (simple tags, raw XML, etc.), return empty string
+        return ""
+      }
+      
       // Parse the template - this throws an error if template is invalid
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
-        linebreaks: true
+        linebreaks: true,
+        nullGetter: nullGetter
       })
       
       // Render the document with data
