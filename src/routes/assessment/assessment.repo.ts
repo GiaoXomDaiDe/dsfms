@@ -878,13 +878,9 @@ export class AssessmentRepo {
         },
         course: {
           select: {
-            subjects: {
+            instructors: {
               select: {
-                instructors: {
-                  select: {
-                    trainerUserId: true
-                  }
-                }
+                trainerUserId: true
               }
             }
           }
@@ -906,15 +902,15 @@ export class AssessmentRepo {
 
     // Trainer can access if assigned to the subject or course
     if (userRole === 'TRAINER') {
-      // Check if trainer is assigned to the specific subject (for subject-level assessments)
-      if (assessment.subject?.instructors.some((inst) => inst.trainerUserId === userId)) {
+      // For subject-level assessments (subjectId is not null)
+      if (assessment.subjectId && assessment.subject?.instructors.some((inst) => inst.trainerUserId === userId)) {
         return true
       }
 
-      // Check if trainer is assigned to any subject in the course (for course-level assessments)
-      if (
-        assessment.course?.subjects.some((subject) => subject.instructors.some((inst) => inst.trainerUserId === userId))
-      ) {
+      // For course-level assessments (courseId is not null, subjectId is null)
+      // Check if trainer is directly assigned as course instructor
+      if (assessment.courseId && !assessment.subjectId && 
+          assessment.course?.instructors.some((inst) => inst.trainerUserId === userId)) {
         return true
       }
     }
@@ -1758,26 +1754,6 @@ export class AssessmentRepo {
   }
 
   /**
-   * Filter fields based on FINAL_SCORE field logic:
-   * - If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist: only show FINAL_SCORE_NUM
-   * - If only FINAL_SCORE_TEXT exists: show normally  
-   * - If only FINAL_SCORE_NUM exists: show normally
-   */
-  private filterFinalScoreFields(fields: any[]): any[] {
-    // Check if both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist
-    const hasFinalScoreNum = fields.some(field => field.templateField.fieldType === 'FINAL_SCORE_NUM')
-    const hasFinalScoreText = fields.some(field => field.templateField.fieldType === 'FINAL_SCORE_TEXT')
-
-    // Case 1: Both exist - only show FINAL_SCORE_NUM, hide FINAL_SCORE_TEXT
-    if (hasFinalScoreNum && hasFinalScoreText) {
-      return fields.filter(field => field.templateField.fieldType !== 'FINAL_SCORE_TEXT')
-    }
-
-    // Case 2 & 3: Only one exists or neither exists - show all fields normally
-    return fields
-  }
-
-  /**
    * Get all fields of an assessment section with their template field information and assessment values
    */
   async getAssessmentSectionFields(assessmentSectionId: string, userId?: string) {
@@ -1884,7 +1860,8 @@ export class AssessmentRepo {
           eid: true,
           firstName: true,
           middleName: true,
-          lastName: true
+          lastName: true,
+          signatureImageUrl: true
         }
       })
     }
@@ -1974,9 +1951,14 @@ export class AssessmentRepo {
       // Check if this is a system field and auto-populate if no value exists
       let finalAnswerValue = existingValue?.answerValue
       if (!finalAnswerValue) {
-        const systemValue = getSystemFieldValue(templateField.fieldName)
-        if (systemValue) {
-          finalAnswerValue = systemValue
+        // Check for SIGNATURE_IMG field type and auto-populate with user's signatureImageUrl
+        if (templateField.fieldType === 'SIGNATURE_IMG' && currentUser?.signatureImageUrl) {
+          finalAnswerValue = currentUser.signatureImageUrl
+        } else {
+          const systemValue = getSystemFieldValue(templateField.fieldName)
+          if (systemValue) {
+            finalAnswerValue = systemValue
+          }
         }
       }
 
@@ -1998,9 +1980,6 @@ export class AssessmentRepo {
       }
     })
 
-    // Filter fields based on FINAL_SCORE field logic
-    const filteredFields = this.filterFinalScoreFields(fieldsWithValues)
-
     return {
       success: true,
       message: 'Assessment section fields retrieved successfully',
@@ -2019,8 +1998,8 @@ export class AssessmentRepo {
           isToggleDependent: assessmentSection.templateSection.isToggleDependent
         }
       },
-      fields: filteredFields,
-      totalFields: filteredFields.length
+      fields: fieldsWithValues,
+      totalFields: fieldsWithValues.length
     }
   }
 

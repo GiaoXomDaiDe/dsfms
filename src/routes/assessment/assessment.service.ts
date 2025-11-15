@@ -1011,7 +1011,8 @@ export class AssessmentService {
 
       // Handle custom application errors from repository
       if (error.message.includes('occurrence date') || 
-          error.message.includes('trainee sections')) {
+          error.message.includes('trainee sections') ||
+          error.message.includes('assessed at least one section')) {
         throw new BadRequestException(error.message)
       }
 
