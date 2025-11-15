@@ -258,6 +258,30 @@ export class AssessmentController {
   }
 
   /**
+   * GET /assessments/:assessmentId/trainee-sections
+   * Get TRAINEE sections of an assessment form (for viewing by trainers/supervisors)
+   */
+  @Get(':assessmentId/trainee-sections')
+  @ZodSerializerDto(GetAssessmentSectionsResDTO)
+  async getTraineeSections(
+    @Param() params: GetAssessmentParamsDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getTraineeSections(
+      params.assessmentId,
+      userContext
+    )
+  }
+
+  /**
    * GET /assessments/sections/:assessmentSectionId/fields
    * Get all fields of an assessment section with template field info and assessment values
    */
