@@ -1754,6 +1754,210 @@ export class AssessmentRepo {
   }
 
   /**
+   * Get TRAINEE sections of an assessment form (for viewing trainee sections by trainers/supervisors)
+   * This API allows users with course/subject access to view trainee sections without role restrictions
+   */
+  async getTraineeSections(assessmentId: string, userId: string) {
+    // First, get the assessment with all necessary information
+    const assessment = await this.prisma.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      include: {
+        template: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        subject: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        sections: {
+          include: {
+            templateSection: {
+              select: {
+                id: true,
+                label: true,
+                displayOrder: true,
+                editBy: true,
+                roleInSubject: true,
+                isSubmittable: true,
+                isToggleDependent: true
+              }
+            },
+            assessedBy: {
+              select: {
+                id: true,
+                eid: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          },
+          orderBy: {
+            templateSection: {
+              displayOrder: 'asc'
+            }
+          }
+        }
+      }
+    })
+
+    if (!assessment) {
+      throw new Error('Assessment not found')
+    }
+
+    // Verify user has access to this assessment (course/subject scope)
+    let hasAccess = false
+
+    if (assessment.subjectId) {
+      // Check if user is instructor for this subject
+      const subjectInstructor = await this.prisma.subjectInstructor.findFirst({
+        where: {
+          subjectId: assessment.subjectId,
+          trainerUserId: userId
+        }
+      })
+      hasAccess = !!subjectInstructor
+    } else if (assessment.courseId) {
+      // Check if user is instructor for this course
+      const courseInstructor = await this.prisma.courseInstructor.findFirst({
+        where: {
+          courseId: assessment.courseId,
+          trainerUserId: userId
+        }
+      })
+      hasAccess = !!courseInstructor
+    }
+
+    if (!hasAccess) {
+      throw new Error('You do not have permission to access this assessment')
+    }
+
+    // Get user's role in the course/subject for response
+    let userRoleInAssessment: string | null = null
+
+    if (assessment.subjectId) {
+      // Check if user is instructor for this subject
+      const subjectInstructor = await this.prisma.subjectInstructor.findFirst({
+        where: {
+          subjectId: assessment.subjectId,
+          trainerUserId: userId
+        },
+        select: {
+          roleInAssessment: true
+        }
+      })
+      userRoleInAssessment = subjectInstructor?.roleInAssessment || null
+    } else if (assessment.courseId) {
+      // Check if user is instructor for this course
+      const courseInstructor = await this.prisma.courseInstructor.findFirst({
+        where: {
+          courseId: assessment.courseId,
+          trainerUserId: userId
+        },
+        select: {
+          roleInAssessment: true
+        }
+      })
+      userRoleInAssessment = courseInstructor?.roleInAssessment || null
+    }
+
+    // Get user's main role for fallback
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: {
+          select: {
+            name: true
+          }
+        }
+      }
+    })
+
+    const userMainRole = user?.role.name || 'UNKNOWN'
+
+    // Filter only TRAINEE sections
+    const traineeSections = assessment.sections
+      .filter(section => section.templateSection.editBy === 'TRAINEE')
+      .map((section, index) => ({
+        id: section.id,
+        assessmentFormId: section.assessmentFormId,
+        assessedById: section.assessedById,
+        status: section.status,
+        createdAt: section.createdAt,
+        templateSection: {
+          id: section.templateSection.id,
+          label: section.templateSection.label,
+          displayOrder: index + 1, // Sequential order for trainee sections
+          editBy: section.templateSection.editBy,
+          roleInSubject: section.templateSection.roleInSubject,
+          isSubmittable: section.templateSection.isSubmittable,
+          isToggleDependent: section.templateSection.isToggleDependent
+        },
+        assessedBy: section.assessedBy ? {
+          id: section.assessedBy.id,
+          firstName: section.assessedBy.firstName,
+          lastName: section.assessedBy.lastName,
+          eid: section.assessedBy.eid
+        } : null,
+      }))
+
+    return {
+      success: true,
+      message: 'Trainee sections retrieved successfully',
+      assessmentInfo: {
+        id: assessment.id,
+        name: assessment.name,
+        trainee: {
+          id: assessment.trainee.id,
+          firstName: assessment.trainee.firstName,
+          lastName: assessment.trainee.lastName,
+          eid: assessment.trainee.eid
+        },
+        template: {
+          id: assessment.template.id,
+          name: assessment.template.name
+        },
+        subject: assessment.subject ? {
+          id: assessment.subject.id,
+          name: assessment.subject.name,
+          code: assessment.subject.code
+        } : null,
+        course: assessment.course ? {
+          id: assessment.course.id,
+          name: assessment.course.name,
+          code: assessment.course.code
+        } : null,
+        occuranceDate: assessment.occuranceDate,
+        status: assessment.status,
+        isTraineeLocked: assessment.isTraineeLocked
+      },
+      sections: traineeSections,
+      totalTraineeSections: traineeSections.length,
+      userRole: userRoleInAssessment || userMainRole
+    }
+  }
+
+  /**
    * Get all fields of an assessment section with their template field information and assessment values
    */
   async getAssessmentSectionFields(assessmentSectionId: string, userId?: string) {

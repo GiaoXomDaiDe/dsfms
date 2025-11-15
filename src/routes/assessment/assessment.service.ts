@@ -792,6 +792,44 @@ export class AssessmentService {
   }
 
   /**
+   * Get TRAINEE sections of an assessment form
+   * Allows users with course/subject access to view trainee sections
+   */
+  async getTraineeSections(
+    assessmentId: string,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ) {
+    try {
+      // Get trainee sections (access check is done in repository)
+      const result = await this.assessmentRepo.getTraineeSections(
+        assessmentId,
+        currentUser.userId
+      )
+
+      return result
+    } catch (error) {
+      // Handle specific known errors
+      if (error instanceof ForbiddenException || 
+          error instanceof NotFoundException) {
+        throw error // Re-throw HTTP exceptions as-is
+      }
+
+      // Handle custom application errors  
+      if (error.message === 'Assessment not found') {
+        throw AssessmentNotFoundException
+      }
+
+      if (error.message === 'You do not have permission to access this assessment') {
+        throw new ForbiddenException('You do not have permission to access this assessment')
+      }
+
+      // Handle any other unexpected errors
+      console.error('Get trainee sections failed:', error)
+      throw new NotFoundException('Failed to get trainee sections')
+    }
+  }
+
+  /**
    * Get all fields of an assessment section with their template field information and assessment values
    */
   async getAssessmentSectionFields(
@@ -867,8 +905,14 @@ export class AssessmentService {
           }
         }
       } else if (templateSection.editBy === 'TRAINEE') {
-        // Section requires trainee access - trainee can only access their own assessment
-        canAccess = currentUser.roleName === 'TRAINEE' && assessment?.traineeId === currentUser.userId
+        // Section requires trainee access - trainee can access their own assessment
+        // OR trainers with assessment permission can view trainee sections
+        if (currentUser.roleName === 'TRAINEE') {
+          canAccess = assessment?.traineeId === currentUser.userId
+        } else if (currentUser.roleName === 'TRAINER') {
+          // Trainers who can assess this assessment form can view trainee sections
+          canAccess = userRoleInAssessment !== null // Must be assigned to subject/course
+        }
       }
 
       if (!canAccess) {
