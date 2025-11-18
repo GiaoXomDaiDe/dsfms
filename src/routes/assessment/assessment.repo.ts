@@ -1645,30 +1645,26 @@ export class AssessmentRepo {
       .filter(item => item.canAssess) // Only return sections user can access
       .sort((a, b) => a.section.templateSection.displayOrder - b.section.templateSection.displayOrder) // Sort by original order
 
-    // Process sections with sequential logic based on filtered list
+    // Process sections with new logic for non-sequential assessment
     const sectionsWithPermissions = accessibleSections
       .map((item, index) => {
         // Re-number displayOrder sequentially for filtered sections
         const frontendDisplayOrder = index + 1
 
-        // For TRAINER: Calculate canAssessed logic based on filtered sections only
+        // For TRAINER: New logic - can assess any section with matching role
         let canAssessed: boolean | undefined = undefined
+        let canUpdated: boolean | undefined = undefined
+        
         if (userMainRole === 'TRAINER') {
-          // Check if section is available for assessment
           const sectionNotAssessed = item.section.assessedById === null
           const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
+          const sectionAssessedByCurrentUser = item.section.assessedById === userId
           
-          // Check if user has assessed any section in the accessible list
-          const userHasAssessedAnySection = accessibleSections.some(s => s.section.assessedById === userId)
+          // canAssessed: true if section is not assessed yet and requires assessment
+          canAssessed = sectionNotAssessed && sectionRequiredAssessment
           
-          // For sequential assessment: only the first unassessed section can be assessed
-          // AND user hasn't assessed any section yet
-          const isFirstUnassessedSection = index === accessibleSections.findIndex(s => s.section.assessedById === null)
-          
-          canAssessed = sectionNotAssessed && 
-                       sectionRequiredAssessment && 
-                       !userHasAssessedAnySection && 
-                       isFirstUnassessedSection
+          // canUpdated: true if section was assessed by current user (they can update their own work)
+          canUpdated = sectionAssessedByCurrentUser
         }
 
         const baseSection = {
@@ -1680,7 +1676,7 @@ export class AssessmentRepo {
           templateSection: {
             id: item.section.templateSection.id,
             label: item.section.templateSection.label,
-            displayOrder: frontendDisplayOrder, // Sequential order for filtered sections
+            displayOrder: frontendDisplayOrder, // Sequential order for filtered sections (for display only)
             editBy: item.section.templateSection.editBy,
             roleInSubject: item.section.templateSection.roleInSubject,
             isSubmittable: item.section.templateSection.isSubmittable,
@@ -1695,11 +1691,12 @@ export class AssessmentRepo {
         }
 
         // Add role-specific fields
-        if (userMainRole === 'TRAINER' && canAssessed !== undefined) {
+        if (userMainRole === 'TRAINER' && canAssessed !== undefined && canUpdated !== undefined) {
           return {
             roleRequirement: item.roleRequirement,
             ...baseSection,
-            canAssessed: canAssessed
+            canAssessed: canAssessed,
+            canUpdated: canUpdated
           }
         }
 
