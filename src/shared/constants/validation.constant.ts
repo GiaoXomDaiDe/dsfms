@@ -47,7 +47,7 @@ export const requiredText = (field: string, max: number, options: TextSchemaOpti
 }
 
 export const optionalText = (field: string, max: number, options: TextSchemaOptions = {}) =>
-  requiredText(field, max, options).optional().nullable()
+  requiredText(field, max, options).optional().nullable().default(null)
 
 export const hasAlphabeticCharacter = (value: string) => LETTER_REGEX.test(value)
 
