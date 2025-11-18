@@ -429,7 +429,8 @@ export const AssessmentSectionDetailSchema = z.object({
     eid: z.string()
   }).nullable(),
   // Optional field for TRAINER users
-  canAssessed: z.boolean().optional()
+  canAssessed: z.boolean().optional(),
+  canUpdated: z.boolean().optional()
 })
 
 export type AssessmentSectionDetailType = z.infer<typeof AssessmentSectionDetailSchema>

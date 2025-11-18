@@ -1322,11 +1322,11 @@ export class AssessmentService {
         throw new BadRequestException('Assessment must be in SUBMITTED status to approve or reject')
       }
 
-      // Check if user has permission to approve/reject assessments
-      // This could be expanded based on role permissions
-      if (userContext.roleName !== 'DEPARTMENT_HEAD' && userContext.roleName !== 'ADMIN') {
-        throw new ForbiddenException('You do not have permission to approve or reject assessments')
-      }
+      // // Check if user has permission to approve/reject assessments
+      // // This could be expanded based on role permissions
+      // if (userContext.roleName !== 'DEPARTMENT_HEAD' && userContext.roleName !== 'ADMIN') {
+      //   throw new ForbiddenException('You do not have permission to approve or reject assessments')
+      // }
 
       // Process the approval/rejection
       const result = await this.assessmentRepo.approveRejectAssessment(
