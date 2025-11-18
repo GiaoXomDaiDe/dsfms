@@ -129,20 +129,24 @@ export class TemplateController {
   }
 
    /**
-   * GET /templates/pdf-content-test/:templateContentUrl
-   * Test endpoint for exporting PDF from S3
+   * POST /templates/pdf-content-test
+   * Test endpoint for exporting PDF from S3 URL
    */
-  @Get('pdf-content-test/:templateContentUrl')
+  @Post('pdf-content-test')
   @Header('Content-Type', 'application/pdf')
   async getTemplatePdfFromS3(
-    @Param('templateContentUrl') templateContentUrl: string, 
+    @Body() body: { templateContentUrl: string }, 
     @Res() res: Response,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
   ) {
-    const pdfBuffer = await this.templateService.exportTemplatePdfFromS3(templateContentUrl)
-    res.set({templateContentUrl,
+    if (!body.templateContentUrl) {
+      throw new BadRequestException('templateContentUrl is required')
+    }
+
+    const pdfBuffer = await this.templateService.exportTemplatePdfFromS3(body.templateContentUrl)
+    res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="template-${templateContentUrl}.pdf"`,
+      'Content-Disposition': `inline; filename="template-${Date.now()}.pdf"`,
     })
     res.send(pdfBuffer)
   }
