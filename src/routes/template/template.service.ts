@@ -1530,16 +1530,17 @@ export class TemplateService {
     const finalScoreNumFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_NUM')
     const finalScoreTextFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_TEXT')
     
+    // Must have at least one final score field (either NUM or TEXT)
     if (finalScoreNumFields.length === 0 && finalScoreTextFields.length === 0) {
-      throw new Error('Template must have at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field')
+      throw new Error('Template must have FINAL_SCORE_NUM/TEXT for this template')
     }
     
     // Check maximum one of each type
     if (finalScoreNumFields.length > 1) {
-      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_NUM')
+      throw new Error('Template can have only 1 FINAL_SCORE_NUM')
     }
     if (finalScoreTextFields.length > 1) {
-      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
+      throw new Error('Template can have only 1 FINAL_SCORE_TEXT')
     }
     
     // 5. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
