@@ -1,10 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-  UnprocessableEntityException
-} from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 /* =========================
  * Basic Role Exceptions - Lỗi cơ bản về role entity
@@ -14,7 +9,7 @@ import {
 export const NotFoundRoleException = new NotFoundException('Role not found')
 
 // Lỗi khi tạo role với tên đã tồn tại
-export const RoleAlreadyExistsException = new UnprocessableEntityException([
+export const RoleAlreadyExistsException = new ValidationException([
   {
     message: 'Role already exists',
     path: 'name'

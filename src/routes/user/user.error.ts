@@ -5,13 +5,14 @@ import {
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common'
+import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 export const UserNotFoundException = new NotFoundException({
   message: 'User not found',
   error: 'USER_NOT_FOUND'
 })
 
-export const UserAlreadyExistsException = new UnprocessableEntityException([
+export const UserAlreadyExistsException = new ValidationException([
   {
     message: 'User already exists',
     path: 'email'
@@ -42,7 +43,7 @@ export const OnlyAdminCanManageAdminRoleException = new ForbiddenException(
   'Only ADMINISTRATOR can create, update, or delete users with ADMINISTRATOR role.'
 )
 
-export const RoleNotFoundException = new UnprocessableEntityException([
+export const RoleNotFoundException = new ValidationException([
   {
     message: 'Role not found',
     path: 'roleId'
@@ -56,7 +57,7 @@ export const DefaultRoleValidationException = new BadRequestException({
   error: 'ROLE_VALIDATION_FAILED'
 })
 
-export const DepartmentNotFoundException = new UnprocessableEntityException([
+export const DepartmentNotFoundException = new ValidationException([
   {
     message: 'Department not found',
     path: 'departmentId'

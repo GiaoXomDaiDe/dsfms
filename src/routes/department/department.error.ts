@@ -1,12 +1,8 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-  UnprocessableEntityException
-} from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 // Lỗi tồn tại / trùng lặp phòng ban
-export const DepartmentAlreadyExistsException = new UnprocessableEntityException([
+export const DepartmentAlreadyExistsException = new ValidationException([
   {
     message: 'Department already exists',
     path: 'name'
@@ -22,7 +18,7 @@ export const DepartmentHasActiveCoursesException = new ForbiddenException(
 )
 
 // Lỗi liên quan đến department head
-export const InvalidDepartmentHeadException = new UnprocessableEntityException([
+export const InvalidDepartmentHeadException = new ValidationException([
   {
     message: 'Invalid department head user',
     path: 'headUserId'
