@@ -99,21 +99,11 @@ export class UserService {
         throw RoleNotFoundException
       }
 
-      // Kiểm tra role có đang active không
-      if (!targetRole.isActive || targetRole.deletedAt) {
-        throw RoleIsDisabledException
-      }
-
       // Kiểm tra departmentId có tồn tại và active không (nếu được cung cấp)
       if (data.departmentId) {
         const department = await this.sharedDepartmentRepository.findDepartmentById(data.departmentId)
         if (!department) {
           throw DepartmentNotFoundException
-        }
-
-        // Kiểm tra department có đang active không
-        if (!department.isActive) {
-          throw DepartmentIsDisabledException
         }
       }
 
