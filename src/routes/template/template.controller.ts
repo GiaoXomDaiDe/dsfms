@@ -128,29 +128,6 @@ export class TemplateController {
     }
   }
 
-   /**
-   * POST /templates/pdf-content-test
-   * Test endpoint for exporting PDF from S3 URL
-   */
-  @Post('pdf-content-test')
-  @Header('Content-Type', 'application/pdf')
-  async getTemplatePdfFromS3(
-    @Body() body: { templateContentUrl: string }, 
-    @Res() res: Response,
-    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
-  ) {
-    if (!body.templateContentUrl) {
-      throw new BadRequestException('templateContentUrl is required')
-    }
-
-    const pdfBuffer = await this.templateService.exportTemplatePdfFromS3(body.templateContentUrl)
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="template-${Date.now()}.pdf"`,
-    })
-    res.send(pdfBuffer)
-  }
-
   /**
    * GET /templates/pdf/:templateFormId
    * convert Docx to PDF for Template Content (Template without Fields)
@@ -205,6 +182,29 @@ export class TemplateController {
       'Content-Disposition': `attachment; filename="template-${templateFormId}.zip"`,
     })
     res.send(zipBuffer)
+  }
+
+   /**
+   * POST /templates/pdf-content-test
+   * Test endpoint for exporting PDF from S3 URL
+   */
+  @Post('pdf-content-test')
+  @Header('Content-Type', 'application/pdf')
+  async getTemplatePdfFromS3(
+    @Body() body: { templateContentUrl: string }, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    if (!body.templateContentUrl) {
+      throw new BadRequestException('templateContentUrl is required')
+    }
+
+    const pdfBuffer = await this.templateService.exportTemplatePdfFromS3(body.templateContentUrl)
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="template-${Date.now()}.pdf"`,
+    })
+    res.send(pdfBuffer)
   }
 
   /**
