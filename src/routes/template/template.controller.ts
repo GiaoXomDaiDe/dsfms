@@ -188,7 +188,7 @@ export class TemplateController {
    * POST /templates/pdf-content-test
    * Test endpoint for exporting PDF from S3 URL
    */
-  @Post('pdf-content-test')
+  @Get('pdf-content-test')
   @Header('Content-Type', 'application/pdf')
   async getTemplatePdfFromS3(
     @Body() body: { templateContentUrl: string }, 
@@ -325,8 +325,6 @@ export class TemplateController {
 
     return await this.templateService.createTemplateVersion(createVersionDto, userContext)
   }
-
-
 
   /**
    * PUT /templates/update-draft/:id
