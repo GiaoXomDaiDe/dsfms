@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import type { AxiosError } from 'axios'
+import { randomUUID } from 'crypto'
 import { unlink } from 'fs/promises'
 import mime from 'mime-types'
 import path from 'path'
@@ -41,7 +42,9 @@ export class MediaService {
   ) {}
 
   private generateControlledFilename(extension: string, type: string = 'file', userId: string): string {
-    return `${type}_${userId}${extension}`
+    const uniqueToken = randomUUID()
+    const safeExtension = extension.startsWith('.') ? extension : `.${extension}`
+    return `${type}_${userId}_${Date.now()}_${uniqueToken}${safeExtension}`
   }
 
   async uploadFile(files: Array<Express.Multer.File>, type: string, userId: string) {

@@ -226,7 +226,6 @@ model Course {
 
   @@index([departmentId])
   @@index([deletedAt])
-  @@unique([departmentId, code])
   @@map("Course")
 }
 
@@ -263,7 +262,6 @@ model Subject {
 
   @@index([courseId])
   @@index([deletedAt])
-  @@unique([courseId, code])
   @@map("Subject")
 }
 

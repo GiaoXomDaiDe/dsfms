@@ -4,6 +4,7 @@ import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
 import { ScheduleModule } from '@nestjs/schedule'
 import { ZodSerializerInterceptor } from 'nestjs-zod'
 import { CourseModule } from '~/routes/course/course.module'
+import { DashboardModule } from '~/routes/dashboard/dashboard.module'
 import { DepartmentModule } from '~/routes/department/department.module'
 import { MediaModule } from '~/routes/media/media.module'
 import { PublicModule } from '~/routes/public/public.module'
@@ -44,6 +45,7 @@ import { TemplateModule } from './routes/template/template.module'
     ProfileModule,
     DepartmentModule,
     CourseModule,
+    DashboardModule,
     SubjectModule,
     TemplateModule,
     AssessmentModule,
