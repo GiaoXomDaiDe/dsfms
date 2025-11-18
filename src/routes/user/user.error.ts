@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-  UnprocessableEntityException
-} from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 export const UserNotFoundException = new NotFoundException({
@@ -164,8 +158,14 @@ export const ProfileNotAllowedForRoleMessage = (profile: string, roleName: strin
   `${profile} is not allowed for ${roleName} role`
 
 export const DepartmentHeadAlreadyExistsException = (departmentName: string, existingHead: string, eid: string) =>
-  new UnprocessableEntityException(
-    `Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
+  new ValidationException(
+    [
+      {
+        path: 'departmentHead',
+        message: `Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
+      }
+    ],
+    'Validation failed'
   )
 
 export const BulkDepartmentHeadAlreadyExistsAtIndexException = (
