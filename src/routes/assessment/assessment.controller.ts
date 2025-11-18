@@ -29,6 +29,8 @@ import {
   ApproveRejectAssessmentResDTO,
   GetAssessmentEventsQueryDTO,
   GetAssessmentEventsResDTO,
+  GetUserAssessmentEventsQueryDTO,
+  GetUserAssessmentEventsResDTO,
   UpdateAssessmentEventBodyDTO,
   UpdateAssessmentEventParamsDTO,
   UpdateAssessmentEventResDTO
@@ -189,6 +191,27 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.updateAssessmentEvent(params, body, userContext)
+  }
+
+  /**
+   * GET /assessments/user-events
+   * Get assessment events for current user based on their role (TRAINER/TRAINEE) and assignments
+   */
+  @Get('user-events')
+  @ZodSerializerDto(GetUserAssessmentEventsResDTO)
+  async getUserAssessmentEvents(
+    @Query() query: GetUserAssessmentEventsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getUserAssessmentEvents(query, userContext)
   }
 
   /**

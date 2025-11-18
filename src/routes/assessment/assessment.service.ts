@@ -35,6 +35,8 @@ import {
   ApproveRejectAssessmentResType,
   GetAssessmentEventsQueryType,
   GetAssessmentEventsResType,
+  GetUserAssessmentEventsQueryType,
+  GetUserAssessmentEventsResType,
   UpdateAssessmentEventBodyType,
   UpdateAssessmentEventParamsType,
   UpdateAssessmentEventResType
@@ -1869,6 +1871,34 @@ export class AssessmentService {
       }
 
       throw new BadRequestException('Failed to get assessment events')
+    }
+  }
+
+  /**
+   * Get assessment events for current user based on their role (TRAINER/TRAINEE) and assignments
+   */
+  async getUserAssessmentEvents(
+    query: GetUserAssessmentEventsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetUserAssessmentEventsResType> {
+    try {
+      const result = await this.assessmentRepo.getUserAssessmentEvents(
+        currentUser.userId,
+        currentUser.roleName,
+        query.page,
+        query.limit,
+        query.courseId,
+        query.subjectId,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error
+      }
+
+      throw new BadRequestException('Failed to get user assessment events')
     }
   }
 
