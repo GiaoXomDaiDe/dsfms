@@ -743,9 +743,37 @@ export const UpdateAssessmentEventResSchema = z.object({
   })
 })
 
+// ===== USER ASSESSMENT EVENTS (TRAINER/TRAINEE) =====
+
+export const GetUserAssessmentEventsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  courseId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
+  status: z.nativeEnum(AssessmentStatus).optional(),
+  templateId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+  search: z.string().max(100).optional()
+})
+
+export const GetUserAssessmentEventsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    events: z.array(AssessmentEventItemSchema),
+    totalItems: z.number().int().min(0),
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1),
+    totalPages: z.number().int().min(0)
+  })
+})
+
 export type AssessmentEventItemType = z.infer<typeof AssessmentEventItemSchema>
 export type GetAssessmentEventsQueryType = z.infer<typeof GetAssessmentEventsQuerySchema>
 export type GetAssessmentEventsResType = z.infer<typeof GetAssessmentEventsResSchema>
+export type GetUserAssessmentEventsQueryType = z.infer<typeof GetUserAssessmentEventsQuerySchema>
+export type GetUserAssessmentEventsResType = z.infer<typeof GetUserAssessmentEventsResSchema>
 export type UpdateAssessmentEventBodyType = z.infer<typeof UpdateAssessmentEventBodySchema>
 export type UpdateAssessmentEventParamsType = z.infer<typeof UpdateAssessmentEventParamsSchema>
 export type UpdateAssessmentEventResType = z.infer<typeof UpdateAssessmentEventResSchema>

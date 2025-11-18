@@ -185,7 +185,7 @@ export class TemplateController {
   }
 
    /**
-   * POST /templates/pdf-content-test
+   * GET /templates/pdf-content-test
    * Test endpoint for exporting PDF from S3 URL
    */
   @Get('pdf-content-test')
