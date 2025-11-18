@@ -1,6 +1,6 @@
-import { UnprocessableEntityException } from '@nestjs/common'
+import { ValidationException } from '~/shared/exceptions/validation.exception'
 
-export const InvalidPasswordException = new UnprocessableEntityException([
+export const InvalidPasswordException = new ValidationException([
   {
     message: 'Invalid password',
     path: 'password'

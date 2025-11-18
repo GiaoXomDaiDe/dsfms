@@ -1,4 +1,5 @@
-import { BadRequestException, NotFoundException, UnprocessableEntityException } from '@nestjs/common'
+import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 /* =========================
  * Basic Permission Exceptions - Lỗi cơ bản về permission entity
@@ -12,7 +13,7 @@ export const NotFoundPermissionException = new NotFoundException({
 })
 
 // Lỗi khi tạo permission với path+method đã tồn tại
-export const PermissionAlreadyExistsException = new UnprocessableEntityException([
+export const PermissionAlreadyExistsException = new ValidationException([
   {
     path: 'path',
     message: 'Permission path must be unique'
