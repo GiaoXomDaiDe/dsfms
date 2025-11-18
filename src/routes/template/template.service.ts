@@ -1571,4 +1571,25 @@ export class TemplateService {
     }
   }
 
+  /**
+   * Get template PDF from template_content S3 URL
+   */
+  async exportTemplatePdfFromS3(templateContentUrl: string): Promise<Buffer> {
+    try {
+
+      if (!templateContentUrl) {
+        throw new Error('Template content URL not found')
+      }
+
+      // Convert DOCX to PDF using the shared service
+      const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateContentUrl)
+      return pdfBuffer
+
+    } catch (error) {
+      if (error instanceof TemplateNotFoundError) {
+        throw error
+      }
+      throw new Error(`Failed to generate template PDF: ${error.message}`)
+    }
+  }
 }

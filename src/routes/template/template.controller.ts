@@ -128,6 +128,25 @@ export class TemplateController {
     }
   }
 
+   /**
+   * GET /templates/pdf-content-test/:templateContentUrl
+   * Test endpoint for exporting PDF from S3
+   */
+  @Get('pdf-content-test/:templateContentUrl')
+  @Header('Content-Type', 'application/pdf')
+  async getTemplatePdfFromS3(
+    @Param('templateContentUrl') templateContentUrl: string, 
+    @Res() res: Response,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
+  ) {
+    const pdfBuffer = await this.templateService.exportTemplatePdfFromS3(templateContentUrl)
+    res.set({templateContentUrl,
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="template-${templateContentUrl}.pdf"`,
+    })
+    res.send(pdfBuffer)
+  }
+
   /**
    * GET /templates/pdf/:templateFormId
    * convert Docx to PDF for Template Content (Template without Fields)
