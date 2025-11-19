@@ -16,7 +16,7 @@ RUN npm ci && npm cache clean --force
 
 COPY . .
 
-ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+# ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 
 RUN npx prisma generate
 RUN npm run build
