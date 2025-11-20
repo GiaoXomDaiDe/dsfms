@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
 import {
   DepartmentAlreadyActiveException,
   DepartmentAlreadyExistsException,
+  DepartmentCodeAlreadyExistsException,
   DepartmentHasActiveCoursesException,
   DepartmentHeadBelongsToAnotherDepartmentException,
   DepartmentHeadMustHaveRoleException,
   DepartmentHeadRoleInactiveException,
   DepartmentHeadUserNotFoundException,
+  DepartmentNameAlreadyExistsException,
   NotFoundDepartmentException,
   OnlyAdministratorCanEnableDepartmentException
 } from '~/routes/department/department.error'
@@ -83,7 +86,7 @@ export class DepartmentService {
         return department
       } catch (error) {
         if (isUniqueConstraintPrismaError(error)) {
-          throw DepartmentAlreadyExistsException
+          this.handleDepartmentUniqueConstraintError(error)
         }
 
         throw error
@@ -149,7 +152,7 @@ export class DepartmentService {
       }
 
       if (isUniqueConstraintPrismaError(error)) {
-        throw DepartmentAlreadyExistsException
+        this.handleDepartmentUniqueConstraintError(error)
       }
 
       throw error
@@ -227,22 +230,20 @@ export class DepartmentService {
   }
 
   async getDepartmentHeads() {
+    const baseWhere = {
+      role: {
+        name: RoleName.DEPARTMENT_HEAD
+      },
+      deletedAt: null,
+      departmentId: null
+    }
+
     const [totalItems, users] = await Promise.all([
       this.prisma.user.count({
-        where: {
-          role: {
-            name: RoleName.DEPARTMENT_HEAD
-          },
-          deletedAt: null
-        }
+        where: baseWhere
       }),
       this.prisma.user.findMany({
-        where: {
-          role: {
-            name: RoleName.DEPARTMENT_HEAD
-          },
-          deletedAt: null
-        },
+        where: baseWhere,
         select: {
           id: true,
           eid: true,
@@ -258,8 +259,28 @@ export class DepartmentService {
 
     return {
       users,
-      totalItems
+      totalItems,
+      infoMessage: totalItems === 0 ? 'No department heads available currently.' : undefined
     }
+  }
+
+  private handleDepartmentUniqueConstraintError(error: PrismaClientKnownRequestError): never {
+    const targetMeta = error.meta?.target
+    const normalizedTargets = Array.isArray(targetMeta)
+      ? targetMeta.map((value) => value?.toString().toLowerCase())
+      : typeof targetMeta === 'string'
+        ? [targetMeta.toLowerCase()]
+        : []
+
+    if (normalizedTargets.some((target) => target?.includes('code'))) {
+      throw DepartmentCodeAlreadyExistsException
+    }
+
+    if (normalizedTargets.some((target) => target?.includes('name'))) {
+      throw DepartmentNameAlreadyExistsException
+    }
+
+    throw DepartmentAlreadyExistsException
   }
 
   private async validateDepartmentHead(headUserId: string, targetDepartmentId?: string) {

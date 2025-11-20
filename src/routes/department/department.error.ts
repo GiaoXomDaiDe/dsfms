@@ -9,6 +9,20 @@ export const DepartmentAlreadyExistsException = new ValidationException([
   }
 ])
 
+export const DepartmentNameAlreadyExistsException = new ValidationException([
+  {
+    message: 'Department name already exists',
+    path: 'name'
+  }
+])
+
+export const DepartmentCodeAlreadyExistsException = new ValidationException([
+  {
+    message: 'Department code already exists',
+    path: 'code'
+  }
+])
+
 // Lỗi không tìm thấy phòng ban
 export const NotFoundDepartmentException = new NotFoundException('Department not found')
 
