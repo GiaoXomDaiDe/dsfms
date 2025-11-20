@@ -9,6 +9,7 @@ import {
   BulkTraineeProfileNotAllowedException,
   BulkTrainerProfileNotAllowedException,
   CannotChangeRoleOfActiveDepartmentHeadException,
+  CannotDisableActiveDepartmentHeadException,
   CannotUpdateOrDeleteYourselfException,
   DefaultRoleValidationException,
   DepartmentHeadAlreadyExistsException,
@@ -692,6 +693,10 @@ export class UserService {
       // Business rules: Validate data integrity
       if (!user.role.isActive) {
         throw RoleIsDisabledException
+      }
+
+      if (user.role.name === RoleName.DEPARTMENT_HEAD && user.department) {
+        throw CannotDisableActiveDepartmentHeadException(user.department.name)
       }
 
       if (user.department && user.department.isActive !== true) {
