@@ -3257,7 +3257,7 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get all assessment values for an assessment
+   * Get all assessment values for an assessment with parent context for proper nested mapping
    */
   async getAssessmentValues(assessmentId: string) {
     return await this.prisma.assessmentValue.findMany({
@@ -3271,7 +3271,22 @@ export class AssessmentRepo {
           select: {
             id: true,
             fieldName: true,
-            fieldType: true
+            fieldType: true,
+            parentId: true,
+            parent: {
+              select: {
+                id: true,
+                fieldName: true,
+                parentId: true,
+                parent: {
+                  select: {
+                    id: true,
+                    fieldName: true,
+                    parentId: true
+                  }
+                }
+              }
+            }
           }
         }
       }
