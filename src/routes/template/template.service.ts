@@ -111,20 +111,32 @@ export class TemplateService {
         placeholders
       }
     } catch (error) {
-      // console.error('Error parsing DOCX template:', error)
-
-      // xử lí các lỗi với docxtemplater
+      // Handle docxtemplater specific errors with detailed information
+      if (error.properties) {
+        const props = error.properties;
+        const explanation = props.explanation || error.message || 'Unknown template error';
+        const location = props.file ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})` : '';
+        throw new DocxParsingError(`Template parsing failed: ${explanation}${location}`);
+      }
+      
+      // Handle array of errors
       if (error.properties && error.properties.errors instanceof Array) {
         const errorMessages = error.properties.errors
           .map((err: any) => {
-            return `${err.name}: ${err.message} at ${err.part}`
+            const explanation = err.properties?.explanation || err.message || 'Unknown error';
+            return explanation;
           })
-          .join('; ')
-        throw new DocxParsingError(errorMessages)
+          .join('; ');
+        throw new DocxParsingError(`Template parsing failed: ${errorMessages}`);
       }
-
-      // xử lí 400
-      throw new DocxParsingError(error.message || 'Unknown error')
+      
+      // Handle validation errors
+      if (error.message && error.message.includes('Invalid file type')) {
+        throw new DocxParsingError('Invalid file format. Please upload a valid DOCX file.');
+      }
+      
+      // Default error handling
+      throw new DocxParsingError(error.message || 'Failed to parse DOCX template. Please check if the file is valid and not corrupted.')
     }
   }
 
@@ -379,18 +391,27 @@ export class TemplateService {
         totalFields: structuredFields.length
       }
     } catch (error) {
-      // Handle docxtemplater errors
+      // Handle docxtemplater specific errors with detailed information
+      if (error.properties) {
+        const props = error.properties;
+        const explanation = props.explanation || error.message || 'Unknown template error';
+        const location = props.file ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})` : '';
+        throw new DocxParsingError(`Field extraction failed: ${explanation}${location}`);
+      }
+      
+      // Handle array of errors
       if (error.properties && error.properties.errors instanceof Array) {
         const errorMessages = error.properties.errors
           .map((err: any) => {
-            return `${err.name}: ${err.message} at ${err.part}`
+            const explanation = err.properties?.explanation || err.message || 'Unknown error';
+            return explanation;
           })
-          .join('; ')
-        throw new DocxParsingError(errorMessages)
+          .join('; ');
+        throw new DocxParsingError(`Field extraction failed: ${errorMessages}`);
       }
-
-      // Handle other errors
-      throw new DocxParsingError(error.message || 'Unknown error')
+      
+      // Default error handling
+      throw new DocxParsingError(error.message || 'Failed to extract fields from DOCX. Please check if the template format is correct.')
     }
   }
 
@@ -452,18 +473,27 @@ export class TemplateService {
         throw new S3FetchError(error.message)
       }
 
-      // Handle docxtemplater errors
+      // Handle docxtemplater specific errors with detailed information
+      if (error.properties) {
+        const props = error.properties;
+        const explanation = props.explanation || error.message || 'Unknown template error';
+        const location = props.file ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})` : '';
+        throw new S3DocxParsingError(`S3 template parsing failed: ${explanation}${location}`);
+      }
+      
+      // Handle array of errors
       if (error.properties && error.properties.errors instanceof Array) {
         const errorMessages = error.properties.errors
           .map((err: any) => {
-            return `${err.name}: ${err.message} at ${err.part}`
+            const explanation = err.properties?.explanation || err.message || 'Unknown error';
+            return explanation;
           })
-          .join('; ')
-        throw new S3DocxParsingError(errorMessages)
+          .join('; ');
+        throw new S3DocxParsingError(`S3 template parsing failed: ${errorMessages}`);
       }
 
       // Handle other errors
-      throw new S3ExtractionError(error.message || 'Unknown error')
+      throw new S3ExtractionError(error.message || 'Failed to extract fields from S3 template')
     }
   }
 
@@ -538,10 +568,17 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
+      // Process sections to ensure unique field names within each section
+      const processedSections = this.processFieldNamesForUniqueness(templateData.sections);
+      const templateDataWithProcessedSections = {
+        ...templateDataWithStatus,
+        sections: processedSections
+      };
+
       // Create template with all nested data
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
-        templateDataWithStatus,
+        templateDataWithProcessedSections,
         userContext.userId,
         templateSchema
       )
@@ -552,7 +589,29 @@ export class TemplateService {
         message: TEMPLATE_CREATED_SUCCESSFULLY
       }
     } catch (error) {
-      throw new TemplateCreationFailedError(error.message)
+      // Handle Prisma validation errors more gracefully
+      if (error.message && error.message.includes('Invalid value for argument')) {
+        // Extract field type validation errors
+        const fieldTypeMatch = error.message.match(/fieldType.*Expected ([^.]+)/);
+        if (fieldTypeMatch) {
+          throw new Error(`Invalid field type. Please use one of the following valid field types: TEXT, IMAGE, PART, TOGGLE, SECTION_CONTROL_TOGGLE, VALUE_LIST, SIGNATURE_DRAW, SIGNATURE_IMG, FINAL_SCORE_TEXT, FINAL_SCORE_NUM, CHECK_BOX`);
+        }
+      }
+      
+      // Handle unique constraint violations
+      if (error.message && error.message.includes('Unique constraint failed')) {
+        if (error.message.includes('sectionId') && error.message.includes('fieldName')) {
+          throw new Error(`Duplicate field name detected within the same section. Please ensure all field names are unique within each section.`);
+        }
+      }
+      
+      // Handle other specific errors
+      if (error.message && error.message.includes('Foreign key constraint failed')) {
+        throw new Error(`Invalid reference detected. Please check that all department IDs and parent field references are valid.`);
+      }
+      
+      // Default error handling
+      throw new TemplateCreationFailedError(error.message || 'An unexpected error occurred while creating the template')
     }
   }
 
@@ -951,10 +1010,17 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
+      // Process sections to ensure unique field names within each section
+      const processedSections = this.processFieldNamesForUniqueness(templateData.sections);
+      const templateDataWithProcessedSections = {
+        ...templateData,
+        sections: processedSections
+      };
+
       // Update rejected template (recreate with preserved metadata)
       const result = await this.templateRepository.updateRejectedTemplate(
         templateId,
-        templateData,
+        templateDataWithProcessedSections,
         userContext.userId,
         templateSchema
       )
@@ -1054,10 +1120,17 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
+      // Process sections to ensure unique field names within each section
+      const processedSections = this.processFieldNamesForUniqueness(templateDataWithStatus.sections);
+      const templateDataWithProcessedSections = {
+        ...templateDataWithStatus,
+        sections: processedSections
+      };
+
       // Update draft template (recreate with preserved metadata)
       const result = await this.templateRepository.updateDraftTemplate(
         templateId,
-        templateDataWithStatus,
+        templateDataWithProcessedSections,
         userContext.userId,
         templateSchema
       )
@@ -1123,6 +1196,7 @@ export class TemplateService {
   /**
    * Generate nested schema based on field hierarchy (parent-child relationships)
    * Fields are ordered by displayOrder within each section
+   * Note: This method should be called BEFORE field name processing to maintain original nested structure
    */
   private generateNestedSchemaFromSections(sections: any[]): Record<string, any> {
     const schema: Record<string, any> = {};
@@ -1134,15 +1208,27 @@ export class TemplateService {
       // Sort fields by displayOrder within each section
       const sortedFields = [...section.fields].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
       
-      // Build field maps for parent-child relationships
+      // Build field maps for parent-child relationships using original field names
       const fieldByTempId = new Map<string, any>();
       const fieldByName = new Map<string, any>();
       const rootFields: any[] = [];
       
       // First pass: create field maps and identify parent fields
       sortedFields.forEach((field: any) => {
+        // For schema generation, use original field names (without prefix processing)
+        let originalFieldName = field.fieldName;
+        
+        // If this field has a parent, use the original base name for schema structure
+        if (field.parentTempId) {
+          // Extract the base field name if it's been processed (remove parent prefix)
+          const parentField = section.fields.find((f: any) => f.tempId === field.parentTempId);
+          if (parentField && field.fieldName.startsWith(`${parentField.fieldName}_`)) {
+            originalFieldName = field.fieldName.replace(`${parentField.fieldName}_`, '');
+          }
+        }
+        
         const fieldObj = {
-          name: field.fieldName,
+          name: originalFieldName,
           tempId: field.tempId,
           parentTempId: field.parentTempId,
           type: this.getSchemaTypeFromFieldType(field.fieldType),
@@ -1150,11 +1236,11 @@ export class TemplateService {
           children: [] as any[]
         };
         
-        // Map by both tempId (if exists) and field name
+        // Map by both tempId (if exists) and original field name
         if (field.tempId) {
           fieldByTempId.set(field.tempId, fieldObj);
         }
-        fieldByName.set(field.fieldName, fieldObj);
+        fieldByName.set(originalFieldName, fieldObj);
         
         // If no parent, it's a root field
         if (!field.parentTempId) {
@@ -1166,7 +1252,14 @@ export class TemplateService {
       sortedFields.forEach((field: any) => {
         if (field.parentTempId) {
           const parentField = fieldByTempId.get(field.parentTempId);
-          const currentField = fieldByName.get(field.fieldName);
+          
+          // Get original field name for schema
+          let originalFieldName = field.fieldName;
+          if (parentField && field.fieldName.startsWith(`${parentField.name}_`)) {
+            originalFieldName = field.fieldName.replace(`${parentField.name}_`, '');
+          }
+          
+          const currentField = fieldByName.get(originalFieldName);
           
           if (parentField && currentField) {
             parentField.children.push(currentField);
@@ -1326,6 +1419,9 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections);
 
+      // Process sections to ensure unique field names within each section
+      const processedSections = this.processFieldNamesForUniqueness(templateVersionData.sections);
+
       // Create new template version with all nested data
       const result = await this.templateRepository.createTemplateVersion(
         templateVersionData.originalTemplateId,
@@ -1334,7 +1430,7 @@ export class TemplateService {
           description: templateVersionData.description,
           templateContent: templateVersionData.templateContent,
           templateConfig: templateVersionData.templateConfig,
-          sections: templateVersionData.sections,
+          sections: processedSections,
           status: status
         },
         userContext.userId,
@@ -1476,6 +1572,37 @@ export class TemplateService {
       }
       throw new Error(`Failed to generate template ZIP: ${error.message}`)
     }
+  }
+
+  /**
+   * Process field names to ensure uniqueness within each section
+   * Child fields of PART parents get prefixed with parent identifier
+   */
+  private processFieldNamesForUniqueness(sections: any[]): any[] {
+    return sections.map(section => {
+      const processedFields = section.fields.map((field: any) => {
+        // If field has a parent (is a child of a PART), prefix the fieldName with parent identifier
+        if (field.parentTempId) {
+          // Find the parent field to get its fieldName
+          const parentField = section.fields.find((f: any) => f.tempId === field.parentTempId);
+          if (parentField) {
+            // Create unique field name by combining parent fieldName with child fieldName
+            const uniqueFieldName = `${parentField.fieldName}_${field.fieldName}`;
+            return {
+              ...field,
+              fieldName: uniqueFieldName
+            };
+          }
+        }
+        // Return field unchanged if no parent or parent not found
+        return field;
+      });
+
+      return {
+        ...section,
+        fields: processedFields
+      };
+    });
   }
 
   /**
