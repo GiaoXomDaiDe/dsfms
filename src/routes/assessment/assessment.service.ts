@@ -2,6 +2,10 @@ import { Injectable, ForbiddenException, NotFoundException, BadRequestException 
 import { CourseStatus, SubjectStatus, AssessmentResult } from '@prisma/client'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
+import * as fs from 'fs'
+import * as path from 'path'
+import sizeOf from 'image-size'
+const ImageModule = require('docxtemplater-image-module-free')
 import { AssessmentRepo } from './assessment.repo'
 import { NodemailerService } from '../email/nodemailer.service'
 import { MediaService } from '../media/media.service'
@@ -1632,6 +1636,41 @@ export class AssessmentService {
   }
 
   /**
+   * Download image from URL (HTTP/HTTPS or S3)
+   */
+  private async downloadImageFromUrl(url: string): Promise<Buffer> {
+    try {
+      if (url.includes('amazonaws.com') || url.includes('s3.')) {
+        // S3 URL - use S3 service
+        const urlParts = new URL(url)
+        const key = urlParts.pathname.substring(1) // Remove leading slash
+        
+        // Download image from S3
+        const fileStream = await this.s3Service.getObject(key)
+        
+        // Convert stream to buffer
+        const chunks: Buffer[] = []
+        return new Promise((resolve, reject) => {
+          fileStream.on('data', (chunk) => chunks.push(chunk))
+          fileStream.on('end', () => resolve(Buffer.concat(chunks)))
+          fileStream.on('error', reject)
+        })
+      } else {
+        // Regular HTTP/HTTPS URL - use fetch
+        const response = await fetch(url)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const arrayBuffer = await response.arrayBuffer()
+        return Buffer.from(arrayBuffer)
+      }
+    } catch (error) {
+      console.error('Failed to download image from URL:', error)
+      return Buffer.alloc(0) // Return empty buffer on error
+    }
+  }
+
+  /**
    * Build assessment data object from assessment values using template schema as base structure
    * Use parent context to handle fields with duplicate names in different parent sections
    */
@@ -1815,6 +1854,13 @@ export class AssessmentService {
       return isNaN(num) ? null : num
     }
     
+    // Handle image field types - keep original value (URL, base64, or file path)
+    if (fieldType === 'SIGNATURE_IMG' || fieldType === 'SIGNATURE_DRAW' || fieldType === 'IMAGE') {
+      // For image fields, return the value as-is (URL, base64, or file path)
+      // The image module will handle the actual image loading
+      return value
+    }
+    
     // For other field types, do NOT auto-convert boolean or number
     // Only convert to actual data types when field type explicitly requires it
     // This prevents "true"/"false" strings from being converted to boolean unintentionally
@@ -1824,7 +1870,7 @@ export class AssessmentService {
   }
 
   /**
-   * Render DOCX template with data using docxtemplater
+   * Render DOCX template with data using docxtemplater with image support
    * Following official documentation: https://docxtemplater.com/docs/get-started-node/
    */
   private async renderDocxTemplate(templateBuffer: Buffer, data: Record<string, any>): Promise<Buffer> {
@@ -1838,8 +1884,74 @@ export class AssessmentService {
         return ""
       }
       
-      // Parse the template - this throws an error if template is invalid
+      // Configure Image Module for handling images (signatures, etc.)
+      const imageOpts = {
+        centered: false, // Don't center images by default
+        fileType: 'docx',
+        
+        // Function to get image data from tag value
+        getImage: async (tagValue: string, tagName: string) => {
+          try {
+            // Handle different image sources
+            if (tagValue.startsWith('http://') || tagValue.startsWith('https://')) {
+              // Download image from URL (S3 or HTTP)
+              console.log(`Downloading image from URL: ${tagValue}`)
+              return await this.downloadImageFromUrl(tagValue)
+            } else if (tagValue.startsWith('data:image/')) {
+              // Handle base64 encoded images
+              const base64Data = tagValue.split(',')[1]
+              return Buffer.from(base64Data, 'base64')
+            } else {
+              // Handle file paths (relative or absolute)
+              const imagePath = path.isAbsolute(tagValue) ? tagValue : path.resolve(tagValue)
+              if (fs.existsSync(imagePath)) {
+                return fs.readFileSync(imagePath)
+              } else {
+                console.warn(`Image file not found: ${imagePath}`)
+                return Buffer.alloc(0)
+              }
+            }
+          } catch (error) {
+            console.error(`Error loading image ${tagValue}:`, error)
+            return Buffer.alloc(0)
+          }
+        },
+        
+        // Function to get image size
+        getSize: (img: Buffer, tagValue: string, tagName: string) => {
+          try {
+            if (img.length === 0) {
+              // Empty image, return minimal size
+              return [1, 1]
+            }
+            
+            // Get dimensions from image buffer
+            const dimensions = sizeOf(img)
+            if (dimensions.width && dimensions.height) {
+              // Resize if image is too large (max 300px width)
+              const maxWidth = 300
+              if (dimensions.width > maxWidth) {
+                const ratio = maxWidth / dimensions.width
+                return [maxWidth, Math.round(dimensions.height * ratio)]
+              }
+              return [dimensions.width, dimensions.height]
+            } else {
+              // Fallback size if dimensions can't be determined
+              console.warn(`Could not determine image dimensions for ${tagValue}`)
+              return [150, 150]
+            }
+          } catch (error) {
+            console.error(`Error getting image size for ${tagValue}:`, error)
+            return [150, 150] // Fallback size
+          }
+        }
+      }
+      
+      const imageModule = new ImageModule(imageOpts)
+      
+      // Parse the template with image module support
       const doc = new Docxtemplater(zip, {
+        modules: [imageModule], // Add image module
         paragraphLoop: true,
         linebreaks: true,
         nullGetter: nullGetter
