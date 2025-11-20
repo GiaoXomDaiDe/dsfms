@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
+import { AssessmentResult, AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
@@ -1655,18 +1655,14 @@ export class AssessmentRepo {
 
         // For TRAINER: New logic - can assess any section with matching role
         let canAssessed: boolean | undefined = undefined
-        let canUpdated: boolean | undefined = undefined
         
         if (userMainRole === 'TRAINER') {
           const sectionNotAssessed = item.section.assessedById === null
           const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
           const sectionAssessedByCurrentUser = item.section.assessedById === userId
           
-          // canAssessed: true if section is not assessed yet and requires assessment
-          canAssessed = sectionNotAssessed && sectionRequiredAssessment
-          
-          // canUpdated: true if section was assessed by current user (they can update their own work)
-          canUpdated = sectionAssessedByCurrentUser
+          // canAssessed: true if section is not assessed yet OR already assessed by current user
+          canAssessed = sectionRequiredAssessment && (sectionNotAssessed || sectionAssessedByCurrentUser)
         }
 
         const baseSection = {
@@ -1693,12 +1689,11 @@ export class AssessmentRepo {
         }
 
         // Add role-specific fields
-        if (userMainRole === 'TRAINER' && canAssessed !== undefined && canUpdated !== undefined) {
+        if (userMainRole === 'TRAINER' && canAssessed !== undefined) {
           return {
             roleRequirement: item.roleRequirement,
             ...baseSection,
-            canAssessed: canAssessed,
-            canUpdated: canUpdated
+            canAssessed: canAssessed
           }
         }
 
@@ -2147,41 +2142,93 @@ export class AssessmentRepo {
       })
     })
 
-    // Map template fields with their corresponding assessment values
-    const fieldsWithValues = assessmentSection.templateSection.fields.map(templateField => {
-      const existingValue = assessmentValueMap.get(templateField.id)
-      
-      // Check if this is a system field and auto-populate if no value exists
-      let finalAnswerValue = existingValue?.answerValue
-      if (!finalAnswerValue) {
-        // Check for SIGNATURE_IMG field type and auto-populate with user's signatureImageUrl
-        if (templateField.fieldType === 'SIGNATURE_IMG' && currentUser?.signatureImageUrl) {
-          finalAnswerValue = currentUser.signatureImageUrl
-        } else {
-          const systemValue = getSystemFieldValue(templateField.fieldName)
-          if (systemValue) {
-            finalAnswerValue = systemValue
+    // Handle FINAL_SCORE_NUM and FINAL_SCORE_TEXT logic
+    // Check what types of final score fields exist in current section
+    const currentSectionFinalScoreNum = assessmentSection.templateSection.fields.find(f => f.fieldType === 'FINAL_SCORE_NUM')
+    const currentSectionFinalScoreText = assessmentSection.templateSection.fields.find(f => f.fieldType === 'FINAL_SCORE_TEXT')
+    
+    let shouldHideFinalScoreText = false
+    
+    // Case 2: If current section has only FINAL_SCORE_TEXT, check if any other section has FINAL_SCORE_NUM
+    if (!currentSectionFinalScoreNum && currentSectionFinalScoreText) {
+      // Get all template sections in this assessment template and check their fields
+      const allTemplateSections = await this.prisma.templateSection.findMany({
+        where: {
+          templateId: assessmentSection.assessmentForm.template.id
+        },
+        include: {
+          fields: {
+            where: {
+              fieldType: 'FINAL_SCORE_NUM'
+            },
+            select: {
+              id: true
+            }
           }
         }
+      })
+      
+      // Check if any section has FINAL_SCORE_NUM fields
+      const hasFinalScoreNum = allTemplateSections.some(section => section.fields.length > 0)
+      
+      // If any section has FINAL_SCORE_NUM, hide FINAL_SCORE_TEXT from current section
+      if (hasFinalScoreNum) {
+        shouldHideFinalScoreText = true
       }
+    }
+    
+    // Case 3: If current section has both, hide FINAL_SCORE_TEXT (only show FINAL_SCORE_NUM)
+    if (currentSectionFinalScoreNum && currentSectionFinalScoreText) {
+      shouldHideFinalScoreText = true
+    }
 
-      return {
-        templateField: {
-          id: templateField.id,
-          label: templateField.label,
-          fieldName: templateField.fieldName,
-          fieldType: templateField.fieldType,
-          roleRequired: templateField.roleRequired,
-          options: templateField.options,
-          displayOrder: templateField.displayOrder,
-          parentId: templateField.parentId
-        },
-        assessmentValue: {
-          id: existingValue?.id || '',
-          answerValue: finalAnswerValue
+    // Map template fields with their corresponding assessment values
+    const fieldsWithValues = assessmentSection.templateSection.fields
+      .filter(templateField => {
+        // Filter out FINAL_SCORE_TEXT based on the logic above
+        if (templateField.fieldType === 'FINAL_SCORE_TEXT' && shouldHideFinalScoreText) {
+          return false
         }
-      }
-    })
+        return true
+      })
+      .map(templateField => {
+        const existingValue = assessmentValueMap.get(templateField.id)
+        
+        // Check if this is a system field and auto-populate if no value exists
+        let finalAnswerValue = existingValue?.answerValue
+        if (!finalAnswerValue) {
+          // Check for SIGNATURE_IMG field type and auto-populate with user's signatureImageUrl
+          if (templateField.fieldType === 'SIGNATURE_IMG' && currentUser?.signatureImageUrl) {
+            finalAnswerValue = currentUser.signatureImageUrl
+          } else {
+            const systemValue = getSystemFieldValue(templateField.fieldName)
+            if (systemValue) {
+              finalAnswerValue = systemValue
+            }
+          }
+        }
+
+        return {
+          templateField: {
+            id: templateField.id,
+            label: templateField.label,
+            fieldName: templateField.fieldName,
+            fieldType: templateField.fieldType,
+            roleRequired: templateField.roleRequired,
+            options: templateField.options,
+            displayOrder: templateField.displayOrder,
+            parentId: templateField.parentId
+          },
+          assessmentValue: {
+            id: existingValue?.id || '',
+            answerValue: finalAnswerValue
+          }
+        }
+      })
+
+    // Determine if current user can update this section
+    // canUpdated: true if section was assessed by current user, false otherwise
+    const canUpdated = assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
 
     return {
       success: true,
@@ -2191,6 +2238,7 @@ export class AssessmentRepo {
         assessmentFormId: assessmentSection.assessmentFormId,
         templateSectionId: assessmentSection.templateSectionId,
         status: assessmentSection.status,
+        canUpdated: canUpdated,
         templateSection: {
           id: assessmentSection.templateSection.id,
           label: assessmentSection.templateSection.label,
@@ -2601,18 +2649,144 @@ export class AssessmentRepo {
   ) {
     const now = new Date()
 
-    return await this.prisma.assessmentForm.update({
-      where: { 
-        id: assessmentId,
-        status: AssessmentStatus.SUBMITTED
-      },
-      data: {
-        status: action === 'APPROVED' ? AssessmentStatus.APPROVED : AssessmentStatus.REJECTED,
-        comment: comment || null,
-        approvedById: action === 'APPROVED' ? approvedById : null,
-        approvedAt: action === 'APPROVED' ? now : null,
-        updatedAt: now
+    return await this.prisma.$transaction(async (tx) => {
+      // Get assessment with template and related course/subject data
+      const assessment = await tx.assessmentForm.findUnique({
+        where: { id: assessmentId },
+        include: {
+          template: {
+            select: { id: true }
+          },
+          course: {
+            select: { 
+              id: true,
+              passScore: true
+            }
+          },
+          subject: {
+            select: { 
+              id: true,
+              passScore: true
+            }
+          },
+          sections: {
+            include: {
+              values: {
+                include: {
+                  templateField: {
+                    select: {
+                      id: true,
+                      fieldType: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!assessment) {
+        throw new Error('Assessment not found')
       }
+
+      let resultScore: number | null = null
+      let resultText: AssessmentResult = AssessmentResult.NOT_APPLICABLE
+
+      // Only process final scores for APPROVED assessments
+      if (action === 'APPROVED') {
+        // Get pass score from course or subject
+        let passScore: number | null = null
+        if (assessment.courseId && assessment.subjectId === null) {
+          // Course scope
+          passScore = assessment.course?.passScore || null
+        } else if (assessment.subjectId) {
+          // Subject scope
+          passScore = assessment.subject?.passScore || null
+        }
+
+        // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT values across all sections
+        let finalScoreNumValue: number | null = null
+        let finalScoreTextFieldId: string | null = null
+
+        for (const section of assessment.sections) {
+          for (const value of section.values) {
+            if (value.templateField.fieldType === 'FINAL_SCORE_NUM' && value.answerValue) {
+              const numValue = parseFloat(value.answerValue)
+              if (!isNaN(numValue)) {
+                finalScoreNumValue = numValue
+              }
+            } else if (value.templateField.fieldType === 'FINAL_SCORE_TEXT') {
+              finalScoreTextFieldId = value.templateField.id
+            }
+          }
+        }
+
+        // Logic for setting resultScore and resultText
+        if (finalScoreNumValue !== null) {
+          // Case 1: Has FINAL_SCORE_NUM
+          resultScore = finalScoreNumValue
+
+          // If there's also a FINAL_SCORE_TEXT field, auto-fill it based on pass/fail logic
+          if (finalScoreTextFieldId && passScore !== null) {
+            const isPass = finalScoreNumValue >= passScore
+            resultText = isPass ? AssessmentResult.PASS : AssessmentResult.FAIL
+
+            // Update the FINAL_SCORE_TEXT field in the database
+            await tx.assessmentValue.updateMany({
+              where: {
+                templateFieldId: finalScoreTextFieldId,
+                assessmentSection: {
+                  assessmentFormId: assessmentId
+                }
+              },
+              data: {
+                answerValue: resultText
+              }
+            })
+          } else {
+            // No FINAL_SCORE_TEXT field or no passScore
+            resultText = AssessmentResult.NOT_APPLICABLE
+          }
+        } else {
+          // Case 2: Only FINAL_SCORE_TEXT (no FINAL_SCORE_NUM)
+          resultScore = null
+
+          // Find the FINAL_SCORE_TEXT value
+          for (const section of assessment.sections) {
+            for (const value of section.values) {
+              if (value.templateField.fieldType === 'FINAL_SCORE_TEXT' && value.answerValue) {
+                const textValue = value.answerValue.toUpperCase()
+                if (textValue === 'PASS') {
+                  resultText = AssessmentResult.PASS
+                } else if (textValue === 'FAIL') {
+                  resultText = AssessmentResult.FAIL
+                } else if (textValue === 'NOT_APPLICABLE') {
+                  resultText = AssessmentResult.NOT_APPLICABLE
+                }
+                break
+              }
+            }
+          }
+        }
+      }
+
+      // Update assessment form
+      return await tx.assessmentForm.update({
+        where: { 
+          id: assessmentId,
+          status: AssessmentStatus.SUBMITTED
+        },
+        data: {
+          status: action === 'APPROVED' ? AssessmentStatus.APPROVED : AssessmentStatus.REJECTED,
+          comment: comment || null,
+          approvedById: action === 'APPROVED' ? approvedById : null,
+          approvedAt: action === 'APPROVED' ? now : null,
+          resultScore: action === 'APPROVED' ? resultScore : null,
+          resultText: action === 'APPROVED' ? resultText : null,
+          updatedAt: now
+        }
+      })
     })
   }
 
