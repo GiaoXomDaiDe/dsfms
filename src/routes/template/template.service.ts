@@ -568,17 +568,10 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
-      // Process sections to ensure unique field names within each section
-      const processedSections = this.processFieldNamesForUniqueness(templateData.sections);
-      const templateDataWithProcessedSections = {
-        ...templateDataWithStatus,
-        sections: processedSections
-      };
-
       // Create template with all nested data
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
-        templateDataWithProcessedSections,
+        templateDataWithStatus,
         userContext.userId,
         templateSchema
       )
@@ -601,7 +594,7 @@ export class TemplateService {
       // Handle unique constraint violations
       if (error.message && error.message.includes('Unique constraint failed')) {
         if (error.message.includes('sectionId') && error.message.includes('fieldName')) {
-          throw new Error(`Duplicate field name detected within the same section. Please ensure all field names are unique within each section.`);
+          throw new Error(`Duplicate field name detected within the same section and parent. Please ensure field names are unique within the same parent group.`);
         }
       }
       
@@ -1010,17 +1003,10 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
-      // Process sections to ensure unique field names within each section
-      const processedSections = this.processFieldNamesForUniqueness(templateData.sections);
-      const templateDataWithProcessedSections = {
-        ...templateData,
-        sections: processedSections
-      };
-
       // Update rejected template (recreate with preserved metadata)
       const result = await this.templateRepository.updateRejectedTemplate(
         templateId,
-        templateDataWithProcessedSections,
+        templateData,
         userContext.userId,
         templateSchema
       )
@@ -1120,17 +1106,10 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
 
-      // Process sections to ensure unique field names within each section
-      const processedSections = this.processFieldNamesForUniqueness(templateDataWithStatus.sections);
-      const templateDataWithProcessedSections = {
-        ...templateDataWithStatus,
-        sections: processedSections
-      };
-
       // Update draft template (recreate with preserved metadata)
       const result = await this.templateRepository.updateDraftTemplate(
         templateId,
-        templateDataWithProcessedSections,
+        templateDataWithStatus,
         userContext.userId,
         templateSchema
       )
@@ -1419,9 +1398,6 @@ export class TemplateService {
       // Generate nested template schema from sections and fields
       const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections);
 
-      // Process sections to ensure unique field names within each section
-      const processedSections = this.processFieldNamesForUniqueness(templateVersionData.sections);
-
       // Create new template version with all nested data
       const result = await this.templateRepository.createTemplateVersion(
         templateVersionData.originalTemplateId,
@@ -1430,7 +1406,7 @@ export class TemplateService {
           description: templateVersionData.description,
           templateContent: templateVersionData.templateContent,
           templateConfig: templateVersionData.templateConfig,
-          sections: processedSections,
+          sections: templateVersionData.sections,
           status: status
         },
         userContext.userId,
@@ -1572,37 +1548,6 @@ export class TemplateService {
       }
       throw new Error(`Failed to generate template ZIP: ${error.message}`)
     }
-  }
-
-  /**
-   * Process field names to ensure uniqueness within each section
-   * Child fields of PART parents get prefixed with parent identifier
-   */
-  private processFieldNamesForUniqueness(sections: any[]): any[] {
-    return sections.map(section => {
-      const processedFields = section.fields.map((field: any) => {
-        // If field has a parent (is a child of a PART), prefix the fieldName with parent identifier
-        if (field.parentTempId) {
-          // Find the parent field to get its fieldName
-          const parentField = section.fields.find((f: any) => f.tempId === field.parentTempId);
-          if (parentField) {
-            // Create unique field name by combining parent fieldName with child fieldName
-            const uniqueFieldName = `${parentField.fieldName}_${field.fieldName}`;
-            return {
-              ...field,
-              fieldName: uniqueFieldName
-            };
-          }
-        }
-        // Return field unchanged if no parent or parent not found
-        return field;
-      });
-
-      return {
-        ...section,
-        fields: processedFields
-      };
-    });
   }
 
   /**
