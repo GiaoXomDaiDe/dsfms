@@ -1848,7 +1848,7 @@ export class AssessmentService {
       // Render the document with data
       doc.render(data)
       
-      // Get the output document as Node.js buffer (recommended method since v3.62.0)
+      // Get the output document as Node.js buffer
       const buffer = doc.toBuffer()
       
       return buffer

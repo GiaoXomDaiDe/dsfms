@@ -429,8 +429,7 @@ export const AssessmentSectionDetailSchema = z.object({
     eid: z.string()
   }).nullable(),
   // Optional field for TRAINER users
-  canAssessed: z.boolean().optional(),
-  canUpdated: z.boolean().optional()
+  canAssessed: z.boolean().optional()
 })
 
 export type AssessmentSectionDetailType = z.infer<typeof AssessmentSectionDetailSchema>
@@ -510,6 +509,7 @@ export const GetAssessmentSectionFieldsResSchema = z.object({
     assessmentFormId: z.string().uuid(),
     templateSectionId: z.string().uuid(),
     status: z.nativeEnum(AssessmentSectionStatus),
+    canUpdated: z.boolean(),
     templateSection: z.object({
       id: z.string().uuid(),
       label: z.string(),
