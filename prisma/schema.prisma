@@ -490,7 +490,7 @@ model TemplateField {
   updatedBy        User?             @relation("TemplateFieldUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   assessmentValues AssessmentValue[]
 
-  @@unique([sectionId, fieldName])
+  @@unique([sectionId, fieldName, parentId])
   @@index([sectionId])
   @@index([parentId])
   @@index([displayOrder])
