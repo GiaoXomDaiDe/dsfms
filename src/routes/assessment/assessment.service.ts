@@ -1633,32 +1633,79 @@ export class AssessmentService {
 
   /**
    * Build assessment data object from assessment values using template schema as base structure
+   * Use parent context to handle fields with duplicate names in different parent sections
    */
   private async buildAssessmentDataFromValues(
     assessmentId: string, 
     templateSchema: Record<string, any>
   ): Promise<Record<string, any>> {
-    // Get all assessment values with field names
+    // Get all assessment values with field names and parent hierarchy for precise mapping
     const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
     
-    // Create a map of fieldName -> parsed value for quick lookup
-    const valueMap = new Map<string, any>()
+    // Create field path mapping using parent hierarchy to handle duplicate field names
+    const pathValueMap = new Map<string, any>()
+    
     assessmentValues.forEach(assessmentValue => {
       if (assessmentValue.templateField && assessmentValue.templateField.fieldName) {
         const parsedValue = this.parseAssessmentValue(
           assessmentValue.answerValue, 
           assessmentValue.templateField.fieldType
         )
-        valueMap.set(assessmentValue.templateField.fieldName, parsedValue)
+        
+        // Build field path from parent hierarchy to ensure uniqueness
+        // e.g., "Apk_Grade.grade1", "Com_Grade.grade1", "root.isPf"
+        const fieldPath = this.buildFieldPath(assessmentValue.templateField)
+        pathValueMap.set(fieldPath, parsedValue)
+        
+        // Also set simple fieldName for root-level fields (backward compatibility)
+        if (!assessmentValue.templateField.parentId) {
+          pathValueMap.set(assessmentValue.templateField.fieldName, parsedValue)
+        }
       }
     })
     
-    // Use template schema as base structure and replace values based on fieldName
-    return this.populateSchemaWithAssessmentValues(templateSchema, valueMap)
+    // Use templateSchema as base and populate with actual values using path mapping
+    return this.populateSchemaWithPathValues(templateSchema, pathValueMap)
+  }
+
+  /**
+   * Build field path from parent hierarchy to handle duplicate field names
+   * Examples: "Apk_Grade.grade1", "Com_Grade.grade2", "isPf" (root level)
+   */
+  private buildFieldPath(templateField: any): string {
+    const pathSegments: string[] = []
+    
+    // Build path from current field up to root
+    let currentField = templateField
+    while (currentField) {
+      pathSegments.unshift(currentField.fieldName)
+      currentField = currentField.parent
+    }
+    
+    // Return full path (e.g., "Apk_Grade.grade1") or just fieldName for root level
+    return pathSegments.length > 1 ? pathSegments.join('.') : pathSegments[0]
+  }
+
+  /**
+   * Populate template schema with assessment values based on path matching
+   * The templateSchema already has the correct nested structure, we just fill in the values
+   */
+  private populateSchemaWithPathValues(
+    schema: Record<string, any>, 
+    pathValueMap: Map<string, any>
+  ): Record<string, any> {
+    // Deep clone the template schema to avoid modifying the original
+    const result = JSON.parse(JSON.stringify(schema))
+    
+    // Recursively populate the schema with assessment values using path context
+    this.populateObjectWithPathValues(result, pathValueMap, '')
+    
+    return result
   }
 
   /**
    * Populate template schema with assessment values based on fieldName matching
+   * The templateSchema already has the correct nested structure, we just fill in the values
    */
   private populateSchemaWithAssessmentValues(
     schema: Record<string, any>, 
@@ -1674,21 +1721,73 @@ export class AssessmentService {
   }
 
   /**
-   * Recursively populate object with values from valueMap based on fieldName
+   * Recursively populate object with values using path-based mapping
+   * Handle nested structures like Apk_Grade.grade1, Com_Grade.grade1 correctly
+   */
+  private populateObjectWithPathValues(obj: any, pathValueMap: Map<string, any>, currentPath: string): void {
+    if (Array.isArray(obj)) {
+      // Handle arrays - recurse into each element
+      obj.forEach(item => {
+        if (typeof item === 'object' && item !== null) {
+          this.populateObjectWithPathValues(item, pathValueMap, currentPath)
+        }
+      })
+    } else if (typeof obj === 'object' && obj !== null) {
+      // Handle objects
+      for (const [key, value] of Object.entries(obj)) {
+        const newPath = currentPath ? `${currentPath}.${key}` : key
+        
+        if (Array.isArray(value)) {
+          // Array property - recurse into array
+          this.populateObjectWithPathValues(value, pathValueMap, newPath)
+        } else if (typeof value === 'object' && value !== null) {
+          // Nested object - recurse with updated path
+          this.populateObjectWithPathValues(value, pathValueMap, newPath)
+        } else {
+          // Leaf field - check for value using full path first, then simple key
+          if (pathValueMap.has(newPath)) {
+            // Found exact path match (e.g., "Apk_Grade.grade1")
+            obj[key] = pathValueMap.get(newPath)
+          } else if (pathValueMap.has(key)) {
+            // Fallback to simple fieldName for root-level fields
+            obj[key] = pathValueMap.get(key)
+          }
+          // If no value found, keep the default value from templateSchema
+        }
+      }
+    }
+  }
+
+  /**
+   * Recursively populate object with values from valueMap based on fieldName (legacy method)
+   * Handle arrays and nested objects properly for PART structures
    */
   private populateObjectWithValues(obj: any, valueMap: Map<string, any>): void {
-    for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        // Nested object - recurse
-        this.populateObjectWithValues(value, valueMap)
-      } else {
-        // Leaf field - check if we have a value for this fieldName
-        if (valueMap.has(key)) {
-          const assessmentValue = valueMap.get(key)
-          // Explicitly set the value, even if it's null
-          obj[key] = assessmentValue
+    if (Array.isArray(obj)) {
+      // Handle arrays - recurse into each element
+      obj.forEach(item => {
+        if (typeof item === 'object' && item !== null) {
+          this.populateObjectWithValues(item, valueMap)
         }
-        // If no value found, keep the default value from schema
+      })
+    } else if (typeof obj === 'object' && obj !== null) {
+      // Handle objects
+      for (const [key, value] of Object.entries(obj)) {
+        if (Array.isArray(value)) {
+          // Array property - recurse into array
+          this.populateObjectWithValues(value, valueMap)
+        } else if (typeof value === 'object' && value !== null) {
+          // Nested object - recurse
+          this.populateObjectWithValues(value, valueMap)
+        } else {
+          // Leaf field - check if we have a value for this fieldName
+          if (valueMap.has(key)) {
+            const assessmentValue = valueMap.get(key)
+            // Set the actual assessment value
+            obj[key] = assessmentValue
+          }
+          // If no value found, keep the default value from templateSchema
+        }
       }
     }
   }
@@ -1706,33 +1805,21 @@ export class AssessmentService {
     // If value is empty string, also return null
     if (value === '') return null
     
-    // Handle specific field types first
-    if (fieldType === 'TOGGLE') {
+    // Handle specific field types first - ONLY convert when field type is explicit
+    if (fieldType === 'TOGGLE' || fieldType === 'SECTION_CONTROL_TOGGLE') {
       return value.toLowerCase() === 'true'
     }
     
-    if (fieldType === 'NUMBER') {
+    if (fieldType === 'NUMBER' || fieldType === 'FINAL_SCORE_NUM') {
       const num = Number(value)
       return isNaN(num) ? null : num
     }
     
-    // Auto-detect data types for other cases
-    // Check for boolean values
-    if (value.toLowerCase() === 'true') return true
-    if (value.toLowerCase() === 'false') return false
+    // For other field types, do NOT auto-convert boolean or number
+    // Only convert to actual data types when field type explicitly requires it
+    // This prevents "true"/"false" strings from being converted to boolean unintentionally
     
-    // Check for numeric values (integer or decimal, including negative numbers)
-    if (/^-?\d+$/.test(value)) {
-      // Integer (positive or negative)
-      return parseInt(value, 10)
-    }
-    
-    if (/^-?\d+\.\d+$/.test(value)) {
-      // Decimal number (positive or negative)
-      return parseFloat(value)
-    }
-    
-    // Return as string for everything else
+    // Return as string for all other field types (TEXT, VALUE_LIST, etc.)
     return value
   }
 
