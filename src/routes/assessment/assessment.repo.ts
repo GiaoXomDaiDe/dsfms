@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
+import { AssessmentResult, AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
@@ -2649,18 +2649,144 @@ export class AssessmentRepo {
   ) {
     const now = new Date()
 
-    return await this.prisma.assessmentForm.update({
-      where: { 
-        id: assessmentId,
-        status: AssessmentStatus.SUBMITTED
-      },
-      data: {
-        status: action === 'APPROVED' ? AssessmentStatus.APPROVED : AssessmentStatus.REJECTED,
-        comment: comment || null,
-        approvedById: action === 'APPROVED' ? approvedById : null,
-        approvedAt: action === 'APPROVED' ? now : null,
-        updatedAt: now
+    return await this.prisma.$transaction(async (tx) => {
+      // Get assessment with template and related course/subject data
+      const assessment = await tx.assessmentForm.findUnique({
+        where: { id: assessmentId },
+        include: {
+          template: {
+            select: { id: true }
+          },
+          course: {
+            select: { 
+              id: true,
+              passScore: true
+            }
+          },
+          subject: {
+            select: { 
+              id: true,
+              passScore: true
+            }
+          },
+          sections: {
+            include: {
+              values: {
+                include: {
+                  templateField: {
+                    select: {
+                      id: true,
+                      fieldType: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!assessment) {
+        throw new Error('Assessment not found')
       }
+
+      let resultScore: number | null = null
+      let resultText: AssessmentResult = AssessmentResult.NOT_APPLICABLE
+
+      // Only process final scores for APPROVED assessments
+      if (action === 'APPROVED') {
+        // Get pass score from course or subject
+        let passScore: number | null = null
+        if (assessment.courseId && assessment.subjectId === null) {
+          // Course scope
+          passScore = assessment.course?.passScore || null
+        } else if (assessment.subjectId) {
+          // Subject scope
+          passScore = assessment.subject?.passScore || null
+        }
+
+        // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT values across all sections
+        let finalScoreNumValue: number | null = null
+        let finalScoreTextFieldId: string | null = null
+
+        for (const section of assessment.sections) {
+          for (const value of section.values) {
+            if (value.templateField.fieldType === 'FINAL_SCORE_NUM' && value.answerValue) {
+              const numValue = parseFloat(value.answerValue)
+              if (!isNaN(numValue)) {
+                finalScoreNumValue = numValue
+              }
+            } else if (value.templateField.fieldType === 'FINAL_SCORE_TEXT') {
+              finalScoreTextFieldId = value.templateField.id
+            }
+          }
+        }
+
+        // Logic for setting resultScore and resultText
+        if (finalScoreNumValue !== null) {
+          // Case 1: Has FINAL_SCORE_NUM
+          resultScore = finalScoreNumValue
+
+          // If there's also a FINAL_SCORE_TEXT field, auto-fill it based on pass/fail logic
+          if (finalScoreTextFieldId && passScore !== null) {
+            const isPass = finalScoreNumValue >= passScore
+            resultText = isPass ? AssessmentResult.PASS : AssessmentResult.FAIL
+
+            // Update the FINAL_SCORE_TEXT field in the database
+            await tx.assessmentValue.updateMany({
+              where: {
+                templateFieldId: finalScoreTextFieldId,
+                assessmentSection: {
+                  assessmentFormId: assessmentId
+                }
+              },
+              data: {
+                answerValue: resultText
+              }
+            })
+          } else {
+            // No FINAL_SCORE_TEXT field or no passScore
+            resultText = AssessmentResult.NOT_APPLICABLE
+          }
+        } else {
+          // Case 2: Only FINAL_SCORE_TEXT (no FINAL_SCORE_NUM)
+          resultScore = null
+
+          // Find the FINAL_SCORE_TEXT value
+          for (const section of assessment.sections) {
+            for (const value of section.values) {
+              if (value.templateField.fieldType === 'FINAL_SCORE_TEXT' && value.answerValue) {
+                const textValue = value.answerValue.toUpperCase()
+                if (textValue === 'PASS') {
+                  resultText = AssessmentResult.PASS
+                } else if (textValue === 'FAIL') {
+                  resultText = AssessmentResult.FAIL
+                } else if (textValue === 'NOT_APPLICABLE') {
+                  resultText = AssessmentResult.NOT_APPLICABLE
+                }
+                break
+              }
+            }
+          }
+        }
+      }
+
+      // Update assessment form
+      return await tx.assessmentForm.update({
+        where: { 
+          id: assessmentId,
+          status: AssessmentStatus.SUBMITTED
+        },
+        data: {
+          status: action === 'APPROVED' ? AssessmentStatus.APPROVED : AssessmentStatus.REJECTED,
+          comment: comment || null,
+          approvedById: action === 'APPROVED' ? approvedById : null,
+          approvedAt: action === 'APPROVED' ? now : null,
+          resultScore: action === 'APPROVED' ? resultScore : null,
+          resultText: action === 'APPROVED' ? resultText : null,
+          updatedAt: now
+        }
+      })
     })
   }
 
