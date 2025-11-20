@@ -1,4 +1,4 @@
-# 🛩️ DSFMS - Digital Skills and Flight Management System
+# DSFMS - Digital Skills and Flight Management System
 
 <p align="center">
   <img src="https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white" alt="NestJS" />
@@ -18,18 +18,18 @@
 
 ---
 
-## 📖 Description
+## Description
 
 **DSFMS (Digital Skills and Flight Management System)** is a robust backend API system designed specifically for aviation training institutions. The system provides comprehensive assessment management capabilities, including:
 
-- 🎯 **Assessment Management** - Create, manage, and evaluate trainee assessments
-- 📋 **Template System** - Dynamic form templates with nested field structures
-- 👥 **User Management** - Role-based access control for trainers, trainees, and department heads
-- 📊 **Reporting & Analytics** - Comprehensive assessment reports and performance tracking
-- 🏢 **Multi-Department Support** - Manage multiple departments, courses, and subjects
-- 🔐 **Security & Authentication** - JWT-based authentication with role-based permissions
+-  **Assessment Management** - Create, manage, and evaluate trainee assessments
+-  **Template System** - Dynamic form templates with nested field structures
+-  **User Management** - Role-based access control for trainers, trainees, and department heads
+-  **Reporting & Analytics** - Comprehensive assessment reports and performance tracking
+-  **Multi-Department Support** - Manage multiple departments, courses, and subjects
+-  **Security & Authentication** - JWT-based authentication with role-based permissions
 
-## 🏗️ Architecture
+## Architecture
 
 The system is built using modern backend technologies:
 
@@ -41,7 +41,7 @@ The system is built using modern backend technologies:
 - **Documentation**: DOCX template generation
 - **Validation**: Class-validator and Zod schemas
 
-## 🚀 Features
+## Features
 
 ### Core Modules
 
@@ -137,7 +137,7 @@ PORT=3000
 NODE_ENV="development"
 ```
 
-## 🚀 Running the Application
+## Running the Application
 
 ```bash
 # Development mode
@@ -151,7 +151,7 @@ npm run start:prod
 npm run start:debug
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Unit tests
@@ -167,7 +167,7 @@ npm run test:cov
 npm run test:watch
 ```
 
-## 📚 API Documentation
+## API Documentation
 
 ### Main Endpoints
 
@@ -189,7 +189,7 @@ All protected routes require JWT token in header:
 Authorization: Bearer <your-jwt-token>
 ```
 
-## 🔧 Database Schema
+## Database Schema
 
 ### Core Entities
 
@@ -217,7 +217,7 @@ npx prisma studio
 npx prisma db reset
 ```
 
-## 🚀 Deployment
+## Deployment
 
 ### Docker Deployment
 
@@ -255,7 +255,7 @@ The project includes GitHub Actions workflow for automated deployment:
 - Docker image building and pushing
 - Automated deployment to production server
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -271,11 +271,11 @@ The project includes GitHub Actions workflow for automated deployment:
 - Add unit tests for new features
 - Update documentation for API changes
 
-## 📄 License
+## License
 
 This project is licensed under the **UNLICENSED** - it is proprietary software developed for aviation training institutions.
 
-## 🎯 Project Status
+## Project Status
 
 - **Version**: 0.0.1
 - **Status**: Development
