@@ -114,7 +114,8 @@ export const DepartmentHeadUserSchema = z.object({
 
 export const GetDepartmentHeadsResSchema = z.object({
   users: z.array(DepartmentHeadUserSchema),
-  totalItems: z.number()
+  totalItems: z.number(),
+  infoMessage: z.string().optional()
 })
 
 // Update Department Enhanced Schema (includes code and returns department heads)

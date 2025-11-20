@@ -25,6 +25,19 @@ export const TrainerAssignedToOngoingSubjectException = (subjects: Array<{ id: s
     }))
   })
 
+export const CannotDisableActiveDepartmentHeadException = (departmentName?: string) =>
+  new ValidationException(
+    [
+      {
+        path: 'departmentId',
+        message: departmentName
+          ? `Department head must be unassigned from "${departmentName}" before disabling this user.`
+          : 'Department head must be unassigned from department before disabling this user.'
+      }
+    ],
+    'Validation failed'
+  )
+
 export const CannotUpdateOrDeleteYourselfException = new ForbiddenException('Cannot update or delete yourself')
 
 export const CannotDeleteAdminUserException = new ForbiddenException('Cannot delete admin user')
