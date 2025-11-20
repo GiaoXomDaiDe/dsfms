@@ -161,8 +161,9 @@ export class SubjectRepo {
                 firstName: true,
                 middleName: true,
                 lastName: true,
-                status: true,
-                createdAt: true
+                email: true,
+                phoneNumber: true,
+                status: true
               }
             }
           },
@@ -171,7 +172,7 @@ export class SubjectRepo {
             : {
                 trainer: {
                   deletedAt: null,
-                  status: 'ACTIVE'
+                  status: UserStatus.ACTIVE
                 }
               }
         },
@@ -207,6 +208,8 @@ export class SubjectRepo {
       firstName: instructor.trainer.firstName,
       middleName: instructor.trainer.middleName === null ? '' : instructor.trainer.middleName,
       lastName: instructor.trainer.lastName,
+      email: instructor.trainer.email,
+      phoneNumber: instructor.trainer.phoneNumber,
       status: instructor.trainer.status,
       roleInSubject: instructor.roleInAssessment
     }))

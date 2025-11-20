@@ -842,8 +842,9 @@ export class UserService {
 
   private formatUserProfileForRole(user: GetUserProfileResType): GetUserProfileResType {
     const { trainerProfile, traineeProfile, ...baseUser } = user
+    const roleName = user.role?.name
 
-    if (user.role.name === RoleName.TRAINER && trainerProfile) {
+    if (roleName === RoleName.TRAINER && trainerProfile) {
       const formattedTrainer = {
         ...baseUser,
         trainerProfile
@@ -852,7 +853,7 @@ export class UserService {
       return formattedTrainer
     }
 
-    if (user.role.name === RoleName.TRAINEE && traineeProfile) {
+    if (roleName === RoleName.TRAINEE && traineeProfile) {
       const formattedTrainee = {
         ...baseUser,
         traineeProfile

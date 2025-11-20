@@ -5,7 +5,7 @@ import {
   TrainerBelongsToAnotherDepartmentException,
   TrainerNotFoundException
 } from '~/routes/subject/subject.error'
-import { RoleName } from '~/shared/constants/auth.constant'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
@@ -35,6 +35,18 @@ import {
   UpdateCourseResType,
   UpdateCourseTrainerAssignmentResType
 } from './course.model'
+
+type CourseInstructorSummary = {
+  id: string
+  eid: string
+  firstName: string
+  middleName: string | null
+  lastName: string
+  email: string
+  phoneNumber: string | null
+  status: (typeof UserStatus)[keyof typeof UserStatus]
+  roleInCourse: SubjectInstructorRoleValue[]
+}
 
 @Injectable()
 @SerializeAll(['aggregateCourseTrainees'])
@@ -201,7 +213,11 @@ export class CourseRepo {
         .then((enrollments) => enrollments.length),
       this.prisma.courseInstructor.findMany({
         where: {
-          courseId: id
+          courseId: id,
+          trainer: {
+            deletedAt: null,
+            status: UserStatus.ACTIVE
+          }
         },
         select: {
           trainerUserId: true,
@@ -226,6 +242,10 @@ export class CourseRepo {
           subject: {
             courseId: id,
             deletedAt: null
+          },
+          trainer: {
+            deletedAt: null,
+            status: UserStatus.ACTIVE
           }
         },
         select: {
@@ -264,50 +284,49 @@ export class CourseRepo {
       ...subjectInstructorRecords.map((record) => record.trainerUserId)
     ])
 
-    const courseExaminers = [
-      ...courseInstructorRecords.map((record) => ({
-        trainer: {
-          id: record.trainer.id,
-          eid: record.trainer.eid,
-          firstName: record.trainer.firstName,
-          middleName: record.trainer.middleName,
-          lastName: record.trainer.lastName,
-          email: record.trainer.email,
-          phoneNumber: record.trainer.phoneNumber,
-          status: record.trainer.status
-        },
-        role: record.roleInAssessment,
-        scope: 'COURSE' as const,
-        subject: null,
-        assignedAt: null
-      })),
-      ...subjectInstructorRecords.map((record) => ({
-        trainer: {
-          id: record.trainer.id,
-          eid: record.trainer.eid,
-          firstName: record.trainer.firstName,
-          middleName: record.trainer.middleName,
-          lastName: record.trainer.lastName,
-          email: record.trainer.email,
-          phoneNumber: record.trainer.phoneNumber,
-          status: record.trainer.status
-        },
-        role: record.roleInAssessment,
-        scope: record.subject?.courseId === id ? ('SUBJECT' as const) : ('CROSS_SUBJECT' as const),
-        subject: record.subject
-          ? {
-              id: record.subject.id,
-              courseId: record.subject.courseId,
-              code: record.subject.code,
-              name: record.subject.name,
-              status: record.subject.status,
-              startDate: record.subject.startDate,
-              endDate: record.subject.endDate
-            }
-          : null,
-        assignedAt: null
-      }))
-    ]
+    const instructorsMap = new Map<string, CourseInstructorSummary>()
+
+    const upsertInstructor = (record: {
+      trainer: {
+        id: string
+        eid: string
+        firstName: string
+        middleName: string | null
+        lastName: string
+        email: string
+        phoneNumber: string | null
+        status: (typeof UserStatus)[keyof typeof UserStatus]
+      }
+      roleInAssessment: SubjectInstructorRoleValue
+    }) => {
+      const role = record.roleInAssessment
+      const existing = instructorsMap.get(record.trainer.id)
+      if (existing) {
+        if (!existing.roleInCourse.includes(role)) {
+          existing.roleInCourse.push(role)
+        }
+        return
+      }
+
+      instructorsMap.set(record.trainer.id, {
+        id: record.trainer.id,
+        eid: record.trainer.eid,
+        firstName: record.trainer.firstName,
+        middleName: record.trainer.middleName,
+        lastName: record.trainer.lastName,
+        email: record.trainer.email,
+        phoneNumber: record.trainer.phoneNumber,
+        status: record.trainer.status,
+        roleInCourse: [role]
+      })
+    }
+
+    courseInstructorRecords.forEach((record) => upsertInstructor(record))
+    subjectInstructorRecords.forEach((record) => upsertInstructor(record))
+
+    const instructors = Array.from(instructorsMap.values()).sort((a, b) =>
+      `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)
+    )
 
     const { subjects, _count, ...courseData } = course
 
@@ -316,8 +335,8 @@ export class CourseRepo {
       subjectCount: _count.subjects,
       traineeCount,
       trainerCount: trainerIds.size,
-      subjects,
-      courseExaminers
+      instructors,
+      subjects
     }
   }
 

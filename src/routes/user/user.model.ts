@@ -20,9 +20,35 @@ import {
   ProfileNotAllowedForRoleMessage
 } from '~/routes/user/user.error'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
+import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
 import { validateRoleProfile } from '~/shared/helper'
+import { CourseSchema } from '~/shared/models/shared-course.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
+import { SubjectSchema } from '~/shared/models/shared-subject.model'
 import { UserSchema } from '~/shared/models/shared-user.model'
+
+const TeachingCourseSchema = CourseSchema.pick({
+  id: true,
+  code: true,
+  name: true,
+  status: true,
+  startDate: true,
+  endDate: true
+}).extend({
+  role: z.enum(SubjectInstructorRole)
+})
+
+const TeachingSubjectSchema = SubjectSchema.pick({
+  id: true,
+  courseId: true,
+  code: true,
+  name: true,
+  status: true,
+  startDate: true,
+  endDate: true
+}).extend({
+  role: z.enum(SubjectInstructorRole)
+})
 
 export const GetUsersQuerySchema = z
   .object({
@@ -105,7 +131,9 @@ export const GetUserResSchema = UserSchema.omit({
     isActive: true
   }).nullable(),
   trainerProfile: TrainerProfileSchema.nullable().optional(),
-  traineeProfile: TraineeProfileSchema.nullable().optional()
+  traineeProfile: TraineeProfileSchema.nullable().optional(),
+  teachingCourses: z.array(TeachingCourseSchema).default([]),
+  teachingSubjects: z.array(TeachingSubjectSchema).default([])
 })
 
 /**
@@ -128,7 +156,9 @@ export const UpdateUserResSchema = UserSchema.omit({
     isActive: true
   }).nullable(),
   trainerProfile: TrainerProfileSchema.nullable().optional(),
-  traineeProfile: TraineeProfileSchema.nullable().optional()
+  traineeProfile: TraineeProfileSchema.nullable().optional(),
+  teachingCourses: z.array(TeachingCourseSchema).default([]),
+  teachingSubjects: z.array(TeachingSubjectSchema).default([])
 })
 
 export const UpdateUserBodySchema = CreateUserBodySchema.partial()
