@@ -77,6 +77,44 @@ const userRoleDepartmentProfileInclude = {
   traineeProfile: true
 } satisfies Prisma.UserInclude
 
+type UserWithProfile = Prisma.UserGetPayload<{
+  include: typeof userRoleDepartmentProfileInclude
+}>
+
+type UserProfileWithoutTeaching = Omit<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>
+
+const mapToUserProfileWithoutTeaching = (user: UserWithProfile): UserProfileWithoutTeaching => {
+  const {
+    passwordHash: _passwordHash,
+    signatureImageUrl: _signatureImageUrl,
+    roleId: _roleId,
+    departmentId: _departmentId,
+    ...publicFields
+  } = user
+
+  return {
+    ...publicFields,
+    role: user.role,
+    department: user.department ?? null,
+    trainerProfile: user.trainerProfile ?? null,
+    traineeProfile: user.traineeProfile ?? null
+  }
+}
+
+const withTeachingAssignmentDefaults = (user: UserWithProfile | null): GetUserProfileResType | null => {
+  if (!user) {
+    return null
+  }
+
+  const baseProfile = mapToUserProfileWithoutTeaching(user)
+
+  return {
+    ...baseProfile,
+    teachingCourses: [],
+    teachingSubjects: []
+  }
+}
+
 @Injectable()
 @SerializeAll()
 export class UserRepo {
@@ -157,10 +195,12 @@ export class UserRepo {
       }
 
       // Bước 3: Trả về user hoàn chỉnh với profile
-      return await tx.user.findUnique({
+      const createdUser = await tx.user.findUnique({
         where: { id: newUser.id },
         include: userRoleDepartmentProfileInclude
       })
+
+      return withTeachingAssignmentDefaults(createdUser)
     })
   }
 
@@ -453,10 +493,12 @@ export class UserRepo {
       }
 
       // Trả về user đã được cập nhật kèm profile
-      return await tx.user.findUnique({
+      const updatedUser = await tx.user.findUnique({
         where: { id },
         include: userRoleDepartmentProfileInclude
       })
+
+      return withTeachingAssignmentDefaults(updatedUser)
     })
   }
 

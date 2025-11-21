@@ -9,7 +9,9 @@ import {
 import { UserNotFoundException } from '~/routes/user/user.error'
 import { GetUserProfileResType, UpdateUserInternalType } from '~/routes/user/user.model'
 import type { RoleNameType } from '~/shared/constants/auth.constant'
-import { RoleName } from '~/shared/constants/auth.constant'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { CourseStatus } from '~/shared/constants/course.constant'
+import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import { UserType } from '~/shared/models/shared-user.model'
@@ -126,6 +128,30 @@ const userProfileInclude = {
   trainerProfile: true,
   traineeProfile: true
 } satisfies Prisma.UserInclude
+
+type UserProfilePayload = Prisma.UserGetPayload<{
+  include: typeof userProfileInclude
+}>
+
+type UserProfileWithoutTeaching = Omit<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>
+
+const mapToUserProfileWithoutTeaching = (user: UserProfilePayload): UserProfileWithoutTeaching => {
+  const {
+    passwordHash: _passwordHash,
+    signatureImageUrl: _signatureImageUrl,
+    roleId: _roleId,
+    departmentId: _departmentId,
+    ...publicFields
+  } = user
+
+  return {
+    ...publicFields,
+    role: user.role,
+    department: user.department ?? null,
+    trainerProfile: user.trainerProfile ?? null,
+    traineeProfile: user.traineeProfile ?? null
+  }
+}
 @Injectable()
 @SerializeAll()
 export class SharedUserRepository {
@@ -320,7 +346,11 @@ export class SharedUserRepository {
       },
       include: userProfileInclude
     })
-    return user
+    if (!user) {
+      return null
+    }
+
+    return this.enrichUserProfile(user)
   }
 
   async updateWithProfile(
@@ -408,7 +438,7 @@ export class SharedUserRepository {
         throw UserNotFoundException
       }
 
-      return refreshedUser as GetUserProfileResType
+      return this.enrichUserProfile(refreshedUser)
     })
   }
   private shouldGenerateNewEid(
@@ -640,5 +670,131 @@ export class SharedUserRepository {
 
   private hasProfilePayload<T extends Record<string, unknown> | undefined>(payload?: T): payload is T {
     return !!payload && Object.keys(payload).length > 0
+  }
+
+  private async enrichUserProfile(user: UserProfilePayload): Promise<GetUserProfileResType> {
+    const teachingAssignments = await this.buildTeachingAssignments(user)
+    const baseProfile = mapToUserProfileWithoutTeaching(user)
+    return {
+      ...baseProfile,
+      teachingCourses: teachingAssignments.teachingCourses,
+      teachingSubjects: teachingAssignments.teachingSubjects
+    }
+  }
+
+  private async buildTeachingAssignments(
+    user: UserProfilePayload
+  ): Promise<Pick<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>> {
+    if (user.role.name !== RoleName.TRAINER) {
+      return {
+        teachingCourses: [],
+        teachingSubjects: []
+      }
+    }
+
+    if (user.status !== UserStatus.ACTIVE || user.deletedAt) {
+      return {
+        teachingCourses: [],
+        teachingSubjects: []
+      }
+    }
+
+    const [courseAssignments, subjectAssignments] = await Promise.all([
+      this.prismaService.courseInstructor.findMany({
+        where: {
+          trainerUserId: user.id,
+          course: {
+            deletedAt: null,
+            status: {
+              not: CourseStatus.ARCHIVED
+            }
+          }
+        },
+        select: {
+          roleInAssessment: true,
+          course: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              status: true,
+              startDate: true,
+              endDate: true
+            }
+          }
+        }
+      }),
+      this.prismaService.subjectInstructor.findMany({
+        where: {
+          trainerUserId: user.id,
+          subject: {
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
+          }
+        },
+        select: {
+          roleInAssessment: true,
+          subject: {
+            select: {
+              id: true,
+              courseId: true,
+              code: true,
+              name: true,
+              status: true,
+              startDate: true,
+              endDate: true
+            }
+          }
+        }
+      })
+    ])
+
+    const teachingCourses = courseAssignments
+      .flatMap((assignment) => {
+        if (!assignment.course) {
+          return []
+        }
+
+        return [
+          {
+            id: assignment.course.id,
+            code: assignment.course.code,
+            name: assignment.course.name,
+            status: assignment.course.status,
+            startDate: assignment.course.startDate,
+            endDate: assignment.course.endDate,
+            role: assignment.roleInAssessment
+          }
+        ]
+      })
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+
+    const teachingSubjects = subjectAssignments
+      .flatMap((assignment) => {
+        if (!assignment.subject) {
+          return []
+        }
+
+        return [
+          {
+            id: assignment.subject.id,
+            courseId: assignment.subject.courseId,
+            code: assignment.subject.code,
+            name: assignment.subject.name,
+            status: assignment.subject.status,
+            startDate: assignment.subject.startDate,
+            endDate: assignment.subject.endDate,
+            role: assignment.roleInAssessment
+          }
+        ]
+      })
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+
+    return {
+      teachingCourses,
+      teachingSubjects
+    }
   }
 }

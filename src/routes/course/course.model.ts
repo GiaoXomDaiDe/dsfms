@@ -27,6 +27,10 @@ const CourseExaminerSubjectSchema = SubjectSchema.pick({
   endDate: true
 }).nullable()
 
+const CourseInstructorSchema = CourseExaminerTrainerSchema.extend({
+  roleInCourse: z.array(z.enum(SubjectInstructorRole)).default([])
+})
+
 export const GetCoursesQuerySchema = IncludeDeletedQuerySchema.strict()
 
 export const GetCourseParamsSchema = z.object({
@@ -62,16 +66,8 @@ export const GetCourseResSchema = CourseSchema.extend({
   subjectCount: z.number().int().default(0),
   traineeCount: z.number().int().default(0),
   trainerCount: z.number().int().default(0),
-  subjects: z.array(SubjectSchema.omit({ courseId: true })),
-  courseExaminers: z.array(
-    z.object({
-      trainer: CourseExaminerTrainerSchema,
-      role: z.enum(SubjectInstructorRole),
-      scope: z.enum(['COURSE', 'SUBJECT', 'COURSE_AND_SUBJECT', 'CROSS_SUBJECT']),
-      subject: CourseExaminerSubjectSchema,
-      assignedAt: z.coerce.date().or(z.null())
-    })
-  )
+  instructors: z.array(CourseInstructorSchema).default([]),
+  subjects: z.array(SubjectSchema.omit({ courseId: true }))
 })
 
 export const CreateCourseBodySchema = CourseSchema.pick({
