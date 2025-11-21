@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { promises as fs } from 'fs'
 import * as nodemailer from 'nodemailer'
 import { Transporter } from 'nodemailer'
-import * as path from 'path'
 import envConfig from '~/shared/config'
 
 export interface NodemailerEmailOptions {
@@ -25,29 +23,29 @@ export class NodemailerService {
     this.createTransporter()
   }
 
-  private async findTemplatePath(templateFile: string): Promise<string> {
-    const candidatePaths = [
-      path.join(__dirname, '../../shared/email-template', templateFile),
-      path.join(process.cwd(), 'src', 'shared', 'email-template', templateFile),
-      path.join(process.cwd(), 'dist', 'src', 'shared', 'email-template', templateFile)
-    ]
+  // private async findTemplatePath(templateFile: string): Promise<string> {
+  //   const candidatePaths = [
+  //     path.join(__dirname, '../../shared/email-template', templateFile),
+  //     path.join(process.cwd(), 'src', 'shared', 'email-template', templateFile),
+  //     path.join(process.cwd(), 'dist', 'src', 'shared', 'email-template', templateFile)
+  //   ]
 
-    for (const candidate of candidatePaths) {
-      try {
-        await fs.access(candidate)
-        return candidate
-      } catch (error) {
-        // ignore and continue checking other candidates
-      }
-    }
+  //   for (const candidate of candidatePaths) {
+  //     try {
+  //       await fs.access(candidate)
+  //       return candidate
+  //     } catch (error) {
+  //       // ignore and continue checking other candidates
+  //     }
+  //   }
 
-    throw new Error(`Email template not found: ${templateFile}`)
-  }
+  //   throw new Error(`Email template not found: ${templateFile}`)
+  // }
 
-  private async loadTemplate(templateFile: string): Promise<string> {
-    const templatePath = await this.findTemplatePath(templateFile)
-    return fs.readFile(templatePath, 'utf-8')
-  }
+  // private async loadTemplate(templateFile: string): Promise<string> {
+  //   const templatePath = await this.findTemplatePath(templateFile)
+  //   return fs.readFile(templatePath, 'utf-8')
+  // }
 
   private createTransporter() {
     this.transporter = nodemailer.createTransport({
