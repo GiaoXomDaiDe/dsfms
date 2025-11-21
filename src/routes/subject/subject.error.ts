@@ -31,10 +31,6 @@ export const DuplicateInstructorException = new BadRequestException(
   'One or more trainers are already instructors of this subject'
 )
 
-export const TrainerBelongsToAnotherDepartmentException = new BadRequestException(
-  'This trainer belongs to another department, choose a trainer within this department'
-)
-
 // Enrollment Management Errors
 export const TraineeNotFoundException = new BadRequestException(
   'One or more trainees not found or do not have TRAINEE role'

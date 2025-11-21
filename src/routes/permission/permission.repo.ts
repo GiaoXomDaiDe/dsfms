@@ -32,7 +32,7 @@ export class PermissionRepo {
     )
 
     const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
-      const rawModuleName = permission.viewModule ?? permission.module ?? ''
+      const rawModuleName = permission.module ?? ''
       const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
       const normalizedModuleName = normalizeModuleName(moduleName)
 
@@ -59,6 +59,7 @@ export class PermissionRepo {
 
       return acc
     }, [])
+    grouped.sort((a, b) => a.module.name.localeCompare(b.module.name, undefined, { sensitivity: 'base' }))
 
     const totalItems = grouped.reduce((sum, item) => sum + item.module.listPermissions.length, 0)
 
