@@ -1,10 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
-import {
-  SubjectNotFoundException,
-  TrainerBelongsToAnotherDepartmentException,
-  TrainerNotFoundException
-} from '~/routes/subject/subject.error'
+import { SubjectNotFoundException, TrainerNotFoundException } from '~/routes/subject/subject.error'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
@@ -671,19 +667,6 @@ export class CourseRepo {
         throw TrainerNotFoundException
       }
 
-      if (trainer.departmentId && trainer.departmentId !== course.departmentId) {
-        throw TrainerBelongsToAnotherDepartmentException
-      }
-
-      if (!trainer.departmentId) {
-        await tx.user.update({
-          where: { id: trainerUserId },
-          data: {
-            departmentId: course.departmentId
-          }
-        })
-      }
-
       const assignmentTimestamp = new Date()
 
       if (subjectId) {
@@ -796,19 +779,6 @@ export class CourseRepo {
 
       if (!trainer) {
         throw TrainerNotFoundException
-      }
-
-      if (trainer.departmentId && trainer.departmentId !== course.departmentId) {
-        throw TrainerBelongsToAnotherDepartmentException
-      }
-
-      if (!trainer.departmentId && course.departmentId) {
-        await tx.user.update({
-          where: { id: trainerUserId },
-          data: {
-            departmentId: course.departmentId
-          }
-        })
       }
 
       const assignment = await tx.courseInstructor.create({

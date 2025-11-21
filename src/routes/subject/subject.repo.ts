@@ -23,7 +23,6 @@ import {
   SubjectNotFoundException,
   TraineeNotFoundException,
   TraineeResolutionFailureException,
-  TrainerBelongsToAnotherDepartmentException,
   TrainerNotFoundException
 } from './subject.error'
 import {
@@ -468,19 +467,6 @@ export class SubjectRepo {
 
       if (!trainer || trainer.deletedAt !== null || trainer.role?.name !== RoleName.TRAINER) {
         throw TrainerNotFoundException
-      }
-
-      if (trainer.departmentId && trainer.departmentId !== subject.course.departmentId) {
-        throw TrainerBelongsToAnotherDepartmentException
-      }
-
-      if (!trainer.departmentId) {
-        await tx.user.update({
-          where: { id: trainerUserId },
-          data: {
-            departmentId: subject.course.departmentId
-          }
-        })
       }
 
       const assignment = await tx.subjectInstructor.create({
