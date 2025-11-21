@@ -71,16 +71,6 @@ export const CourseDateRangeViolationException = (
     }))
   })
 
-export const SubjectDoesNotBelongToCourseException = new BadRequestException('Subject does not belong to this course')
-export const CourseExaminerAlreadyAssignedException = new BadRequestException(
-  'Trainer is already assigned as examiner for this course'
-)
-export const CourseExaminerAlreadyAssignedForSubjectException = new BadRequestException(
-  'Trainer is already assigned as examiner for this subject'
-)
-export const CannotAssignExaminerToArchivedCourseException = new BadRequestException(
-  'Cannot assign examiner to an archived course'
-)
 export const CourseTrainerAlreadyAssignedException = new BadRequestException(
   'Trainer is already assigned to this course'
 )

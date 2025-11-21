@@ -1,8 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
-  AssignCourseExaminerBodyDto,
-  AssignCourseExaminerResDto,
   AssignCourseTrainerBodyDto,
   AssignCourseTrainerResDto,
   CancelCourseEnrollmentsBodyDto,
@@ -103,15 +101,6 @@ export class CourseController {
       id: params.courseId,
       deletedById: userId,
       deletedByRoleName: roleName
-    })
-  }
-
-  @Post(':courseId/examiners')
-  @ZodSerializerDto(AssignCourseExaminerResDto)
-  async assignExaminer(@Param() params: GetCourseParamsDto, @Body() body: AssignCourseExaminerBodyDto) {
-    return await this.courseService.assignExaminerToCourse({
-      courseId: params.courseId,
-      data: body
     })
   }
 

@@ -21,7 +21,7 @@ export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
 
   @Get()
-  @ExcludePermissionModules('AUTH', 'EMAIL', 'PERMISSION')
+  @ExcludePermissionModules('Authentication Management', 'System Services', 'Permission Management')
   @ZodSerializerDto(GetPermissionsResDTO)
   async list(@ExcludedPermissionModules() excludedModules: string[]) {
     const result = await this.permissionService.list({

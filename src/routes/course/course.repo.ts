@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
-import { SubjectNotFoundException, TrainerNotFoundException } from '~/routes/subject/subject.error'
+import { TrainerNotFoundException } from '~/routes/subject/subject.error'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectInstructorRoleValue } from '~/shared/constants/subject.constant'
@@ -11,14 +11,10 @@ import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CannotArchiveCourseWithActiveSubjectsException,
   CannotArchiveCourseWithNonCancelledEnrollmentsException,
-  CannotAssignExaminerToArchivedCourseException,
-  CourseExaminerAlreadyAssignedException,
-  CourseExaminerAlreadyAssignedForSubjectException,
   CourseNotFoundException
 } from './course.error'
 import {
   AssignCourseTrainerResType,
-  CourseExaminerAssignmentType,
   CourseTraineeInfoType,
   CourseType,
   CreateCourseBodyType,
@@ -540,187 +536,6 @@ export class CourseRepo {
     })
 
     return { cancelledCount, notCancelledCount }
-  }
-
-  async assignExaminerToCourse({
-    courseId,
-    trainerUserId,
-    roleInSubject,
-    subjectId
-  }: {
-    courseId: string
-    trainerUserId: string
-    roleInSubject: SubjectInstructorRoleValue
-    subjectId?: string
-  }): Promise<CourseExaminerAssignmentType> {
-    return this.prisma.$transaction(async (tx) => {
-      const course = await tx.course.findFirst({
-        where: {
-          id: courseId,
-          deletedAt: null
-        },
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          status: true,
-          startDate: true,
-          endDate: true,
-          departmentId: true,
-          department: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      })
-
-      if (!course) {
-        throw CourseNotFoundException
-      }
-
-      if (course.status === CourseStatus.ARCHIVED) {
-        throw CannotAssignExaminerToArchivedCourseException
-      }
-
-      let subject: {
-        id: string
-        courseId: string
-        code: string
-        name: string
-        status: SubjectStatus
-        startDate: Date
-        endDate: Date
-      } | null = null
-
-      if (subjectId) {
-        subject = await tx.subject.findFirst({
-          where: {
-            id: subjectId,
-            deletedAt: null
-          },
-          select: {
-            id: true,
-            courseId: true,
-            code: true,
-            name: true,
-            status: true,
-            startDate: true,
-            endDate: true
-          }
-        })
-
-        if (!subject) {
-          throw SubjectNotFoundException
-        }
-
-        const existingSubjectAssignment = await tx.subjectInstructor.findUnique({
-          where: {
-            trainerUserId_subjectId: {
-              trainerUserId,
-              subjectId
-            }
-          }
-        })
-
-        if (existingSubjectAssignment) {
-          throw CourseExaminerAlreadyAssignedForSubjectException
-        }
-      } else {
-        const existingCourseAssignment = await tx.courseInstructor.findUnique({
-          where: {
-            trainerUserId_courseId: {
-              trainerUserId,
-              courseId
-            }
-          }
-        })
-
-        if (existingCourseAssignment) {
-          throw CourseExaminerAlreadyAssignedException
-        }
-      }
-
-      const trainer = await tx.user.findFirst({
-        where: {
-          id: trainerUserId,
-          deletedAt: null,
-          role: {
-            name: RoleName.TRAINER
-          }
-        },
-        select: {
-          id: true,
-          eid: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-          email: true,
-          phoneNumber: true,
-          status: true,
-          departmentId: true
-        }
-      })
-
-      if (!trainer) {
-        throw TrainerNotFoundException
-      }
-
-      const assignmentTimestamp = new Date()
-
-      if (subjectId) {
-        await tx.subjectInstructor.create({
-          data: {
-            trainerUserId,
-            subjectId,
-            roleInAssessment: roleInSubject as any
-          }
-        })
-      } else {
-        await tx.courseInstructor.create({
-          data: {
-            trainerUserId,
-            courseId,
-            roleInAssessment: roleInSubject as any
-          }
-        })
-      }
-
-      return {
-        trainer: {
-          id: trainer.id,
-          eid: trainer.eid,
-          firstName: trainer.firstName,
-          middleName: trainer.middleName,
-          lastName: trainer.lastName,
-          email: trainer.email,
-          phoneNumber: trainer.phoneNumber,
-          status: trainer.status
-        },
-        course: {
-          id: course.id,
-          code: course.code,
-          name: course.name,
-          status: course.status,
-          startDate: course.startDate,
-          endDate: course.endDate
-        },
-        subject: subject
-          ? {
-              id: subject.id,
-              courseId: subject.courseId,
-              code: subject.code,
-              name: subject.name,
-              status: subject.status,
-              startDate: subject.startDate,
-              endDate: subject.endDate
-            }
-          : null,
-        role: roleInSubject,
-        assignedAt: assignmentTimestamp
-      }
-    })
   }
 
   async assignTrainerToCourse({
