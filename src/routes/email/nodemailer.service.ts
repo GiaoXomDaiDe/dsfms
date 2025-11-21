@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common'
+import { promises as fs } from 'fs'
 import * as nodemailer from 'nodemailer'
 import { Transporter } from 'nodemailer'
 import * as path from 'path'
-import { promises as fs } from 'fs'
 import envConfig from '~/shared/config'
 
 export interface NodemailerEmailOptions {
@@ -23,6 +23,30 @@ export class NodemailerService {
 
   constructor() {
     this.createTransporter()
+  }
+
+  private async findTemplatePath(templateFile: string): Promise<string> {
+    const candidatePaths = [
+      path.join(__dirname, '../../shared/email-template', templateFile),
+      path.join(process.cwd(), 'src', 'shared', 'email-template', templateFile),
+      path.join(process.cwd(), 'dist', 'src', 'shared', 'email-template', templateFile)
+    ]
+
+    for (const candidate of candidatePaths) {
+      try {
+        await fs.access(candidate)
+        return candidate
+      } catch (error) {
+        // ignore and continue checking other candidates
+      }
+    }
+
+    throw new Error(`Email template not found: ${templateFile}`)
+  }
+
+  private async loadTemplate(templateFile: string): Promise<string> {
+    const templatePath = await this.findTemplatePath(templateFile)
+    return fs.readFile(templatePath, 'utf-8')
   }
 
   private createTransporter() {
@@ -103,10 +127,7 @@ export class NodemailerService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Đọc email template
-      const { readFileSync } = await import('fs')
-      const { join } = await import('path')
-      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'forgot-password.txt')
-      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+      let htmlTemplate = await this.loadTemplate('forgot-password.txt')
 
       // Tạo reset link từ magic link và token
       const resetLink = `${magicLink}?token=${resetToken}`
@@ -158,10 +179,7 @@ export class NodemailerService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Read email template
-      const { readFileSync } = await import('fs')
-      const { join } = await import('path')
-      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'new-user-account.txt')
-      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+      let htmlTemplate = await this.loadTemplate('new-user-account.txt')
 
       // Get current date
       const creationDate = new Date().toLocaleDateString('en-US', {
@@ -273,10 +291,7 @@ This account was created on ${creationDate}.`
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Read email template
-      const { readFileSync } = await import('fs')
-      const { join } = await import('path')
-      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'rejected-assessment.txt')
-      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+      let htmlTemplate = await this.loadTemplate('rejected-assessment.txt')
 
       // Replace placeholders in template
       htmlTemplate = htmlTemplate.replace('[Your_Logo_URL]', 'https://via.placeholder.com/150x50?text=DSFMS')
@@ -333,10 +348,7 @@ This account was created on ${creationDate}.`
     reviewDate: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const { readFileSync } = await import('fs')
-      const { join } = await import('path')
-      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'approved-template.txt')
-      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+      let htmlTemplate = await this.loadTemplate('approved-template.txt')
 
       // Replace placeholders with actual data
       htmlTemplate = htmlTemplate.replace(/\[CREATOR_NAME\]/g, creatorName)
@@ -391,10 +403,7 @@ This account was created on ${creationDate}.`
     rejectionComment: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const { readFileSync } = await import('fs')
-      const { join } = await import('path')
-      const templatePath = join(process.cwd(), 'src', 'shared', 'email-template', 'rejected-template.txt')
-      let htmlTemplate = readFileSync(templatePath, 'utf-8')
+      let htmlTemplate = await this.loadTemplate('rejected-template.txt')
 
       // Replace placeholders with actual data
       htmlTemplate = htmlTemplate.replace(/\[CREATOR_NAME\]/g, creatorName)

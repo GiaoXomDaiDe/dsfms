@@ -17,31 +17,22 @@ export class PermissionRepo {
 
     const permissions = await this.prisma.permission.findMany()
 
-    const normalizeModuleName = (value: string) =>
-      value
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-
     const excludedModuleNames = new Set(
       excludeModules
         .filter((moduleName) => typeof moduleName === 'string')
-        .map((moduleName) => normalizeModuleName(moduleName))
         .filter((moduleName) => moduleName.length > 0)
     )
 
     const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
-      const rawModuleName = permission.module ?? ''
+      const rawModuleName = permission.viewModule ?? 'Uncategorized'
       const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
-      const normalizedModuleName = normalizeModuleName(moduleName)
 
-      if (excludedModuleNames.has(normalizedModuleName)) return acc
+      if (excludedModuleNames.has(moduleName)) return acc
 
-      const rawPermissionName = permission.viewName ?? permission.name ?? ''
-      const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : permission.name
+      const rawPermissionName = permission.viewName ?? 'Uncategorized'
+      const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : 'Uncategorized'
 
-      let moduleEntry = acc.find((entry) => normalizeModuleName(entry.module.name) === normalizedModuleName)
+      let moduleEntry = acc.find((entry) => entry.module.name === moduleName)
       if (!moduleEntry) {
         moduleEntry = {
           module: {
@@ -59,7 +50,7 @@ export class PermissionRepo {
 
       return acc
     }, [])
-    grouped.sort((a, b) => a.module.name.localeCompare(b.module.name, undefined, { sensitivity: 'base' }))
+    grouped.sort((a, b) => a.module.name.localeCompare(b.module.name))
 
     const totalItems = grouped.reduce((sum, item) => sum + item.module.listPermissions.length, 0)
 

@@ -69,7 +69,7 @@ export class ReportsController {
     return this.reportsService.acknowledgeReport(params.id, userId)
   }
 
-  @Put(':id/respond')
+  @Put(':reportId/respond')
   async respondToReport(
     @Param() params: RespondReportParamsDTO,
     @Body() body: RespondReportBodyDTO,
