@@ -32,7 +32,10 @@ export const DepartmentResSchema = DepartmentSchema.extend({
         name: z.string()
       })
     })
-    .nullable()
+    .nullable(),
+  courseCount: z.number().default(0),
+  traineeCount: z.number().default(0),
+  trainerCount: z.number().default(0)
 })
 
 // Trainer Detail Schema
@@ -56,9 +59,6 @@ export const DepartmentCourseSchema = CourseSchema.extend({
 })
 
 export const DepartmentDetailResSchema = DepartmentResSchema.extend({
-  courseCount: z.number().default(0),
-  traineeCount: z.number().default(0),
-  trainerCount: z.number().default(0),
   trainers: z.array(DepartmentTrainerSchema),
   courses: z.array(DepartmentCourseSchema)
 })
