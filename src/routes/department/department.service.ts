@@ -252,7 +252,7 @@ export class DepartmentService {
           email: true
         },
         orderBy: {
-          firstName: 'asc'
+          eid: 'asc'
         }
       })
     ])
