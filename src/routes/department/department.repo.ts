@@ -7,6 +7,7 @@ import {
   GetDepartmentsResType,
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
+import { RoleName } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SharedFilterService } from '~/shared/repositories/shared-filter.service'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -51,13 +52,21 @@ export class DepartmentRepo {
       })
     ])
 
-    // Format departments data with proper date strings
-    const formattedDepartments = departments.map((dept) => ({
-      ...dept
-    }))
+    const departmentsWithStats = await Promise.all(
+      departments.map(async (department) => {
+        const { courseCount, traineeCount, trainerCount } = await this.getDepartmentStats(department.id)
+
+        return {
+          ...department,
+          courseCount,
+          traineeCount,
+          trainerCount
+        }
+      })
+    )
 
     return {
-      departments: formattedDepartments,
+      departments: departmentsWithStats,
       totalItems
     }
   }
@@ -85,33 +94,22 @@ export class DepartmentRepo {
               }
             }
           }
-        },
-        _count: {
-          select: {
-            courses: {
-              where: {
-                deletedAt: null
-              }
-            }
-          }
         }
       }
     })
 
     if (!department) return null
 
-    // Complex logic: Get trainee count through department → courses → subjects → enrollments
-    const traineeCount = await this.getTraineeCountByDepartment(id)
-
-    // Complex logic: Get trainer count through department → courses → subjects → instructors
-    const trainerCountResult = await this.getTrainerCountByDepartment(id)
-    const trainerCount = trainerCountResult.count
+    const { courseCount, traineeCount, trainerCount, trainerIds } = await this.getDepartmentStats(id)
 
     // Get ALL trainers của department này (for detailed info)
     const trainers = await this.prisma.user.findMany({
       where: {
-        id: { in: trainerCountResult.trainerIds },
-        deletedAt: null
+        id: { in: trainerIds },
+        deletedAt: null,
+        status: {
+          notIn: ['DISABLED']
+        }
       },
       omit: {
         passwordHash: true,
@@ -144,10 +142,9 @@ export class DepartmentRepo {
       subjectCount: _count.subjects
     }))
 
-    const { _count, ...departmentData } = department
     return {
-      ...departmentData,
-      courseCount: _count.courses,
+      ...department,
+      courseCount,
       traineeCount,
       trainerCount,
       trainers,
@@ -256,6 +253,68 @@ export class DepartmentRepo {
     })
   }
 
+  async getDepartmentHeads() {
+    const baseWhere = {
+      role: {
+        name: RoleName.DEPARTMENT_HEAD
+      },
+      deletedAt: null,
+      departmentId: null
+    }
+
+    const [totalItems, users] = await Promise.all([
+      this.prisma.user.count({
+        where: baseWhere
+      }),
+      this.prisma.user.findMany({
+        where: baseWhere,
+        select: {
+          id: true,
+          eid: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        },
+        orderBy: {
+          eid: 'asc'
+        }
+      })
+    ])
+
+    return {
+      users,
+      totalItems,
+      infoMessage: totalItems === 0 ? 'No department heads available currently.' : undefined
+    }
+  }
+
+  private async getDepartmentStats(departmentId: string) {
+    const [courseCount, traineeCount, trainerResult] = await Promise.all([
+      this.getCourseCountByDepartment(departmentId),
+      this.getTraineeCountByDepartment(departmentId),
+      this.getTrainerCountByDepartment(departmentId)
+    ])
+
+    return {
+      courseCount,
+      traineeCount,
+      trainerCount: trainerResult.count,
+      trainerIds: trainerResult.trainerIds
+    }
+  }
+
+  private async getCourseCountByDepartment(departmentId: string): Promise<number> {
+    return this.prisma.course.count({
+      where: {
+        departmentId,
+        deletedAt: null,
+        status: {
+          notIn: ['ARCHIVED']
+        }
+      }
+    })
+  }
+
   /**
    * Get unique trainee count for a department through:
    * Department → Courses → Subjects → SubjectEnrollments
@@ -266,9 +325,15 @@ export class DepartmentRepo {
         subject: {
           course: {
             departmentId,
-            deletedAt: null
+            deletedAt: null,
+            status: {
+              notIn: ['ARCHIVED']
+            }
           },
-          deletedAt: null
+          deletedAt: null,
+          status: {
+            notIn: ['ARCHIVED']
+          }
         }
       },
       select: {
@@ -290,9 +355,15 @@ export class DepartmentRepo {
         subject: {
           course: {
             departmentId,
-            deletedAt: null
+            deletedAt: null,
+            status: {
+              notIn: ['ARCHIVED']
+            }
           },
-          deletedAt: null
+          deletedAt: null,
+          status: {
+            notIn: ['ARCHIVED']
+          }
         }
       },
       select: {

@@ -229,39 +229,8 @@ export class DepartmentService {
     }
   }
 
-  async getDepartmentHeads() {
-    const baseWhere = {
-      role: {
-        name: RoleName.DEPARTMENT_HEAD
-      },
-      deletedAt: null,
-      departmentId: null
-    }
-
-    const [totalItems, users] = await Promise.all([
-      this.prisma.user.count({
-        where: baseWhere
-      }),
-      this.prisma.user.findMany({
-        where: baseWhere,
-        select: {
-          id: true,
-          eid: true,
-          firstName: true,
-          lastName: true,
-          email: true
-        },
-        orderBy: {
-          eid: 'asc'
-        }
-      })
-    ])
-
-    return {
-      users,
-      totalItems,
-      infoMessage: totalItems === 0 ? 'No department heads available currently.' : undefined
-    }
+  getDepartmentHeads() {
+    return this.departmentRepo.getDepartmentHeads()
   }
 
   private handleDepartmentUniqueConstraintError(error: PrismaClientKnownRequestError): never {
