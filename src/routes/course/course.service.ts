@@ -12,12 +12,10 @@ import { MessageResType } from '~/shared/models/response.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SubjectService } from '../subject/subject.service'
 import {
-  CannotAssignExaminerToArchivedCourseException,
   CourseAlreadyArchivedException,
   CourseCannotBeArchivedFromCurrentStatusException,
   CourseCodeAlreadyExistsException,
   CourseDateRangeViolationException,
-  CourseExaminerAlreadyAssignedException,
   CourseNotFoundException,
   CourseTrainerAlreadyAssignedException,
   CourseTrainerAssignmentNotFoundException,
@@ -27,8 +25,6 @@ import {
   OnlyAcademicDepartmentCanUpdateCourseException
 } from './course.error'
 import {
-  AssignCourseExaminerBodyType,
-  AssignCourseExaminerResType,
   AssignCourseTrainerBodyType,
   AssignCourseTrainerResType,
   CreateCourseBodyType,
@@ -329,44 +325,6 @@ export class CourseService {
     })
 
     return { message: 'Trainer removed successfully' }
-  }
-
-  async assignExaminerToCourse({
-    courseId,
-    data
-  }: {
-    courseId: string
-    data: AssignCourseExaminerBodyType
-  }): Promise<AssignCourseExaminerResType> {
-    const course = await this.courseRepo.findById(courseId, { includeDeleted: true })
-
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    if ((course.status as string) === CourseStatus.ARCHIVED) {
-      throw CannotAssignExaminerToArchivedCourseException
-    }
-
-    try {
-      const assignment = await this.courseRepo.assignExaminerToCourse({
-        courseId,
-        trainerUserId: data.trainerUserId,
-        roleInSubject: data.roleInSubject,
-        subjectId: data.subjectId
-      })
-
-      return {
-        message: 'Assigned examiner successfully',
-        data: assignment
-      }
-    } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw CourseExaminerAlreadyAssignedException
-      }
-
-      throw error
-    }
   }
 
   async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {

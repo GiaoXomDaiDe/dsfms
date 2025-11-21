@@ -17,16 +17,6 @@ const CourseExaminerTrainerSchema = UserSchema.pick({
   status: true
 })
 
-const CourseExaminerSubjectSchema = SubjectSchema.pick({
-  id: true,
-  courseId: true,
-  code: true,
-  name: true,
-  status: true,
-  startDate: true,
-  endDate: true
-}).nullable()
-
 const CourseInstructorSchema = CourseExaminerTrainerSchema.extend({
   roleInCourse: z.array(z.enum(SubjectInstructorRole)).default([])
 })
@@ -130,12 +120,6 @@ export const CancelCourseEnrollmentsBodySchema = z.object({
   batchCode: z.string().min(1)
 })
 
-export const AssignCourseExaminerBodySchema = z.object({
-  trainerUserId: z.uuid(),
-  roleInSubject: z.enum(SubjectInstructorRole),
-  subjectId: z.uuid().optional()
-})
-
 const CourseTrainerCourseSchema = CourseSchema.pick({
   id: true,
   code: true,
@@ -162,28 +146,6 @@ export const UpdateCourseTrainerAssignmentBodySchema = z.object({
 
 export const UpdateCourseTrainerAssignmentResSchema = AssignCourseTrainerResSchema
 
-const CourseExaminerCourseSchema = CourseSchema.pick({
-  id: true,
-  code: true,
-  name: true,
-  status: true,
-  startDate: true,
-  endDate: true
-})
-
-export const CourseExaminerAssignmentSchema = z.object({
-  trainer: CourseExaminerTrainerSchema,
-  course: CourseExaminerCourseSchema,
-  subject: CourseExaminerSubjectSchema,
-  role: z.enum(SubjectInstructorRole),
-  assignedAt: z.coerce.date()
-})
-
-export const AssignCourseExaminerResSchema = z.object({
-  message: z.string(),
-  data: CourseExaminerAssignmentSchema
-})
-
 export type CourseType = z.infer<typeof CourseSchema>
 export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
 export type GetCourseResType = z.infer<typeof GetCourseResSchema>
@@ -201,6 +163,3 @@ export type AssignCourseTrainerBodyType = z.infer<typeof AssignCourseTrainerBody
 export type AssignCourseTrainerResType = z.infer<typeof AssignCourseTrainerResSchema>
 export type UpdateCourseTrainerAssignmentBodyType = z.infer<typeof UpdateCourseTrainerAssignmentBodySchema>
 export type UpdateCourseTrainerAssignmentResType = z.infer<typeof UpdateCourseTrainerAssignmentResSchema>
-export type AssignCourseExaminerBodyType = z.infer<typeof AssignCourseExaminerBodySchema>
-export type CourseExaminerAssignmentType = z.infer<typeof CourseExaminerAssignmentSchema>
-export type AssignCourseExaminerResType = z.infer<typeof AssignCourseExaminerResSchema>
