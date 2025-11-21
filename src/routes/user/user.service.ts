@@ -119,8 +119,8 @@ export class UserService {
 
       // Sinh eid theo role
       const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
-      // Hash mật khẩu mặc định
-      const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
+      // Hash mật khẩu mặc định (tạm disable trong giai đoạn dev)
+      // const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
 
       // Tách profile và role ra khỏi data
       const { trainerProfile, traineeProfile, role, ...userData } = data
@@ -130,7 +130,7 @@ export class UserService {
         userData: {
           ...userData,
           roleId: role.id,
-          passwordHash: hashedPassword,
+          passwordHash: '123',
           eid
         },
         roleName: targetRole.name,
