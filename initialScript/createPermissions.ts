@@ -16,7 +16,7 @@ async function bootstrap() {
   const server = app.getHttpAdapter().getInstance()
   const router = server.router
 
-  const permissionsInDb = await prisma.permission.findMany({
+  const permissionsInDb = await prisma.endpointPermission.findMany({
     where: {
       deletedAt: null
     }
@@ -79,7 +79,7 @@ async function bootstrap() {
   })
   // Thêm các permissions này vào database
   if (permissionsToAdd.length > 0) {
-    const addResult = await prisma.permission.createMany({
+    const addResult = await prisma.endpointPermission.createMany({
       data: permissionsToAdd,
       skipDuplicates: true
     })
@@ -89,7 +89,7 @@ async function bootstrap() {
   }
 
   // Lấy ra permissions trong database sau khi thêm mới (hoặc bị xóa)
-  const updatedPermissionsInDb = await prisma.permission.findMany({
+  const updatedPermissionsInDb = await prisma.endpointPermission.findMany({
     where: {
       deletedAt: null
     }

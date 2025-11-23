@@ -114,7 +114,7 @@ async function addMediaPermissions() {
 
     for (const permission of MEDIA_PERMISSIONS) {
       // Check if permission already exists
-      const existingPermission = await prisma.permission.findFirst({
+      const existingPermission = await prisma.endpointPermission.findFirst({
         where: {
           path: permission.path,
           method: permission.method,
@@ -123,7 +123,7 @@ async function addMediaPermissions() {
       })
 
       if (!existingPermission) {
-        await prisma.permission.create({
+        await prisma.endpointPermission.create({
           data: permission
         })
         console.log(`   ✅ Added: ${permission.name}`)
@@ -133,7 +133,7 @@ async function addMediaPermissions() {
     }
 
     // 2. Lấy tất cả media permissions từ database
-    const mediaPermissions = await prisma.permission.findMany({
+    const mediaPermissions = await prisma.endpointPermission.findMany({
       where: {
         module: 'MEDIA',
         deletedAt: null

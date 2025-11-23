@@ -14,7 +14,7 @@ import { PrismaService } from '~/shared/services/prisma.service'
 const activePermissionFilter = {
   deletedAt: null,
   isActive: true
-} satisfies Prisma.PermissionWhereInput
+} satisfies Prisma.EndpointPermissionWhereInput
 
 const roleDetailInclude = {
   permissions: {
@@ -206,7 +206,7 @@ export class RoleRepo {
       }
     })
 
-    const addedPermissions = await this.prismaService.permission.findMany({
+    const addedPermissions = await this.prismaService.endpointPermission.findMany({
       where: {
         id: { in: newPermissionIds },
         ...activePermissionFilter
@@ -256,7 +256,7 @@ export class RoleRepo {
       }
     })
 
-    const removedPermissions = await this.prismaService.permission.findMany({
+    const removedPermissions = await this.prismaService.endpointPermission.findMany({
       where: {
         id: { in: permissionIdsToRemove },
         ...activePermissionFilter
