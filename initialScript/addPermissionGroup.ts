@@ -108,24 +108,31 @@ async function main() {
     const featureGroupName = fg['feature-group']
 
     for (const perm of fg.permissions) {
-      const permissionId = perm['permission-id'] // PERM-xx
-      const permissionName = perm['permission-name'] // text
+      const permissionGroupCode = perm['permission-id']
+      const permissionDisplayName = perm['permission-name']
 
-      // groupName phải unique → encode: "<feature-group> - <permission-id>"
-      const groupName = `${featureGroupName} - ${permissionId}`
-
-      await prisma.permissionGroup.upsert({
-        where: { groupName },
-        update: {
-          name: permissionName,
-          permissionGroupCode: permissionId
-        },
-        create: {
-          groupName,
-          name: permissionName,
-          permissionGroupCode: permissionId
-        }
+      const existingGroup = await prisma.permissionGroup.findFirst({
+        where: { permissionGroupCode }
       })
+
+      if (existingGroup) {
+        await prisma.permissionGroup.update({
+          where: { id: existingGroup.id },
+          data: {
+            groupName: featureGroupName,
+            name: permissionDisplayName,
+            permissionGroupCode
+          }
+        })
+      } else {
+        await prisma.permissionGroup.create({
+          data: {
+            groupName: featureGroupName,
+            name: permissionDisplayName,
+            permissionGroupCode
+          }
+        })
+      }
     }
   }
 
@@ -134,9 +141,9 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Seed PermissionGroup thất bại:', e)
+    console.error('❌ Seed thất bại:', e)
     process.exit(1)
   })
   .finally(() => {
-    prisma.$disconnect()
+    void prisma.$disconnect()
   })
