@@ -54,7 +54,7 @@ export class SubjectController {
 
   @Get('courses/:courseId/available-trainers')
   @ZodSerializerDto(GetAvailableTrainersResDto)
-  async getAvailableTrainers(@Param('courseId') { courseId }: CourseIdParamsDto) {
+  async getAvailableTrainers(@Param() { courseId }: CourseIdParamsDto) {
     return await this.subjectService.getAvailableTrainers(courseId)
   }
 

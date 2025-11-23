@@ -134,7 +134,7 @@ model PermissionGroup {
   id                String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   groupName         String                        
   name              String
-  permissionGroupCode String
+  permissionGroupCode String                      @unique
 
   permissions PermissionGroupToEndpointPermission[]
 }

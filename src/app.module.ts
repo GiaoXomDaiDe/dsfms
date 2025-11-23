@@ -22,6 +22,7 @@ import { AssessmentModule } from './routes/assessment/assessment.module'
 import { AuthModule } from './routes/auth/auth.module'
 import { EmailModule } from './routes/email/email.module'
 import { GlobalFieldModule } from './routes/global-field/global-field.module'
+import { PermissionGroupModule } from './routes/permission-group/permission-group.module'
 import { PermissionModule } from './routes/permission/permission.module'
 import { ProfileModule } from './routes/profile/profile.module'
 import { TemplateModule } from './routes/template/template.module'
@@ -51,7 +52,8 @@ import { TemplateModule } from './routes/template/template.module'
     AssessmentModule,
     ReportsModule,
     PublicModule,
-    MediaModule
+    MediaModule,
+    PermissionGroupModule
   ],
   controllers: [AppController],
   providers: [
