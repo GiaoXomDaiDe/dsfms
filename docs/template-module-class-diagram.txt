@@ -1,0 +1,233 @@
+@startuml Template Module Class Diagram
+
+!define LIGHTBLUE #E1F5FE
+!define LIGHTGREEN #E8F5E8
+!define LIGHTYELLOW #FFFDE7
+!define LIGHTPINK #FCE4EC
+!define LIGHTGRAY #F5F5F5
+
+package "Template Module" {
+
+  ' Controller Layer
+  class TemplateController <<Controller>> {
+    - templateService: TemplateService
+    --
+    + parseTemplate(file: any): Promise<ParseTemplateResponseType>
+    + extractFields(file: any): Promise<ExtractFieldsResponseType>
+    + extractFieldsFromS3(s3Url: string): Promise<ExtractFieldsResponseType>
+    + createTemplate(templateData: CreateTemplateFormDto, user: ActiveUserType): Promise<any>
+    + getTemplate(templateId: string): Promise<any>
+    + getTemplateSchema(templateId: string): Promise<any>
+    + getAllTemplates(query: GetTemplatesQueryDto): Promise<any>
+    + getDepartmentTemplates(departmentId: string, query: GetDepartmentTemplatesQueryDto): Promise<any>
+    + updateTemplate(templateId: string, updateData: UpdateTemplateFormDto, user: ActiveUserType): Promise<any>
+    + updateTemplateStatus(templateId: string, statusData: UpdateTemplateStatusDto): Promise<any>
+    + createTemplateVersion(templateId: string, versionData: CreateTemplateVersionDto, user: ActiveUserType): Promise<any>
+    + reviewTemplate(templateId: string, reviewData: ReviewTemplateBodyDTO): Promise<ReviewTemplateResDTO>
+  }
+
+  ' Service Layer
+  class TemplateService <<Service>> {
+    - templateRepository: TemplateRepository
+    - nodemailerService: NodemailerService
+    - pdfConverterService: PdfConverterService
+    --
+    + parseDocxTemplate(file: any): Promise<ParseTemplateResponseType>
+    + extractFieldsFromDocx(file: any): Promise<ExtractFieldsResponseType>
+    + extractFieldsFromS3Url(s3Url: string): Promise<ExtractFieldsResponseType>
+    + createTemplate(templateData: CreateTemplateFormDto, userId: string): Promise<any>
+    + getTemplateById(templateId: string): Promise<any>
+    + getTemplateSchemaById(templateId: string): Promise<any>
+    + getAllTemplates(query: GetTemplatesQueryDto): Promise<any>
+    + getDepartmentTemplates(departmentId: string, query: GetDepartmentTemplatesQueryDto): Promise<any>
+    + updateTemplate(templateId: string, updateData: UpdateTemplateFormDto, userId: string): Promise<any>
+    + updateTemplateStatus(templateId: string, status: TemplateStatus): Promise<any>
+    + createTemplateVersion(templateId: string, versionData: CreateTemplateVersionDto, userId: string): Promise<any>
+    + reviewTemplate(templateId: string, reviewData: ReviewTemplateBodyType): Promise<ReviewTemplateResType>
+    - processPlaceholders(placeholders: string[]): Record<string, any>
+    - validateFieldStructure(sections: CreateTemplateSectionDto[]): void
+    - validateSignatureFields(sections: CreateTemplateSectionDto[]): void
+    - validateFinalScoreFields(sections: CreateTemplateSectionDto[]): void
+  }
+
+  ' Repository Layer
+  class TemplateRepository <<Repository>> {
+    - prismaService: PrismaService
+    --
+    + createTemplateWithSectionsAndFields(templateData: CreateTemplateFormDto, userId: string, departmentId: string): Promise<any>
+    + findTemplateById(templateId: string, includeDeleted?: boolean): Promise<any>
+    + findTemplateSchemaById(templateId: string): Promise<any>
+    + findAllTemplates(page: number, limit: number, search?: string, departmentId?: string, status?: TemplateStatus): Promise<any>
+    + findDepartmentTemplates(departmentId: string, page: number, limit: number, search?: string, status?: TemplateStatus): Promise<any>
+    + updateTemplate(templateId: string, updateData: UpdateTemplateFormDto, userId: string): Promise<any>
+    + updateTemplateStatus(templateId: string, status: TemplateStatus): Promise<any>
+    + createTemplateVersion(originalTemplateId: string, versionData: CreateTemplateVersionDto, userId: string): Promise<any>
+    + checkDepartmentExists(departmentId: string): Promise<boolean>
+    + checkTemplateNameExists(name: string, departmentId: string, excludeId?: string): Promise<boolean>
+    + checkTemplateInUse(templateId: string): Promise<boolean>
+    - validateFieldHierarchy(fields: any[]): void
+    - processFieldCreation(sectionId: string, fields: CreateTemplateFieldDto[], parentMap: Map): Promise<void>
+  }
+
+  ' DTOs
+  class CreateTemplateFormDto <<DTO>> {
+    + name: string
+    + description?: string
+    + departmentId: string
+    + sections: CreateTemplateSectionDto[]
+  }
+
+  class CreateTemplateSectionDto <<DTO>> {
+    + label: string
+    + displayOrder: number
+    + editBy: EditByRole
+    + roleInSubject?: RoleInSubject
+    + isSubmittable: boolean
+    + isToggleDependent?: boolean
+    + controllerFieldName?: string
+    + fields: CreateTemplateFieldDto[]
+  }
+
+  class CreateTemplateFieldDto <<DTO>> {
+    + label: string
+    + fieldName: string
+    + fieldType: FieldType
+    + roleRequired?: RoleRequired
+    + options?: any
+    + displayOrder: number
+    + parentTempId?: string
+    + tempId?: string
+  }
+
+  class UpdateTemplateFormDto <<DTO>> {
+    + name?: string
+    + description?: string
+    + departmentId?: string
+    + sections?: CreateTemplateSectionDto[]
+  }
+
+  class ParseTemplateResponseDTO <<DTO>> {
+    + success: boolean
+    + message: string
+    + schema?: Record<string, any>
+    + placeholders?: string[]
+  }
+
+  class ExtractFieldsResponseDTO <<DTO>> {
+    + success: boolean
+    + message: string
+    + fields: ExtractedField[]
+    + totalFields: number
+  }
+
+  ' Error Classes
+  class TemplateError <<Error>> {
+    + TemplateNotFoundError
+    + TemplateNameAlreadyExistsError
+    + TemplateCreationFailedError
+    + InvalidFileTypeError
+    + DocxParsingError
+    + DepartmentNotFoundError
+    + RoleRequiredMismatchError
+    + SignatureFieldMissingRoleError
+    + PartFieldMissingChildrenError
+    + ToggleDependentSectionMissingControlError
+    + ValueListFieldMissingOptionsError
+    + MissingSignatureFieldError
+    + MissingFinalScoreFieldsError
+    + DuplicateFinalScoreFieldsError
+  }
+
+  ' Module Class
+  class TemplateModule <<Module>> {
+    + imports: [SharedModule, EmailModule]
+    + controllers: [TemplateController]
+    + providers: [TemplateService, TemplateRepository]
+    + exports: [TemplateService, TemplateRepository]
+  }
+
+  ' Helper Interfaces
+  interface PlaceholderInfo {
+    + type: 'field' | 'section' | 'condition' | 'inverted'
+    + name: string
+    + children?: string[]
+  }
+
+  ' External Dependencies
+  class PrismaService <<External>> {
+    + templateForm: TemplateFormDelegate
+    + templateSection: TemplateSectionDelegate
+    + templateField: TemplateFieldDelegate
+  }
+
+  class NodemailerService <<External>> {
+    + sendEmail(): Promise<void>
+  }
+
+  class PdfConverterService <<External>> {
+    + convertToPdf(): Promise<Buffer>
+  }
+}
+
+' Relationships
+TemplateController --> TemplateService : uses
+TemplateService --> TemplateRepository : uses
+TemplateService --> NodemailerService : uses
+TemplateService --> PdfConverterService : uses
+TemplateRepository --> PrismaService : uses
+
+TemplateController --> CreateTemplateFormDto : receives
+TemplateController --> UpdateTemplateFormDto : receives
+TemplateController --> ParseTemplateResponseDTO : returns
+TemplateController --> ExtractFieldsResponseDTO : returns
+
+TemplateService --> PlaceholderInfo : processes
+TemplateService --> TemplateError : throws
+
+CreateTemplateFormDto --> CreateTemplateSectionDto : contains
+CreateTemplateSectionDto --> CreateTemplateFieldDto : contains
+
+' Module Dependencies
+TemplateModule --> TemplateController : provides
+TemplateModule --> TemplateService : provides
+TemplateModule --> TemplateRepository : provides
+
+' Color coding
+TemplateController #LIGHTBLUE
+TemplateService #LIGHTGREEN
+TemplateRepository #LIGHTYELLOW
+TemplateModule #LIGHTPINK
+CreateTemplateFormDto #LIGHTGRAY
+CreateTemplateSectionDto #LIGHTGRAY
+CreateTemplateFieldDto #LIGHTGRAY
+UpdateTemplateFormDto #LIGHTGRAY
+ParseTemplateResponseDTO #LIGHTGRAY
+ExtractFieldsResponseDTO #LIGHTGRAY
+
+note top of TemplateController
+  **REST API Controller**
+  - Handles HTTP requests for template operations
+  - File upload processing (DOCX parsing)
+  - Input validation and response formatting
+  - Role-based access control via decorators
+end note
+
+note top of TemplateService
+  **Business Logic Layer** 
+  - DOCX template parsing and field extraction
+  - Template creation and validation logic
+  - Email notifications for template reviews
+  - Complex field hierarchy validation
+  - Final score and signature field validation
+end note
+
+note top of TemplateRepository
+  **Data Access Layer**
+  - Database operations via Prisma ORM
+  - Template CRUD operations
+  - Parent-child field relationship management
+  - Circular reference detection
+  - Transaction management for complex operations
+end note
+
+@enduml

@@ -9,7 +9,7 @@ import {
   TrainerCannotHaveTraineeProfileException,
   UserNotFoundException
 } from '~/routes/profile/profile.error'
-import { ResetPasswordBodyType, UpdateProfileBodyType } from '~/routes/profile/profile.model'
+import { ResetPasswordBodyType, UpdateProfileBodyType, UpdateSignatureBodyType } from '~/routes/profile/profile.model'
 import type { GetUserProfileResType } from '~/routes/user/user.model'
 import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName } from '~/shared/constants/auth.constant'
@@ -117,5 +117,33 @@ export class ProfileService {
     )
 
     return PasswordResetSuccessException
+  }
+
+  async updateSignature({
+    userId,
+    signatureImageUrl
+  }: {
+    userId: string
+    signatureImageUrl: string
+  }): Promise<{ message: string; signatureImageUrl: string }> {
+    // Check if user exists
+    const user = await this.sharedUserRepository.findUnique({ id: userId })
+    if (!user) {
+      throw UserNotFoundException
+    }
+
+    // Update signature image URL
+    await this.sharedUserRepository.update(
+      { id: userId },
+      {
+        signatureImageUrl,
+        updatedById: userId
+      }
+    )
+
+    return {
+      message: 'Signature updated successfully',
+      signatureImageUrl
+    }
   }
 }
