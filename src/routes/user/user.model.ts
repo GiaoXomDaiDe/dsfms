@@ -115,7 +115,7 @@ export const CreateUserBodyWithProfileSchema = CreateUserBodySchema.extend({
 // Schema cho Response của API GET('profile') và GET('users/:userId')
 export const GetUserResSchema = UserSchema.omit({
   passwordHash: true,
-  signatureImageUrl: true,
+  // signatureImageUrl: true,
   roleId: true,
   departmentId: true
 }).extend({
