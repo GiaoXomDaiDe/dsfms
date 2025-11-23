@@ -86,7 +86,6 @@ type UserProfileWithoutTeaching = Omit<GetUserProfileResType, 'teachingCourses' 
 const mapToUserProfileWithoutTeaching = (user: UserWithProfile): UserProfileWithoutTeaching => {
   const {
     passwordHash: _passwordHash,
-    signatureImageUrl: _signatureImageUrl,
     roleId: _roleId,
     departmentId: _departmentId,
     ...publicFields
