@@ -1,0 +1,4 @@
+-- This migration intentionally left blank.
+-- Previous attempt tried to coerce UUID columns in PermissionGroupToEndpointPermission to text,
+-- which conflicts with the foreign keys referencing UUID primary keys.
+-- Keeping the migration as a no-op allows Prisma to progress while preserving the correct schema.
