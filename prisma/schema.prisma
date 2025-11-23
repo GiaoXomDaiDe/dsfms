@@ -38,9 +38,9 @@ model User {
   updatedDepartments         Department[]        @relation("DeptUpdatedBy")
   createdGlobalFields        GlobalField[]       @relation("GlobalFieldCreatedBy")
   updatedGlobalFields        GlobalField[]       @relation("GlobalFieldUpdatedBy")
-  createdPermissions         Permission[]        @relation("PermissionCreatedBy")
-  deletedPermissions         Permission[]        @relation("PermissionDeletedBy")
-  updatedPermissions         Permission[]        @relation("PermissionUpdatedBy")
+  createdPermissions         EndpointPermission[]        @relation("PermissionCreatedBy")
+  deletedPermissions         EndpointPermission[]        @relation("PermissionDeletedBy")
+  updatedPermissions         EndpointPermission[]        @relation("PermissionUpdatedBy")
   createdRoles               Role[]              @relation("RoleCreatedBy")
   deletedRoles               Role[]              @relation("RoleDeletedBy")
   updatedRoles               Role[]              @relation("RoleUpdatedBy")
@@ -100,12 +100,12 @@ model Role {
   deletedBy   User?        @relation("RoleDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?        @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   users       User[]
-  permissions Permission[] @relation("PermissionToRole")
+  permissions EndpointPermission[] @relation("EndpointPermissionToRole")
 
   @@map("Role")
 }
 
-model Permission {
+model EndpointPermission {
   id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   method      HttpMethod
   path        String       
@@ -124,9 +124,29 @@ model Permission {
   createdBy   User?        @relation("PermissionCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   deletedBy   User?        @relation("PermissionDeletedBy", fields: [deletedById], references: [id], onUpdate: NoAction)
   updatedBy   User?        @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
-  roles       Role[]       @relation("PermissionToRole")
+  roles       Role[]       @relation("EndpointPermissionToRole")
+  permissionGroupLinks PermissionGroupToEndpointPermission[]
 
-  @@map("Permission")
+  @@map("EndpointPermission")
+}
+
+model PermissionGroup {
+  id                String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  groupName         String                        @unique
+  name              String
+  permissionGroupCode String
+
+  permissions PermissionGroupToEndpointPermission[]
+}
+
+model PermissionGroupToEndpointPermission {
+  permissionGroupId    String @db.Uuid
+  endpointPermissionId String @db.Uuid
+
+  permissionGroup   PermissionGroup    @relation(fields: [permissionGroupId], references: [id])
+  endpointPermission EndpointPermission @relation(fields: [endpointPermissionId], references: [id])
+
+  @@id([permissionGroupId, endpointPermissionId])
 }
 
 model TrainerProfile {

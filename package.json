@@ -10,6 +10,7 @@
     "create-permissions": "ts-node initialScript/createPermissions.ts",
     "add-media-permissions": "ts-node initialScript/addMediaPermissions.ts",
     "seed-departments": "ts-node initialScript/seedDepartments.ts",
+    "seed:permission-group": "ts-node initialScript/addPermissionGroup.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
