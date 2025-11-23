@@ -15,7 +15,7 @@ export class PermissionRepo {
   async list(options: { excludeModules?: string[] } = {}) {
     const { excludeModules = [] } = options
 
-    const permissions = await this.prisma.permission.findMany()
+    const permissions = await this.prisma.endpointPermission.findMany()
 
     const excludedModuleNames = new Set(
       excludeModules
@@ -60,8 +60,8 @@ export class PermissionRepo {
     }
   }
 
-  async findById(id: string): Promise<PermissionType | null> {
-    return this.prisma.permission.findFirst({
+  findById(id: string): Promise<PermissionType | null> {
+    return this.prisma.endpointPermission.findFirst({
       where: {
         id
       }
@@ -75,7 +75,7 @@ export class PermissionRepo {
     data: CreatePermissionBodyType
     createdById: string | null
   }): Promise<PermissionType> {
-    return await this.prisma.permission.create({
+    return await this.prisma.endpointPermission.create({
       data: {
         ...data,
         createdById
@@ -84,7 +84,7 @@ export class PermissionRepo {
   }
 
   async update({ id, updatedById, data }: { id: string; updatedById: string; data: UpdatePermissionBodyType }) {
-    return await this.prisma.permission.update({
+    return await this.prisma.endpointPermission.update({
       where: {
         id,
         deletedAt: null,
@@ -108,12 +108,12 @@ export class PermissionRepo {
     isHard?: boolean
   ): Promise<PermissionType> {
     return isHard
-      ? this.prisma.permission.delete({
+      ? this.prisma.endpointPermission.delete({
           where: {
             id
           }
         })
-      : this.prisma.permission.update({
+      : this.prisma.endpointPermission.update({
           where: {
             id,
             deletedAt: null,
@@ -127,8 +127,8 @@ export class PermissionRepo {
         })
   }
 
-  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<PermissionType> {
-    return this.prisma.permission.update({
+  enable({ id, enabledById }: { id: string; enabledById: string }): Promise<PermissionType> {
+    return this.prisma.endpointPermission.update({
       where: {
         id,
         deletedAt: { not: null },

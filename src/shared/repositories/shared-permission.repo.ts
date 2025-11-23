@@ -17,7 +17,7 @@ export class SharedPermissionRepository {
    * @throws Error nếu có IDs không tồn tại
    */
   async validatePermissionIds(ids: string[]): Promise<void> {
-    const existingPermissions = await this.prismaService.permission.findMany({
+    const existingPermissions = await this.prismaService.endpointPermission.findMany({
       where: {
         id: { in: ids },
         deletedAt: null
@@ -35,11 +35,11 @@ export class SharedPermissionRepository {
 
   /**
    * Lấy thông tin chi tiết permissions theo IDs
-   * @param ids - Array permission IDs
+   * @param ids - Array endpointPermission IDs
    * @returns Array permissions với thông tin đầy đủ
    */
-  async findByIds(ids: string[]) {
-    return this.prismaService.permission.findMany({
+  findByIds(ids: string[]) {
+    return this.prismaService.endpointPermission.findMany({
       where: {
         id: { in: ids },
         deletedAt: null
@@ -48,12 +48,12 @@ export class SharedPermissionRepository {
   }
 
   /**
-   * Lấy thông tin một permission theo ID
+   * Lấy thông tin một endpointPermission theo ID
    * @param id - Permission ID
    * @returns Permission object hoặc null
    */
-  async findById(id: string) {
-    return this.prismaService.permission.findFirst({
+  findById(id: string) {
+    return this.prismaService.endpointPermission.findFirst({
       where: {
         id,
         deletedAt: null
