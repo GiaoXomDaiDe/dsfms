@@ -1,0 +1,53 @@
+1. Overview
+ - In the template, Unit test cases are based on functions. Each sheet presents test cases for one function.
+ - Cover: General information of the project and Unit Test cases
+" - FunctionList: The list of Classes and Functions in the document. 
+     + To control that the number of Unit TC meets customer's requirement or the norm, user should fill value for  
+     'Normal number of Test cases/KLOC'. "
+"     + Click on Function link to open the related Test cases of the function.  
+     Note: You should create new Function sheet before creating the link"
+" - Test Report: provive the overview results of Functions Unit test: Test coverage, Test successful coverage 
+    (Summary, for normal/abnormal/boundary cases)"
+     Note:  Should check the formula of "Sub Total" if you add more functions
+
+2. Content in Test function sheet
+2.1 Combination of test cases.
+ - To verify that number of Unit TC meets customer's requirement or not. User has to fill number LOC of tested function and fill value of 'Normal number test cases/KLOC' item in FunctionList sheet, which is required by customer or normal value. The number of lacked TC is shown in 'Lack of test cases' item.
+ - If the number of Unit TC does not meet the requirement, creator should explain the reasons.
+ - If the number of  'Normal number test cases/KLOC' item in FunctionList sheet is not recorded, the number in 'Lack of test cases' is not calculated.
+
+ 2.2 Condition and confirmation of Test cases.
+ Each test case is the combination of condition and confirmation.
+a. Condition:
+        - Condition is combination of precondition and values of inputs.
+"        - Precondition: it is setting condition that must exist before execution of the test case. 
+                    Example: file A is precondition for the test case that needs to access file A."
+        - Values of inputs: it includes 3 types of values: normal, boundary and abnormal.
+                . Normal values are values of inputs used mainly and usually to ensure the function works.
+                . Boundary values are limited values that contain upper and lower values.
+                . Abnormal values are non-expected values. And normally it processes exception cases.   
+        - For examples:
+            Input value belongs to 5<= input <=10.
+               . 6,7,8,9 are normal values.
+               . 5, 10 are boundary values.
+               . -1, 11,... are abnormal values.   
+b. Confirmation: 
+"        - It is combination of expected result to check output of each function. 
+          If the results are the same with confirmation, the test case is passed, other case it is failed. "
+        - Confirmation can include:
+                + Output result of the function.
+                + Output log messages in log file.
+                + Output screen message...
+c. Type of test cases and result:
+        - Type of test case: It includes normal, boundary and abnormal test cases. User selects the type based on the type of input data.
+"        - Test case result: the actual output results comparing with the Confirmation.
+                 P for Passed and F for Failed cases.
+          It can 'OK' or 'NG' (it depends on habit of the teams or customers)"
+
+ 2.3. Other items:
+ - Function Code: it is ID of the function and updated automatically according to FunctionList sheet.
+ - Function Name: it is name  of the function and updated automatically according to FunctionList sheet.
+ - Created By: Name of creator.
+ - Executed By: Name of person who executes the unit test
+ - Lines of code: Number of Code line of the function.
+ - Test requirement: Brief description about requirements which are tested in this function, it is not mandatory.

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Put } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
-import { ResetPasswordBodyDTO, UpdateProfileBodyDTO } from '~/routes/profile/profile.dto'
+import { ResetPasswordBodyDTO, UpdateProfileBodyDTO, UpdateSignatureBodyDTO } from '~/routes/profile/profile.dto'
 import { ProfileService } from '~/routes/profile/profile.service'
 import { GetUserProfileResDTO, UpdateUserResDTO } from '~/routes/user/user.dto'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
@@ -36,5 +36,20 @@ export class ProfileController {
       body: { oldPassword, newPassword }
     })
     return result
+  }
+
+  @Put('signature')
+  @ZodSerializerDto(MessageResDTO)
+  async updateSignature(@Body() body: UpdateSignatureBodyDTO, @ActiveUser('userId') userId: string) {
+    const { signatureImageUrl } = body
+    const result = await this.profileService.updateSignature({
+      userId,
+      signatureImageUrl
+    })
+    return { 
+      success: true,
+      message: result.message,
+      data: { signatureImageUrl: result.signatureImageUrl }
+    }
   }
 }

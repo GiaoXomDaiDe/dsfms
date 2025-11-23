@@ -184,6 +184,10 @@ export const ResetPasswordBodySchema = z
     }
   })
 
+export const UpdateSignatureBodySchema = z.object({
+  signatureImageUrl: z.string().url('Signature image URL must be a valid URL')
+}).strict()
+
 export type TrainerProfileType = z.infer<typeof TrainerProfileSchema>
 export type TraineeProfileType = z.infer<typeof TraineeProfileSchema>
 export type CreateTrainerProfileType = z.infer<typeof CreateTrainerProfileSchema>
@@ -195,3 +199,4 @@ export type UpdateProfileBodyType = z.infer<typeof UpdateProfileBodySchema>
 export type UpdateMeBodyType = z.infer<typeof UpdateMeBodySchema>
 export type ChangePasswordBodyType = z.infer<typeof ChangePasswordBodySchema>
 export type ResetPasswordBodyType = z.infer<typeof ResetPasswordBodySchema>
+export type UpdateSignatureBodyType = z.infer<typeof UpdateSignatureBodySchema>
