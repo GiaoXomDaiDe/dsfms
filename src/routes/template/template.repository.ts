@@ -445,6 +445,45 @@ export class TemplateRepository {
     })
   }
 
+  async findTemplatesByUser(userId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' | 'DRAFT') {
+    const whereCondition: any = {
+      createdBy: userId
+    };
+
+    // If status is provided, add it to where condition, otherwise get all statuses
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    return this.prismaService.templateForm.findMany({
+      where: whereCondition,
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        _count: {
+          select: {
+            sections: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+  }
+
   async findTemplatesByCourse(courseId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     const whereCondition: any = {
       department: {
