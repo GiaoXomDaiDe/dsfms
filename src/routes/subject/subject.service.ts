@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { ForbiddenException, Injectable } from '@nestjs/common'
 import { round } from 'lodash'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { SubjectInstructorRoleValue, SubjectStatus } from '~/shared/constants/subject.constant'
@@ -41,7 +41,11 @@ import {
   CreateSubjectBodyType,
   GetAvailableTrainersResType,
   GetCourseEnrollmentBatchesResType,
+  GetEnrollmentsQueryType,
+  GetEnrollmentsResType,
   GetSubjectDetailResType,
+  GetSubjectEnrollmentsQueryType,
+  GetSubjectEnrollmentsResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetTraineeEnrollmentsQueryType,
@@ -90,6 +94,11 @@ export class SubjectService {
     const trainers = await this.subjectRepo.getAvailableTrainers(courseId)
 
     return trainers
+  }
+
+  async getAllEnrollments(query: GetEnrollmentsQueryType, roleName: string): Promise<GetEnrollmentsResType> {
+    this.ensureEnrollmentAccess(roleName)
+    return await this.subjectRepo.getAllEnrollments(query)
   }
 
   async create({
@@ -470,6 +479,16 @@ export class SubjectService {
     }
   }
 
+  async getSubjectEnrollments(
+    subjectId: string,
+    query: GetSubjectEnrollmentsQueryType
+  ): Promise<GetSubjectEnrollmentsResType> {
+    return await this.subjectRepo.getSubjectEnrollments({
+      subjectId,
+      ...query
+    })
+  }
+
   async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
     const course = await this.sharedCourseRepository.findById(courseId)
     if (!course) {
@@ -620,5 +639,12 @@ export class SubjectService {
     const diffInMs = end.getTime() - start.getTime()
     const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
     return round(diffInDays / 30, 2)
+  }
+
+  private ensureEnrollmentAccess(roleName: string) {
+    const allowedRoles = new Set<string>([RoleName.ACADEMIC_DEPARTMENT, RoleName.ADMINISTRATOR])
+    if (!allowedRoles.has(roleName)) {
+      throw new ForbiddenException('Insufficient permission to view enrollments')
+    }
   }
 }
