@@ -1,12 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import {
-  CannotUpdateTraineeProfileException,
   CannotUpdateTrainerProfileException,
   EmailAlreadyExistsException,
   OldPasswordIncorrectException,
   PasswordResetSuccessException,
   TraineeCannotHaveTrainerProfileException,
-  TrainerCannotHaveTraineeProfileException,
   UserNotFoundException
 } from '~/routes/profile/profile.error'
 import { ResetPasswordBodyType, UpdateProfileBodyType } from '~/routes/profile/profile.model'
@@ -47,22 +45,18 @@ export class ProfileService {
         throw UserNotFoundException
       }
 
-      const { trainerProfile, traineeProfile, ...userBasicInfo } = body
+      const { trainerProfile, avatarUrl } = body
+
+      const userBasicInfo: Pick<UpdateProfileBodyType, 'avatarUrl'> = {}
+      if (typeof avatarUrl !== 'undefined') {
+        userBasicInfo.avatarUrl = avatarUrl
+      }
 
       if (trainerProfile && currentUser.role.name !== RoleName.TRAINER) {
+        if (currentUser.role.name === RoleName.TRAINEE) {
+          throw TraineeCannotHaveTrainerProfileException
+        }
         throw CannotUpdateTrainerProfileException
-      }
-
-      if (traineeProfile && currentUser.role.name !== RoleName.TRAINEE) {
-        throw CannotUpdateTraineeProfileException
-      }
-
-      if (currentUser.role.name === RoleName.TRAINER && traineeProfile) {
-        throw TrainerCannotHaveTraineeProfileException
-      }
-
-      if (currentUser.role.name === RoleName.TRAINEE && trainerProfile) {
-        throw TraineeCannotHaveTrainerProfileException
       }
 
       const updated = await this.sharedUserRepository.updateWithProfile(
@@ -71,8 +65,7 @@ export class ProfileService {
           updatedById: userId,
           userData: userBasicInfo,
           newRoleName: currentUser.role.name as RoleNameType,
-          trainerProfile: currentUser.role.name === RoleName.TRAINER ? trainerProfile : undefined,
-          traineeProfile: currentUser.role.name === RoleName.TRAINEE ? traineeProfile : undefined
+          trainerProfile: currentUser.role.name === RoleName.TRAINER ? trainerProfile : undefined
         }
       )
 

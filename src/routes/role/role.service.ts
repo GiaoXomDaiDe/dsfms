@@ -120,7 +120,7 @@ export class RoleService {
     const permissionGroups: Awaited<
       ReturnType<SharedPermissionGroupRepository['findActivePermissionMappingsByCodes']>
     > = await this.sharedPermissionGroupRepo.findActivePermissionMappingsByCodes(permissionGroupCodes)
-
+    console.log(permissionGroups.map((group) => group.permissions))
     const foundCodes = new Set(permissionGroups.map((group) => group.permissionGroupCode))
     const missingCodes = permissionGroupCodes.filter((code) => !foundCodes.has(code))
     if (missingCodes.length > 0) {
@@ -133,11 +133,12 @@ export class RoleService {
         groupsWithoutPermissions.map((group) => group.permissionGroupCode)
       )
     }
+    console.log('group without pers', groupsWithoutPermissions)
 
     const permissionIds = permissionGroups.flatMap((group) =>
       group.permissions.map((permission) => permission.endpointPermissionId)
     )
-
+    console.log('permissions ID', permissionIds)
     return Array.from(new Set(permissionIds))
   }
 
