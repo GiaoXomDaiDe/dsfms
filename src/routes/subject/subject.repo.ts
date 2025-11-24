@@ -29,8 +29,12 @@ import {
   AssignTrainerResType,
   CourseEnrollmentBatchSummaryType,
   CreateSubjectBodyType,
+  EnrollmentListItemType,
   GetAvailableTrainersResType,
+  GetEnrollmentsQueryType,
+  GetEnrollmentsResType,
   GetSubjectDetailResType,
+  GetSubjectEnrollmentsResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetSubjectsType,
@@ -59,6 +63,50 @@ type AssignmentUserSummary = Pick<
   AssignmentUserForSubject,
   'id' | 'eid' | 'firstName' | 'lastName' | 'email' | 'department'
 >
+
+const traineeSelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  department: {
+    select: {
+      id: true,
+      name: true
+    }
+  }
+} as const
+
+const subjectSelect = {
+  id: true,
+  code: true,
+  name: true,
+  status: true,
+  method: true,
+  type: true,
+  course: {
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      status: true
+    }
+  }
+} as const
+
+type EnrollmentWithSubjectRelations = Prisma.SubjectEnrollmentGetPayload<{
+  include: {
+    trainee: { select: typeof traineeSelect }
+    subject: { select: typeof subjectSelect }
+  }
+}>
+
+type EnrollmentWithTrainee = Prisma.SubjectEnrollmentGetPayload<{
+  include: {
+    trainee: { select: typeof traineeSelect }
+  }
+}>
 
 @Injectable()
 @SerializeAll()
@@ -297,6 +345,198 @@ export class SubjectRepo {
     }))
 
     return { trainers: trainersWithFlag, totalCount: trainersWithFlag.length }
+  }
+
+  async getAllEnrollments(query: GetEnrollmentsQueryType): Promise<GetEnrollmentsResType> {
+    const {
+      page,
+      pageSize,
+      courseId,
+      courseCode,
+      subjectId,
+      subjectCode,
+      traineeId,
+      traineeEid,
+      traineeEmail,
+      batchCode,
+      status,
+      enrollmentDateFrom,
+      enrollmentDateTo,
+      sortBy,
+      sortOrder
+    } = query
+
+    const where: Prisma.SubjectEnrollmentWhereInput = {
+      subject: {
+        deletedAt: null,
+        ...(courseId && { courseId }),
+        ...(courseCode && { course: { code: courseCode } }),
+        ...(subjectId && { id: subjectId }),
+        ...(subjectCode && { code: subjectCode })
+      },
+      trainee: {
+        ...(traineeId && { id: traineeId }),
+        ...(traineeEid && { eid: traineeEid }),
+        ...(traineeEmail && { email: traineeEmail }),
+        deletedAt: null
+      },
+      ...(batchCode && { batchCode }),
+      ...(status && { status }),
+      ...(enrollmentDateFrom || enrollmentDateTo
+        ? {
+            enrollmentDate: {
+              ...(enrollmentDateFrom && { gte: new Date(enrollmentDateFrom) }),
+              ...(enrollmentDateTo && { lte: new Date(enrollmentDateTo) })
+            }
+          }
+        : {})
+    }
+
+    const [items, totalItems] = await Promise.all([
+      this.prisma.subjectEnrollment.findMany({
+        where,
+        include: {
+          trainee: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              department: {
+                select: { id: true, name: true }
+              }
+            }
+          },
+          subject: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              status: true,
+              method: true,
+              type: true,
+              course: {
+                select: {
+                  id: true,
+                  code: true,
+                  name: true,
+                  status: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: this.buildEnrollmentOrder(sortBy, sortOrder),
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      this.prisma.subjectEnrollment.count({ where })
+    ])
+
+    return {
+      items: items.map((item) => this.mapEnrollmentItem(item)),
+      page,
+      pageSize,
+      totalItems
+    }
+  }
+
+  async getSubjectEnrollments({
+    subjectId,
+    batchCode,
+    status,
+    page,
+    pageSize
+  }: {
+    subjectId: string
+    batchCode?: string
+    status?: SubjectEnrollmentStatusValue
+    page: number
+    pageSize: number
+  }): Promise<GetSubjectEnrollmentsResType> {
+    const subject = await this.prisma.subject.findUnique({
+      where: { id: subjectId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        status: true,
+        method: true,
+        type: true,
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true
+          }
+        }
+      }
+    })
+
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    const where: Prisma.SubjectEnrollmentWhereInput = {
+      subjectId,
+      ...(batchCode && { batchCode }),
+      ...(status && { status })
+    }
+
+    const [items, totalItems] = await Promise.all([
+      this.prisma.subjectEnrollment.findMany({
+        where,
+        include: {
+          trainee: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { enrollmentDate: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      this.prisma.subjectEnrollment.count({ where })
+    ])
+
+    return {
+      subject: {
+        id: subject.id,
+        code: subject.code,
+        name: subject.name,
+        status: subject.status as SubjectStatusValue,
+        method: subject.method as SubjectMethodValue,
+        type: subject.type as SubjectTypeValue,
+        course: subject.course
+          ? {
+              id: subject.course.id,
+              code: subject.course.code,
+              name: subject.course.name,
+              status: subject.course.status
+            }
+          : null
+      },
+      items: items.map((item) => ({
+        trainee: this.mapEnrollmentTrainee(item),
+        enrollment: this.mapEnrollmentRecord(item)
+      })),
+      page,
+      pageSize,
+      totalItems
+    }
   }
 
   async create({
@@ -1356,6 +1596,68 @@ export class SubjectRepo {
     return {
       current: distinctTrainees.length,
       max: course?.maxNumTrainee || null
+    }
+  }
+
+  private buildEnrollmentOrder(
+    sortBy: GetEnrollmentsQueryType['sortBy'],
+    sortOrder: GetEnrollmentsQueryType['sortOrder']
+  ): Prisma.SubjectEnrollmentOrderByWithRelationInput[] {
+    switch (sortBy) {
+      case 'courseCode':
+        return [{ subject: { course: { code: sortOrder } } }, { enrollmentDate: 'desc' }]
+      case 'subjectCode':
+        return [{ subject: { code: sortOrder } }, { enrollmentDate: 'desc' }]
+      case 'traineeEid':
+        return [{ trainee: { eid: sortOrder } }, { enrollmentDate: 'desc' }]
+      default:
+        return [{ enrollmentDate: sortOrder }]
+    }
+  }
+
+  private mapEnrollmentItem(enrollment: EnrollmentWithSubjectRelations): EnrollmentListItemType {
+    return {
+      trainee: this.mapEnrollmentTrainee(enrollment),
+      course: enrollment.subject.course
+        ? {
+            id: enrollment.subject.course.id,
+            code: enrollment.subject.course.code,
+            name: enrollment.subject.course.name,
+            status: enrollment.subject.course.status
+          }
+        : null,
+      subject: {
+        id: enrollment.subject.id,
+        code: enrollment.subject.code,
+        name: enrollment.subject.name,
+        status: enrollment.subject.status as SubjectStatusValue,
+        method: enrollment.subject.method as SubjectMethodValue,
+        type: enrollment.subject.type as SubjectTypeValue
+      },
+      enrollment: this.mapEnrollmentRecord(enrollment)
+    }
+  }
+
+  private mapEnrollmentTrainee(enrollment: EnrollmentWithTrainee): EnrollmentListItemType['trainee'] {
+    const trainee = enrollment.trainee
+    const fullName = [trainee.firstName ?? '', trainee.lastName ?? ''].filter(Boolean).join(' ').trim()
+    return {
+      id: trainee.id,
+      eid: trainee.eid,
+      fullName: fullName || trainee.eid,
+      email: trainee.email,
+      department: trainee.department ? { id: trainee.department.id, name: trainee.department.name } : null
+    }
+  }
+
+  private mapEnrollmentRecord(
+    enrollment: Pick<EnrollmentWithTrainee, 'status' | 'batchCode' | 'enrollmentDate' | 'updatedAt'>
+  ) {
+    return {
+      status: enrollment.status as SubjectEnrollmentStatusValue,
+      batchCode: enrollment.batchCode,
+      enrollmentDate: enrollment.enrollmentDate,
+      updatedAt: enrollment.updatedAt
     }
   }
 }
