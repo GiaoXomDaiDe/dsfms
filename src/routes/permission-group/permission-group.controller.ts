@@ -6,6 +6,7 @@ import {
   AssignPermissionGroupPermissionsBodyDto,
   AssignPermissionGroupPermissionsResDto,
   CreatePermissionGroupBodyDto,
+  PermissionGroupDetailResDto,
   PermissionGroupListResDto,
   PermissionGroupParamsDto,
   PermissionGroupResDto,
@@ -34,7 +35,7 @@ export class PermissionGroupController {
   }
 
   @Get(':permissionGroupId')
-  @ZodSerializerDto(PermissionGroupResDto)
+  @ZodSerializerDto(PermissionGroupDetailResDto)
   async findOne(@Param() { permissionGroupId }: PermissionGroupParamsDto) {
     const data = await this.permissionGroupService.findOne(permissionGroupId)
     return { message: PermissionGroupMes.DETAIL_SUCCESS, data }

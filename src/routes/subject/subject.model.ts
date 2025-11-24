@@ -128,6 +128,27 @@ export const GetAvailableTrainersResSchema = z.object({
   totalCount: z.number().int()
 })
 
+const enrollmentSortFields = ['enrollmentDate', 'courseCode', 'subjectCode', 'traineeEid'] as const
+const sortOrderValues = ['asc', 'desc'] as const
+
+export const GetEnrollmentsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  courseId: z.uuid().optional(),
+  courseCode: z.string().optional(),
+  subjectId: z.uuid().optional(),
+  subjectCode: z.string().optional(),
+  traineeId: z.uuid().optional(),
+  traineeEid: z.string().optional(),
+  traineeEmail: z.email().optional(),
+  batchCode: z.string().optional(),
+  status: z.enum(SubjectEnrollmentStatus).optional(),
+  enrollmentDateFrom: z.iso.datetime().optional(),
+  enrollmentDateTo: z.iso.datetime().optional(),
+  sortBy: z.enum(enrollmentSortFields).default('enrollmentDate'),
+  sortOrder: z.enum(sortOrderValues).default('desc')
+})
+
 export const SubjectTrainerParamsSchema = SubjectIdParamsSchema.extend({
   trainerId: z.uuid()
 })
@@ -318,6 +339,17 @@ export type LookupTraineesResType = z.infer<typeof LookupTraineesResSchema>
 export type AssignTraineesBodyType = z.infer<typeof AssignTraineesBodySchema>
 export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
+export type GetEnrollmentsQueryType = z.infer<typeof GetEnrollmentsQuerySchema>
+export type EnrollmentTraineeType = z.infer<typeof EnrollmentTraineeSchema>
+export type EnrollmentCourseType = z.infer<typeof EnrollmentCourseSchema>
+export type EnrollmentSubjectType = z.infer<typeof EnrollmentSubjectSchema>
+export type EnrollmentRecordType = z.infer<typeof EnrollmentRecordSchema>
+export type EnrollmentListItemType = z.infer<typeof EnrollmentListItemSchema>
+export type GetEnrollmentsResType = z.infer<typeof GetEnrollmentsResSchema>
+export type GetSubjectEnrollmentsQueryType = z.infer<typeof GetSubjectEnrollmentsQuerySchema>
+export type SubjectEnrollmentSummaryType = z.infer<typeof SubjectEnrollmentSummarySchema>
+export type SubjectEnrollmentListItemType = z.infer<typeof SubjectEnrollmentListItemSchema>
+export type GetSubjectEnrollmentsResType = z.infer<typeof GetSubjectEnrollmentsResSchema>
 export type GetCourseEnrollmentBatchesResType = z.infer<typeof GetCourseEnrollmentBatchesResSchema>
 export type RemoveCourseEnrollmentsByBatchResType = z.infer<typeof RemoveCourseEnrollmentsByBatchResSchema>
 export type RemoveCourseTraineeEnrollmentsBodyType = z.infer<typeof RemoveCourseTraineeEnrollmentsBodySchema>
@@ -367,19 +399,19 @@ export const TraineeAssignmentUserSchema = z.object({
   userId: z.uuid(),
   eid: z.string(),
   fullName: z.string(),
-  email: z.string().email(),
+  email: z.email(),
   department: TraineeAssignmentDepartmentSchema
 })
 
 export const TraineeAssignmentDuplicateSchema = TraineeAssignmentUserSchema.extend({
-  enrolledAt: z.string().datetime(),
+  enrolledAt: z.iso.datetime(),
   batchCode: z.string()
 })
 
 export const TraineeAssignmentIssueSchema = z.object({
   submittedId: z.uuid(),
   eid: z.string().optional(),
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   reason: z.enum(['USER_NOT_FOUND', 'ROLE_NOT_TRAINEE', 'USER_INACTIVE']),
   note: z.string().optional()
 })
@@ -387,6 +419,90 @@ export const TraineeAssignmentIssueSchema = z.object({
 export const AssignTraineesResSchema = z.object({
   enrolledCount: z.number().int(),
   enrolled: z.array(TraineeAssignmentUserSchema)
+})
+
+const EnrollmentDepartmentSchema = TraineeAssignmentDepartmentSchema
+
+export const EnrollmentTraineeSchema = z.object({
+  id: z.uuid(),
+  eid: z.string(),
+  fullName: z.string(),
+  email: z.email(),
+  department: EnrollmentDepartmentSchema
+})
+
+export const EnrollmentCourseSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(CourseStatus)
+})
+
+export const EnrollmentSubjectSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(SubjectStatus),
+  method: z.enum(SubjectMethod),
+  type: z.enum(SubjectType)
+})
+
+export const EnrollmentRecordSchema = z.object({
+  status: z.enum(SubjectEnrollmentStatus),
+  batchCode: z.string(),
+  enrollmentDate: z.date(),
+  updatedAt: z.date()
+})
+
+export const EnrollmentListItemSchema = z.object({
+  trainee: EnrollmentTraineeSchema,
+  course: EnrollmentCourseSchema.nullable(),
+  subject: EnrollmentSubjectSchema,
+  enrollment: EnrollmentRecordSchema
+})
+
+export const GetEnrollmentsResSchema = z.object({
+  items: z.array(EnrollmentListItemSchema),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  totalItems: z.number().int()
+})
+
+export const GetSubjectEnrollmentsQuerySchema = z.object({
+  batchCode: z.string().optional(),
+  status: z.enum(SubjectEnrollmentStatus).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20)
+})
+
+export const SubjectEnrollmentSummarySchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(SubjectStatus),
+  method: z.enum(SubjectMethod),
+  type: z.enum(SubjectType),
+  course: z
+    .object({
+      id: z.uuid(),
+      code: z.string(),
+      name: z.string(),
+      status: z.enum(CourseStatus)
+    })
+    .nullable()
+})
+
+export const SubjectEnrollmentListItemSchema = z.object({
+  trainee: EnrollmentTraineeSchema,
+  enrollment: EnrollmentRecordSchema
+})
+
+export const GetSubjectEnrollmentsResSchema = z.object({
+  subject: SubjectEnrollmentSummarySchema,
+  items: z.array(SubjectEnrollmentListItemSchema),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  totalItems: z.number().int()
 })
 
 // Get Course Trainees Schema
@@ -416,8 +532,8 @@ export const TraineeEnrollmentSubjectSchema = z.object({
   status: z.enum(SubjectStatus),
   type: z.enum(SubjectType),
   method: z.enum(SubjectMethod),
-  startDate: z.string().datetime().nullable(),
-  endDate: z.string().datetime().nullable(),
+  startDate: z.iso.datetime().nullable(),
+  endDate: z.iso.datetime().nullable(),
   course: z
     .object({
       id: z.uuid(),
@@ -431,8 +547,14 @@ export const TraineeEnrollmentRecordSchema = z.object({
   enrollment: z.object({
     batchCode: z.string(),
     status: z.enum(SubjectEnrollmentStatus),
-    enrollmentDate: z.iso.datetime().transform((value) => new Date(value)),
-    updatedAt: z.iso.datetime().transform((value) => new Date(value))
+    enrollmentDate: z.iso
+      .datetime()
+      .transform((d) => new Date(d))
+      .nullable(),
+    updatedAt: z.iso
+      .datetime()
+      .transform((d) => new Date(d))
+      .nullable()
   })
 })
 

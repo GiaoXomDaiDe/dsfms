@@ -20,8 +20,10 @@ import {
 } from '~/routes/role/role.model'
 import { RoleRepo } from '~/routes/role/role.repo'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
+import { SharedPermissionGroupRepository } from '~/shared/repositories/shared-permission-group.repo'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
+import { mapPermissionGroupsWithCounts } from '~/shared/utils/permission-group.util'
 import { preventAdminDeletion } from '~/shared/validation/entity-operation.validation'
 
 @Injectable()
@@ -29,7 +31,8 @@ export class RoleService {
   constructor(
     private readonly roleRepo: RoleRepo,
     private readonly sharedPermissionRepo: SharedPermissionRepository,
-    private readonly sharedRoleRepo: SharedRoleRepository
+    private readonly sharedRoleRepo: SharedRoleRepository,
+    private readonly sharedPermissionGroupRepo: SharedPermissionGroupRepository
   ) {}
 
   async list(): Promise<GetRolesResType> {
@@ -40,7 +43,16 @@ export class RoleService {
   async findById(id: string): Promise<GetRoleDetailResType> {
     const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
-    return role
+
+    const permissionGroups = await this.sharedPermissionGroupRepo.findByRoleId(role.id)
+    const grouped = mapPermissionGroupsWithCounts(permissionGroups)
+    const permissionCount = grouped.reduce((total, group) => total + group.permissionCount, 0)
+
+    return {
+      ...role,
+      permissionCount,
+      permissionGroups: grouped
+    }
   }
 
   async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }): Promise<CreateRoleResType> {

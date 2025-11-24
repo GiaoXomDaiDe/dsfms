@@ -1,13 +1,32 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { groupBy } from 'lodash'
+import { HttpMethod } from '@prisma/client'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
+import { mapPermissionGroups } from '~/shared/utils/permission-group.util'
 import {
   AssignPermissionGroupPermissionsBodyType,
   CreatePermissionGroupBodyType,
   PermissionGroupCollectionType,
+  PermissionGroupDetailType,
+  PermissionGroupPermissionType,
+  PermissionGroupType,
   UpdatePermissionGroupBodyType
 } from './permission-group.model'
 import { PermissionGroupRepo } from './permission-group.repo'
+
+type PermissionGroupWithEndpoints = PermissionGroupType & {
+  permissions: Array<{
+    endpointPermission: {
+      id: string
+      name: string
+      method: HttpMethod
+      path: string
+      module: string
+      description: string | null
+      viewModule: string | null
+      viewName: string | null
+    } | null
+  }>
+}
 
 @Injectable()
 export class PermissionGroupService {
@@ -22,20 +41,11 @@ export class PermissionGroupService {
 
   async list(): Promise<PermissionGroupCollectionType[]> {
     const permissionGroups = await this.permissionGroupRepo.list()
-    const grouped = groupBy(permissionGroups, 'groupName')
-
-    return Object.entries(grouped).map(([groupName, permissions]) => ({
-      groupName,
-      permissionsGroup: permissions.map((permission) => ({
-        id: permission.id,
-        code: permission.permissionGroupCode,
-        name: permission.name
-      }))
-    }))
+    return mapPermissionGroups(permissionGroups)
   }
 
   async findOne(id: string) {
-    return this.ensureExists(id)
+    return this.getDetailedGroup(id)
   }
 
   async update(id: string, data: UpdatePermissionGroupBodyType) {
@@ -59,14 +69,49 @@ export class PermissionGroupService {
 
     await this.permissionGroupRepo.replaceEndpointPermissions(permissionGroupId, permissionIds)
 
-    return this.ensureExists(permissionGroupId)
+    return this.getDetailedGroup(permissionGroupId)
   }
 
-  private async ensureExists(id: string) {
+  private async ensureExists(id: string): Promise<PermissionGroupType> {
     const group = await this.permissionGroupRepo.findById(id)
     if (!group) {
       throw new NotFoundException(`PermissionGroup ${id} not found`)
     }
     return group
+  }
+
+  private async getDetailedGroup(id: string): Promise<PermissionGroupDetailType> {
+    const group = await this.permissionGroupRepo.findDetailById(id)
+    if (!group) {
+      throw new NotFoundException(`PermissionGroup ${id} not found`)
+    }
+
+    return this.mapGroupDetail(group as PermissionGroupWithEndpoints)
+  }
+
+  private mapGroupDetail(group: PermissionGroupWithEndpoints): PermissionGroupDetailType {
+    const permissions: PermissionGroupPermissionType[] = group.permissions
+      .map((link) => link.endpointPermission)
+      .filter((permission): permission is NonNullable<typeof permission> => Boolean(permission))
+      .map((permission) => ({
+        id: permission.id,
+        name: permission.name,
+        method: permission.method,
+        path: permission.path,
+        module: permission.module,
+        description: permission.description ?? null,
+        viewModule: permission.viewModule ?? null,
+        viewName: permission.viewName ?? null
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    return {
+      id: group.id,
+      groupName: group.groupName,
+      name: group.name,
+      permissionGroupCode: group.permissionGroupCode,
+      permissionCount: permissions.length,
+      permissions
+    }
   }
 }
