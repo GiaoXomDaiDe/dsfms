@@ -2680,6 +2680,13 @@ export class AssessmentRepo {
                     }
                   }
                 }
+              },
+              assessedBy: {
+                select: {
+                  id: true,
+                  signatureImageUrl: true,
+                  lastName: true
+                }
               }
             }
           }
@@ -2693,8 +2700,54 @@ export class AssessmentRepo {
       let resultScore: number | null = null
       let resultText: AssessmentResult = AssessmentResult.NOT_APPLICABLE
 
-      // Only process final scores for APPROVED assessments
+      // Only process final scores and signatures for APPROVED assessments
       if (action === 'APPROVED') {
+        // Process SIGNATURE_IMG fields first
+        for (const section of assessment.sections) {
+          for (const value of section.values) {
+            if (value.templateField.fieldType === 'SIGNATURE_IMG') {
+              // Find the user who assessed this section
+              const sectionWithAssessor = await tx.assessmentSection.findUnique({
+                where: { id: section.id },
+                include: {
+                  assessedBy: {
+                    select: {
+                      id: true,
+                      signatureImageUrl: true,
+                      lastName: true,
+                      middleName: true,
+                      firstName: true
+                    }
+                  }
+                }
+              })
+
+              if (sectionWithAssessor?.assessedBy) {
+                const assessor = sectionWithAssessor.assessedBy
+                let signatureValue: string
+
+                if (assessor.signatureImageUrl) {
+                  // Use signature image URL if available
+                  signatureValue = assessor.signatureImageUrl
+                } else {
+                  // Use full name as fallback if no signature image
+                  signatureValue = assessor.firstName + ' ' + assessor.middleName + ' ' + assessor.lastName
+                }
+
+                // Update the SIGNATURE_IMG field value
+                await tx.assessmentValue.updateMany({
+                  where: {
+                    id: value.id
+                  },
+                  data: {
+                    answerValue: signatureValue
+                  }
+                })
+              }
+            }
+          }
+        }
+
         // Get pass score from course or subject
         let passScore: number | null = null
         if (assessment.courseId && assessment.subjectId === null) {
