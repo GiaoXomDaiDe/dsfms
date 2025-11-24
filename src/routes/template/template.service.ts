@@ -783,6 +783,19 @@ export class TemplateService {
   }
 
   /**
+   * Get templates created by a specific user with optional status filtering
+   */
+  async getTemplatesByUser(userId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' | 'DRAFT') {
+    const templates = await this.templateRepository.findTemplatesByUser(userId, status)
+
+    return {
+      success: true,
+      data: templates,
+      message: TEMPLATES_RETRIEVED_SUCCESSFULLY
+    };
+  }
+
+  /**
    * Change template status
    */
   async changeTemplateStatus(

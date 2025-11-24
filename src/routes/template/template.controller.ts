@@ -101,12 +101,28 @@ export class TemplateController {
 
   /**
    * GET /templates?status=PUBLISHED
-   * Get all templates with optional status filtering
+   * Get all system templates with optional status filtering
    */
   @Get()
   async getAllTemplates(@Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     try {
       return await this.templateService.getAllTemplates(status)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * GET /templates/my-templates?status=DRAFT
+   * Get all templates created by the current user with optional status filtering
+   */
+  @Get('my-templates')
+  async getMyTemplates(
+    @ActiveUser('userId') userId: string,
+    @Query('status') status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' | 'DRAFT'
+  ) {
+    try {
+      return await this.templateService.getTemplatesByUser(userId, status)
     } catch (error) {
       throw error
     }
