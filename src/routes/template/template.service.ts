@@ -744,13 +744,14 @@ export class TemplateService {
    */
   private getDefaultValueForField(field: any): any {
     switch (field.fieldType) {
-      case 'CHECK_BOX':
       case 'TOGGLE':
       case 'SECTION_CONTROL_TOGGLE':
         return false
       case 'NUMBER':
       case 'FINAL_SCORE_NUM':
         return 0
+      case 'CHECK_BOX':
+        return {} // CHECK_BOX is a parent field that contains child fields
       default:
         return ''
     }
@@ -997,17 +998,8 @@ export class TemplateService {
             }
           }
 
-          // Check if PART field has at least one child field
-          if (field.fieldType === 'PART') {
-            const hasChildFields = section.fields.some(childField => 
-              childField.parentTempId === field.tempId || 
-              childField.parentTempId === field.fieldName ||
-              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
-            )
-            if (!hasChildFields) {
-              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
-            }
-          }
+          // CHECK_BOX field validation handled in validateTemplateBusinessRules
+          // PART field validation handled in validateTemplateBusinessRules
         }
       }
 
@@ -1100,6 +1092,18 @@ export class TemplateService {
             )
             if (!hasChildFields) {
               throw new Error(`PART field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
+            }
+          }
+
+          // Check if CHECK_BOX field has at least one child field
+          if (field.fieldType === 'CHECK_BOX') {
+            const hasChildFields = section.fields.some(childField => 
+              childField.parentTempId === field.tempId || 
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            )
+            if (!hasChildFields) {
+              throw new Error(`CHECK_BOX field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
             }
           }
         }
@@ -1312,13 +1316,13 @@ export class TemplateService {
       case 'FINAL_SCORE_NUM':
         return 'number';
       case 'PART':
+      case 'CHECK_BOX':
         return 'part'; // Special type for parent/section fields
       case 'TEXT':
       case 'IMAGE':
       case 'SIGNATURE_DRAW':
       case 'SIGNATURE_IMG':
       case 'VALUE_LIST':
-      case 'CHECK_BOX':
       default:
         return 'string';
     }
@@ -1377,6 +1381,18 @@ export class TemplateService {
           )
           if (!hasChildFields) {
             throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+          }
+        }
+
+        // Check if CHECK_BOX field has at least one child field
+        if (field.fieldType === 'CHECK_BOX') {
+          const hasChildFields = section.fields.some(childField => 
+            childField.parentTempId === field.tempId || 
+            childField.parentTempId === field.fieldName ||
+            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          )
+          if (!hasChildFields) {
+            throw new Error(`CHECK_BOX field '${field.fieldName}' must have at least one child field`)
           }
         }
       }
@@ -1602,9 +1618,48 @@ export class TemplateService {
         
         allFields.push(field)
       }
+      
+      // 3. Check CHECK_BOX fields validation
+      for (const field of section.fields) {
+        if (field.fieldType === 'CHECK_BOX') {
+          // Find all child fields of this CHECK_BOX
+          const childFields = section.fields.filter((childField: any) => 
+            childField.parentTempId === field.tempId || 
+            childField.parentTempId === field.fieldName ||
+            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          )
+          
+          // Validate that all child fields are TEXT type only
+          for (const childField of childFields) {
+            if (childField.fieldType !== 'TEXT') {
+              throw new Error(`CHECK_BOX field '${field.fieldName}' can only contain TEXT fields. Found '${childField.fieldType}' in field '${childField.fieldName}'`)
+            }
+          }
+        }
+      }
+      
+      // 4. Check PART fields validation
+      for (const field of section.fields) {
+        if (field.fieldType === 'PART') {
+          // Find all child fields of this PART
+          const childFields = section.fields.filter((childField: any) => 
+            childField.parentTempId === field.tempId || 
+            childField.parentTempId === field.fieldName ||
+            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          )
+          
+          // Validate that PART children don't include restricted field types
+          const restrictedTypes = ['PART', 'TOGGLE', 'SECTION_CONTROL_TOGGLE', 'FINAL_SCORE_TEXT', 'FINAL_SCORE_NUM', 'CHECK_BOX']
+          for (const childField of childFields) {
+            if (restrictedTypes.includes(childField.fieldType)) {
+              throw new Error(`PART field '${field.fieldName}' cannot contain '${childField.fieldType}' field type. Found in field '${childField.fieldName}'. Restricted types: ${restrictedTypes.join(', ')}`)
+            }
+          }
+        }
+      }
     }
     
-    // 3. Check at least one signature field
+    // 5. Check at least one signature field
     const hasSignatureField = allFields.some((field: any) => 
       field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG'
     )
@@ -1612,7 +1667,7 @@ export class TemplateService {
       throw new MissingSignatureFieldError()
     }
     
-    // 4. Check at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field
+    // 6. Check at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field
     const finalScoreNumFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_NUM')
     const finalScoreTextFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_TEXT')
     
@@ -1629,7 +1684,7 @@ export class TemplateService {
       throw new Error('Template can have only 1 FINAL_SCORE_TEXT')
     }
     
-    // 5. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
+    // 7. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
     if (finalScoreTextFields.length > 0) {
       const finalScoreTextField = finalScoreTextFields[0]
       const hasFinalScoreNum = finalScoreNumFields.length > 0
