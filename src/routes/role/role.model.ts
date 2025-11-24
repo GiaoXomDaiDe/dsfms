@@ -50,7 +50,6 @@ export const RoleWithPermissionsSchema = RoleSchema.extend({
 
 export const RolePermissionGroupSchema = z.object({
   featureGroup: z.string(),
-  permissionCount: z.number().int().nonnegative(),
   permissions: PermissionGroupCollectionItemSchema.array()
 })
 

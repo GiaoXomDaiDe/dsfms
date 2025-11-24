@@ -23,7 +23,7 @@ import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/h
 import { SharedPermissionGroupRepository } from '~/shared/repositories/shared-permission-group.repo'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
-import { mapPermissionGroupsWithCounts } from '~/shared/utils/permission-group.util'
+import { mapPermissionGroups } from '~/shared/utils/permission-group.util'
 import { preventAdminDeletion } from '~/shared/validation/entity-operation.validation'
 
 @Injectable()
@@ -44,9 +44,30 @@ export class RoleService {
     const role = await this.roleRepo.findById(id)
     if (!role) throw NotFoundRoleException
 
-    const permissionGroups = await this.sharedPermissionGroupRepo.findByRoleId(role.id)
-    const grouped = mapPermissionGroupsWithCounts(permissionGroups)
-    const permissionCount = grouped.reduce((total, group) => total + group.permissionCount, 0)
+    const [roleEndpointIds, allGroups] = await Promise.all([
+      this.sharedPermissionGroupRepo.findRoleActiveEndpointIds(role.id),
+      this.sharedPermissionGroupRepo.findAllGroupsWithActiveEndpointMappings()
+    ])
+
+    const roleEndpointSet = new Set(roleEndpointIds)
+
+    const eligibleGroups = allGroups.filter((group) => {
+      const groupEndpointIds = group.permissions.map((permission) => permission.endpointPermissionId)
+      if (groupEndpointIds.length === 0) {
+        return false
+      }
+      return groupEndpointIds.every((endpointId) => roleEndpointSet.has(endpointId))
+    })
+
+    const grouped = mapPermissionGroups(
+      eligibleGroups.map((group) => ({
+        groupName: group.groupName,
+        permissionGroupCode: group.permissionGroupCode,
+        name: group.name
+      }))
+    )
+
+    const permissionCount = grouped.reduce((total, group) => total + group.permissions.length, 0)
 
     return {
       ...role,

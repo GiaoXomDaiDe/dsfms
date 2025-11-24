@@ -133,6 +133,14 @@ export const UpdateProfileBasicInfoSchema = UserSchema.pick({
 export const UpdateProfileBodySchema = UpdateProfileBasicInfoSchema.extend({
   trainerProfile: UpdateTrainerProfileSchema.optional(),
   traineeProfile: UpdateTraineeProfileSchema.optional()
+}).omit({
+  address: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  middleName: true,
+  gender: true,
+  phoneNumber: true
 })
 
 export const UpdateMeBodySchema = UserSchema.pick({
