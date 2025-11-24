@@ -44,7 +44,8 @@ import {
   DEPARTMENT_TEMPLATES_RETRIEVED_SUCCESSFULLY,
   TEMPLATE_UPDATED_SUCCESSFULLY,
   TEMPLATE_STATUS_UPDATED_SUCCESSFULLY,
-  TEMPLATE_VERSION_CREATED_SUCCESSFULLY
+  TEMPLATE_VERSION_CREATED_SUCCESSFULLY,
+  TEMPLATE_DELETED_SUCCESSFULLY
 } from './template.message'
 
 interface PlaceholderInfo {
@@ -1662,6 +1663,51 @@ export class TemplateService {
         throw error
       }
       throw new Error(`Failed to generate template PDF: ${error.message}`)
+    }
+  }
+
+  /**
+   * Delete a DRAFT template permanently
+   * Only users with appropriate permissions can delete templates in their department
+   */
+  async deleteDraftTemplate(
+    templateId: string,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // First get template to verify ownership and department
+      const template = await this.templateRepository.findTemplateById(templateId)
+      
+      if (!template) {
+        throw new TemplateNotFoundError(templateId)
+      }
+
+      // Verify user has permission to delete (department match)
+      if (userContext.departmentId && template.departmentId !== userContext.departmentId) {
+        throw new Error('You can only delete templates in your department')
+      }
+
+      // Check if template is DRAFT status
+      if (template.status !== 'DRAFT') {
+        throw new Error('Only DRAFT templates can be deleted')
+      }
+
+      // Delete the template
+      await this.templateRepository.deleteDraftTemplate(templateId)
+
+      return {
+        success: true,
+        message: TEMPLATE_DELETED_SUCCESSFULLY(template.name)
+      }
+
+    } catch (error) {
+      if (
+        error instanceof TemplateNotFoundError ||
+        error instanceof InvalidDraftTemplateStatusError
+      ) {
+        throw error
+      }
+      throw new TemplateCreationFailedError(error.message)
     }
   }
 }

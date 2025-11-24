@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Put, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Put, Delete, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import type { Response } from 'express'
@@ -373,6 +373,32 @@ export class TemplateController {
 
     try {
       return await this.templateService.updateRejectedTemplate(id, updateTemplateDto, userContext)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  /**
+   * DELETE /templates/draft/:id
+   * Delete a DRAFT template permanently
+   * Only DRAFT templates can be deleted, and only by users in the same department
+   */
+  @Delete('draft/:id')
+  async deleteDraftTemplate(
+    @Param('id') id: string,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    try {
+      const result = await this.templateService.deleteDraftTemplate(id, userContext)
+      return result
     } catch (error) {
       throw error
     }

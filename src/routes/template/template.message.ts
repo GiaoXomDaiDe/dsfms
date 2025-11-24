@@ -27,5 +27,8 @@ export const TEMPLATE_UPDATED_SUCCESSFULLY = 'Template updated successfully'
 export const TEMPLATE_STATUS_UPDATED_SUCCESSFULLY = (status: string) => 
   `Template status updated to ${status} successfully`
 
+export const TEMPLATE_DELETED_SUCCESSFULLY = (templateName: string) =>
+  `Template '${templateName}' deleted successfully`
+
 // ==================== Template Version Messages ====================
 export const TEMPLATE_VERSION_CREATED_SUCCESSFULLY = 'Template version created successfully'

@@ -1353,4 +1353,50 @@ export class TemplateRepository {
       }
     )
   }
+
+  /**
+   * Delete a DRAFT template permanently
+   * Only DRAFT templates can be deleted completely
+   */
+  async deleteDraftTemplate(templateId: string): Promise<void> {
+    return await this.prismaService.$transaction(
+      async (tx) => {
+        // First verify template exists and is DRAFT
+        const template = await tx.templateForm.findUnique({
+          where: { id: templateId },
+          select: { 
+            id: true, 
+            status: true,
+            name: true
+          }
+        })
+
+        if (!template) {
+          throw new TemplateNotFoundError(templateId)
+        }
+
+        if (template.status !== 'DRAFT') {
+          throw new InvalidDraftTemplateStatusError(template.status)
+        }
+
+        // Check if template is being used in assessments
+        const assessmentCount = await tx.assessmentForm.count({
+          where: { templateId }
+        })
+
+        if (assessmentCount > 0) {
+          throw new Error(`Cannot delete template '${template.name}' because it is being used in ${assessmentCount} assessment(s)`)
+        }
+
+        // Delete template - cascade will handle sections and fields
+        await tx.templateForm.delete({
+          where: { id: templateId }
+        })
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000
+      }
+    )
+  }
 }
