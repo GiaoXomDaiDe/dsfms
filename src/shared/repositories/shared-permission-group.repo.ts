@@ -31,4 +31,40 @@ export class SharedPermissionGroupRepository {
       orderBy: [{ groupName: 'asc' }, { permissionGroupCode: 'asc' }]
     })
   }
+
+  async findRoleActiveEndpointIds(roleId: string): Promise<string[]> {
+    const endpoints = await this.prismaService.endpointPermission.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        roles: {
+          some: {
+            id: roleId
+          }
+        }
+      },
+      select: { id: true }
+    })
+
+    return endpoints.map((endpoint) => endpoint.id)
+  }
+
+  findAllGroupsWithActiveEndpointMappings() {
+    return this.prismaService.permissionGroup.findMany({
+      include: {
+        permissions: {
+          where: {
+            endpointPermission: {
+              deletedAt: null,
+              isActive: true
+            }
+          },
+          select: {
+            endpointPermissionId: true
+          }
+        }
+      },
+      orderBy: [{ groupName: 'asc' }, { permissionGroupCode: 'asc' }]
+    })
+  }
 }
