@@ -24,6 +24,34 @@ export class PermissionGroupRepo {
     return this.prisma.permissionGroup.findUnique({ where: { id } })
   }
 
+  findDetailById(id: string) {
+    return this.prisma.permissionGroup.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        groupName: true,
+        name: true,
+        permissionGroupCode: true,
+        permissions: {
+          select: {
+            endpointPermission: {
+              select: {
+                id: true,
+                name: true,
+                method: true,
+                path: true,
+                module: true,
+                description: true,
+                viewModule: true,
+                viewName: true
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+
   update(id: string, data: UpdatePermissionGroupBodyType): Promise<PermissionGroupType> {
     return this.prisma.permissionGroup.update({ where: { id }, data })
   }

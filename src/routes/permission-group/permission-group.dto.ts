@@ -3,6 +3,7 @@ import {
   AssignPermissionGroupPermissionsBodySchema,
   AssignPermissionGroupPermissionsResSchema,
   CreatePermissionGroupBodySchema,
+  PermissionGroupDetailResSchema,
   PermissionGroupListResSchema,
   PermissionGroupParamsSchema,
   PermissionGroupResSchema,
@@ -12,6 +13,7 @@ import {
 export class PermissionGroupParamsDto extends createZodDto(PermissionGroupParamsSchema) {}
 export class CreatePermissionGroupBodyDto extends createZodDto(CreatePermissionGroupBodySchema) {}
 export class PermissionGroupResDto extends createZodDto(PermissionGroupResSchema) {}
+export class PermissionGroupDetailResDto extends createZodDto(PermissionGroupDetailResSchema) {}
 export class PermissionGroupListResDto extends createZodDto(PermissionGroupListResSchema) {}
 export class UpdatePermissionGroupBodyDto extends createZodDto(UpdatePermissionGroupBodySchema) {}
 export class AssignPermissionGroupPermissionsBodyDto extends createZodDto(AssignPermissionGroupPermissionsBodySchema) {}

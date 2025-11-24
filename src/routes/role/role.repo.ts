@@ -271,7 +271,7 @@ export class RoleRepo {
   ): RoleWithPermissionsType | null {
     if (!role) return null
 
-    const { _count, ...roleData } = role
+    const { _count, permissions, ...roleData } = role
 
     return {
       ...roleData,

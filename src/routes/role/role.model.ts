@@ -1,4 +1,5 @@
 import z from 'zod'
+import { PermissionGroupCollectionItemSchema } from '~/routes/permission-group/permission-group.model'
 import { PermissionSchema } from '~/routes/permission/permission.model'
 import {
   AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE,
@@ -42,12 +43,20 @@ export const GetRoleParamsSchema = z
   .strict()
 
 export const RoleWithPermissionsSchema = RoleSchema.extend({
-  permissions: z.array(PermissionSchema),
+  // permissions: z.array(PermissionSchema),
   userCount: z.number().default(0),
   permissionCount: z.number().default(0)
 })
 
-export const GetRoleDetailResSchema = RoleWithPermissionsSchema
+export const RolePermissionGroupSchema = z.object({
+  featureGroup: z.string(),
+  permissionCount: z.number().int().nonnegative(),
+  permissions: PermissionGroupCollectionItemSchema.array()
+})
+
+export const GetRoleDetailResSchema = RoleWithPermissionsSchema.extend({
+  permissionGroups: z.array(RolePermissionGroupSchema)
+})
 
 export const CreateRoleBodySchema = RoleSchema.pick({
   name: true,
@@ -61,11 +70,11 @@ export const CreateRoleBodySchema = RoleSchema.pick({
   })
   .strict()
 
-export const CreateRoleResSchema = GetRoleDetailResSchema
+export const CreateRoleResSchema = RoleWithPermissionsSchema
 
 export const UpdateRoleBodySchema = CreateRoleBodySchema.partial()
 
-export const UpdateRoleResSchema = GetRoleDetailResSchema
+export const UpdateRoleResSchema = RoleWithPermissionsSchema
 
 export const AddPermissionsToRoleBodySchema = z
   .object({
