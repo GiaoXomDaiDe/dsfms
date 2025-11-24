@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
+  createPermissionGroupNotFoundError,
+  createPermissionGroupWithoutPermissionsError,
   createRoleAlreadyActiveError,
   NoNewPermissionsToAddException,
   NoPermissionsToRemoveException,
@@ -77,12 +79,10 @@ export class RoleService {
   }
 
   async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }): Promise<CreateRoleResType> {
-    if (data.permissionIds && data.permissionIds.length > 0) {
-      await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
-    }
+    const permissionIds = await this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes)
 
     try {
-      return await this.roleRepo.create({ createdById, data })
+      return await this.roleRepo.create({ createdById, data, permissionIds })
     } catch (error) {
       if (isUniqueConstraintPrismaError(error)) throw RoleAlreadyExistsException
       throw error
@@ -98,20 +98,47 @@ export class RoleService {
     data: UpdateRoleBodyType
     updatedById: string
   }): Promise<RoleWithPermissionsType> {
-    if (data.permissionIds && data.permissionIds.length > 0) {
-      await this.sharedPermissionRepo.validatePermissionIds(data.permissionIds)
+    let permissionIds: string[] | undefined
+
+    if (data.permissionGroupCodes && data.permissionGroupCodes.length > 0) {
+      permissionIds = await this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes)
     }
 
     const role = await this.sharedRoleRepo.findRolebyId(id)
     if (!role) throw NotFoundRoleException
 
     try {
-      return await this.roleRepo.update({ id, updatedById, data })
+      return await this.roleRepo.update({ id, updatedById, data, permissionIds })
     } catch (error) {
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       if (isUniqueConstraintPrismaError(error)) throw RoleAlreadyExistsException
       throw error
     }
+  }
+
+  private async resolvePermissionIdsFromGroupCodes(permissionGroupCodes: string[]): Promise<string[]> {
+    const permissionGroups: Awaited<
+      ReturnType<SharedPermissionGroupRepository['findActivePermissionMappingsByCodes']>
+    > = await this.sharedPermissionGroupRepo.findActivePermissionMappingsByCodes(permissionGroupCodes)
+
+    const foundCodes = new Set(permissionGroups.map((group) => group.permissionGroupCode))
+    const missingCodes = permissionGroupCodes.filter((code) => !foundCodes.has(code))
+    if (missingCodes.length > 0) {
+      throw createPermissionGroupNotFoundError(missingCodes)
+    }
+
+    const groupsWithoutPermissions = permissionGroups.filter((group) => group.permissions.length === 0)
+    if (groupsWithoutPermissions.length > 0) {
+      throw createPermissionGroupWithoutPermissionsError(
+        groupsWithoutPermissions.map((group) => group.permissionGroupCode)
+      )
+    }
+
+    const permissionIds = permissionGroups.flatMap((group) =>
+      group.permissions.map((permission) => permission.endpointPermissionId)
+    )
+
+    return Array.from(new Set(permissionIds))
   }
 
   async delete({ id, deletedById }: { id: string; deletedById: string }): Promise<{ message: string }> {

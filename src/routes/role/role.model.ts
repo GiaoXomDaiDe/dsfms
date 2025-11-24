@@ -2,7 +2,9 @@ import z from 'zod'
 import { PermissionGroupCollectionItemSchema } from '~/routes/permission-group/permission-group.model'
 import { PermissionSchema } from '~/routes/permission/permission.model'
 import {
+  AT_LEAST_ONE_PERMISSION_GROUP_REQUIRED_MESSAGE,
   AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE,
+  PERMISSION_GROUP_CODES_MUST_BE_UNIQUE_MESSAGE,
   PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE
 } from '~/routes/role/role.error'
 import { ROLE_NAME_REGEX, optionalAlphabeticCharacter, requiredText } from '~/shared/constants/validation.constant'
@@ -62,10 +64,10 @@ export const CreateRoleBodySchema = RoleSchema.pick({
   description: true
 })
   .extend({
-    permissionIds: z
-      .array(z.uuid())
-      .min(1, AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE)
-      .refine((ids) => new Set(ids).size === ids.length, PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE)
+    permissionGroupCodes: z
+      .array(z.string().min(1))
+      .min(1, AT_LEAST_ONE_PERMISSION_GROUP_REQUIRED_MESSAGE)
+      .refine((codes) => new Set(codes).size === codes.length, PERMISSION_GROUP_CODES_MUST_BE_UNIQUE_MESSAGE)
   })
   .strict()
 
