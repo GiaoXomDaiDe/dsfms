@@ -119,21 +119,23 @@ export const UpdateTraineeProfileSchema = TraineeProfileSchema.pick({
   nation: true
 }).partial()
 
+const TrainerSelfProfileUpdateSchema = z
+  .object({
+    bio: TrainerProfileSchema.shape.bio
+  })
+  .partial()
+  .strict()
+
 export const UpdateProfileBasicInfoSchema = UserSchema.pick({
-  email: true,
-  firstName: true,
-  lastName: true,
-  middleName: true,
-  address: true,
-  phoneNumber: true,
-  avatarUrl: true,
-  gender: true
+  avatarUrl: true
 })
 
-export const UpdateProfileBodySchema = UpdateProfileBasicInfoSchema.extend({
-  trainerProfile: UpdateTrainerProfileSchema.optional(),
-  traineeProfile: UpdateTraineeProfileSchema.optional()
-})
+export const UpdateProfileBodySchema = z
+  .object({
+    avatarUrl: UserSchema.shape.avatarUrl.optional(),
+    trainerProfile: TrainerSelfProfileUpdateSchema.optional()
+  })
+  .strict()
 
 export const UpdateMeBodySchema = UserSchema.pick({
   email: true,

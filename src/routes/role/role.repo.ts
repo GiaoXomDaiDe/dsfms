@@ -72,17 +72,19 @@ export class RoleRepo {
 
   async create({
     createdById,
-    data
+    data,
+    permissionIds
   }: {
     createdById: string | null
     data: CreateRoleBodyType
+    permissionIds: string[]
   }): Promise<RoleWithPermissionsType> {
     const role = await this.prismaService.role.create({
       data: {
         name: data.name,
         description: data.description,
         permissions: {
-          connect: data.permissionIds.map((id) => ({ id }))
+          connect: permissionIds.map((id) => ({ id }))
         },
         createdById
       },
@@ -95,11 +97,13 @@ export class RoleRepo {
   async update({
     id,
     updatedById,
-    data
+    data,
+    permissionIds
   }: {
     id: string
     updatedById: string
     data: UpdateRoleBodyType
+    permissionIds?: string[]
   }): Promise<RoleWithPermissionsType> {
     const role = await this.prismaService.role.update({
       where: {
@@ -110,9 +114,11 @@ export class RoleRepo {
       data: {
         name: data.name,
         description: data.description,
-        permissions: {
-          set: data.permissionIds?.map((permissionId) => ({ id: permissionId }))
-        },
+        permissions: permissionIds
+          ? {
+              set: permissionIds.map((permissionId) => ({ id: permissionId }))
+            }
+          : undefined,
         updatedById
       },
       include: roleDetailInclude

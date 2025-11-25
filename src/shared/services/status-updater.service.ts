@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
-import { AssessmentStatus } from '@prisma/client'
+import { AssessmentStatus, Prisma } from '@prisma/client'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectEnrollmentStatus, SubjectStatus } from '~/shared/constants/subject.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -8,6 +8,13 @@ import { PrismaService } from '~/shared/services/prisma.service'
 @Injectable()
 export class StatusUpdaterService {
   private readonly logger = new Logger(StatusUpdaterService.name)
+  private static readonly cancellableAssessmentStatuses: AssessmentStatus[] = [
+    AssessmentStatus.NOT_STARTED,
+    AssessmentStatus.ON_GOING,
+    AssessmentStatus.DRAFT,
+    AssessmentStatus.SIGNATURE_PENDING,
+    AssessmentStatus.READY_TO_SUBMIT
+  ]
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -26,11 +33,42 @@ export class StatusUpdaterService {
       await this.updateCourseStatuses()
       await this.updateSubjectStatuses()
       await this.updateEnrollmentStatuses()
-      await this.updateAssessmentStatuses()
 
       this.logger.log('Automatic status update completed successfully')
     } catch (error) {
       this.logger.error('Error during automatic status update', error)
+    }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_1AM, {
+    name: 'assessment-schedule-keeper',
+    timeZone: 'Asia/Ho_Chi_Minh'
+  })
+  async handleAssessmentSchedule() {
+    this.logger.log('Starting assessment schedule cron...')
+    try {
+      const started = await this.activateAssessmentsForToday()
+      const cancelled = await this.cancelExpiredAssessments()
+      this.logger.log(`Assessment schedule cron finished: ${started} → ON_GOING, ${cancelled} → CANCELLED (expired)`)
+    } catch (error) {
+      this.logger.error('Error during assessment schedule cron', error)
+    }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_2AM, {
+    name: 'assessment-cancel-on-enrollment',
+    timeZone: 'Asia/Ho_Chi_Minh'
+  })
+  async handleCancelledEnrollmentAssessments() {
+    this.logger.log('Starting assessment cancellation cron for cancelled enrollments...')
+    try {
+      const { subjectCancelled, courseCancelled } = await this.cancelAssessmentsForCancelledEnrollments()
+      const cancellationSummary =
+        `Assessment cancellation cron finished: ${subjectCancelled} subject-level, ` +
+        `${courseCancelled} course-level → CANCELLED`
+      this.logger.log(cancellationSummary)
+    } catch (error) {
+      this.logger.error('Error during assessment cancellation cron', error)
     }
   }
 
@@ -235,18 +273,13 @@ export class StatusUpdaterService {
     )
   }
 
-  /**
-   * Chuyển đổi status của Assessment từ NOT_STARTED sang ON_GOING khi ngày hiện tại >= startDate
-   */
-  private async updateAssessmentStatuses() {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
-
-    const result = await this.prisma.assessmentForm.updateMany({
+  private async activateAssessmentsForToday() {
+    const today = this.getStartOfToday()
+    const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
         occuranceDate: {
-          lte: now
+          lte: today
         }
       },
       data: {
@@ -254,9 +287,100 @@ export class StatusUpdaterService {
       }
     })
 
-    if (result.count > 0) {
-      this.logger.log(`Assessment statuses updated: ${result.count} → ON_GOING`)
-    }
+    return count
+  }
+
+  private async cancelExpiredAssessments() {
+    const today = this.getStartOfToday()
+    const { count } = await this.prisma.assessmentForm.updateMany({
+      where: {
+        occuranceDate: {
+          lt: today
+        },
+        status: {
+          in: StatusUpdaterService.cancellableAssessmentStatuses
+        }
+      },
+      data: {
+        status: AssessmentStatus.CANCELLED
+      }
+    })
+
+    return count
+  }
+
+  private async cancelAssessmentsForCancelledEnrollments() {
+    const cancellableStatuses = StatusUpdaterService.cancellableAssessmentStatuses
+
+    const subjectAssessmentIds = await this.prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT af."id"
+        FROM "Assessment_Form" af
+        JOIN "Subject_Enrollment" se
+          ON se."subjectId" = af."subjectId"
+         AND se."traineeUserId" = af."traineeId"
+        WHERE af."subjectId" IS NOT NULL
+          AND af."status" IN (${Prisma.join(cancellableStatuses)})
+          AND se."status" = ${SubjectEnrollmentStatus.CANCELLED}
+      `
+    )
+
+    const subjectCancelled = await this.cancelAssessmentsByIds(subjectAssessmentIds.map((row) => row.id))
+
+    const courseAssessmentIds = await this.prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT af."id"
+        FROM "Assessment_Form" af
+        WHERE af."courseId" IS NOT NULL
+          AND af."status" IN (${Prisma.join(cancellableStatuses)})
+          AND EXISTS (
+            SELECT 1
+            FROM "Subject_Enrollment" se
+            JOIN "Subject" s ON s."id" = se."subjectId"
+            WHERE se."traineeUserId" = af."traineeId"
+              AND s."courseId" = af."courseId"
+              AND se."status" = ${SubjectEnrollmentStatus.CANCELLED}
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "Subject_Enrollment" se
+            JOIN "Subject" s ON s."id" = se."subjectId"
+            WHERE se."traineeUserId" = af."traineeId"
+              AND s."courseId" = af."courseId"
+              AND se."status" <> ${SubjectEnrollmentStatus.CANCELLED}
+          )
+      `
+    )
+
+    const courseCancelled = await this.cancelAssessmentsByIds(courseAssessmentIds.map((row) => row.id))
+
+    return { subjectCancelled, courseCancelled }
+  }
+
+  private async cancelAssessmentsByIds(ids: string[]) {
+    if (!ids.length) return 0
+
+    const { count } = await this.prisma.assessmentForm.updateMany({
+      where: {
+        id: {
+          in: ids
+        },
+        status: {
+          in: StatusUpdaterService.cancellableAssessmentStatuses
+        }
+      },
+      data: {
+        status: AssessmentStatus.CANCELLED
+      }
+    })
+
+    return count
+  }
+
+  private getStartOfToday() {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return today
   }
 
   /**

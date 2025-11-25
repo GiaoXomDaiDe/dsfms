@@ -166,6 +166,22 @@ export function createRequireAdminPermissionError(operation: string) {
   })
 }
 
+export function createPermissionGroupNotFoundError(permissionGroupCodes: string[]) {
+  return new NotFoundException({
+    message: `Permission group codes not found: ${permissionGroupCodes.join(', ')}`,
+    errorCode: 'PERMISSION_GROUP_NOT_FOUND',
+    permissionGroupCodes
+  })
+}
+
+export function createPermissionGroupWithoutPermissionsError(permissionGroupCodes: string[]) {
+  return new BadRequestException({
+    message: `Permission groups lack endpoint permissions: ${permissionGroupCodes.join(', ')}`,
+    errorCode: 'PERMISSION_GROUP_HAS_NO_PERMISSIONS',
+    permissionGroupCodes
+  })
+}
+
 /* =========================
  * System Error Exceptions - Lỗi hệ thống
  * ========================= */
@@ -206,6 +222,8 @@ export const NoPermissionsToRemoveException = new BadRequestException({
 export const AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE = 'At least one permission ID is required'
 export const PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE = 'Permission IDs must be unique'
 export const PERMISSION_ID_MUST_BE_UUID_MESSAGE = 'Permission ID must be a valid UUID'
+export const AT_LEAST_ONE_PERMISSION_GROUP_REQUIRED_MESSAGE = 'At least one permission group code is required'
+export const PERMISSION_GROUP_CODES_MUST_BE_UNIQUE_MESSAGE = 'Permission group codes must be unique'
 
 // Message cho role validation
 export const ROLE_NAME_REQUIRED_MESSAGE = 'Role name is required'

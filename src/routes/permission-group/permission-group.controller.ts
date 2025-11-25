@@ -16,11 +16,11 @@ import { PermissionGroupMes } from './permission-group.message'
 import { PermissionGroupService } from './permission-group.service'
 
 @Controller('permission-groups')
-@IsPublic()
 export class PermissionGroupController {
   constructor(private readonly permissionGroupService: PermissionGroupService) {}
 
   @Post()
+  @IsPublic()
   @ZodSerializerDto(PermissionGroupResDto)
   async create(@Body() body: CreatePermissionGroupBodyDto) {
     const data = await this.permissionGroupService.create(body)
@@ -35,6 +35,7 @@ export class PermissionGroupController {
   }
 
   @Get(':permissionGroupId')
+  @IsPublic()
   @ZodSerializerDto(PermissionGroupDetailResDto)
   async findOne(@Param() { permissionGroupId }: PermissionGroupParamsDto) {
     const data = await this.permissionGroupService.findOne(permissionGroupId)
@@ -42,6 +43,7 @@ export class PermissionGroupController {
   }
 
   @Patch(':permissionGroupId')
+  @IsPublic()
   @ZodSerializerDto(MessageResDTO)
   async update(@Param() { permissionGroupId }: PermissionGroupParamsDto, @Body() body: UpdatePermissionGroupBodyDto) {
     await this.permissionGroupService.update(permissionGroupId, body)
@@ -49,6 +51,7 @@ export class PermissionGroupController {
   }
 
   @Delete(':permissionGroupId')
+  @IsPublic()
   @ZodSerializerDto(MessageResDTO)
   async remove(@Param() { permissionGroupId }: PermissionGroupParamsDto) {
     await this.permissionGroupService.remove(permissionGroupId)
@@ -56,6 +59,7 @@ export class PermissionGroupController {
   }
 
   @Post(':permissionGroupId/permissions')
+  @IsPublic()
   @ZodSerializerDto(AssignPermissionGroupPermissionsResDto)
   async assignPermissions(
     @Param() { permissionGroupId }: PermissionGroupParamsDto,
