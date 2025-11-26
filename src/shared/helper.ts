@@ -4,7 +4,6 @@ import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import z from 'zod'
 import { ProfileNotAllowedForRoleMessage } from '~/routes/user/user.error'
-import { CreateUserBodyWithProfileType } from '~/routes/user/user.model'
 import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { ROLE_PROFILE_VIOLATION_TYPES, RoleProfileViolationType } from '~/shared/constants/user.constant'
 
@@ -17,10 +16,9 @@ type RoleProfileViolation = {
   message: string
 }
 
-export const evaluateRoleProfileRules = (
-  roleName: string,
-  data: CreateUserBodyWithProfileType
-): RoleProfileViolation[] => {
+export type RoleProfilePayload = Partial<Record<RoleProfileKey, unknown>>
+
+export const evaluateRoleProfileRules = (roleName: string, data: RoleProfilePayload): RoleProfileViolation[] => {
   const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
   const violations: RoleProfileViolation[] = []
 
@@ -87,7 +85,7 @@ export function createResponseDto<T extends z.ZodTypeAny>(dataSchema: T, default
   return createZodDto(schema)
 }
 
-export const validateRoleProfile = (roleName: string, data: CreateUserBodyWithProfileType, ctx: z.RefinementCtx) => {
+export const validateRoleProfile = (roleName: string, data: RoleProfilePayload, ctx: z.RefinementCtx) => {
   const violations = evaluateRoleProfileRules(roleName, data)
 
   violations.forEach((violation) => {

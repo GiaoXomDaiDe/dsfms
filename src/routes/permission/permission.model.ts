@@ -1,76 +1,7 @@
-import { HttpMethod } from '@prisma/client'
 import z from 'zod'
-import { hasAlphabeticCharacter, optionalAlphabeticCharacter } from '~/shared/constants/validation.constant'
+import { PermissionSchema, type PermissionType as SharedPermissionType } from '~/shared/models/shared-permission.model'
 
-const HAS_ALPHABETIC_MESSAGE = 'Must include at least one alphabetic character'
-
-export const PermissionSchema = z.object({
-  id: z.uuid(),
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Permission name is required')
-    .max(250)
-    .refine(hasAlphabeticCharacter, { message: HAS_ALPHABETIC_MESSAGE }),
-  description: z
-    .string()
-    .trim()
-    .max(500)
-    .nullable()
-    .refine(optionalAlphabeticCharacter, { message: HAS_ALPHABETIC_MESSAGE }),
-  path: z
-    .string()
-    .trim()
-    .min(1, 'Permission path is required')
-    .max(500)
-    .refine(hasAlphabeticCharacter, { message: HAS_ALPHABETIC_MESSAGE }),
-  module: z
-    .string()
-    .trim()
-    .min(1, 'Permission module is required')
-    .max(100)
-    .refine(hasAlphabeticCharacter, { message: HAS_ALPHABETIC_MESSAGE }),
-  method: z.enum(
-    [
-      HttpMethod.GET,
-      HttpMethod.POST,
-      HttpMethod.PUT,
-      HttpMethod.DELETE,
-      HttpMethod.PATCH,
-      HttpMethod.HEAD,
-      HttpMethod.OPTIONS
-    ],
-    {
-      error: ({ values }) => {
-        return { message: `Method must be one of: ${values.join(', ')}` }
-      }
-    }
-  ),
-  isActive: z.boolean().default(true),
-  viewName: z
-    .string()
-    .trim()
-    .max(250)
-    .nullable()
-    .refine(optionalAlphabeticCharacter, { message: HAS_ALPHABETIC_MESSAGE })
-    .default(''),
-  viewModule: z
-    .string()
-    .trim()
-    .max(250)
-    .nullable()
-    .refine(optionalAlphabeticCharacter, { message: HAS_ALPHABETIC_MESSAGE })
-    .default(''),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
-  deletedAt: z.iso
-    .datetime()
-    .transform((value) => new Date(value))
-    .nullable(),
-  createdAt: z.iso.datetime().transform((value) => new Date(value)),
-  updatedAt: z.iso.datetime().transform((value) => new Date(value))
-})
+export { PermissionSchema } from '~/shared/models/shared-permission.model'
 
 export const PermissionListItemSchema = PermissionSchema.pick({
   id: true,
@@ -110,7 +41,7 @@ export const CreatePermissionBodySchema = PermissionSchema.pick({
 
 export const UpdatePermissionBodySchema = CreatePermissionBodySchema.partial()
 
-export type PermissionType = z.infer<typeof PermissionSchema>
+export type PermissionType = SharedPermissionType
 export type GetPermissionsResType = z.infer<typeof GetPermissionsResSchema>
 export type PermissionModuleType = z.infer<typeof PermissionModuleSchema>
 export type PermissionListItemType = z.infer<typeof PermissionListItemSchema>

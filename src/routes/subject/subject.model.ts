@@ -128,6 +128,29 @@ export const GetAvailableTrainersResSchema = z.object({
   totalCount: z.number().int()
 })
 
+export const ActiveTraineeSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true,
+  avatarUrl: true,
+  departmentId: true
+}).extend({
+  department: z
+    .object({
+      id: z.uuid(),
+      name: z.string()
+    })
+    .nullable()
+})
+
+export const GetActiveTraineesResSchema = z.object({
+  trainees: z.array(ActiveTraineeSchema),
+  totalItems: z.number().int()
+})
+
 const enrollmentSortFields = ['enrollmentDate', 'courseCode', 'subjectCode', 'traineeEid'] as const
 const sortOrderValues = ['asc', 'desc'] as const
 
@@ -327,6 +350,7 @@ export type GetSubjectsType = z.infer<typeof GetSubjectsSchema>
 export type GetSubjectsResType = z.infer<typeof GetSubjectsResSchema>
 export type GetSubjectDetailResType = z.infer<typeof GetSubjectDetailResSchema>
 export type GetAvailableTrainersResType = z.infer<typeof GetAvailableTrainersResSchema>
+export type GetActiveTraineesResType = z.infer<typeof GetActiveTraineesResSchema>
 export type CreateSubjectBodyType = z.infer<typeof CreateSubjectBodySchema>
 export type BulkCreateSubjectsBodyType = z.infer<typeof BulkCreateSubjectsBodySchema>
 export type BulkCreateSubjectsResType = z.infer<typeof BulkCreateSubjectsResSchema>
@@ -564,6 +588,37 @@ export const GetTraineeEnrollmentsResSchema = z.object({
   totalCount: z.number().int()
 })
 
+const TraineeCourseSubjectsCourseSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(CourseStatus)
+})
+
+export const TraineeCourseSubjectsSubjectSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(SubjectStatus),
+  method: z.enum(SubjectMethod),
+  type: z.enum(SubjectType),
+  startDate: z.iso.datetime().nullable(),
+  endDate: z.iso.datetime().nullable(),
+  batchCode: z.string(),
+  enrollmentDate: z.iso.datetime(),
+  updatedAt: z.iso.datetime()
+})
+
+export const TraineeCourseSubjectsItemSchema = z.object({
+  course: TraineeCourseSubjectsCourseSchema,
+  subjects: z.array(TraineeCourseSubjectsSubjectSchema)
+})
+
+export const GetTraineeCourseSubjectsResSchema = z.object({
+  traineeId: z.uuid(),
+  courses: z.array(TraineeCourseSubjectsItemSchema)
+})
+
 export type TraineeAssignmentUserType = z.infer<typeof TraineeAssignmentUserSchema>
 export type TraineeAssignmentDuplicateType = z.infer<typeof TraineeAssignmentDuplicateSchema>
 export type TraineeAssignmentIssueType = z.infer<typeof TraineeAssignmentIssueSchema>
@@ -572,3 +627,5 @@ export type GetTraineeEnrollmentsQueryType = z.infer<typeof GetTraineeEnrollment
 export type TraineeEnrollmentUserType = z.infer<typeof TraineeEnrollmentUserSchema>
 export type TraineeEnrollmentRecordType = z.infer<typeof TraineeEnrollmentRecordSchema>
 export type GetTraineeEnrollmentsResType = z.infer<typeof GetTraineeEnrollmentsResSchema>
+export type TraineeCourseSubjectsItemType = z.infer<typeof TraineeCourseSubjectsItemSchema>
+export type GetTraineeCourseSubjectsResType = z.infer<typeof GetTraineeCourseSubjectsResSchema>

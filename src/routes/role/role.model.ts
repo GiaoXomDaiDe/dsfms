@@ -1,34 +1,13 @@
 import z from 'zod'
 import { PermissionGroupCollectionItemSchema } from '~/routes/permission-group/permission-group.model'
-import { PermissionSchema } from '~/routes/permission/permission.model'
 import {
   AT_LEAST_ONE_PERMISSION_GROUP_REQUIRED_MESSAGE,
   AT_LEAST_ONE_PERMISSION_REQUIRED_MESSAGE,
   PERMISSION_GROUP_CODES_MUST_BE_UNIQUE_MESSAGE,
   PERMISSION_IDS_MUST_BE_UNIQUE_MESSAGE
 } from '~/routes/role/role.error'
-import { ROLE_NAME_REGEX, optionalAlphabeticCharacter, requiredText } from '~/shared/constants/validation.constant'
-
-export const RoleSchema = z.object({
-  id: z.uuid(),
-  name: requiredText('Role name', 500, {
-    pattern: ROLE_NAME_REGEX,
-    message: 'Role name must contain only alphabetic characters and spaces'
-  }),
-  description: z.string().trim().max(500).nullable().refine(optionalAlphabeticCharacter, {
-    message: 'Description must include at least one alphabetic character'
-  }),
-  isActive: z.boolean().default(true),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
-  deletedAt: z.iso
-    .datetime()
-    .transform((value) => new Date(value))
-    .nullable(),
-  createdAt: z.iso.datetime().transform((value) => new Date(value)),
-  updatedAt: z.iso.datetime().transform((value) => new Date(value))
-})
+import { PermissionSchema } from '~/shared/models/shared-permission.model'
+import { RoleSchema, type RoleType as SharedRoleType } from '~/shared/models/shared-role.model'
 
 export const RoleWithUserCountSchema = RoleSchema.extend({
   userCount: z.number()
@@ -100,7 +79,7 @@ export const RemovePermissionsFromRoleResSchema = z.object({
   summary: z.string()
 })
 
-export type RoleType = z.infer<typeof RoleSchema>
+export type RoleType = SharedRoleType
 export type RoleWithPermissionsType = z.infer<typeof RoleWithPermissionsSchema>
 export type GetRolesResType = z.infer<typeof GetRolesResSchema>
 export type GetRoleDetailResType = z.infer<typeof GetRoleDetailResSchema>

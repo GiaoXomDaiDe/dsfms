@@ -1,23 +1,12 @@
-import { HttpMethod } from '@prisma/client'
 import z from 'zod'
+import {
+  PermissionGroupPermissionSchema,
+  PermissionGroupSchema,
+  type PermissionGroupPermissionType as SharedPermissionGroupPermissionType,
+  type PermissionGroupType as SharedPermissionGroupType
+} from '~/shared/models/shared-permission-group.model'
 
-export const PermissionGroupSchema = z.object({
-  id: z.string(),
-  groupName: z.string(),
-  name: z.string(),
-  permissionGroupCode: z.string()
-})
-
-export const PermissionGroupPermissionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  method: z.nativeEnum(HttpMethod),
-  path: z.string(),
-  module: z.string(),
-  description: z.string().nullable(),
-  viewModule: z.string().nullable(),
-  viewName: z.string().nullable()
-})
+export { PermissionGroupPermissionSchema, PermissionGroupSchema } from '~/shared/models/shared-permission-group.model'
 
 export const PermissionGroupDetailSchema = PermissionGroupSchema.extend({
   permissionCount: z.number().int(),
@@ -66,8 +55,8 @@ export const AssignPermissionGroupPermissionsBodySchema = z.object({
 })
 export const AssignPermissionGroupPermissionsResSchema = PermissionGroupDetailResSchema
 
-export type PermissionGroupType = z.infer<typeof PermissionGroupSchema>
-export type PermissionGroupPermissionType = z.infer<typeof PermissionGroupPermissionSchema>
+export type PermissionGroupType = SharedPermissionGroupType
+export type PermissionGroupPermissionType = SharedPermissionGroupPermissionType
 export type PermissionGroupDetailType = z.infer<typeof PermissionGroupDetailSchema>
 export type CreatePermissionGroupBodyType = z.infer<typeof CreatePermissionGroupBodySchema>
 export type UpdatePermissionGroupBodyType = z.infer<typeof UpdatePermissionGroupBodySchema>

@@ -9,7 +9,6 @@ import {
   UpdateTraineeProfileSchema,
   UpdateTrainerProfileSchema
 } from '~/routes/profile/profile.model'
-import { RoleSchema } from '~/routes/role/role.model'
 import {
   AtLeastOneUserRequiredMessage,
   DuplicateEmailInBatchMessage,
@@ -23,9 +22,15 @@ import { ROLE_PROFILE_RULES } from '~/shared/constants/role.constant'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
 import { validateRoleProfile } from '~/shared/helper'
 import { CourseSchema } from '~/shared/models/shared-course.model'
-import { DepartmentSchema } from '~/shared/models/shared-department.model'
+import { departmentSummarySchema } from '~/shared/models/shared-department.model'
+import { roleIdNameSchema, roleSummarySchema } from '~/shared/models/shared-role.model'
 import { SubjectSchema } from '~/shared/models/shared-subject.model'
-import { UserSchema } from '~/shared/models/shared-user.model'
+import { UserListItemSchema, UserSchema } from '~/shared/models/shared-user.model'
+
+export const GetUsersResSchema = z.object({
+  users: z.array(UserListItemSchema),
+  totalItems: z.number()
+})
 
 const TeachingCourseSchema = CourseSchema.pick({
   id: true,
@@ -48,6 +53,25 @@ const TeachingSubjectSchema = SubjectSchema.pick({
   endDate: true
 }).extend({
   role: z.enum(SubjectInstructorRole)
+})
+
+export const UserWithProfilesSchema = UserSchema.omit({
+  passwordHash: true,
+  signatureImageUrl: true,
+  roleId: true,
+  departmentId: true
+}).extend({
+  role: roleSummarySchema,
+  department: departmentSummarySchema.nullable(),
+  trainerProfile: TrainerProfileSchema.nullable().optional(),
+  traineeProfile: TraineeProfileSchema.nullable().optional()
+})
+
+export const UserWithProfileRelationSchema = UserSchema.extend({
+  role: roleSummarySchema,
+  department: departmentSummarySchema.nullable(),
+  trainerProfile: TrainerProfileSchema.nullable().optional(),
+  traineeProfile: TraineeProfileSchema.nullable().optional()
 })
 
 export const GetUsersQuerySchema = z
@@ -75,10 +99,7 @@ export const CreateUserBodySchema = UserSchema.pick({
   departmentId: true
 })
   .extend({
-    role: RoleSchema.pick({
-      id: true,
-      name: true
-    })
+    role: roleIdNameSchema
   })
   .strict()
 
@@ -119,17 +140,8 @@ export const GetUserResSchema = UserSchema.omit({
   roleId: true,
   departmentId: true
 }).extend({
-  role: RoleSchema.pick({
-    id: true,
-    name: true,
-    description: true,
-    isActive: true
-  }),
-  department: DepartmentSchema.pick({
-    id: true,
-    name: true,
-    isActive: true
-  }).nullable(),
+  role: roleSummarySchema,
+  department: departmentSummarySchema.nullable(),
   trainerProfile: TrainerProfileSchema.nullable().optional(),
   traineeProfile: TraineeProfileSchema.nullable().optional(),
   teachingCourses: z.array(TeachingCourseSchema).default([]),
@@ -145,16 +157,8 @@ export const UpdateUserResSchema = UserSchema.omit({
   roleId: true,
   departmentId: true
 }).extend({
-  role: RoleSchema.pick({
-    id: true,
-    name: true,
-    isActive: true
-  }),
-  department: DepartmentSchema.pick({
-    id: true,
-    name: true,
-    isActive: true
-  }).nullable(),
+  role: roleSummarySchema,
+  department: departmentSummarySchema.nullable(),
   trainerProfile: TrainerProfileSchema.nullable().optional(),
   traineeProfile: TraineeProfileSchema.nullable().optional(),
   teachingCourses: z.array(TeachingCourseSchema).default([]),
@@ -169,12 +173,8 @@ export const UpdateUserBodyWithProfileSchema = UpdateUserBodySchema.omit({
   .extend({
     trainerProfile: UpdateTrainerProfileSchema.optional(),
     traineeProfile: UpdateTraineeProfileSchema.optional(),
-    role: RoleSchema.pick({
-      id: true,
-      name: true
-    }).optional()
+    role: roleSummarySchema.optional()
   })
-
   .strict()
   .superRefine((data, ctx) => {
     // Chỉ validate role khi có role data
@@ -251,25 +251,7 @@ export const CreateBulkUsersBodySchema = z
   })
 
 export const BulkCreateResultSchema = z.object({
-  success: z.array(
-    UserSchema.omit({
-      passwordHash: true,
-      signatureImageUrl: true,
-      roleId: true,
-      departmentId: true
-    }).extend({
-      role: RoleSchema.pick({
-        id: true,
-        name: true
-      }),
-      department: DepartmentSchema.pick({
-        id: true,
-        name: true
-      }).nullable(),
-      trainerProfile: TrainerProfileSchema.nullable().optional(),
-      traineeProfile: TraineeProfileSchema.nullable().optional()
-    })
-  ),
+  success: z.array(UserWithProfilesSchema),
   failed: z.array(
     z.object({
       index: z.number(),
@@ -284,6 +266,8 @@ export const BulkCreateResultSchema = z.object({
   })
 })
 
+export type UserWithProfilesType = z.infer<typeof UserWithProfilesSchema>
+export type UserWithProfileRelationType = z.infer<typeof UserWithProfileRelationSchema>
 export type GetUsersQueryType = z.infer<typeof GetUsersQuerySchema>
 export type GetUserParamsType = z.infer<typeof GetUserParamsSchema>
 export type CreateUserBodyType = z.infer<typeof CreateUserBodySchema>
@@ -301,6 +285,8 @@ export type UpdateUserBodyWithProfileType = z.infer<typeof UpdateUserBodyWithPro
 export type CreateBulkUsersBodyType = z.infer<typeof CreateBulkUsersBodySchema>
 export type BulkCreateResultType = z.infer<typeof BulkCreateResultSchema>
 export type GetUserProfileResType = z.infer<typeof GetUserResSchema>
+export type UserProfileWithoutTeachingType = Omit<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>
+export type GetUsersResType = z.infer<typeof GetUsersResSchema>
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
 export type BulkUserData = CreateUserInternalType & {
   roleName: string

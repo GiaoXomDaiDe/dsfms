@@ -34,9 +34,10 @@ import {
   CreateUserBodyWithProfileType,
   GetUserProfileResType,
   GetUsersQueryType,
+  GetUsersResType,
   UpdateUserBodyWithProfileType
 } from '~/routes/user/user.model'
-import { UserRepo } from '~/routes/user/user.repo'
+import { UserRepository } from '~/routes/user/user.repo'
 import envConfig from '~/shared/config'
 import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName } from '~/shared/constants/auth.constant'
@@ -45,9 +46,9 @@ import {
   evaluateRoleProfileRules,
   isForeignKeyConstraintPrismaError,
   isNotFoundPrismaError,
-  isUniqueConstraintPrismaError
+  isUniqueConstraintPrismaError,
+  type RoleProfilePayload
 } from '~/shared/helper'
-import { GetUsersResType } from '~/shared/models/shared-user.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -63,13 +64,13 @@ interface ProcessRoleChangeResult {
 @Injectable()
 export class UserService {
   constructor(
-    private readonly userRepo: UserRepo,
     private readonly hashingService: HashingService,
-    private readonly sharedUserRepository: SharedUserRepository,
-    private readonly sharedRoleRepository: SharedRoleRepository,
-    private readonly sharedDepartmentRepository: SharedDepartmentRepository,
     private readonly eidService: EidService,
-    private readonly nodemailerService: NodemailerService
+    private readonly nodemailerService: NodemailerService,
+    private readonly userRepo: UserRepository,
+    private readonly sharedUserRepo: SharedUserRepository,
+    private readonly sharedRoleRepo: SharedRoleRepository,
+    private readonly sharedDepartmentRepo: SharedDepartmentRepository
   ) {}
 
   list(query: GetUsersQueryType = {}): Promise<GetUsersResType> {
@@ -77,7 +78,7 @@ export class UserService {
   }
 
   async findById(id: string): Promise<GetUserProfileResType> {
-    const user = await this.sharedUserRepository.findUniqueIncludeProfile(id)
+    const user = await this.sharedUserRepo.findUniqueIncludeProfile(id)
 
     if (!user) {
       throw UserNotFoundException
@@ -95,21 +96,24 @@ export class UserService {
   }): Promise<GetUserProfileResType> {
     try {
       // Lấy thông tin role mục tiêu
-      const targetRole = await this.sharedRoleRepository.findRolebyId(data.role.id)
+      const targetRole = await this.sharedRoleRepo.findRolebyId(data.role.id)
       if (!targetRole) {
         throw RoleNotFoundException
       }
 
       // Kiểm tra departmentId có tồn tại và active không (nếu được cung cấp)
       if (data.departmentId) {
-        const department = await this.sharedDepartmentRepository.findDepartmentById(data.departmentId)
+        const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId)
         if (!department) {
           throw DepartmentNotFoundException
         }
       }
 
       // Kiểm tra dữ liệu profile có hợp lệ không
-      this.validateProfileData(targetRole.name, data)
+      this.validateProfileData(targetRole.name, {
+        trainerProfile: data.trainerProfile,
+        traineeProfile: data.traineeProfile
+      })
 
       // Kiểm tra unique department head constraint
       await this.validateUniqueDepartmentHead({
@@ -142,7 +146,7 @@ export class UserService {
         throw UserNotFoundException
       }
 
-      const userWithProfile = await this.sharedUserRepository.findUniqueIncludeProfile(createdUser.id)
+      const userWithProfile = await this.sharedUserRepo.findUniqueIncludeProfile(createdUser.id)
       if (!userWithProfile) {
         throw UserNotFoundException
       }
@@ -186,12 +190,12 @@ export class UserService {
       const departmentHeadMap = new Map<string, number>()
       for (let i = 0; i < users.length; i++) {
         const userData = users[i]
-        const role = await this.sharedRoleRepository.findRolebyId(userData.role.id)
+        const role = await this.sharedRoleRepo.findRolebyId(userData.role.id)
 
         if (role?.name === RoleName.DEPARTMENT_HEAD && userData.departmentId) {
           const existingIndex = departmentHeadMap.get(userData.departmentId)
           if (existingIndex !== undefined) {
-            const department = await this.sharedDepartmentRepository.findDepartmentById(userData.departmentId)
+            const department = await this.sharedDepartmentRepo.findDepartmentById(userData.departmentId)
             throw new Error(
               `Duplicate department heads in batch: Users at index ${existingIndex} and ${i} are both assigned as department head for "${department?.name || 'Unknown'}"`
             )
@@ -203,13 +207,13 @@ export class UserService {
       // Bước 1: Validate tất cả các role và profile
       const roleValidationPromises = users.map(async (userData, index) => {
         try {
-          const targetRole = await this.sharedRoleRepository.findRolebyId(userData.role.id)
+          const targetRole = await this.sharedRoleRepo.findRolebyId(userData.role.id)
           if (!targetRole) {
             throw new Error(BulkRoleNotFoundAtIndexException(index))
           }
 
           if (userData.departmentId) {
-            const department = await this.sharedDepartmentRepository.findDepartmentById(userData.departmentId)
+            const department = await this.sharedDepartmentRepo.findDepartmentById(userData.departmentId)
             if (!department) {
               throw new Error(BulkDepartmentNotFoundAtIndexException(index, userData.departmentId))
             }
@@ -451,7 +455,7 @@ export class UserService {
     }
   }
 
-  private validateProfileData(roleName: string, data: CreateUserBodyWithProfileType): void {
+  private validateProfileData(roleName: string, data: RoleProfilePayload): void {
     const violations = evaluateRoleProfileRules(roleName, data)
     if (violations.length === 0) {
       return
@@ -491,7 +495,7 @@ export class UserService {
     }
 
     // Nếu không phải admin thì không được tác động đến admin
-    const adminRoleId = await this.sharedRoleRepository.getAdminRoleId()
+    const adminRoleId = await this.sharedRoleRepo.getAdminRoleId()
     if (roleIdTarget === adminRoleId) {
       throw OnlyAdminCanManageAdminRoleException
     }
@@ -518,7 +522,7 @@ export class UserService {
       })
 
       // Bước 2: Lấy thông tin user hiện tại
-      const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(id)
+      const currentUser = await this.sharedUserRepo.findUniqueIncludeProfile(id)
       if (!currentUser) {
         throw UserNotFoundException
       }
@@ -536,7 +540,7 @@ export class UserService {
 
       // Bước 4: Kiểm tra department exists và active (nếu có)
       if (data.departmentId !== undefined && data.departmentId !== null) {
-        const department = await this.sharedDepartmentRepository.findDepartmentById(data.departmentId)
+        const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId)
         if (!department) {
           throw DepartmentNotFoundException
         }
@@ -562,7 +566,7 @@ export class UserService {
 
       // Bước 5: Thực hiện update
       const { role, trainerProfile, traineeProfile, ...userData } = data
-      const updatedUser = await this.sharedUserRepository.updateWithProfile(
+      const updatedUser = await this.sharedUserRepo.updateWithProfile(
         { id },
         {
           updatedById,
@@ -627,7 +631,7 @@ export class UserService {
     // Case 2: Có thay đổi role
     if (currentUser.role.name === RoleName.DEPARTMENT_HEAD && currentUser.department?.id) {
       // Xác nhận user hiện tại có phải department head đang active không
-      const isDepartmentHead = await this.sharedUserRepository.findDepartmentHeadByDepartment({
+      const isDepartmentHead = await this.sharedUserRepo.findDepartmentHeadByDepartment({
         departmentId: currentUser.department.id,
         excludeUserId: undefined // Don't exclude anyone, check if this user is head
       })
@@ -641,7 +645,7 @@ export class UserService {
     }
 
     // Lấy thông tin role mới
-    const newRole = await this.sharedRoleRepository.findRolebyId(inputRole.id)
+    const newRole = await this.sharedRoleRepo.findRolebyId(inputRole.id)
     if (!newRole) {
       throw RoleNotFoundException
     }
@@ -653,10 +657,9 @@ export class UserService {
 
     // Validate profile với role mới
     this.validateProfileData(newRole.name, {
-      role: inputRole,
       trainerProfile,
       traineeProfile
-    } as CreateUserBodyWithProfileType)
+    })
 
     // Kiểm tra quyền với role mới
     await this.verifyRole({
@@ -685,7 +688,7 @@ export class UserService {
       })
 
       // Get user info for validation
-      const user = await this.sharedUserRepository.findUniqueIncludeProfile(id)
+      const user = await this.sharedUserRepo.findUniqueIncludeProfile(id)
       if (!user) {
         throw UserNotFoundException
       }
@@ -733,7 +736,7 @@ export class UserService {
       })
 
       // Get user info (including disabled users)
-      const user = await this.sharedUserRepository.findUniqueIncludeProfile(id)
+      const user = await this.sharedUserRepo.findUniqueIncludeProfile(id)
       if (!user) {
         throw UserNotFoundException
       }
@@ -825,14 +828,14 @@ export class UserService {
     }
 
     // Kiểm tra xem department đã có head chưa
-    const existingHead = await this.sharedUserRepository.findDepartmentHeadByDepartment({
+    const existingHead = await this.sharedUserRepo.findDepartmentHeadByDepartment({
       departmentId,
       excludeUserId
     })
 
     if (existingHead) {
       // Lấy thông tin department để hiển thị tên
-      const department = await this.sharedDepartmentRepository.findDepartmentById(departmentId)
+      const department = await this.sharedDepartmentRepo.findDepartmentById(departmentId)
       const departmentName = department?.name || 'Unknown Department'
       const existingHeadFullName = `${existingHead.firstName} ${existingHead.lastName}`.trim()
 

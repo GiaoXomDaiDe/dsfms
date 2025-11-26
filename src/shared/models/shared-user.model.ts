@@ -1,90 +1,47 @@
 import z from 'zod'
-import { RoleSchema } from '~/routes/role/role.model'
-import { GenderStatus, UserStatus } from '~/shared/constants/auth.constant'
+import { isoDatetimeSchema, nullableUuidSchema, urlSchema } from '~/shared/helpers/zod-validation.helper'
+import { departmentIdNameSchema } from '~/shared/models/shared-department.model'
+import { roleIdNameSchema } from '~/shared/models/shared-role.model'
 import {
-  NAME_ALLOWED_CHARS_REGEX,
-  NAME_CONTAINS_LETTER_REGEX,
-  normalizeWhitespace
-} from '~/shared/constants/validation.constant'
-import { DepartmentSchema } from '~/shared/models/shared-department.model'
-
-const nameRegexMessage = 'Name must contain only alphabetic characters'
-
-const normalizedNameSchema = z.string().transform((value) => normalizeWhitespace(value))
-
-const validatedNameSchema = z
-  .string()
-  .min(1, nameRegexMessage)
-  .max(100)
-  .regex(NAME_ALLOWED_CHARS_REGEX, nameRegexMessage)
-  .refine((value) => NAME_CONTAINS_LETTER_REGEX.test(value), { message: nameRegexMessage })
-
-const nameSchema = normalizedNameSchema.pipe(validatedNameSchema)
+  userAddressSchema,
+  userGenderSchema,
+  userMiddleNameSchema,
+  userNameSchema,
+  userPhoneNumberSchema,
+  userStatusSchema
+} from '~/shared/validation/user.validation'
 
 export const UserSchema = z.object({
   id: z.uuid(),
   eid: z.string().max(8),
-  firstName: nameSchema,
-  lastName: nameSchema,
-  middleName: z
-    .union([z.string(), z.null()])
-    .transform((value) => {
-      if (value === null) {
-        return null
-      }
-
-      const normalized = normalizeWhitespace(value)
-      return normalized.length === 0 ? null : normalized
-    })
-    .pipe(z.union([validatedNameSchema, z.null()])),
-  address: z.string().max(255).nullable(),
+  firstName: userNameSchema,
+  lastName: userNameSchema,
+  middleName: userMiddleNameSchema,
+  address: userAddressSchema,
   email: z.email().min(5).max(255),
-  passwordHash: z.string().min(6).max(100),
-  status: z.enum([UserStatus.ACTIVE, UserStatus.DISABLED], {
-    error: ({ values }) => {
-      return { message: `Status must be one of: ${values.join(', ')}` }
-    }
-  }),
-  signatureImageUrl: z.string().nullable(),
+  passwordHash: z.string().min(2).max(100),
+  status: userStatusSchema,
+  signatureImageUrl: urlSchema,
   roleId: z.uuid(),
-  gender: z.enum([GenderStatus.MALE, GenderStatus.FEMALE], {
-    error: ({ values }) => {
-      return { message: `Gender must be one of: ${values.join(', ')}` }
-    }
-  }),
-  phoneNumber: z.string().min(9).max(15).nullable(),
-  avatarUrl: z.string().nullable(),
-  departmentId: z.uuid().nullable().optional(),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
-  deletedAt: z.iso
-    .datetime()
-    .transform((value) => new Date(value))
-    .nullable(),
-  createdAt: z.iso.datetime().transform((value) => new Date(value)),
-  updatedAt: z.iso.datetime().transform((value) => new Date(value))
+  gender: userGenderSchema,
+  phoneNumber: userPhoneNumberSchema,
+  avatarUrl: urlSchema,
+  departmentId: nullableUuidSchema,
+  createdById: nullableUuidSchema,
+  updatedById: nullableUuidSchema,
+  deletedById: nullableUuidSchema,
+  deletedAt: isoDatetimeSchema.nullable(),
+  createdAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema
 })
 
 export const UserListItemSchema = UserSchema.omit({
   passwordHash: true,
-  signatureImageUrl: true,
   roleId: true,
   departmentId: true
 }).extend({
-  role: RoleSchema.pick({
-    id: true,
-    name: true
-  }),
-  department: DepartmentSchema.pick({
-    id: true,
-    name: true
-  }).nullable()
-})
-
-export const GetUsersResSchema = z.object({
-  users: z.array(UserListItemSchema),
-  totalItems: z.number()
+  role: roleIdNameSchema,
+  department: departmentIdNameSchema.nullable()
 })
 
 export const UserLookupResSchema = z.object({
@@ -97,6 +54,6 @@ export const UserLookupResSchema = z.object({
   )
 })
 
-export type GetUsersResType = z.infer<typeof GetUsersResSchema>
 export type UserType = z.infer<typeof UserSchema>
 export type UserLookupResType = z.infer<typeof UserLookupResSchema>
+export type UserListItemType = z.infer<typeof UserListItemSchema>

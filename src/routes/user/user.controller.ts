@@ -34,8 +34,8 @@ export class UserController {
 
   @Get(':userId')
   @ZodSerializerDto(GetUserProfileResDTO)
-  async findById(@Param() { userId }: GetUserParamsDTO) {
-    const data = await this.userService.findById(userId)
+  async findById(@Param() params: GetUserParamsDTO) {
+    const data = await this.userService.findById(params.userId)
     return {
       message: UserMes.DETAIL_SUCCESS,
       data
