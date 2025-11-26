@@ -1,6 +1,6 @@
 import z from 'zod'
 import { NAME_REGEX } from '~/shared/constants/validation.constant'
-import { optionalAlphabeticCharacter, requiredText } from '~/shared/helpers/zod-validation.helper'
+import { nullableStringField, optionalAlphabeticCharacter, requiredText } from '~/shared/helpers/zod-validation.helper'
 
 const ROLE_NAME_MESSAGE = 'Role name invalid'
 const ROLE_DESCRIPTION_MESSAGE = 'Description invalid'
@@ -11,12 +11,11 @@ export const roleNameSchema = requiredText({
   max: 500,
   options: {
     pattern: NAME_REGEX,
-    message: ROLE_NAME_MESSAGE,
-    requiredMessage: ROLE_NAME_MESSAGE
+    message: ROLE_NAME_MESSAGE
   }
 })
 
 // roleDescriptionSchema: cho phép null, nhưng nếu có nội dung thì vẫn phải chứa ít nhất một ký tự chữ
-export const roleDescriptionSchema = z.string().trim().max(500).nullable().refine(optionalAlphabeticCharacter, {
+export const roleDescriptionSchema = nullableStringField(z.string().max(500)).refine(optionalAlphabeticCharacter, {
   message: ROLE_DESCRIPTION_MESSAGE
 })

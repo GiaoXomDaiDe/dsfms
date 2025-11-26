@@ -9,11 +9,11 @@ export const PHONE_NUMBER_REGEX = /^\+?(?:\d[\s().-]?){8,14}\d$/
 // Cho phép mọi ký tự chữ (Letter) theo chuẩn Unicode
 export const LETTER_REGEX = /\p{L}/u
 
-// Cho phép chữ, số, khoảng trắng và một số ký tự dấu phổ biến trong mô tả
-export const BASIC_TEXT_REGEX = /^[\p{L}\p{N}\s.,'’\-_/()]+$/u
-
 // Cho phép chữ, số, khoảng trắng, gạch ngang, gạch dưới và dấu slash (dùng cho mã)
 export const CODE_TEXT_REGEX = /^[\p{L}\p{N}\s\-_/]+$/u
+
+// Cho phép chữ, số, khoảng trắng và một số ký tự dấu phổ biến trong mô tả
+export const BASIC_TEXT_REGEX = /^[\p{L}\p{N}\s.,'’\-_/()&]+$/u
 
 // Cho phép chữ, số, khoảng trắng và dấu gạch ngang (dùng cho số hộ chiếu)
 export const PASSPORT_REGEX = /^[\p{L}\p{N}\s-]+$/u

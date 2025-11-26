@@ -12,9 +12,9 @@ import {
   BulkCreateResultType,
   BulkUserData,
   CreateUserInternalType,
-  GetUserProfileResType,
   GetUsersQueryType,
   GetUsersResType,
+  GetUserWithProfileResType,
   UserProfileWithoutTeachingType,
   UserWithProfileRelationType
 } from '~/routes/user/user.model'
@@ -42,7 +42,7 @@ const mapToUserProfileWithoutTeaching = (user: UserWithProfileRelationType): Use
   }
 }
 
-const withTeachingAssignmentDefaults = (user: UserWithProfileRelationType | null): GetUserProfileResType | null => {
+const withTeachingAssignmentDefaults = (user: UserWithProfileRelationType | null): GetUserWithProfileResType | null => {
   if (!user) {
     return null
   }
@@ -97,7 +97,7 @@ export class UserRepository {
     roleName: string
     trainerProfile?: CreateTrainerProfileType
     traineeProfile?: CreateTraineeProfileType
-  }): Promise<GetUserProfileResType | null> {
+  }): Promise<GetUserWithProfileResType | null> {
     return await this.prismaService.$transaction(async (tx) => {
       // Bước 1: Tạo user cơ bản
       const newUser = await tx.user.create({
@@ -398,7 +398,7 @@ export class UserRepository {
       trainerProfile?: any
       traineeProfile?: any
     }
-  ): Promise<GetUserProfileResType | null> {
+  ): Promise<GetUserWithProfileResType | null> {
     return await this.prismaService.$transaction(async (tx) => {
       // Cập nhật thông tin user cơ bản nếu có dữ liệu
       if (Object.keys(userData).length > 0) {

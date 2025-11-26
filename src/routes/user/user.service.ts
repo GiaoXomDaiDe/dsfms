@@ -32,9 +32,9 @@ import {
   BulkCreateResultType,
   CreateBulkUsersBodyType,
   CreateUserBodyWithProfileType,
-  GetUserProfileResType,
   GetUsersQueryType,
   GetUsersResType,
+  GetUserWithProfileResType,
   UpdateUserBodyWithProfileType
 } from '~/routes/user/user.model'
 import { UserRepository } from '~/routes/user/user.repo'
@@ -77,7 +77,7 @@ export class UserService {
     return this.userRepo.list(query)
   }
 
-  async findById(id: string): Promise<GetUserProfileResType> {
+  async findById(id: string): Promise<GetUserWithProfileResType> {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile(id)
 
     if (!user) {
@@ -93,7 +93,7 @@ export class UserService {
   }: {
     data: CreateUserBodyWithProfileType
     createdById: string
-  }): Promise<GetUserProfileResType> {
+  }): Promise<GetUserWithProfileResType> {
     try {
       // Lấy thông tin role mục tiêu
       const targetRole = await this.sharedRoleRepo.findRolebyId(data.role.id)
@@ -513,7 +513,7 @@ export class UserService {
     data: UpdateUserBodyWithProfileType
     updatedById: string
     updatedByRoleName: string
-  }): Promise<GetUserProfileResType> {
+  }): Promise<GetUserWithProfileResType> {
     try {
       // Không thể cập nhật chính mình
       this.verifyYourself({
@@ -843,7 +843,7 @@ export class UserService {
     }
   }
 
-  private formatUserProfileForRole(user: GetUserProfileResType): GetUserProfileResType {
+  private formatUserProfileForRole(user: GetUserWithProfileResType): GetUserWithProfileResType {
     const { trainerProfile, traineeProfile, ...baseUser } = user
     const roleName = user.role?.name
 
@@ -851,7 +851,7 @@ export class UserService {
       const formattedTrainer = {
         ...baseUser,
         trainerProfile
-      } satisfies GetUserProfileResType
+      } satisfies GetUserWithProfileResType
 
       return formattedTrainer
     }
@@ -860,14 +860,14 @@ export class UserService {
       const formattedTrainee = {
         ...baseUser,
         traineeProfile
-      } satisfies GetUserProfileResType
+      } satisfies GetUserWithProfileResType
 
       return formattedTrainee
     }
 
     const formattedUser = {
       ...baseUser
-    } satisfies GetUserProfileResType
+    } satisfies GetUserWithProfileResType
 
     return formattedUser
   }
