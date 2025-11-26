@@ -13,83 +13,25 @@ import {
   BulkUserData,
   CreateUserInternalType,
   GetUserProfileResType,
-  GetUsersQueryType
+  GetUsersQueryType,
+  GetUsersResType,
+  UserProfileWithoutTeachingType,
+  UserWithProfileRelationType
 } from '~/routes/user/user.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { GetUsersResType, UserType } from '~/shared/models/shared-user.model'
+import { UserType } from '~/shared/models/shared-user.model'
+import {
+  userRoleDepartmentInclude,
+  userRoleDepartmentNameInclude,
+  userRoleDepartmentProfileInclude,
+  userRoleNameInclude
+} from '~/shared/prisma-presets/user.prisma-presets'
 import { PrismaService } from '~/shared/services/prisma.service'
 
-const roleNameSelect = {
-  name: true
-} satisfies Prisma.RoleSelect
-
-const roleIdNameSelect = {
-  id: true,
-  name: true,
-  description: true,
-  isActive: true
-} satisfies Prisma.RoleSelect
-
-const departmentNameSelect = {
-  name: true
-} satisfies Prisma.DepartmentSelect
-
-const departmentIdNameSelect = {
-  id: true,
-  name: true,
-  isActive: true
-} satisfies Prisma.DepartmentSelect
-
-const userRoleNameInclude = {
-  role: {
-    select: roleNameSelect
-  }
-} satisfies Prisma.UserInclude
-
-const userRoleDepartmentNameInclude = {
-  role: {
-    select: roleNameSelect
-  },
-  department: {
-    select: departmentNameSelect
-  }
-} satisfies Prisma.UserInclude
-
-const userRoleDepartmentInclude = {
-  role: {
-    select: roleIdNameSelect
-  },
-  department: {
-    select: departmentIdNameSelect
-  }
-} satisfies Prisma.UserInclude
-
-const userRoleDepartmentProfileInclude = {
-  role: {
-    select: roleIdNameSelect
-  },
-  department: {
-    select: departmentIdNameSelect
-  },
-  trainerProfile: true,
-  traineeProfile: true
-} satisfies Prisma.UserInclude
-
-type UserWithProfile = Prisma.UserGetPayload<{
-  include: typeof userRoleDepartmentProfileInclude
-}>
-
-type UserProfileWithoutTeaching = Omit<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>
-
-const mapToUserProfileWithoutTeaching = (user: UserWithProfile): UserProfileWithoutTeaching => {
-  const {
-    passwordHash: _passwordHash,
-    roleId: _roleId,
-    departmentId: _departmentId,
-    ...publicFields
-  } = user
+const mapToUserProfileWithoutTeaching = (user: UserWithProfileRelationType): UserProfileWithoutTeachingType => {
+  const { passwordHash: _passwordHash, roleId: _roleId, departmentId: _departmentId, ...publicFields } = user
 
   return {
     ...publicFields,
@@ -100,7 +42,7 @@ const mapToUserProfileWithoutTeaching = (user: UserWithProfile): UserProfileWith
   }
 }
 
-const withTeachingAssignmentDefaults = (user: UserWithProfile | null): GetUserProfileResType | null => {
+const withTeachingAssignmentDefaults = (user: UserWithProfileRelationType | null): GetUserProfileResType | null => {
   if (!user) {
     return null
   }
@@ -116,8 +58,8 @@ const withTeachingAssignmentDefaults = (user: UserWithProfile | null): GetUserPr
 
 @Injectable()
 @SerializeAll()
-export class UserRepo {
-  constructor(private prismaService: PrismaService) {}
+export class UserRepository {
+  constructor(private readonly prismaService: PrismaService) {}
 
   async list({ roleName }: GetUsersQueryType = {}): Promise<GetUsersResType> {
     const whereClause: Prisma.UserWhereInput = roleName
@@ -132,7 +74,6 @@ export class UserRepo {
       where: whereClause,
       omit: {
         passwordHash: true,
-        signatureImageUrl: true,
         roleId: true,
         departmentId: true
       },
@@ -229,7 +170,7 @@ export class UserRepo {
 
       return {
         ...originalUserData,
-        role: { id: roleId, name: roleName }
+        role: { id: roleId, name: roleName, description: null, isActive: true }
       }
     }
 

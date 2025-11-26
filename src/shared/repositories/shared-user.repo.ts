@@ -7,141 +7,61 @@ import {
   UpdateTrainerProfileType
 } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
-import { GetUserProfileResType, UpdateUserInternalType } from '~/routes/user/user.model'
+import {
+  GetUserProfileResType,
+  UpdateUserInternalType,
+  UserProfileWithoutTeachingType,
+  UserWithProfileRelationType
+} from '~/routes/user/user.model'
 import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
+import type { DepartmentSummaryType } from '~/shared/models/shared-department.model'
+import type { RoleSummaryType } from '~/shared/models/shared-role.model'
 import { UserType } from '~/shared/models/shared-user.model'
+import {
+  departmentSummarySelect,
+  roleNameSelect,
+  roleSummarySelect,
+  userRoleDepartmentProfileInclude
+} from '~/shared/prisma-presets/user.prisma-presets'
 import { EidService } from '~/shared/services/eid.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 export type WhereUniqueUserType = { id: string } | { email: string }
-type UserWithRoleAndDepartment = Prisma.UserGetPayload<{
-  select: {
-    id: true
-    eid: true
-    firstName: true
-    lastName: true
-    middleName: true
-    address: true
-    email: true
-    status: true
-    gender: true
-    phoneNumber: true
-    avatarUrl: true
-    createdById: true
-    updatedById: true
-    deletedById: true
-    deletedAt: true
-    createdAt: true
-    updatedAt: true
-    role: {
-      select: {
-        id: true
-        name: true
-      }
-    }
-    department: {
-      select: {
-        id: true
-        name: true
-      }
-    }
-  }
-}>
-type TrainerSummary = Prisma.UserGetPayload<{
-  select: {
-    id: true
-    eid: true
-    firstName: true
-    lastName: true
-    email: true
-    departmentId: true
-  }
-}>
-type TraineeIdLookup = Prisma.UserGetPayload<{
-  select: {
-    id: true
-    eid: true
-  }
-}>
-export type AssignmentUserForSubject = Prisma.UserGetPayload<{
-  select: {
-    id: true
-    eid: true
-    firstName: true
-    lastName: true
-    email: true
-    deletedAt: true
-    role: {
-      select: {
-        name: true
-      }
-    }
-    department: {
-      select: {
-        id: true
-        name: true
-      }
-    }
-  }
-}>
-type BasicUserInfoWithDepartment = Prisma.UserGetPayload<{
-  select: {
-    id: true
-    eid: true
-    firstName: true
-    lastName: true
-    email: true
-    department: {
-      select: {
-        id: true
-        name: true
-      }
-    }
-  }
-}>
 
-const roleDetailSelect = {
-  id: true,
-  name: true,
-  description: true,
-  isActive: true
-} satisfies Prisma.RoleSelect
+type RoleNameOnly = Pick<RoleSummaryType, 'name'>
 
-const departmentDetailSelect = {
-  id: true,
-  name: true,
-  isActive: true
-} satisfies Prisma.DepartmentSelect
+type UserWithRoleAndDepartment = Omit<UserType, 'passwordHash' | 'roleId' | 'departmentId'> & {
+  role: RoleSummaryType
+  department: DepartmentSummaryType | null
+}
 
-const userProfileInclude = {
-  role: {
-    select: roleDetailSelect
-  },
-  department: {
-    select: departmentDetailSelect
-  },
-  trainerProfile: true,
-  traineeProfile: true
-} satisfies Prisma.UserInclude
+type TrainerSummary = Pick<UserType, 'id' | 'eid' | 'firstName' | 'lastName' | 'email' | 'departmentId'>
 
-type UserProfilePayload = Prisma.UserGetPayload<{
-  include: typeof userProfileInclude
-}>
+type TraineeIdLookup = Pick<UserType, 'id' | 'eid'>
 
-type UserProfileWithoutTeaching = Omit<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>
+export type AssignmentUserForSubject = Pick<
+  UserType,
+  'id' | 'eid' | 'firstName' | 'lastName' | 'email' | 'deletedAt'
+> & {
+  role: RoleNameOnly
+  department: DepartmentSummaryType | null
+}
 
-const mapToUserProfileWithoutTeaching = (user: UserProfilePayload): UserProfileWithoutTeaching => {
-  const {
-    passwordHash: _passwordHash,
-    roleId: _roleId,
-    departmentId: _departmentId,
-    ...publicFields
-  } = user
+type BasicUserInfoWithDepartment = Pick<UserType, 'id' | 'eid' | 'firstName' | 'lastName' | 'email'> & {
+  department: DepartmentSummaryType | null
+}
+
+const userProfileInclude = userRoleDepartmentProfileInclude
+
+type UserProfilePayload = UserWithProfileRelationType
+
+const mapToUserProfileWithoutTeaching = (user: UserProfilePayload): UserProfileWithoutTeachingType => {
+  const { passwordHash: _passwordHash, roleId: _roleId, departmentId: _departmentId, ...publicFields } = user
 
   return {
     ...publicFields,
@@ -189,6 +109,7 @@ export class SharedUserRepository {
         email: true,
         status: true,
         gender: true,
+        signatureImageUrl: true,
         phoneNumber: true,
         avatarUrl: true,
         createdById: true,
@@ -198,13 +119,13 @@ export class SharedUserRepository {
         createdAt: true,
         updatedAt: true,
         role: {
-          select: { id: true, name: true }
+          select: roleSummarySelect
         },
         department: {
-          select: { id: true, name: true }
+          select: departmentSummarySelect
         }
       }
-    })
+    }) as Promise<UserWithRoleAndDepartment | null>
   }
 
   async findAvailableTrainersByDepartment(
@@ -228,7 +149,7 @@ export class SharedUserRepository {
         email: true,
         departmentId: true
       }
-    })
+    }) as Promise<TrainerSummary[]>
   }
 
   async findActiveTrainers({ excludeUserIds = [] }: { excludeUserIds?: string[] } = {}): Promise<TrainerSummary[]> {
@@ -248,7 +169,7 @@ export class SharedUserRepository {
         email: true,
         departmentId: true
       }
-    })
+    }) as Promise<TrainerSummary[]>
   }
 
   async findActiveTraineesByEids(eids: string[]): Promise<TraineeIdLookup[]> {
@@ -268,7 +189,7 @@ export class SharedUserRepository {
         id: true,
         eid: true
       }
-    })
+    }) as Promise<TraineeIdLookup[]>
   }
 
   async findActiveUsersByEids(eids: string[]): Promise<TraineeIdLookup[]> {
@@ -285,7 +206,7 @@ export class SharedUserRepository {
         id: true,
         eid: true
       }
-    })
+    }) as Promise<TraineeIdLookup[]>
   }
 
   async findUsersForAssignment(userIds: string[]): Promise<AssignmentUserForSubject[]> {
@@ -305,18 +226,13 @@ export class SharedUserRepository {
         email: true,
         deletedAt: true,
         role: {
-          select: {
-            name: true
-          }
+          select: roleNameSelect
         },
         department: {
-          select: {
-            id: true,
-            name: true
-          }
+          select: departmentSummarySelect
         }
       }
-    })
+    }) as Promise<AssignmentUserForSubject[]>
   }
 
   async findBasicInfoWithDepartmentById(userId: string): Promise<BasicUserInfoWithDepartment | null> {
@@ -329,13 +245,10 @@ export class SharedUserRepository {
         lastName: true,
         email: true,
         department: {
-          select: {
-            id: true,
-            name: true
-          }
+          select: departmentSummarySelect
         }
       }
-    })
+    }) as Promise<BasicUserInfoWithDepartment | null>
   }
 
   async findUniqueIncludeProfile(id: string): Promise<GetUserProfileResType | null> {
@@ -349,7 +262,7 @@ export class SharedUserRepository {
       return null
     }
 
-    return this.enrichUserProfile(user)
+    return this.enrichUserProfile(user as UserProfilePayload)
   }
 
   async updateWithProfile(
@@ -371,13 +284,13 @@ export class SharedUserRepository {
     }
   ): Promise<GetUserProfileResType> {
     return this.prismaService.$transaction(async (tx) => {
-      const currentUser = await tx.user.findUnique({
+      const currentUser = (await tx.user.findUnique({
         where: {
           id: where.id,
           deletedAt: includeDeleted ? undefined : null
         },
         include: userProfileInclude
-      })
+      })) as UserProfilePayload | null
       if (!currentUser) throw UserNotFoundException
 
       const hasExistingTrainerProfile = Array.isArray(currentUser.trainerProfile)
@@ -428,10 +341,10 @@ export class SharedUserRepository {
         hasExistingTraineeProfile
       })
 
-      const refreshedUser = await tx.user.findUnique({
+      const refreshedUser = (await tx.user.findUnique({
         where: { id: where.id },
         include: userProfileInclude
-      })
+      })) as UserProfilePayload | null
 
       if (!refreshedUser) {
         throw UserNotFoundException

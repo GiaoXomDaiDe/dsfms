@@ -9,10 +9,12 @@ import {
   BulkCreateSubjectsResDto,
   CancelSubjectEnrollmentBodyDto,
   CreateSubjectBodyDto,
+  GetActiveTraineesResDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
+  GetTraineeCourseSubjectsResDto,
   GetTraineeEnrollmentsQueryDto,
   GetTraineeEnrollmentsResDto,
   LookupTraineesBodyDto,
@@ -32,6 +34,7 @@ import {
 } from '~/routes/subject/subject.dto'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 import { CourseIdParamsDto } from '~/shared/dtos/shared-course.dto'
 import { SubjectService } from './subject.service'
@@ -44,6 +47,12 @@ export class SubjectController {
   @ZodSerializerDto(GetSubjectsResDto)
   async list(@Query() query: GetSubjectsQueryDto, @ActiveRolePermissions('name') roleName: string) {
     return await this.subjectService.list(query, roleName)
+  }
+
+  @Get('active-trainees')
+  @ZodSerializerDto(GetActiveTraineesResDto)
+  async getActiveTrainees() {
+    return await this.subjectService.getActiveTrainees()
   }
 
   @Get(':subjectId')
@@ -151,6 +160,14 @@ export class SubjectController {
       traineeId,
       query
     })
+  }
+
+  // API phục vụ dashboard trainee: gom các môn (PLANNED, ENROLLED) theo course cha để hiển thị lịch học
+  @Get('trainees/:traineeId/course-subjects')
+  @IsPublic()
+  @ZodSerializerDto(GetTraineeCourseSubjectsResDto)
+  async getTraineeCourseSubjects(@Param() { traineeId }: TraineeIdParamsDto) {
+    return await this.subjectService.getTraineeCourseSubjects(traineeId)
   }
 
   @Post('trainees/lookup')

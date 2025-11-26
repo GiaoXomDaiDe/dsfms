@@ -1,6 +1,6 @@
-import { RoleType } from '~/routes/role/role.model'
 import envConfig from '~/shared/config'
 import { GenderStatus, RoleName } from '~/shared/constants/auth.constant'
+import { RoleType } from '~/shared/models/shared-role.model'
 import { EidService } from '~/shared/services/eid.service'
 import { HashingService } from '~/shared/services/hashing.service'
 import { PrismaService } from '~/shared/services/prisma.service'

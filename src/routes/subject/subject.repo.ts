@@ -30,6 +30,7 @@ import {
   CourseEnrollmentBatchSummaryType,
   CreateSubjectBodyType,
   EnrollmentListItemType,
+  GetActiveTraineesResType,
   GetAvailableTrainersResType,
   GetEnrollmentsQueryType,
   GetEnrollmentsResType,
@@ -38,6 +39,7 @@ import {
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetSubjectsType,
+  GetTraineeCourseSubjectsResType,
   LookupTraineesBodyType,
   LookupTraineesResType,
   SubjectDetailCourseType,
@@ -47,6 +49,7 @@ import {
   TraineeAssignmentDuplicateType,
   TraineeAssignmentIssueType,
   TraineeAssignmentUserType,
+  TraineeCourseSubjectsItemType,
   TraineeEnrollmentRecordType,
   TraineeEnrollmentUserType,
   UpdateSubjectBodyType,
@@ -345,6 +348,42 @@ export class SubjectRepo {
     }))
 
     return { trainers: trainersWithFlag, totalCount: trainersWithFlag.length }
+  }
+
+  async findActiveTrainees(): Promise<GetActiveTraineesResType> {
+    const trainees = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        status: UserStatus.ACTIVE,
+        role: {
+          name: RoleName.TRAINEE
+        }
+      },
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        email: true,
+        avatarUrl: true,
+        departmentId: true,
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        eid: 'asc'
+      }
+    })
+
+    return {
+      trainees,
+      totalItems: trainees.length
+    }
   }
 
   async getAllEnrollments(query: GetEnrollmentsQueryType): Promise<GetEnrollmentsResType> {
@@ -987,6 +1026,116 @@ export class SubjectRepo {
       enrolled,
       duplicates,
       invalid
+    }
+  }
+
+  async getTraineeCoursesWithSubjects({
+    traineeUserId
+  }: {
+    traineeUserId: string
+  }): Promise<GetTraineeCourseSubjectsResType> {
+    const trainee = await this.prisma.user.findUnique({
+      where: {
+        id: traineeUserId,
+        status: UserStatus.ACTIVE
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (!trainee) {
+      throw TraineeNotFoundException
+    }
+
+    const enrollments = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        traineeUserId,
+        status: SubjectEnrollmentStatus.ENROLLED,
+        subject: {
+          status: SubjectStatus.PLANNED,
+          deletedAt: null,
+          course: {
+            deletedAt: null,
+            status: {
+              not: CourseStatus.ARCHIVED
+            }
+          }
+        }
+      },
+      include: {
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            status: true,
+            method: true,
+            type: true,
+            startDate: true,
+            endDate: true,
+            course: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                status: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    const coursesMap = new Map<string, TraineeCourseSubjectsItemType>()
+
+    enrollments.forEach((enrollment) => {
+      const subject = enrollment.subject
+      if (!subject || !subject.course) {
+        return
+      }
+
+      const courseId = subject.course.id
+      const subjectPayload = {
+        id: subject.id,
+        code: subject.code,
+        name: subject.name,
+        status: subject.status as SubjectStatusValue,
+        method: subject.method as SubjectMethodValue,
+        type: subject.type as SubjectTypeValue,
+        startDate: subject.startDate ? subject.startDate.toISOString() : null,
+        endDate: subject.endDate ? subject.endDate.toISOString() : null,
+        batchCode: enrollment.batchCode,
+        enrollmentDate: enrollment.enrollmentDate.toISOString(),
+        updatedAt: enrollment.updatedAt.toISOString()
+      }
+
+      if (!coursesMap.has(courseId)) {
+        coursesMap.set(courseId, {
+          course: {
+            id: courseId,
+            code: subject.course.code,
+            name: subject.course.name,
+            status: subject.course.status
+          },
+          subjects: [subjectPayload]
+        })
+        return
+      }
+
+      coursesMap.get(courseId)?.subjects.push(subjectPayload)
+    })
+
+    const courses = Array.from(coursesMap.values()).map((item) => ({
+      ...item,
+      subjects: item.subjects.sort((a, b) => a.name.localeCompare(b.name))
+    }))
+
+    courses.sort((a, b) => a.course.name.localeCompare(b.course.name))
+
+    return {
+      traineeId: traineeUserId,
+      courses
     }
   }
 

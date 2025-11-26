@@ -3,20 +3,27 @@ import {
   BASIC_TEXT_REGEX,
   CODE_TEXT_REGEX,
   COUNTRY_REGEX,
-  PASSPORT_REGEX,
-  optionalText,
-  requiredText
+  PASSPORT_REGEX
 } from '~/shared/constants/validation.constant'
+import { optionalText, requiredText } from '~/shared/helpers/zod-validation.helper'
 import { UserSchema } from '~/shared/models/shared-user.model'
 
 export const TrainerProfileSchema = z.object({
-  specialization: requiredText('Specialization', 100, {
-    pattern: BASIC_TEXT_REGEX,
-    message: 'Specialization may only contain letters, numbers, spaces, and common punctuation'
+  specialization: requiredText({
+    field: 'Specialization',
+    max: 100,
+    options: {
+      pattern: BASIC_TEXT_REGEX,
+      message: 'Specialization may only contain letters, numbers, spaces, and common punctuation'
+    }
   }),
-  certificationNumber: requiredText('Certification number', 50, {
-    pattern: CODE_TEXT_REGEX,
-    message: 'Certification number may only contain letters, numbers, spaces, dash, slash, or underscore'
+  certificationNumber: requiredText({
+    field: 'Certification number',
+    max: 50,
+    options: {
+      pattern: CODE_TEXT_REGEX,
+      message: 'Certification number may only contain letters, numbers, spaces, dash, slash, or underscore'
+    }
   }),
   yearsOfExp: z
     .number()
@@ -25,9 +32,13 @@ export const TrainerProfileSchema = z.object({
     .max(50, 'Years of experience cannot exceed 50 years')
     .nullable()
     .default(0),
-  bio: optionalText('Bio', 1000, {
-    pattern: BASIC_TEXT_REGEX,
-    message: 'Bio contains unsupported characters'
+  bio: optionalText({
+    field: 'Bio',
+    max: 1000,
+    options: {
+      pattern: BASIC_TEXT_REGEX,
+      message: 'Bio contains unsupported characters'
+    }
   }),
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
@@ -57,17 +68,29 @@ export const TraineeProfileSchema = z
       .transform((value) => new Date(value))
       .nullable()
       .optional(),
-    trainingBatch: requiredText('Training batch', 100, {
-      pattern: CODE_TEXT_REGEX,
-      message: 'Training batch may only contain letters, numbers, spaces, dash, slash, or underscore'
+    trainingBatch: requiredText({
+      field: 'Training batch',
+      max: 100,
+      options: {
+        pattern: CODE_TEXT_REGEX,
+        message: 'Training batch may only contain letters, numbers, spaces, dash, slash, or underscore'
+      }
     }),
-    passportNo: requiredText('Passport number', 100, {
-      pattern: PASSPORT_REGEX,
-      message: 'Passport number may only contain letters, numbers, spaces, or hyphen'
+    passportNo: requiredText({
+      field: 'Passport number',
+      max: 100,
+      options: {
+        pattern: PASSPORT_REGEX,
+        message: 'Passport number may only contain letters, numbers, spaces, or hyphen'
+      }
     }),
-    nation: optionalText('Nation', 100, {
-      pattern: COUNTRY_REGEX,
-      message: 'Nation may only contain alphabetic characters and separators'
+    nation: optionalText({
+      field: 'Nation',
+      max: 100,
+      options: {
+        pattern: COUNTRY_REGEX,
+        message: 'Nation may only contain alphabetic characters and separators'
+      }
     }),
     createdById: z.uuid().nullable(),
     updatedById: z.uuid().nullable(),
@@ -186,9 +209,11 @@ export const ResetPasswordBodySchema = z
     }
   })
 
-export const UpdateSignatureBodySchema = z.object({
-  signatureImageUrl: z.string().url('Signature image URL must be a valid URL')
-}).strict()
+export const UpdateSignatureBodySchema = z
+  .object({
+    signatureImageUrl: z.string().url('Signature image URL must be a valid URL')
+  })
+  .strict()
 
 export type TrainerProfileType = z.infer<typeof TrainerProfileSchema>
 export type TraineeProfileType = z.infer<typeof TraineeProfileSchema>

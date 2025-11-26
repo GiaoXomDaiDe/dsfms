@@ -25,6 +25,8 @@ export class GetRolesResDTO extends createResponseDto(GetRolesResSchema, RoleMes
 export class GetRoleDetailResDTO extends createResponseDto(GetRoleDetailResSchema, RoleMes.DETAIL_SUCCESS) {}
 export class CreateRoleResDTO extends createResponseDto(CreateRoleResSchema, RoleMes.CREATE_SUCCESS) {}
 export class UpdateRoleResDTO extends createResponseDto(UpdateRoleResSchema, RoleMes.UPDATE_SUCCESS) {}
+
+//dùng cho internal
 export class AddPermissionsToRoleResDTO extends createResponseDto(
   AddPermissionsToRoleResSchema,
   RoleMes.ADD_PERMISSIONS_SUCCESS

@@ -39,6 +39,7 @@ import {
   BulkCreateSubjectsResType,
   CancelSubjectEnrollmentBodyType,
   CreateSubjectBodyType,
+  GetActiveTraineesResType,
   GetAvailableTrainersResType,
   GetCourseEnrollmentBatchesResType,
   GetEnrollmentsQueryType,
@@ -48,6 +49,7 @@ import {
   GetSubjectEnrollmentsResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
+  GetTraineeCourseSubjectsResType,
   GetTraineeEnrollmentsQueryType,
   GetTraineeEnrollmentsResType,
   LookupTraineesBodyType,
@@ -94,6 +96,10 @@ export class SubjectService {
     const trainers = await this.subjectRepo.getAvailableTrainers(courseId)
 
     return trainers
+  }
+
+  async getActiveTrainees(): Promise<GetActiveTraineesResType> {
+    return await this.subjectRepo.findActiveTrainees()
   }
 
   async getAllEnrollments(query: GetEnrollmentsQueryType, roleName: string): Promise<GetEnrollmentsResType> {
@@ -477,6 +483,12 @@ export class SubjectService {
       enrollments: result.enrollments,
       totalCount: result.enrollments.length
     }
+  }
+
+  async getTraineeCourseSubjects(traineeId: string): Promise<GetTraineeCourseSubjectsResType> {
+    return await this.subjectRepo.getTraineeCoursesWithSubjects({
+      traineeUserId: traineeId
+    })
   }
 
   async getSubjectEnrollments(

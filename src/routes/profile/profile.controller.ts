@@ -46,7 +46,7 @@ export class ProfileController {
       userId,
       signatureImageUrl
     })
-    return { 
+    return {
       success: true,
       message: result.message,
       data: { signatureImageUrl: result.signatureImageUrl }
