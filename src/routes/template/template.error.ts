@@ -177,3 +177,64 @@ export class DuplicateFinalScoreFieldsError extends BadRequestException {
     super(`Template can only have one field with fieldType ${fieldType}`)
   }
 }
+
+export class InvalidFieldTypeError extends BadRequestException {
+  constructor(fieldType?: string) {
+    const validTypes = 'TEXT, IMAGE, PART, TOGGLE, SECTION_CONTROL_TOGGLE, VALUE_LIST, SIGNATURE_DRAW, SIGNATURE_IMG, FINAL_SCORE_TEXT, FINAL_SCORE_NUM, CHECK_BOX'
+    super(fieldType 
+      ? `Invalid field type '${fieldType}'. Please use one of the following valid field types: ${validTypes}`
+      : `Invalid field type. Please use one of the following valid field types: ${validTypes}`
+    )
+  }
+}
+
+export class DuplicateFieldNameError extends BadRequestException {
+  constructor(fieldName?: string) {
+    super(fieldName 
+      ? `Duplicate field name '${fieldName}' detected within the same section and parent. Please ensure field names are unique within the same parent group.`
+      : 'Duplicate field name detected within the same section and parent. Please ensure field names are unique within the same parent group.'
+    )
+  }
+}
+
+export class InvalidReferenceError extends BadRequestException {
+  constructor(message?: string) {
+    super(message || 'Invalid reference detected. Please check that all department IDs and parent field references are valid.')
+  }
+}
+
+export class CheckBoxFieldInvalidChildTypeError extends BadRequestException {
+  constructor(fieldName: string, childFieldType: string, childFieldName: string) {
+    super(`CHECK_BOX field '${fieldName}' can only contain TEXT fields. Found '${childFieldType}' in field '${childFieldName}'`)
+  }
+}
+
+export class PartFieldInvalidChildTypeError extends BadRequestException {
+  constructor(fieldName: string, childFieldType: string, childFieldName: string, restrictedTypes: string[]) {
+    super(`PART field '${fieldName}' cannot contain '${childFieldType}' field type. Found in field '${childFieldName}'. Restricted types: ${restrictedTypes.join(', ')}`)
+  }
+}
+
+export class FinalScoreTextRequiredOptionsError extends BadRequestException {
+  constructor() {
+    super('FINAL_SCORE_TEXT field must have options when FINAL_SCORE_NUM field is not present')
+  }
+}
+
+export class FinalScoreTextInvalidOptionsError extends BadRequestException {
+  constructor() {
+    super('FINAL_SCORE_TEXT field options must have "items" array with at least one value when FINAL_SCORE_NUM field is not present')
+  }
+}
+
+export class FinalScoreTextInvalidJsonError extends BadRequestException {
+  constructor() {
+    super('FINAL_SCORE_TEXT field options must be valid JSON with "items" array when FINAL_SCORE_NUM field is not present')
+  }
+}
+
+export class CheckBoxFieldMissingChildrenError extends BadRequestException {
+  constructor(fieldName: string, sectionLabel: string) {
+    super(`CHECK_BOX field '${fieldName}' in section '${sectionLabel}' must have at least one child field`)
+  }
+}

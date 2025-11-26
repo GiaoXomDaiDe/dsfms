@@ -11,7 +11,32 @@ const convertAsync = promisify(libre.convert)
 
 @Injectable()
 export class PdfConverterService {
-  constructor(private readonly s3Service: S3Service) {}
+  constructor(private readonly s3Service: S3Service) {
+    // Log LibreOffice availability on startup
+    this.checkLibreOfficeAvailability()
+  }
+
+  /**
+   * Check if LibreOffice is available (non-blocking)
+   */
+  private checkLibreOfficeAvailability(): void {
+    try {
+      const testBuffer = Buffer.from('test')
+      libre.convert(testBuffer, '.pdf', undefined, (err) => {
+        if (err) {
+          console.warn('⚠️  LibreOffice not available:', err.message)
+          console.warn('📝 To enable PDF conversion, please:')
+          console.warn('   1. Download LibreOffice from: https://www.libreoffice.org/download/')
+          console.warn('   2. Install it on your system')
+          console.warn('   3. Restart this application')
+        } else {
+          console.log('✅ LibreOffice is available for PDF conversion')
+        }
+      })
+    } catch (error) {
+      console.warn('⚠️  LibreOffice not detected. PDF conversion will not work.')
+    }
+  }
 
   /**
    * Convert DOCX from S3 URL to PDF buffer
@@ -131,9 +156,9 @@ export class PdfConverterService {
         const docxFileBuffer = fs.readFileSync(tempDocxPath)
         
         // Convert DOCX to PDF using LibreOffice
-        const pdfBuffer = await convertAsync(docxFileBuffer, '.pdf', undefined)
+        const pdfBuffer = await this.convertWithLibreOffice(docxFileBuffer)
         
-        return pdfBuffer as Buffer
+        return pdfBuffer
       } finally {
         // Clean up temporary file
         if (fs.existsSync(tempDocxPath)) {
@@ -144,6 +169,44 @@ export class PdfConverterService {
       console.error('LibreOffice conversion error:', error)
       throw new InternalServerErrorException('PDF conversion failed')
     }
+  }
+
+  /**
+   * Convert buffer using LibreOffice with proper error handling
+   */
+  private async convertWithLibreOffice(buffer: Buffer): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      // Validate buffer
+      if (!buffer || buffer.length === 0) {
+        reject(new BadRequestException('Invalid or empty document buffer'))
+        return
+      }
+
+      // Check if LibreOffice is available
+      try {
+        libre.convert(buffer, '.pdf', undefined, (err, result) => {
+          if (err) {
+            console.error('LibreOffice conversion error:', err)
+            
+            // Provide better error messages for common issues
+            if (err.message.includes('Document is empty')) {
+              reject(new BadRequestException('The document appears to be empty or corrupted'))
+            } else if (err.message.includes('Could not find platform independent libraries')) {
+              reject(new InternalServerErrorException('LibreOffice is not properly installed or configured. Please install LibreOffice and restart the application.'))
+            } else if (err.message.includes('soffice')) {
+              reject(new InternalServerErrorException('LibreOffice executable not found. Please ensure LibreOffice is installed and accessible in PATH.'))
+            } else {
+              reject(new InternalServerErrorException(`PDF conversion failed: ${err.message}`))
+            }
+          } else {
+            resolve(result)
+          }
+        })
+      } catch (error) {
+        console.error('LibreOffice setup error:', error)
+        reject(new InternalServerErrorException('LibreOffice is not available. Please install LibreOffice to enable PDF conversion.'))
+      }
+    })  
   }
 
   /**
