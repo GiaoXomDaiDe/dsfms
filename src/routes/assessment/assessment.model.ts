@@ -649,12 +649,15 @@ export type ApproveRejectAssessmentResType = z.infer<typeof ApproveRejectAssessm
 
 // ===== ASSESSMENT EVENT SCHEMAS =====
 
+// Custom event status enum (server-defined, not stored in DB)
+export const AssessmentEventStatus = z.enum(['NOT_STARTED', 'ON_GOING', 'FINISHED'])
+
 export const AssessmentEventItemSchema = z.object({
   name: z.string().max(255),
   subjectId: z.string().uuid().nullable(),
   courseId: z.string().uuid().nullable(),
   occuranceDate: z.coerce.date(),
-  status: z.nativeEnum(AssessmentStatus),
+  status: AssessmentEventStatus,
   totalTrainees: z.number().int().min(0),
   // Additional info about the subject/course
   entityInfo: z.object({
@@ -674,7 +677,7 @@ export const AssessmentEventItemSchema = z.object({
 export const GetAssessmentEventsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  status: z.nativeEnum(AssessmentStatus).optional(),
+  status: AssessmentEventStatus.optional(),
   subjectId: z.string().uuid().optional(),
   courseId: z.string().uuid().optional(),
   templateId: z.string().uuid().optional(),
