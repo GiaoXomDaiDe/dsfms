@@ -21,6 +21,7 @@ import {
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
 import { RoleRepo } from '~/routes/role/role.repo'
+import { DEFAULT_ROLE_ENDPOINT_PERMISSION_NAMES } from '~/shared/constants/permission.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedPermissionGroupRepository } from '~/shared/repositories/shared-permission-group.repo'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
@@ -79,10 +80,15 @@ export class RoleService {
   }
 
   async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }): Promise<CreateRoleResType> {
-    const permissionIds = await this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes)
+    const [permissionIds, defaultPermissionIds] = await Promise.all([
+      this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes),
+      this.sharedPermissionRepo.findActiveIdsByNames(DEFAULT_ROLE_ENDPOINT_PERMISSION_NAMES)
+    ])
+
+    const mergedPermissionIds = Array.from(new Set([...permissionIds, ...defaultPermissionIds]))
 
     try {
-      return await this.roleRepo.create({ createdById, data, permissionIds })
+      return await this.roleRepo.create({ createdById, data, permissionIds: mergedPermissionIds })
     } catch (error) {
       if (isUniqueConstraintPrismaError(error)) throw RoleAlreadyExistsException
       throw error

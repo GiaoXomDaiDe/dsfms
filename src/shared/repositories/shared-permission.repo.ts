@@ -60,4 +60,30 @@ export class SharedPermissionRepository {
       }
     })
   }
+
+  async findActiveIdsByNames(names: readonly string[]): Promise<string[]> {
+    if (names.length === 0) {
+      return []
+    }
+
+    const permissions = await this.prismaService.endpointPermission.findMany({
+      where: {
+        name: { in: [...names] },
+        deletedAt: null,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true
+      }
+    })
+
+    const foundNames = new Set(permissions.map((permission) => permission.name))
+    const missingNames = names.filter((name) => !foundNames.has(name))
+    if (missingNames.length > 0) {
+      throw createPermissionNotFoundError(missingNames)
+    }
+
+    return permissions.map((permission) => permission.id)
+  }
 }
