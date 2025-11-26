@@ -238,3 +238,15 @@ export class CheckBoxFieldMissingChildrenError extends BadRequestException {
     super(`CHECK_BOX field '${fieldName}' in section '${sectionLabel}' must have at least one child field`)
   }
 }
+
+export class InvalidStatusTransitionError extends BadRequestException {
+  constructor(currentStatus: string, newStatus: string) {
+    super(`Cannot change template status from '${currentStatus}' to '${newStatus}'. Only PUBLISHED ↔ DISABLED transitions are allowed through this endpoint.`)
+  }
+}
+
+export class TemplateInUseCannotDisableError extends BadRequestException {
+  constructor() {
+    super('Cannot disable template because it is being used in assessments that are not APPROVED or CANCELLED')
+  }
+}
