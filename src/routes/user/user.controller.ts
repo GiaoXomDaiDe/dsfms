@@ -6,9 +6,9 @@ import {
   CreateUserBodyWithProfileDTO,
   CreateUserResDTO,
   GetUserParamsDTO,
-  GetUserProfileResDTO,
   GetUsersQueryDTO,
   GetUsersResDTO,
+  GetUserWithProfileResDTO,
   UpdateUserBodyWithProfileDTO,
   UpdateUserResDTO
 } from '~/routes/user/user.dto'
@@ -33,7 +33,7 @@ export class UserController {
   }
 
   @Get(':userId')
-  @ZodSerializerDto(GetUserProfileResDTO)
+  @ZodSerializerDto(GetUserWithProfileResDTO)
   async findById(@Param() params: GetUserParamsDTO) {
     const data = await this.userService.findById(params.userId)
     return {

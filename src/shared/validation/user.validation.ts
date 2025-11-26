@@ -10,16 +10,15 @@ import {
 
 const USER_NAME_MESSAGE = 'Name invalid'
 const PHONE_NUMBER_MESSAGE = 'Phone number must contain digits only'
-const statusErrorMessage = `Status must be one of: ${[UserStatus.ACTIVE, UserStatus.DISABLED].join(', ')}`
-const genderErrorMessage = `Gender must be one of: ${[GenderStatus.MALE, GenderStatus.FEMALE].join(', ')}`
+const STATUS_ERROR_MESSAGE = `Status must be one of: ${[UserStatus.ACTIVE, UserStatus.DISABLED].join(', ')}`
+const GENDER_ERROR_MESSAGE = `Gender must be one of: ${[GenderStatus.MALE, GenderStatus.FEMALE].join(', ')}`
 
 const baseNameSchema = requiredText({
   field: 'Name',
   max: 100,
   options: {
     pattern: NAME_REGEX,
-    message: USER_NAME_MESSAGE,
-    requiredMessage: USER_NAME_MESSAGE
+    message: USER_NAME_MESSAGE
   }
 }).refine((val) => LETTER_REGEX.test(val), { message: USER_NAME_MESSAGE })
 
@@ -50,7 +49,7 @@ export const userPhoneNumberSchema = nullableStringField(
 )
 
 /** userStatusSchema: đảm bảo status nằm trong danh sách ACTIVE/DISABLED */
-export const userStatusSchema = createEnumSchema([UserStatus.ACTIVE, UserStatus.DISABLED], statusErrorMessage)
+export const userStatusSchema = createEnumSchema([UserStatus.ACTIVE, UserStatus.DISABLED], STATUS_ERROR_MESSAGE)
 
 /** userGenderSchema: đảm bảo gender chỉ nhận MALE hoặc FEMALE */
-export const userGenderSchema = createEnumSchema([GenderStatus.MALE, GenderStatus.FEMALE], genderErrorMessage)
+export const userGenderSchema = createEnumSchema([GenderStatus.MALE, GenderStatus.FEMALE], GENDER_ERROR_MESSAGE)

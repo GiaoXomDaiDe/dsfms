@@ -22,7 +22,7 @@ export class UpdateUserBodyWithProfileDTO extends createZodDto(UpdateUserBodyWit
 export class CreateBulkUsersBodyDTO extends createZodDto(CreateBulkUsersBodySchema) {}
 
 export class GetUsersResDTO extends createResponseDto(GetUsersResSchema, UserMes.LIST_SUCCESS) {}
-export class GetUserProfileResDTO extends createResponseDto(GetUserResSchema, UserMes.DETAIL_SUCCESS) {}
+export class GetUserWithProfileResDTO extends createResponseDto(GetUserResSchema, UserMes.DETAIL_SUCCESS) {}
 export class CreateUserResDTO extends createResponseDto(UpdateUserResSchema, UserMes.CREATE_SUCCESS) {}
 export class BulkCreateResultDTO extends createResponseDto(BulkCreateResultSchema, UserMes.BULK_CREATE_SUCCESS) {}
 export class UpdateUserResDTO extends createResponseDto(UpdateUserResSchema, UserMes.UPDATE_SUCCESS) {}

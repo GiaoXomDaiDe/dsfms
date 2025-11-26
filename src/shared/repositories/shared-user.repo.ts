@@ -8,7 +8,7 @@ import {
 } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
 import {
-  GetUserProfileResType,
+  GetUserWithProfileResType,
   UpdateUserInternalType,
   UserProfileWithoutTeachingType,
   UserWithProfileRelationType
@@ -251,7 +251,7 @@ export class SharedUserRepository {
     }) as Promise<BasicUserInfoWithDepartment | null>
   }
 
-  async findUniqueIncludeProfile(id: string): Promise<GetUserProfileResType | null> {
+  async findUniqueIncludeProfile(id: string): Promise<GetUserWithProfileResType | null> {
     const user = await this.prismaService.user.findFirst({
       where: {
         id
@@ -282,7 +282,7 @@ export class SharedUserRepository {
       traineeProfile?: UpdateTraineeProfileType
       includeDeleted?: boolean
     }
-  ): Promise<GetUserProfileResType> {
+  ): Promise<GetUserWithProfileResType> {
     return this.prismaService.$transaction(async (tx) => {
       const currentUser = (await tx.user.findUnique({
         where: {
@@ -584,7 +584,7 @@ export class SharedUserRepository {
     return !!payload && Object.keys(payload).length > 0
   }
 
-  private async enrichUserProfile(user: UserProfilePayload): Promise<GetUserProfileResType> {
+  private async enrichUserProfile(user: UserProfilePayload): Promise<GetUserWithProfileResType> {
     const teachingAssignments = await this.buildTeachingAssignments(user)
     const baseProfile = mapToUserProfileWithoutTeaching(user)
     return {
@@ -596,7 +596,7 @@ export class SharedUserRepository {
 
   private async buildTeachingAssignments(
     user: UserProfilePayload
-  ): Promise<Pick<GetUserProfileResType, 'teachingCourses' | 'teachingSubjects'>> {
+  ): Promise<Pick<GetUserWithProfileResType, 'teachingCourses' | 'teachingSubjects'>> {
     if (user.role.name !== RoleName.TRAINER) {
       return {
         teachingCourses: [],

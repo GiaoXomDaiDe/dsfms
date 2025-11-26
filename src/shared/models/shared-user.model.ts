@@ -1,7 +1,7 @@
 import z from 'zod'
 import { isoDatetimeSchema, nullableUuidSchema, urlSchema } from '~/shared/helpers/zod-validation.helper'
-import { departmentIdNameSchema } from '~/shared/models/shared-department.model'
-import { roleIdNameSchema } from '~/shared/models/shared-role.model'
+import { departmentSummarySchema } from '~/shared/models/shared-department.model'
+import { roleSummarySchema } from '~/shared/models/shared-role.model'
 import {
   userAddressSchema,
   userGenderSchema,
@@ -40,8 +40,8 @@ export const UserListItemSchema = UserSchema.omit({
   roleId: true,
   departmentId: true
 }).extend({
-  role: roleIdNameSchema,
-  department: departmentIdNameSchema.nullable()
+  role: roleSummarySchema,
+  department: departmentSummarySchema.nullable()
 })
 
 export const UserLookupResSchema = z.object({

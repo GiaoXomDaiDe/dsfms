@@ -1,106 +1,44 @@
 import z from 'zod'
-import {
-  BASIC_TEXT_REGEX,
-  CODE_TEXT_REGEX,
-  COUNTRY_REGEX,
-  PASSPORT_REGEX
-} from '~/shared/constants/validation.constant'
-import { optionalText, requiredText } from '~/shared/helpers/zod-validation.helper'
+import { isoDatetimeSchema } from '~/shared/helpers/zod-validation.helper'
 import { UserSchema } from '~/shared/models/shared-user.model'
+import {
+  traineeDobSchema,
+  traineeEnrollmentDateSchema,
+  traineeNationSchema,
+  traineePassportSchema,
+  traineeTrainingBatchSchema,
+  trainerBioSchema,
+  trainerCertificationNumberSchema,
+  trainerSpecializationSchema,
+  trainerYearsOfExperienceSchema
+} from '~/shared/validation/profile.validation'
 
 export const TrainerProfileSchema = z.object({
-  specialization: requiredText({
-    field: 'Specialization',
-    max: 100,
-    options: {
-      pattern: BASIC_TEXT_REGEX,
-      message: 'Specialization may only contain letters, numbers, spaces, and common punctuation'
-    }
-  }),
-  certificationNumber: requiredText({
-    field: 'Certification number',
-    max: 50,
-    options: {
-      pattern: CODE_TEXT_REGEX,
-      message: 'Certification number may only contain letters, numbers, spaces, dash, slash, or underscore'
-    }
-  }),
-  yearsOfExp: z
-    .number()
-    .int('Years of experience must be a whole number')
-    .min(0, 'Years of experience cannot be negative')
-    .max(50, 'Years of experience cannot exceed 50 years')
-    .nullable()
-    .default(0),
-  bio: optionalText({
-    field: 'Bio',
-    max: 1000,
-    options: {
-      pattern: BASIC_TEXT_REGEX,
-      message: 'Bio contains unsupported characters'
-    }
-  }),
+  specialization: trainerSpecializationSchema,
+  certificationNumber: trainerCertificationNumberSchema,
+  yearsOfExp: trainerYearsOfExperienceSchema,
+  bio: trainerBioSchema,
   createdById: z.uuid().nullable(),
   updatedById: z.uuid().nullable(),
   deletedById: z.uuid().nullable(),
-  deletedAt: z.iso
-    .datetime()
-    .transform((value) => new Date(value))
-    .nullable(),
-  createdAt: z.iso.datetime().transform((value) => new Date(value)),
-  updatedAt: z.iso.datetime().transform((value) => new Date(value))
+  deletedAt: isoDatetimeSchema.nullable(),
+  createdAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema
 })
 
 export const TraineeProfileSchema = z
   .object({
-    dob: z.iso
-      .datetime()
-      .transform((value) => new Date(value))
-      .superRefine((date, ctx) => {
-        if (Number.isNaN(date.getTime())) {
-          ctx.addIssue({ code: 'custom', message: 'Date of birth must be a valid date' })
-        } else if (date.getTime() > Date.now()) {
-          ctx.addIssue({ code: 'custom', message: 'Date of birth cannot be in the future' })
-        }
-      }),
-    enrollmentDate: z.iso
-      .datetime()
-      .transform((value) => new Date(value))
-      .nullable()
-      .optional(),
-    trainingBatch: requiredText({
-      field: 'Training batch',
-      max: 100,
-      options: {
-        pattern: CODE_TEXT_REGEX,
-        message: 'Training batch may only contain letters, numbers, spaces, dash, slash, or underscore'
-      }
-    }),
-    passportNo: requiredText({
-      field: 'Passport number',
-      max: 100,
-      options: {
-        pattern: PASSPORT_REGEX,
-        message: 'Passport number may only contain letters, numbers, spaces, or hyphen'
-      }
-    }),
-    nation: optionalText({
-      field: 'Nation',
-      max: 100,
-      options: {
-        pattern: COUNTRY_REGEX,
-        message: 'Nation may only contain alphabetic characters and separators'
-      }
-    }),
+    dob: traineeDobSchema,
+    enrollmentDate: traineeEnrollmentDateSchema,
+    trainingBatch: traineeTrainingBatchSchema,
+    passportNo: traineePassportSchema,
+    nation: traineeNationSchema,
     createdById: z.uuid().nullable(),
     updatedById: z.uuid().nullable(),
     deletedById: z.uuid().nullable(),
-    deletedAt: z.iso
-      .datetime()
-      .transform((value) => new Date(value))
-      .nullable(),
-    createdAt: z.iso.datetime().transform((value) => new Date(value)),
-    updatedAt: z.iso.datetime().transform((value) => new Date(value))
+    deletedAt: isoDatetimeSchema.nullable(),
+    createdAt: isoDatetimeSchema,
+    updatedAt: isoDatetimeSchema
   })
   .superRefine((data, ctx) => {
     if (data.enrollmentDate && data.enrollmentDate < data.dob) {
