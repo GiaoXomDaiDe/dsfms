@@ -206,7 +206,7 @@ export class PdfConverterService {
         console.error('LibreOffice setup error:', error)
         reject(new InternalServerErrorException('LibreOffice is not available. Please install LibreOffice to enable PDF conversion.'))
       }
-    })
+    })  
   }
 
   /**

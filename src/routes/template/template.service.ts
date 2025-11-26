@@ -31,7 +31,16 @@ import {
   ValueListFieldInvalidOptionsError,
   MissingSignatureFieldError,
   MissingFinalScoreFieldsError,
-  DuplicateFinalScoreFieldsError
+  DuplicateFinalScoreFieldsError,
+  InvalidFieldTypeError,
+  DuplicateFieldNameError,
+  InvalidReferenceError,
+  CheckBoxFieldInvalidChildTypeError,
+  PartFieldInvalidChildTypeError,
+  FinalScoreTextRequiredOptionsError,
+  FinalScoreTextInvalidOptionsError,
+  FinalScoreTextInvalidJsonError,
+  CheckBoxFieldMissingChildrenError
 } from './template.error'
 import {
   TEMPLATE_PARSED_SUCCESSFULLY,
@@ -583,25 +592,46 @@ export class TemplateService {
         message: TEMPLATE_CREATED_SUCCESSFULLY
       }
     } catch (error) {
+      console.error('Template creation error:', error)
+      
+      // Re-throw known custom errors as-is
+      if (error instanceof TemplateConfigRequiredError ||
+          error instanceof DepartmentNotFoundError ||
+          error instanceof TemplateNameAlreadyExistsError ||
+          error instanceof RoleRequiredMismatchError ||
+          error instanceof SignatureFieldMissingRoleError ||
+          error instanceof PartFieldMissingChildrenError ||
+          error instanceof ToggleDependentSectionMissingControlError ||
+          error instanceof ValueListFieldMissingOptionsError ||
+          error instanceof ValueListFieldInvalidOptionsError ||
+          error instanceof MissingSignatureFieldError ||
+          error instanceof MissingFinalScoreFieldsError ||
+          error instanceof DuplicateFinalScoreFieldsError ||
+          error instanceof InvalidFieldTypeError ||
+          error instanceof DuplicateFieldNameError ||
+          error instanceof InvalidReferenceError) {
+        throw error
+      }
+      
       // Handle Prisma validation errors more gracefully
       if (error.message && error.message.includes('Invalid value for argument')) {
         // Extract field type validation errors
         const fieldTypeMatch = error.message.match(/fieldType.*Expected ([^.]+)/);
         if (fieldTypeMatch) {
-          throw new Error(`Invalid field type. Please use one of the following valid field types: TEXT, IMAGE, PART, TOGGLE, SECTION_CONTROL_TOGGLE, VALUE_LIST, SIGNATURE_DRAW, SIGNATURE_IMG, FINAL_SCORE_TEXT, FINAL_SCORE_NUM, CHECK_BOX`);
+          throw new InvalidFieldTypeError()
         }
       }
       
       // Handle unique constraint violations
       if (error.message && error.message.includes('Unique constraint failed')) {
         if (error.message.includes('sectionId') && error.message.includes('fieldName')) {
-          throw new Error(`Duplicate field name detected within the same section and parent. Please ensure field names are unique within the same parent group.`);
+          throw new DuplicateFieldNameError()
         }
       }
       
       // Handle other specific errors
       if (error.message && error.message.includes('Foreign key constraint failed')) {
-        throw new Error(`Invalid reference detected. Please check that all department IDs and parent field references are valid.`);
+        throw new InvalidReferenceError()
       }
       
       // Default error handling
@@ -1072,14 +1102,14 @@ export class TemplateService {
           // Only validate when roleRequired is explicitly provided
           if (field.roleRequired !== undefined && field.roleRequired !== null) {
             if (String(field.roleRequired) !== String(section.editBy)) {
-              throw new Error(`Field '${field.fieldName}' in section '${section.label}' has roleRequired '${field.roleRequired}' but section editBy is '${section.editBy}'. They must match.`)
+              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
             }
           }
 
           // Validate that signature fields must have roleRequired set
           if (field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG') {
             if (!field.roleRequired) {
-              throw new Error(`Signature field '${field.fieldName}' in section '${section.label}' must have roleRequired set`)
+              throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
             }
           }
 
@@ -1091,7 +1121,7 @@ export class TemplateService {
               (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
             )
             if (!hasChildFields) {
-              throw new Error(`PART field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
+              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
             }
           }
 
@@ -1103,7 +1133,7 @@ export class TemplateService {
               (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
             )
             if (!hasChildFields) {
-              throw new Error(`CHECK_BOX field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
+              throw new CheckBoxFieldMissingChildrenError(field.fieldName, section.label)
             }
           }
         }
@@ -1392,7 +1422,7 @@ export class TemplateService {
             (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
           )
           if (!hasChildFields) {
-            throw new Error(`CHECK_BOX field '${field.fieldName}' must have at least one child field`)
+            throw new CheckBoxFieldMissingChildrenError(field.fieldName, section.label)
           }
         }
       }
@@ -1632,7 +1662,7 @@ export class TemplateService {
           // Validate that all child fields are TEXT type only
           for (const childField of childFields) {
             if (childField.fieldType !== 'TEXT') {
-              throw new Error(`CHECK_BOX field '${field.fieldName}' can only contain TEXT fields. Found '${childField.fieldType}' in field '${childField.fieldName}'`)
+              throw new CheckBoxFieldInvalidChildTypeError(field.fieldName, childField.fieldType, childField.fieldName)
             }
           }
         }
@@ -1652,7 +1682,7 @@ export class TemplateService {
           const restrictedTypes = ['PART', 'TOGGLE', 'SECTION_CONTROL_TOGGLE', 'FINAL_SCORE_TEXT', 'FINAL_SCORE_NUM', 'CHECK_BOX']
           for (const childField of childFields) {
             if (restrictedTypes.includes(childField.fieldType)) {
-              throw new Error(`PART field '${field.fieldName}' cannot contain '${childField.fieldType}' field type. Found in field '${childField.fieldName}'. Restricted types: ${restrictedTypes.join(', ')}`)
+              throw new PartFieldInvalidChildTypeError(field.fieldName, childField.fieldType, childField.fieldName, restrictedTypes)
             }
           }
         }
@@ -1673,15 +1703,15 @@ export class TemplateService {
     
     // Must have at least one final score field (either NUM or TEXT)
     if (finalScoreNumFields.length === 0 && finalScoreTextFields.length === 0) {
-      throw new Error('Template must have FINAL_SCORE_NUM/TEXT for this template')
+      throw new MissingFinalScoreFieldsError('FINAL_SCORE_NUM')
     }
     
     // Check maximum one of each type
     if (finalScoreNumFields.length > 1) {
-      throw new Error('Template can have only 1 FINAL_SCORE_NUM')
+      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_NUM')
     }
     if (finalScoreTextFields.length > 1) {
-      throw new Error('Template can have only 1 FINAL_SCORE_TEXT')
+      throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
     }
     
     // 7. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
@@ -1692,7 +1722,7 @@ export class TemplateService {
       if (!hasFinalScoreNum) {
         // If only FINAL_SCORE_TEXT exists (no FINAL_SCORE_NUM), options are required
         if (!finalScoreTextField.options) {
-          throw new Error('FINAL_SCORE_TEXT field must have options when FINAL_SCORE_NUM field is not present')
+          throw new FinalScoreTextRequiredOptionsError()
         }
         
         // Validate options format
@@ -1702,10 +1732,10 @@ export class TemplateService {
             : finalScoreTextField.options
             
           if (!options.items || !Array.isArray(options.items) || options.items.length === 0) {
-            throw new Error('FINAL_SCORE_TEXT field options must have "items" array with at least one value when FINAL_SCORE_NUM field is not present')
+            throw new FinalScoreTextInvalidOptionsError()
           }
         } catch (parseError) {
-          throw new Error('FINAL_SCORE_TEXT field options must be valid JSON with "items" array when FINAL_SCORE_NUM field is not present')
+          throw new FinalScoreTextInvalidJsonError()
         }
       }
       // If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist, options are optional for FINAL_SCORE_TEXT
