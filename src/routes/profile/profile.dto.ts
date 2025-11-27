@@ -1,5 +1,10 @@
 import { createZodDto } from 'nestjs-zod'
-import { ResetPasswordBodySchema, UpdateMeBodySchema, UpdateProfileBodySchema, UpdateSignatureBodySchema } from '~/routes/profile/profile.model'
+import {
+  ResetPasswordBodySchema,
+  UpdateMeBodySchema,
+  UpdateProfileBodySchema,
+  UpdateSignatureBodySchema
+} from '~/routes/profile/profile.model'
 
 export class UpdateMeBodyDTO extends createZodDto(UpdateMeBodySchema) {}
 

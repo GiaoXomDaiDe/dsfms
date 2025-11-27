@@ -1,4 +1,10 @@
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common'
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException
+} from '@nestjs/common'
 import { CourseStatus, SubjectStatus, AssessmentResult } from '@prisma/client'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
@@ -130,21 +136,25 @@ export class AssessmentService {
       const entity = subject || course
       const entityType = data.subjectId ? 'Subject' : 'Course'
       const entityPassScore = entity!.passScore
-      
+
       // Check if template has FINAL_SCORE_NUM field
-      const hasFinalScoreNumField = template.sections.some(section => 
-        section.fields.some(field => field.fieldType === 'FINAL_SCORE_NUM')
+      const hasFinalScoreNumField = template.sections.some((section) =>
+        section.fields.some((field) => field.fieldType === 'FINAL_SCORE_NUM')
       )
-      
+
       if (entityPassScore === null || entityPassScore === undefined) {
         // Entity doesn't use score - template should not require score
         if (hasFinalScoreNumField) {
-          throw new BadRequestException(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+          throw new BadRequestException(
+            `The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`
+          )
         }
       } else {
         // Entity uses score - template must have score field
         if (!hasFinalScoreNumField) {
-          throw new BadRequestException(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+          throw new BadRequestException(
+            `This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`
+          )
         }
       }
 
@@ -155,46 +165,42 @@ export class AssessmentService {
 
       // Step 4: Validate occurrence date is after start date (no end date restriction)
       const occurrenceDate = new Date(data.occuranceDate)
-      
+
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 5: Validate trainees
-      const validTrainees = await this.assessmentRepo.validateTrainees(
-        data.traineeIds,
-        data.subjectId,
-        data.courseId
-      )
+      const validTrainees = await this.assessmentRepo.validateTrainees(data.traineeIds, data.subjectId, data.courseId)
 
       // Check if all requested trainees were found and valid
-      const foundTraineeIds = validTrainees.map(t => t.id)
-      const missingTraineeIds = data.traineeIds.filter(id => !foundTraineeIds.includes(id))
+      const foundTraineeIds = validTrainees.map((t) => t.id)
+      const missingTraineeIds = data.traineeIds.filter((id) => !foundTraineeIds.includes(id))
 
       if (missingTraineeIds.length > 0) {
         // Get more details about missing trainees
         const allRequestedTrainees = await this.getAllTraineeDetails(data.traineeIds)
-        const missingTrainees = allRequestedTrainees.filter(t => missingTraineeIds.includes(t.id))
-        
-        const notFoundTrainees = missingTrainees.filter(t => !t.exists)
-        const invalidRoleTrainees = missingTrainees.filter(t => t.exists && t.role !== 'TRAINEE')
-        const inactiveTrainees = missingTrainees.filter(t => t.exists && t.role === 'TRAINEE' && !t.isActive)
-        const notEnrolledTrainees = missingTrainees.filter(t => 
-          t.exists && t.role === 'TRAINEE' && t.isActive && !t.isEnrolled
+        const missingTrainees = allRequestedTrainees.filter((t) => missingTraineeIds.includes(t.id))
+
+        const notFoundTrainees = missingTrainees.filter((t) => !t.exists)
+        const invalidRoleTrainees = missingTrainees.filter((t) => t.exists && t.role !== 'TRAINEE')
+        const inactiveTrainees = missingTrainees.filter((t) => t.exists && t.role === 'TRAINEE' && !t.isActive)
+        const notEnrolledTrainees = missingTrainees.filter(
+          (t) => t.exists && t.role === 'TRAINEE' && t.isActive && !t.isEnrolled
         )
 
         if (notFoundTrainees.length > 0) {
-          throw TraineeNotFoundException(notFoundTrainees.map(t => t.id))
+          throw TraineeNotFoundException(notFoundTrainees.map((t) => t.id))
         }
         if (invalidRoleTrainees.length > 0) {
-          throw TraineeInvalidRoleException(invalidRoleTrainees.map(t => t.id))
+          throw TraineeInvalidRoleException(invalidRoleTrainees.map((t) => t.id))
         }
         if (inactiveTrainees.length > 0) {
-          throw TraineeNotActiveException(inactiveTrainees.map(t => t.id))
+          throw TraineeNotActiveException(inactiveTrainees.map((t) => t.id))
         }
         if (notEnrolledTrainees.length > 0) {
           throw TraineeNotEnrolledException(
-            notEnrolledTrainees.map(t => t.id),
+            notEnrolledTrainees.map((t) => t.id),
             data.subjectId ? 'subject' : 'course'
           )
         }
@@ -208,10 +214,7 @@ export class AssessmentService {
       )
 
       if (existingAssessments.length > 0) {
-        throw TraineeAssessmentExistsException(
-          existingAssessments,
-          data.subjectId ? 'subject' : 'course'
-        )
+        throw TraineeAssessmentExistsException(existingAssessments, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 8: Validate template structure
@@ -231,11 +234,7 @@ export class AssessmentService {
       }
 
       // Step 9: Create assessments in database transaction
-      const createdAssessments = await this.assessmentRepo.createAssessments(
-        data,
-        templateSections,
-        currentUser.userId
-      )
+      const createdAssessments = await this.assessmentRepo.createAssessments(data, templateSections, currentUser.userId)
 
       if (!createdAssessments || createdAssessments.length === 0) {
         throw AssessmentFormCreationFailedException
@@ -247,17 +246,18 @@ export class AssessmentService {
         assessments: createdAssessments,
         totalCreated: createdAssessments.length
       }
-
     } catch (error) {
       // Log the error for debugging
       console.error('Assessment creation failed:', error)
 
       // Re-throw known business logic errors
-      if (error.name === 'BadRequestException' || 
-          error.name === 'NotFoundException' || 
-          error.name === 'ForbiddenException' ||
-          error.name === 'ConflictException' ||
-          error.name === 'UnprocessableEntityException') {
+      if (
+        error.name === 'BadRequestException' ||
+        error.name === 'NotFoundException' ||
+        error.name === 'ForbiddenException' ||
+        error.name === 'ConflictException' ||
+        error.name === 'UnprocessableEntityException'
+      ) {
         throw error
       }
 
@@ -292,13 +292,13 @@ export class AssessmentService {
       let startDate: Date
       let endDate: Date
       let enrolledTrainees: Array<{
-        id: string;
-        eid: string;
-        firstName: string;
-        lastName: string;
-        middleName: string | null;
-        email: string;
-        enrollmentStatus: string;
+        id: string
+        eid: string
+        firstName: string
+        lastName: string
+        middleName: string | null
+        email: string
+        enrollmentStatus: string
       }> = []
       let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course' }
 
@@ -347,36 +347,37 @@ export class AssessmentService {
       const entity = subject || course
       const entityType = data.subjectId ? 'Subject' : 'Course'
       const entityPassScore = entity!.passScore
-      
+
       // Check if template has FINAL_SCORE_NUM field
-      const hasFinalScoreNumField = template.sections.some(section => 
-        section.fields.some(field => field.fieldType === 'FINAL_SCORE_NUM')
+      const hasFinalScoreNumField = template.sections.some((section) =>
+        section.fields.some((field) => field.fieldType === 'FINAL_SCORE_NUM')
       )
-      
+
       if (entityPassScore === null || entityPassScore === undefined) {
         // Entity doesn't use score - template should not require score
         if (hasFinalScoreNumField) {
-          throw new BadRequestException(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+          throw new BadRequestException(
+            `The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`
+          )
         }
       } else {
         // Entity uses score - template must have score field
         if (!hasFinalScoreNumField) {
-          throw new BadRequestException(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+          throw new BadRequestException(
+            `This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`
+          )
         }
       }
 
       // Step 3: Check if any trainees are enrolled
       // For course-level assessments: trainees enrolled in at least one active subject in the course
       if (enrolledTrainees.length === 0) {
-        throw NoEnrolledTraineesFoundException(
-          data.subjectId ? 'subject' : 'course',
-          entityInfo.name
-        )
+        throw NoEnrolledTraineesFoundException(data.subjectId ? 'subject' : 'course', entityInfo.name)
       }
 
       // Step 4: Filter out excluded trainees if specified
       const excludeIds = data.excludeTraineeIds || []
-      const eligibleTrainees = enrolledTrainees.filter(trainee => !excludeIds.includes(trainee.id))
+      const eligibleTrainees = enrolledTrainees.filter((trainee) => !excludeIds.includes(trainee.id))
 
       if (eligibleTrainees.length === 0) {
         throw AllTraineesExcludedException(enrolledTrainees.length)
@@ -389,13 +390,13 @@ export class AssessmentService {
 
       // Step 6: Validate occurrence date is after start date (no end date restriction)
       const occurrenceDate = new Date(data.occuranceDate)
-      
+
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
       }
 
       // Step 7: Check for existing assessments and filter out trainees who already have assessments
-      const traineeIds = eligibleTrainees.map(t => t.id)
+      const traineeIds = eligibleTrainees.map((t) => t.id)
       const existingAssessments = await this.assessmentRepo.checkTraineeAssessmentExists(
         traineeIds,
         data.templateId,
@@ -403,22 +404,22 @@ export class AssessmentService {
       )
 
       // Filter out trainees who already have assessments
-      const existingTraineeIds = existingAssessments.map(d => d.traineeId)
-      const finalTraineeIds = traineeIds.filter(id => !existingTraineeIds.includes(id))
-      const finalTrainees = eligibleTrainees.filter(t => finalTraineeIds.includes(t.id))
+      const existingTraineeIds = existingAssessments.map((d) => d.traineeId)
+      const finalTraineeIds = traineeIds.filter((id) => !existingTraineeIds.includes(id))
+      const finalTrainees = eligibleTrainees.filter((t) => finalTraineeIds.includes(t.id))
 
       // Track skipped trainees for response
       const skippedTrainees = [
         // Excluded trainees
         ...enrolledTrainees
-          .filter(t => excludeIds.includes(t.id))
-          .map(t => ({
+          .filter((t) => excludeIds.includes(t.id))
+          .map((t) => ({
             traineeId: t.id,
             traineeName: `${t.firstName} ${t.lastName}`.trim(),
             reason: 'Manually excluded from assessment creation'
           })),
         // Existing assessments
-        ...existingAssessments.map(d => ({
+        ...existingAssessments.map((d) => ({
           traineeId: d.traineeId,
           traineeName: d.traineeName,
           reason: `Assessment form already exists for this ${data.subjectId ? 'subject' : 'course'}`
@@ -476,17 +477,18 @@ export class AssessmentService {
         skippedTrainees,
         entityInfo
       }
-
     } catch (error) {
       // Log the error for debugging
       console.error('Bulk assessment creation failed:', error)
 
       // Re-throw known business logic errors
-      if (error.name === 'BadRequestException' || 
-          error.name === 'NotFoundException' || 
-          error.name === 'ForbiddenException' ||
-          error.name === 'ConflictException' ||
-          error.name === 'UnprocessableEntityException') {
+      if (
+        error.name === 'BadRequestException' ||
+        error.name === 'NotFoundException' ||
+        error.name === 'ForbiddenException' ||
+        error.name === 'ConflictException' ||
+        error.name === 'UnprocessableEntityException'
+      ) {
         throw error
       }
 
@@ -509,7 +511,7 @@ export class AssessmentService {
   ): Promise<GetAssessmentsResType> {
     // Filter assessments based on user role and permissions
     const filteredQuery = this.applyUserFilters(query, currentUser)
-    
+
     return await this.assessmentRepo.list(filteredQuery)
   }
 
@@ -561,15 +563,15 @@ export class AssessmentService {
       return result
     } catch (error) {
       console.error('Get subject assessments failed:', error)
-      
+
       if (error.message === 'Trainer is not assigned to this subject') {
         throw new ForbiddenException('You are not assigned to this subject')
       }
-      
+
       if (error.message === 'Trainee has no assessments in this subject') {
         throw new ForbiddenException('You have no assessments in this subject')
       }
-      
+
       if (error.message === 'Subject not found') {
         throw SubjectNotFoundException
       }
@@ -603,15 +605,15 @@ export class AssessmentService {
       return result
     } catch (error) {
       console.error('Get course assessments failed:', error)
-      
+
       if (error.message === 'Trainer is not assigned to this course') {
         throw new ForbiddenException('You are not assigned to this course')
       }
-      
+
       if (error.message === 'Trainee has no assessments in course') {
         throw new ForbiddenException('You have no assessments in this course')
       }
-      
+
       if (error.message === 'Course not found') {
         throw CourseNotFoundException
       }
@@ -654,7 +656,7 @@ export class AssessmentService {
       return result
     } catch (error) {
       console.error('Get department assessments failed:', error)
-      
+
       if (error instanceof ForbiddenException) {
         throw error
       }
@@ -733,14 +735,14 @@ export class AssessmentService {
       }
     })
 
-    return traineeIds.map(id => {
-      const trainee = trainees.find(t => t.id === id)
+    return traineeIds.map((id) => {
+      const trainee = trainees.find((t) => t.id === id)
       return {
         id,
         exists: !!trainee,
         role: trainee?.role.name || null,
         isActive: trainee?.status === 'ACTIVE',
-        isEnrolled: trainee?.subjectEnrollments.some(e => e.status === 'ENROLLED') || false
+        isEnrolled: trainee?.subjectEnrollments.some((e) => e.status === 'ENROLLED') || false
       }
     })
   }
@@ -765,20 +767,16 @@ export class AssessmentService {
       }
 
       // Get sections with permission information
-      const result = await this.assessmentRepo.getAssessmentSections(
-        assessmentId,
-        currentUser.userId
-      )
+      const result = await this.assessmentRepo.getAssessmentSections(assessmentId, currentUser.userId)
 
       return result
     } catch (error) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException) {
+      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
-      // Handle custom application errors  
+      // Handle custom application errors
       if (error.name === 'ForbiddenException') {
         throw new ForbiddenException(error.message)
       }
@@ -803,20 +801,16 @@ export class AssessmentService {
   ) {
     try {
       // Get trainee sections (access check is done in repository)
-      const result = await this.assessmentRepo.getTraineeSections(
-        assessmentId,
-        currentUser.userId
-      )
+      const result = await this.assessmentRepo.getTraineeSections(assessmentId, currentUser.userId)
 
       return result
     } catch (error) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException) {
+      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
-      // Handle custom application errors  
+      // Handle custom application errors
       if (error.message === 'Assessment not found') {
         throw AssessmentNotFoundException
       }
@@ -858,13 +852,13 @@ export class AssessmentService {
 
       // Now check if user has permission to access this specific section based on role
       const templateSection = result.assessmentSectionInfo.templateSection
-      
+
       // Get user's role in the assessment (same logic as getAssessmentSections)
       let userRoleInAssessment: string | null = null
-      
+
       // Get assessment details to check subject/course
       const assessment = await this.assessmentRepo.findById(assessmentFormId)
-      
+
       if (assessment?.subjectId) {
         // Check if user is instructor for this subject
         const subjectInstructor = await this.assessmentRepo.prismaClient.subjectInstructor.findFirst({
@@ -893,7 +887,7 @@ export class AssessmentService {
 
       // Check section-level permissions
       let canAccess = false
-      
+
       if (templateSection.editBy === 'TRAINER') {
         // Section requires trainer access
         if (currentUser.roleName === 'TRAINER') {
@@ -924,12 +918,11 @@ export class AssessmentService {
       return result
     } catch (error) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException) {
+      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
-      // Handle custom application errors  
+      // Handle custom application errors
       if (error.name === 'ForbiddenException') {
         throw new ForbiddenException(error.message)
       }
@@ -953,8 +946,11 @@ export class AssessmentService {
   ): Promise<SaveAssessmentValuesResType> {
     try {
       // First, get the assessment section to check permissions
-      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId, userContext.userId)
-      
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(
+        body.assessmentSectionId,
+        userContext.userId
+      )
+
       // Get assessment info for permission check
       const assessmentSection = await this.assessmentRepo.prismaClient.assessmentSection.findUnique({
         where: { id: body.assessmentSectionId },
@@ -993,26 +989,23 @@ export class AssessmentService {
       }
 
       // Validate that all provided assessment value IDs belong to this section
-      const sectionValueIds = sectionFields.fields.map(field => field.assessmentValue.id)
-      const providedValueIds = body.values.map(v => v.assessmentValueId)
-      
-      const invalidIds = providedValueIds.filter(id => !sectionValueIds.includes(id))
+      const sectionValueIds = sectionFields.fields.map((field) => field.assessmentValue.id)
+      const providedValueIds = body.values.map((v) => v.assessmentValueId)
+
+      const invalidIds = providedValueIds.filter((id) => !sectionValueIds.includes(id))
       if (invalidIds.length > 0) {
         throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
       }
 
       // Save the values
-      return await this.assessmentRepo.saveAssessmentValues(
-        body.assessmentSectionId,
-        body.values,
-        userContext.userId
-      )
-
+      return await this.assessmentRepo.saveAssessmentValues(body.assessmentSectionId, body.values, userContext.userId)
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException ||
-          error instanceof BadRequestException) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
@@ -1042,23 +1035,19 @@ export class AssessmentService {
         throw new ForbiddenException('You do not have permission to access this assessment')
       }
 
-      return await this.assessmentRepo.toggleTraineeLock(
-        assessmentId,
-        body.isTraineeLocked,
-        userContext.userId
-      )
-
+      return await this.assessmentRepo.toggleTraineeLock(assessmentId, body.isTraineeLocked, userContext.userId)
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException) {
+      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
       // Handle custom application errors from repository
-      if (error.message.includes('occurrence date') || 
-          error.message.includes('trainee sections') ||
-          error.message.includes('assessed at least one section')) {
+      if (
+        error.message.includes('occurrence date') ||
+        error.message.includes('trainee sections') ||
+        error.message.includes('assessed at least one section')
+      ) {
         throw new BadRequestException(error.message)
       }
 
@@ -1087,22 +1076,19 @@ export class AssessmentService {
         throw new ForbiddenException('You do not have permission to access this assessment')
       }
 
-      return await this.assessmentRepo.submitAssessment(
-        assessmentId,
-        userContext.userId
-      )
-
+      return await this.assessmentRepo.submitAssessment(assessmentId, userContext.userId)
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException) {
+      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
       // Handle custom application errors from repository
-      if (error.message.includes('not ready to submit') || 
-          error.message.includes('must be completed') ||
-          error.message.includes('submittable section')) {
+      if (
+        error.message.includes('not ready to submit') ||
+        error.message.includes('must be completed') ||
+        error.message.includes('submittable section')
+      ) {
         throw new BadRequestException(error.message)
       }
 
@@ -1190,36 +1176,38 @@ export class AssessmentService {
   ): Promise<UpdateAssessmentValuesResType> {
     try {
       // First, get the assessment section to validate access
-      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(body.assessmentSectionId, userContext.userId)
-      
+      const sectionFields = await this.assessmentRepo.getAssessmentSectionFields(
+        body.assessmentSectionId,
+        userContext.userId
+      )
+
       // Validate that all provided assessment value IDs belong to this section
-      const sectionValueIds = sectionFields.fields.map(field => field.assessmentValue.id)
+      const sectionValueIds = sectionFields.fields.map((field) => field.assessmentValue.id)
       const providedValueIds = body.values.map((v: any) => v.assessmentValueId)
-      
+
       const invalidIds = providedValueIds.filter((id: any) => !sectionValueIds.includes(id))
       if (invalidIds.length > 0) {
         throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
       }
 
       // Update the values (repository will check if user is the original assessor)
-      return await this.assessmentRepo.updateAssessmentValues(
-        body.assessmentSectionId,
-        body.values,
-        userContext.userId
-      )
-
+      return await this.assessmentRepo.updateAssessmentValues(body.assessmentSectionId, body.values, userContext.userId)
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException ||
-          error instanceof BadRequestException) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
       // Handle custom application errors from repository
-      if (error.message.includes('originally assessed') || 
-          error.message.includes('DRAFT status') ||
-          error.message.includes('Cannot update values for assessment in this status')) {
+      if (
+        error.message.includes('originally assessed') ||
+        error.message.includes('DRAFT status') ||
+        error.message.includes('Cannot update values for assessment in this status')
+      ) {
         throw new ForbiddenException(error.message)
       }
 
@@ -1275,12 +1263,13 @@ export class AssessmentService {
         status: result.status,
         previousStatus: 'SIGNATURE_PENDING'
       }
-
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException ||
-          error instanceof BadRequestException) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
@@ -1295,8 +1284,8 @@ export class AssessmentService {
    * Only authorized users (e.g., Department Head, Admin) can approve/reject assessments
    */
   async approveRejectAssessment(
-    assessmentId: string, 
-    body: ApproveRejectAssessmentBodyType, 
+    assessmentId: string,
+    body: ApproveRejectAssessmentBodyType,
     userContext: { userId: string; roleName: string; departmentId?: string }
   ): Promise<ApproveRejectAssessmentResType> {
     try {
@@ -1310,8 +1299,8 @@ export class AssessmentService {
       // Check if user has access to this assessment (same department)
       if (userContext.departmentId) {
         const hasAccess = await this.assessmentRepo.checkUserAssessmentAccess(
-          assessmentId, 
-          userContext.userId, 
+          assessmentId,
+          userContext.userId,
           userContext.departmentId
         )
         if (!hasAccess) {
@@ -1343,17 +1332,17 @@ export class AssessmentService {
         try {
           // Get detailed assessment information for email
           const detailedAssessment = await this.assessmentRepo.getAssessmentWithDetails(assessmentId)
-          
+
           if (detailedAssessment) {
             // Format dates for email
-            const submissionDate = detailedAssessment.submittedAt 
+            const submissionDate = detailedAssessment.submittedAt
               ? new Date(detailedAssessment.submittedAt).toLocaleDateString()
               : 'N/A'
             const reviewDate = new Date().toLocaleDateString()
 
             // Get reviewer name (current user)
             const reviewerName = userContext.roleName === 'DEPARTMENT_HEAD' ? 'Department Head' : 'Administrator'
-            
+
             // Get subject or course name
             const subjectOrCourseName = detailedAssessment.subject?.name || detailedAssessment.course?.name || 'N/A'
 
@@ -1367,7 +1356,7 @@ export class AssessmentService {
               reviewerName,
               reviewDate,
               body.comment || 'No specific comment provided.',
-              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}`  // sửa lại chỗ này khi có URL đúng
+              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}` // sửa lại chỗ này khi có URL đúng
             )
           }
         } catch (emailError) {
@@ -1403,12 +1392,13 @@ export class AssessmentService {
           processedBy: userContext.userId
         }
       }
-
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException ||
-          error instanceof BadRequestException) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error // Re-throw HTTP exceptions as-is
       }
 
@@ -1436,8 +1426,8 @@ export class AssessmentService {
       // Check if user has access to this assessment (same department)
       if (userContext.departmentId) {
         const hasAccess = await this.assessmentRepo.checkUserAssessmentAccess(
-          assessmentId, 
-          userContext.userId, 
+          assessmentId,
+          userContext.userId,
           userContext.departmentId
         )
         if (!hasAccess) {
@@ -1455,10 +1445,8 @@ export class AssessmentService {
         },
         message: 'Assessment PDF URL retrieved successfully'
       }
-
     } catch (error: any) {
-      if (error instanceof ForbiddenException || 
-          error instanceof NotFoundException) {
+      if (error instanceof ForbiddenException || error instanceof NotFoundException) {
         throw error
       }
 
@@ -1475,7 +1463,7 @@ export class AssessmentService {
     try {
       // Get assessment with all related data
       const assessmentForm = await this.assessmentRepo.getAssessmentWithTemplateAndValues(assessmentId)
-      
+
       if (!assessmentForm || !(assessmentForm as any).template) {
         throw new NotFoundException('Assessment form or template not found')
       }
@@ -1487,31 +1475,31 @@ export class AssessmentService {
       const template = (assessmentForm as any).template
       const templateSchema = template.templateSchema as Record<string, any>
       const templateConfigUrl = template.templateConfig
-      
+
       if (!templateConfigUrl) {
         throw new BadRequestException('Template config URL not found')
       }
 
       // Download DOCX template from S3
       const templateBuffer = await this.downloadFileFromS3(templateConfigUrl)
-      
+
       // Build data object from assessment values (refresh after processing result)
       const assessmentData = await this.buildAssessmentDataFromValues(assessmentId, templateSchema)
-      
+
       // Render DOCX with data
       const renderedDocxBuffer = await this.renderDocxTemplate(templateBuffer, assessmentData)
-      
+
       // Convert DOCX to PDF
       const pdfBuffer = await this.pdfConverterService['convertDocxBufferToPdf'](renderedDocxBuffer)
-      
+
       // Upload PDF to S3 with proper filename
       const pdfUrl = await this.uploadPdfToS3(pdfBuffer, assessmentForm)
       console.log(`PDF uploaded to S3 with URL: ${pdfUrl}`)
-      
+
       // Update assessment form with PDF URL
       const updatedAssessment = await this.assessmentRepo.updateAssessmentPdfUrl(assessmentId, pdfUrl)
       console.log(`Assessment form updated with PDF URL. Assessment ID: ${assessmentId}`)
-      
+
       return pdfUrl
     } catch (error) {
       console.error('Failed to render assessment to PDF:', error)
@@ -1523,28 +1511,24 @@ export class AssessmentService {
    * Process assessment result based on FINAL_SCORE fields and update AssessmentForm
    * This method handles 3 cases:
    * 1. Both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist
-   * 2. Only FINAL_SCORE_TEXT exists  
+   * 2. Only FINAL_SCORE_TEXT exists
    * 3. Only FINAL_SCORE_NUM exists
    */
   private async processAssessmentResult(assessmentId: string, assessmentForm: any): Promise<void> {
     try {
       // Get all assessment values with field types
       const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
-      
+
       // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT fields
-      const finalScoreNumValue = assessmentValues.find(av => 
-        av.templateField?.fieldType === 'FINAL_SCORE_NUM'
-      )
-      const finalScoreTextValue = assessmentValues.find(av => 
-        av.templateField?.fieldType === 'FINAL_SCORE_TEXT'
-      )
+      const finalScoreNumValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_NUM')
+      const finalScoreTextValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_TEXT')
 
       // Get pass score from subject or course
       let passScore: number | null = null
-      if (assessmentForm.subjectId && (assessmentForm as any).subject?.passScore !== null) {
-        passScore = (assessmentForm as any).subject.passScore
-      } else if (assessmentForm.courseId && (assessmentForm as any).course?.passScore !== null) {
-        passScore = (assessmentForm as any).course.passScore
+      if (assessmentForm.subjectId && assessmentForm.subject?.passScore !== null) {
+        passScore = assessmentForm.subject.passScore
+      } else if (assessmentForm.courseId && assessmentForm.course?.passScore !== null) {
+        passScore = assessmentForm.course.passScore
       }
 
       let resultScore: number | null = null
@@ -1554,15 +1538,15 @@ export class AssessmentService {
       if (finalScoreNumValue && finalScoreTextValue && passScore !== null) {
         const scoreValue = parseFloat(finalScoreNumValue.answerValue || '0')
         resultScore = scoreValue
-        
+
         // Determine PASS/FAIL based on pass score
         const isPassed = scoreValue >= passScore
         resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
-        
+
         // Update FINAL_SCORE_TEXT field with PASS/FAIL
         await this.assessmentRepo.prismaClient.assessmentValue.update({
           where: { id: finalScoreTextValue.id },
-          data: { 
+          data: {
             answerValue: resultText
           }
         })
@@ -1574,19 +1558,21 @@ export class AssessmentService {
         // User manually enters text, keep resultScore as null
         resultScore = null
         resultText = AssessmentResult.NOT_APPLICABLE
-        
+
         console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - keeping resultScore as null`)
       }
       // Case 3: Only FINAL_SCORE_NUM exists
       else if (finalScoreNumValue && !finalScoreTextValue && passScore !== null) {
         const scoreValue = parseFloat(finalScoreNumValue.answerValue || '0')
         resultScore = scoreValue
-        
+
         // Determine PASS/FAIL based on pass score
         const isPassed = scoreValue >= passScore
         resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
-        
-        console.log(`Assessment ${assessmentId} has only FINAL_SCORE_NUM field - score: ${scoreValue}, result: ${resultText}`)
+
+        console.log(
+          `Assessment ${assessmentId} has only FINAL_SCORE_NUM field - score: ${scoreValue}, result: ${resultText}`
+        )
       }
 
       // Update AssessmentForm with calculated results
@@ -1599,7 +1585,6 @@ export class AssessmentService {
       })
 
       console.log(`Updated AssessmentForm ${assessmentId} - resultScore: ${resultScore}, resultText: ${resultText}`)
-
     } catch (error) {
       console.error('Failed to process assessment result:', error)
       throw new BadRequestException('Failed to process assessment result')
@@ -1614,10 +1599,10 @@ export class AssessmentService {
       // Extract S3 key from URL
       const urlParts = new URL(url)
       const key = urlParts.pathname.substring(1) // Remove leading slash
-      
+
       // Download file from S3
       const fileStream = await this.s3Service.getObject(key)
-      
+
       // Convert stream to buffer
       const chunks: Buffer[] = []
       return new Promise((resolve, reject) => {
@@ -1636,34 +1621,34 @@ export class AssessmentService {
    * Use parent context to handle fields with duplicate names in different parent sections
    */
   private async buildAssessmentDataFromValues(
-    assessmentId: string, 
+    assessmentId: string,
     templateSchema: Record<string, any>
   ): Promise<Record<string, any>> {
     // Get all assessment values with field names and parent hierarchy for precise mapping
     const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
-    
+
     // Create field path mapping using parent hierarchy to handle duplicate field names
     const pathValueMap = new Map<string, any>()
-    
-    assessmentValues.forEach(assessmentValue => {
+
+    assessmentValues.forEach((assessmentValue) => {
       if (assessmentValue.templateField && assessmentValue.templateField.fieldName) {
         const parsedValue = this.parseAssessmentValue(
-          assessmentValue.answerValue, 
+          assessmentValue.answerValue,
           assessmentValue.templateField.fieldType
         )
-        
+
         // Build field path from parent hierarchy to ensure uniqueness
         // e.g., "Apk_Grade.grade1", "Com_Grade.grade1", "root.isPf"
         const fieldPath = this.buildFieldPath(assessmentValue.templateField)
         pathValueMap.set(fieldPath, parsedValue)
-        
+
         // Also set simple fieldName for root-level fields (backward compatibility)
         if (!assessmentValue.templateField.parentId) {
           pathValueMap.set(assessmentValue.templateField.fieldName, parsedValue)
         }
       }
     })
-    
+
     // Use templateSchema as base and populate with actual values using path mapping
     return this.populateSchemaWithPathValues(templateSchema, pathValueMap)
   }
@@ -1674,14 +1659,14 @@ export class AssessmentService {
    */
   private buildFieldPath(templateField: any): string {
     const pathSegments: string[] = []
-    
+
     // Build path from current field up to root
     let currentField = templateField
     while (currentField) {
       pathSegments.unshift(currentField.fieldName)
       currentField = currentField.parent
     }
-    
+
     // Return full path (e.g., "Apk_Grade.grade1") or just fieldName for root level
     return pathSegments.length > 1 ? pathSegments.join('.') : pathSegments[0]
   }
@@ -1691,15 +1676,15 @@ export class AssessmentService {
    * The templateSchema already has the correct nested structure, we just fill in the values
    */
   private populateSchemaWithPathValues(
-    schema: Record<string, any>, 
+    schema: Record<string, any>,
     pathValueMap: Map<string, any>
   ): Record<string, any> {
     // Deep clone the template schema to avoid modifying the original
     const result = JSON.parse(JSON.stringify(schema))
-    
+
     // Recursively populate the schema with assessment values using path context
     this.populateObjectWithPathValues(result, pathValueMap, '')
-    
+
     return result
   }
 
@@ -1708,15 +1693,15 @@ export class AssessmentService {
    * The templateSchema already has the correct nested structure, we just fill in the values
    */
   private populateSchemaWithAssessmentValues(
-    schema: Record<string, any>, 
+    schema: Record<string, any>,
     valueMap: Map<string, any>
   ): Record<string, any> {
     // Deep clone the template schema to avoid modifying the original
     const result = JSON.parse(JSON.stringify(schema))
-    
+
     // Recursively populate the schema with assessment values
     this.populateObjectWithValues(result, valueMap)
-    
+
     return result
   }
 
@@ -1727,7 +1712,7 @@ export class AssessmentService {
   private populateObjectWithPathValues(obj: any, pathValueMap: Map<string, any>, currentPath: string): void {
     if (Array.isArray(obj)) {
       // Handle arrays - recurse into each element
-      obj.forEach(item => {
+      obj.forEach((item) => {
         if (typeof item === 'object' && item !== null) {
           this.populateObjectWithPathValues(item, pathValueMap, currentPath)
         }
@@ -1736,7 +1721,7 @@ export class AssessmentService {
       // Handle objects
       for (const [key, value] of Object.entries(obj)) {
         const newPath = currentPath ? `${currentPath}.${key}` : key
-        
+
         if (Array.isArray(value)) {
           // Array property - recurse into array
           this.populateObjectWithPathValues(value, pathValueMap, newPath)
@@ -1765,7 +1750,7 @@ export class AssessmentService {
   private populateObjectWithValues(obj: any, valueMap: Map<string, any>): void {
     if (Array.isArray(obj)) {
       // Handle arrays - recurse into each element
-      obj.forEach(item => {
+      obj.forEach((item) => {
         if (typeof item === 'object' && item !== null) {
           this.populateObjectWithValues(item, valueMap)
         }
@@ -1801,24 +1786,24 @@ export class AssessmentService {
     // CRITICAL: Preserve null values - if answerValue is null, return null
     // This will result in "fieldName": null in the JSON output for docxtemplater
     if (value === null || value === undefined) return null
-    
+
     // If value is empty string, also return null
     if (value === '') return null
-    
+
     // Handle specific field types first - ONLY convert when field type is explicit
     if (fieldType === 'TOGGLE' || fieldType === 'SECTION_CONTROL_TOGGLE') {
       return value.toLowerCase() === 'true'
     }
-    
+
     if (fieldType === 'NUMBER' || fieldType === 'FINAL_SCORE_NUM') {
       const num = Number(value)
       return isNaN(num) ? null : num
     }
-    
+
     // For other field types, do NOT auto-convert boolean or number
     // Only convert to actual data types when field type explicitly requires it
     // This prevents "true"/"false" strings from being converted to boolean unintentionally
-    
+
     // Return as string for all other field types (TEXT, VALUE_LIST, etc.)
     return value
   }
@@ -1831,38 +1816,36 @@ export class AssessmentService {
     try {
       // Load template with PizZip (unzip the content of the file)
       const zip = new PizZip(templateBuffer)
-      
+
       // Custom nullGetter to return empty string instead of "undefined" for null/undefined values
       const nullGetter = (part: any, scopeManager: any) => {
         // For all cases (simple tags, raw XML, etc.), return empty string
-        return ""
+        return ''
       }
-      
+
       // Parse the template - this throws an error if template is invalid
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
         nullGetter: nullGetter
       })
-      
+
       // Render the document with data
       doc.render(data)
-      
+
       // Get the output document as Node.js buffer
       const buffer = doc.toBuffer()
-      
+
       return buffer
     } catch (error) {
       console.error('Failed to render DOCX template:', error)
-      
+
       // Handle specific docxtemplater errors
       if (error.properties && error.properties.errors instanceof Array) {
-        const errorMessages = error.properties.errors
-          .map((err: any) => `${err.name}: ${err.message}`)
-          .join('; ')
+        const errorMessages = error.properties.errors.map((err: any) => `${err.name}: ${err.message}`).join('; ')
         throw new BadRequestException(`Template rendering failed: ${errorMessages}`)
       }
-      
+
       throw new BadRequestException('Failed to render document template')
     }
   }
@@ -1876,15 +1859,15 @@ export class AssessmentService {
       // Generate filename based on assessment data
       const filename = this.generateAssessmentPdfFilename(assessmentForm)
       const key = `assessments/pdf/${filename}`
-      
+
       console.log(`Uploading PDF with filename: ${filename}`)
-      
+
       const uploadResult = await this.s3Service.uploadBuffer({
         key,
         body: pdfBuffer,
         contentType: 'application/pdf'
       })
-      
+
       return uploadResult.url || this.s3Service.getObjectUrl(key)
     } catch (error) {
       console.error('Failed to upload PDF to S3:', error)
@@ -1899,27 +1882,27 @@ export class AssessmentService {
   private generateAssessmentPdfFilename(assessmentForm: any): string {
     try {
       // Get trainee EID
-      const traineeEid = (assessmentForm as any).trainee?.eid || 'UNKNOWN'
-      
+      const traineeEid = assessmentForm.trainee?.eid || 'UNKNOWN'
+
       // Get course/subject code (prioritize subject over course)
       let scopeCode = 'UNKNOWN'
-      if (assessmentForm.subjectId && (assessmentForm as any).subject?.code) {
-        scopeCode = (assessmentForm as any).subject.code
-      } else if (assessmentForm.courseId && (assessmentForm as any).course?.code) {
-        scopeCode = (assessmentForm as any).course.code
+      if (assessmentForm.subjectId && assessmentForm.subject?.code) {
+        scopeCode = assessmentForm.subject.code
+      } else if (assessmentForm.courseId && assessmentForm.course?.code) {
+        scopeCode = assessmentForm.course.code
       }
-      
+
       // Format occurrence date (YYYY-MM-DD)
       let formattedDate = 'UNKNOWN'
       if (assessmentForm.occuranceDate) {
         const date = new Date(assessmentForm.occuranceDate)
         formattedDate = date.toISOString().split('T')[0] // YYYY-MM-DD format
       }
-      
+
       // Generate filename with timestamp to avoid overwrite
       const timestamp = Date.now()
       const filename = `Final Assessment_${traineeEid}_${scopeCode}_${formattedDate}_${timestamp}.pdf`
-      
+
       // Sanitize filename (remove invalid characters)
       return filename.replace(/[<>:"/\\|?*]/g, '_')
     } catch (error) {
@@ -2010,15 +1993,16 @@ export class AssessmentService {
       return result
     } catch (error: any) {
       // Handle specific known errors
-      if (error instanceof NotFoundException ||
-          error instanceof BadRequestException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error
       }
 
       // Handle custom repository errors
-      if (error.message?.includes('NOT_STARTED status') ||
-          error.message?.includes('occurrence date has already passed') ||
-          error.message?.includes('must be in the future')) {
+      if (
+        error.message?.includes('NOT_STARTED status') ||
+        error.message?.includes('occurrence date has already passed') ||
+        error.message?.includes('must be in the future')
+      ) {
         throw new BadRequestException(error.message)
       }
 
@@ -2026,6 +2010,4 @@ export class AssessmentService {
       throw new BadRequestException('Failed to update assessment event')
     }
   }
-
-
 }

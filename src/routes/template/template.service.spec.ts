@@ -225,7 +225,7 @@ describe('TemplateService', () => {
         fields: expect.any(Array),
         totalFields: expect.any(Number)
       })
-      
+
       expect(result.fields).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -285,7 +285,6 @@ describe('TemplateService', () => {
   }
 
   describe('createTemplate', () => {
-
     beforeEach(() => {
       templateRepository.validateDepartmentExists.mockResolvedValue(true)
       templateRepository.templateNameExists.mockResolvedValue(false)
@@ -314,22 +313,25 @@ describe('TemplateService', () => {
     it('should throw TemplateConfigRequiredError when templateConfig is missing', async () => {
       const dtoWithoutConfig = { ...mockCreateTemplateDto, templateConfig: undefined }
 
-      await expect(service.createTemplate(dtoWithoutConfig, mockUserContext))
-        .rejects.toThrow(TemplateConfigRequiredError)
+      await expect(service.createTemplate(dtoWithoutConfig, mockUserContext)).rejects.toThrow(
+        TemplateConfigRequiredError
+      )
     })
 
     it('should throw DepartmentNotFoundError when department does not exist', async () => {
       templateRepository.validateDepartmentExists.mockResolvedValue(false)
 
-      await expect(service.createTemplate(mockCreateTemplateDto, mockUserContext))
-        .rejects.toThrow(DepartmentNotFoundError)
+      await expect(service.createTemplate(mockCreateTemplateDto, mockUserContext)).rejects.toThrow(
+        DepartmentNotFoundError
+      )
     })
 
     it('should throw TemplateNameAlreadyExistsError when name already exists', async () => {
       templateRepository.templateNameExists.mockResolvedValue(true)
 
-      await expect(service.createTemplate(mockCreateTemplateDto, mockUserContext))
-        .rejects.toThrow(TemplateNameAlreadyExistsError)
+      await expect(service.createTemplate(mockCreateTemplateDto, mockUserContext)).rejects.toThrow(
+        TemplateNameAlreadyExistsError
+      )
     })
 
     it('should throw RoleRequiredMismatchError when field roleRequired does not match section editBy', async () => {
@@ -351,8 +353,7 @@ describe('TemplateService', () => {
         ]
       }
 
-      await expect(service.createTemplate(invalidDto, mockUserContext))
-        .rejects.toThrow(TemplateCreationFailedError)
+      await expect(service.createTemplate(invalidDto, mockUserContext)).rejects.toThrow(TemplateCreationFailedError)
     })
 
     it('should throw SignatureFieldMissingRoleError when signature field has no roleRequired', async () => {
@@ -380,8 +381,7 @@ describe('TemplateService', () => {
         ]
       }
 
-      await expect(service.createTemplate(invalidDto, mockUserContext))
-        .rejects.toThrow(TemplateCreationFailedError)
+      await expect(service.createTemplate(invalidDto, mockUserContext)).rejects.toThrow(TemplateCreationFailedError)
     })
 
     it('should throw PartFieldMissingChildrenError when PART field has no children', async () => {
@@ -415,8 +415,7 @@ describe('TemplateService', () => {
         ]
       }
 
-      await expect(service.createTemplate(invalidDto, mockUserContext))
-        .rejects.toThrow(TemplateCreationFailedError)
+      await expect(service.createTemplate(invalidDto, mockUserContext)).rejects.toThrow(TemplateCreationFailedError)
     })
 
     it('should validate business rules when status is PENDING', async () => {
@@ -446,8 +445,7 @@ describe('TemplateService', () => {
         ]
       }
 
-      await expect(service.createTemplate(invalidDto, mockUserContext))
-        .rejects.toThrow(TemplateCreationFailedError)
+      await expect(service.createTemplate(invalidDto, mockUserContext)).rejects.toThrow(TemplateCreationFailedError)
     })
   })
 
@@ -468,8 +466,7 @@ describe('TemplateService', () => {
     it('should throw TemplateNotFoundError when template not found', async () => {
       templateRepository.findTemplateById.mockResolvedValue(null)
 
-      await expect(service.getTemplateById('nonexistent'))
-        .rejects.toThrow(TemplateNotFoundError)
+      await expect(service.getTemplateById('nonexistent')).rejects.toThrow(TemplateNotFoundError)
     })
   })
 
@@ -538,8 +535,9 @@ describe('TemplateService', () => {
     it('should throw TemplateNotFoundError when template not found', async () => {
       templateRepository.findTemplateById.mockResolvedValue(null)
 
-      await expect(service.changeTemplateStatus('nonexistent', 'PUBLISHED', mockUserContext))
-        .rejects.toThrow(TemplateNotFoundError)
+      await expect(service.changeTemplateStatus('nonexistent', 'PUBLISHED', mockUserContext)).rejects.toThrow(
+        TemplateNotFoundError
+      )
     })
   })
 
@@ -576,8 +574,9 @@ describe('TemplateService', () => {
     it('should throw OriginalTemplateNotFoundError when original template not found', async () => {
       templateRepository.findTemplateById.mockResolvedValue(null)
 
-      await expect(service.createTemplateVersion(mockCreateVersionDto, mockUserContext))
-        .rejects.toThrow(OriginalTemplateNotFoundError)
+      await expect(service.createTemplateVersion(mockCreateVersionDto, mockUserContext)).rejects.toThrow(
+        OriginalTemplateNotFoundError
+      )
     })
 
     it('should generate versioned name when name already exists', async () => {
@@ -609,16 +608,13 @@ describe('TemplateService', () => {
       const result = await service.getTemplatePdf('template-123')
 
       expect(result).toBe(mockPdfBuffer)
-      expect(pdfConverterService.convertDocxToPdfFromS3).toHaveBeenCalledWith(
-        mockTemplate.templateContent
-      )
+      expect(pdfConverterService.convertDocxToPdfFromS3).toHaveBeenCalledWith(mockTemplate.templateContent)
     })
 
     it('should throw TemplateNotFoundError when template not found', async () => {
       templateRepository.findTemplateById.mockResolvedValue(null)
 
-      await expect(service.getTemplatePdf('nonexistent'))
-        .rejects.toThrow(TemplateNotFoundError)
+      await expect(service.getTemplatePdf('nonexistent')).rejects.toThrow(TemplateNotFoundError)
     })
 
     it('should throw error when template content URL not found', async () => {
@@ -627,8 +623,7 @@ describe('TemplateService', () => {
         templateContent: null
       })
 
-      await expect(service.getTemplatePdf('template-123'))
-        .rejects.toThrow('Template content URL not found')
+      await expect(service.getTemplatePdf('template-123')).rejects.toThrow('Template content URL not found')
     })
   })
 
@@ -669,8 +664,9 @@ describe('TemplateService', () => {
     it('should throw TemplateNotFoundError when template not found', async () => {
       templateRepository.findTemplateById.mockResolvedValue(null)
 
-      await expect(service.updateDraftTemplate('nonexistent', mockUpdateDto, mockUserContext))
-        .rejects.toThrow(TemplateNotFoundError)
+      await expect(service.updateDraftTemplate('nonexistent', mockUpdateDto, mockUserContext)).rejects.toThrow(
+        TemplateNotFoundError
+      )
     })
 
     it('should throw InvalidDraftTemplateStatusError when template is not DRAFT', async () => {
@@ -679,8 +675,9 @@ describe('TemplateService', () => {
         status: 'PUBLISHED'
       })
 
-      await expect(service.updateDraftTemplate('template-123', mockUpdateDto, mockUserContext))
-        .rejects.toThrow(InvalidDraftTemplateStatusError)
+      await expect(service.updateDraftTemplate('template-123', mockUpdateDto, mockUserContext)).rejects.toThrow(
+        InvalidDraftTemplateStatusError
+      )
     })
   })
 
@@ -703,8 +700,7 @@ describe('TemplateService', () => {
     it('should throw TemplateNotFoundError when template not found', async () => {
       templateRepository.findTemplateById.mockResolvedValue(null)
 
-      await expect(service.deleteDraftTemplate('nonexistent', mockUserContext))
-        .rejects.toThrow(TemplateNotFoundError)
+      await expect(service.deleteDraftTemplate('nonexistent', mockUserContext)).rejects.toThrow(TemplateNotFoundError)
     })
 
     it('should throw error when template is not DRAFT', async () => {
@@ -713,8 +709,9 @@ describe('TemplateService', () => {
         status: 'PUBLISHED'
       })
 
-      await expect(service.deleteDraftTemplate('template-123', mockUserContext))
-        .rejects.toThrow('Only DRAFT templates can be deleted')
+      await expect(service.deleteDraftTemplate('template-123', mockUserContext)).rejects.toThrow(
+        'Only DRAFT templates can be deleted'
+      )
     })
 
     it('should throw error when user department does not match template department', async () => {
@@ -723,8 +720,9 @@ describe('TemplateService', () => {
         departmentId: 'different-dept'
       }
 
-      await expect(service.deleteDraftTemplate('template-123', userWithDifferentDept))
-        .rejects.toThrow('You can only delete templates in your department')
+      await expect(service.deleteDraftTemplate('template-123', userWithDifferentDept)).rejects.toThrow(
+        'You can only delete templates in your department'
+      )
     })
   })
 
@@ -763,8 +761,7 @@ describe('TemplateService', () => {
         statusText: 'Not Found'
       })
 
-      await expect(service.extractFieldsFromS3Url(mockS3Url))
-        .rejects.toThrow()
+      await expect(service.extractFieldsFromS3Url(mockS3Url)).rejects.toThrow()
     })
   })
 
@@ -778,7 +775,7 @@ describe('TemplateService', () => {
       // Since this method involves complex JSZip logic, we'll test that it calls the converter
       // and doesn't throw an error, indicating the business logic works
       const result = await service.getTemplateBothPdf('template-123')
-      
+
       // Verify the PDF converter was called for both template files
       expect(pdfConverterService.convertDocxToPdfFromS3).toHaveBeenCalledWith(mockTemplate.templateContent)
       expect(pdfConverterService.convertDocxToPdfFromS3).toHaveBeenCalledWith(mockTemplate.templateConfig)
@@ -792,8 +789,7 @@ describe('TemplateService', () => {
         templateConfig: null
       })
 
-      await expect(service.getTemplateBothPdf('template-123'))
-        .rejects.toThrow('No template URLs found')
+      await expect(service.getTemplateBothPdf('template-123')).rejects.toThrow('No template URLs found')
     })
   })
 
@@ -828,8 +824,7 @@ describe('TemplateService', () => {
       templateRepository.templateHasAssessments.mockResolvedValue(true)
       const updateWithDepartment = { ...mockUpdateData, departmentId: 'new-dept' }
 
-      await expect(service.updateTemplateForm('template-123', updateWithDepartment, mockUserContext))
-        .rejects.toThrow()
+      await expect(service.updateTemplateForm('template-123', updateWithDepartment, mockUserContext)).rejects.toThrow()
     })
   })
 
@@ -894,8 +889,9 @@ describe('TemplateService', () => {
         reviewedByUser: null
       })
 
-      await expect(service.reviewTemplate('template-123', mockReviewBody, mockUserContext))
-        .rejects.toThrow('Template must be in PENDING status to be reviewed')
+      await expect(service.reviewTemplate('template-123', mockReviewBody, mockUserContext)).rejects.toThrow(
+        'Template must be in PENDING status to be reviewed'
+      )
     })
 
     it('should successfully reject template', async () => {
@@ -940,7 +936,7 @@ describe('TemplateService', () => {
     it('should pass business rules validation for valid template', async () => {
       // Test that business rules are validated when status is PENDING
       const testDto = { ...mockCreateTemplateDto, status: 'PENDING' as const }
-      
+
       // Should pass validation with proper signature and final score fields
       const result = await service.createTemplate(testDto, mockUserContext)
       expect(result.success).toBe(true)
@@ -950,7 +946,7 @@ describe('TemplateService', () => {
     it('should validate template structure and fields', async () => {
       // Test that the service properly handles template business rules
       const testDto = { ...mockCreateTemplateDto, status: 'DRAFT' as const }
-      
+
       const result = await service.createTemplate(testDto, mockUserContext)
       expect(result.success).toBe(true)
       expect(templateRepository.createTemplateWithSectionsAndFields).toHaveBeenCalled()

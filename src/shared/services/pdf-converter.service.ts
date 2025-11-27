@@ -50,22 +50,22 @@ export class PdfConverterService {
 
       // Download DOCX file from S3
       const docxBuffer = await this.downloadFileFromS3(s3Url)
-      
+
       if (!docxBuffer || docxBuffer.length === 0) {
         throw new BadRequestException('Failed to download DOCX file from S3')
       }
 
       // Convert DOCX to PDF
       const pdfBuffer = await this.convertDocxBufferToPdf(docxBuffer)
-      
+
       return pdfBuffer
     } catch (error) {
       console.error('Error converting DOCX to PDF:', error)
-      
+
       if (error instanceof BadRequestException) {
         throw error
       }
-      
+
       throw new InternalServerErrorException('Failed to convert DOCX to PDF')
     }
   }
@@ -73,14 +73,16 @@ export class PdfConverterService {
   /**
    * Convert multiple DOCX files from S3 URLs to PDF buffers
    */
-  async convertMultipleDocxToPdfFromS3(s3Urls: string[]): Promise<{ url: string; pdfBuffer: Buffer; filename: string }[]> {
+  async convertMultipleDocxToPdfFromS3(
+    s3Urls: string[]
+  ): Promise<{ url: string; pdfBuffer: Buffer; filename: string }[]> {
     const results: { url: string; pdfBuffer: Buffer; filename: string }[] = []
-    
+
     for (const url of s3Urls) {
       try {
         const pdfBuffer = await this.convertDocxToPdfFromS3(url)
         const filename = this.extractFilenameFromS3Url(url).replace('.docx', '.pdf')
-        
+
         results.push({
           url,
           pdfBuffer,
@@ -91,7 +93,7 @@ export class PdfConverterService {
         // Continue with other files even if one fails
       }
     }
-    
+
     return results
   }
 
@@ -101,7 +103,7 @@ export class PdfConverterService {
   private async downloadFileFromS3(s3Url: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = []
-      
+
       const request = https.get(s3Url, (response) => {
         if (response.statusCode !== 200) {
           reject(new Error(`HTTP ${response.statusCode}: Failed to download file from S3`))
@@ -147,17 +149,17 @@ export class PdfConverterService {
       // Create temporary file for LibreOffice conversion
       const tempDir = os.tmpdir()
       const tempDocxPath = path.join(tempDir, `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.docx`)
-      
+
       try {
         // Write DOCX buffer to temporary file
         fs.writeFileSync(tempDocxPath, docxBuffer)
-        
+
         // Read the file back as buffer for LibreOffice
         const docxFileBuffer = fs.readFileSync(tempDocxPath)
-        
+
         // Convert DOCX to PDF using LibreOffice
         const pdfBuffer = await this.convertWithLibreOffice(docxFileBuffer)
-        
+
         return pdfBuffer
       } finally {
         // Clean up temporary file
@@ -187,14 +189,22 @@ export class PdfConverterService {
         libre.convert(buffer, '.pdf', undefined, (err, result) => {
           if (err) {
             console.error('LibreOffice conversion error:', err)
-            
+
             // Provide better error messages for common issues
             if (err.message.includes('Document is empty')) {
               reject(new BadRequestException('The document appears to be empty or corrupted'))
             } else if (err.message.includes('Could not find platform independent libraries')) {
-              reject(new InternalServerErrorException('LibreOffice is not properly installed or configured. Please install LibreOffice and restart the application.'))
+              reject(
+                new InternalServerErrorException(
+                  'LibreOffice is not properly installed or configured. Please install LibreOffice and restart the application.'
+                )
+              )
             } else if (err.message.includes('soffice')) {
-              reject(new InternalServerErrorException('LibreOffice executable not found. Please ensure LibreOffice is installed and accessible in PATH.'))
+              reject(
+                new InternalServerErrorException(
+                  'LibreOffice executable not found. Please ensure LibreOffice is installed and accessible in PATH.'
+                )
+              )
             } else {
               reject(new InternalServerErrorException(`PDF conversion failed: ${err.message}`))
             }
@@ -204,9 +214,13 @@ export class PdfConverterService {
         })
       } catch (error) {
         console.error('LibreOffice setup error:', error)
-        reject(new InternalServerErrorException('LibreOffice is not available. Please install LibreOffice to enable PDF conversion.'))
+        reject(
+          new InternalServerErrorException(
+            'LibreOffice is not available. Please install LibreOffice to enable PDF conversion.'
+          )
+        )
       }
-    })  
+    })
   }
 
   /**
@@ -215,15 +229,15 @@ export class PdfConverterService {
   private isValidS3Url(url: string): boolean {
     try {
       const urlObj = new URL(url)
-      
+
       // Check if it's a valid S3 URL pattern
       const s3Patterns = [
         /^https:\/\/.*\.s3\..*\.amazonaws\.com\/.*\.docx$/,
         /^https:\/\/s3\..*\.amazonaws\.com\/.*\/.*\.docx$/,
         /^https:\/\/.*\.s3-.*\.amazonaws\.com\/.*\.docx$/
       ]
-      
-      return s3Patterns.some(pattern => pattern.test(url))
+
+      return s3Patterns.some((pattern) => pattern.test(url))
     } catch {
       return false
     }
@@ -255,13 +269,13 @@ export class PdfConverterService {
    */
   createPdfResponseHeaders(filename: string): Record<string, string> {
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-_]/g, '_')
-    
+
     return {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${sanitizedFilename}"`,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+      Pragma: 'no-cache',
+      Expires: '0'
     }
   }
 }

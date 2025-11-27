@@ -5,30 +5,30 @@ export const ASSESSMENT_MESSAGES = {
   ASSESSMENT_CREATED: (count: number) => `Successfully created ${count} assessment(s)`,
   ASSESSMENT_UPDATED: 'Assessment updated successfully',
   ASSESSMENT_DELETED: 'Assessment deleted successfully',
-  
+
   // Bulk operations
-  BULK_ASSESSMENT_CREATED: (count: number, entityType: string, entityName: string) => 
+  BULK_ASSESSMENT_CREATED: (count: number, entityType: string, entityName: string) =>
     `Successfully created ${count} assessment(s) for ${entityType}: ${entityName}`,
-  
+
   // Section operations
   ASSESSMENT_VALUES_SAVED: 'Assessment values saved successfully',
   ASSESSMENT_VALUES_UPDATED: 'Assessment values updated successfully',
-  ASSESSMENT_VALUES_UPDATED_WITH_STATUS_CHANGE: 'Assessment values updated successfully and assessment status changed to READY_TO_SUBMIT',
+  ASSESSMENT_VALUES_UPDATED_WITH_STATUS_CHANGE:
+    'Assessment values updated successfully and assessment status changed to READY_TO_SUBMIT',
   ASSESSMENT_SECTION_RETRIEVED: 'Assessment sections retrieved successfully',
   ASSESSMENT_SECTION_FIELDS_RETRIEVED: 'Assessment section fields retrieved successfully',
-  
+
   // Status changes
-  TRAINEE_LOCK_TOGGLED: (isLocked: boolean) => 
-    `Trainee lock ${isLocked ? 'enabled' : 'disabled'} successfully`,
+  TRAINEE_LOCK_TOGGLED: (isLocked: boolean) => `Trainee lock ${isLocked ? 'enabled' : 'disabled'} successfully`,
   ASSESSMENT_SUBMITTED: 'Assessment submitted successfully',
   ASSESSMENT_PARTICIPATION_CONFIRMED: 'Assessment participation confirmed successfully',
-  
+
   // Status transitions
   STATUS_CHANGED_TO_DRAFT: 'Assessment status changed to DRAFT',
   STATUS_CHANGED_TO_SIGNATURE_PENDING: 'Assessment status changed to SIGNATURE_PENDING',
   STATUS_CHANGED_TO_READY_TO_SUBMIT: 'Assessment status changed to READY_TO_SUBMIT',
   STATUS_CHANGED_TO_SUBMITTED: 'Assessment status changed to SUBMITTED',
-  
+
   // Retrieval operations
   ASSESSMENTS_RETRIEVED: 'Assessments retrieved successfully',
   ASSESSMENT_DETAIL_RETRIEVED: 'Assessment details retrieved successfully',

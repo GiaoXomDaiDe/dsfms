@@ -129,14 +129,14 @@ export const AllTraineesExcludedException = (totalEnrolled: number) =>
 
 // ===== DUPLICATE ASSESSMENT ERRORS =====
 
-export const AssessmentAlreadyExistsException = (duplicates: Array<{traineeId: string, traineeName: string}>) =>
+export const AssessmentAlreadyExistsException = (duplicates: Array<{ traineeId: string; traineeName: string }>) =>
   new ConflictException({
     message: 'Assessment already exists for one or more trainees on the specified date',
     duplicates
   })
 
 export const TraineeAssessmentExistsException = (
-  duplicates: Array<{traineeId: string, traineeName: string, assessmentId: string}>,
+  duplicates: Array<{ traineeId: string; traineeName: string; assessmentId: string }>,
   entityType: 'subject' | 'course'
 ) =>
   new ConflictException({
@@ -249,7 +249,9 @@ export const RequiredFieldMissingException = (fieldName: string) =>
 
 export const AssessmentSectionNotFoundError = new Error('Assessment section not found')
 
-export const OriginalAssessorOnlyError = new Error('Only the user who originally assessed this section can update the values')
+export const OriginalAssessorOnlyError = new Error(
+  'Only the user who originally assessed this section can update the values'
+)
 
 export const SectionDraftStatusOnlyError = new Error('Can only update values for sections in DRAFT status')
 
@@ -271,7 +273,9 @@ export const AccessDeniedError = new Error('Access denied')
 
 export const AssessmentNotReadyToSubmitError = new Error('Assessment is not ready to submit')
 
-export const SubmittableSectionNotCompletedError = new Error('All submittable sections must be completed before submission')
+export const SubmittableSectionNotCompletedError = new Error(
+  'All submittable sections must be completed before submission'
+)
 
 export const OccurrenceDateNotTodayError = new Error('Trainee lock can only be toggled on the occurrence date')
 
@@ -299,11 +303,17 @@ export const ConfirmAssessmentParticipationFailedError = new Error('Failed to co
 
 // ===== PARTICIPATION CONFIRMATION ERRORS =====
 
-export const OnlyTraineeCanConfirmParticipationError = new ForbiddenException('Only trainees can confirm assessment participation')
+export const OnlyTraineeCanConfirmParticipationError = new ForbiddenException(
+  'Only trainees can confirm assessment participation'
+)
 
-export const TraineeNotAssignedToAssessmentError = new ForbiddenException('You can only confirm participation for your own assessments')
+export const TraineeNotAssignedToAssessmentError = new ForbiddenException(
+  'You can only confirm participation for your own assessments'
+)
 
-export const AssessmentNotInSignaturePendingError = new BadRequestException('Assessment must be in SIGNATURE_PENDING status to confirm participation')
+export const AssessmentNotInSignaturePendingError = new BadRequestException(
+  'Assessment must be in SIGNATURE_PENDING status to confirm participation'
+)
 
 // ===== SECTION PERMISSION ERRORS =====
 
@@ -313,7 +323,7 @@ export const SectionEditNotAllowedError = new ForbiddenException('You do not hav
 
 // ===== VALIDATION ERRORS =====
 
-export const InvalidAssessmentValueIdsError = (invalidIds: string[]) => 
+export const InvalidAssessmentValueIdsError = (invalidIds: string[]) =>
   new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
 
 // ===== ASSESSMENT STATUS ERRORS =====
