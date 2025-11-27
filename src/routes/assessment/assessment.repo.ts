@@ -120,7 +120,7 @@ export class AssessmentRepo {
       lastName: trainee.lastName,
       middleName: trainee.middleName,
       email: trainee.email,
-      enrollmentStatus: trainee.subjectEnrollments[0]?.status || 'NOT_STARTED'
+      enrollmentStatus: trainee.subjectEnrollments[0]?.status || 'ON_GOING'
     }))
   }
 
@@ -3101,7 +3101,6 @@ export class AssessmentRepo {
       const subjectEnrollments = await this.prisma.subjectEnrollment.findMany({
         where: {
           traineeUserId: userId,
-          status: 'ENROLLED',
           ...(subjectId ? { subjectId } : {})
         },
         include: {
