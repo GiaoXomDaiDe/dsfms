@@ -105,6 +105,46 @@ export class RoleRepo {
     data: UpdateRoleBodyType
     permissionIds?: string[]
   }): Promise<RoleWithPermissionsType> {
+    let permissionsUpdate: Prisma.RoleUpdateInput['permissions'] | undefined
+
+    if (permissionIds) {
+      const currentRole = await this.prismaService.role.findFirst({
+        where: {
+          id,
+          deletedAt: null,
+          isActive: true
+        },
+        select: {
+          permissions: {
+            select: { id: true }
+          }
+        }
+      })
+
+      if (!currentRole) {
+        throw NotFoundRoleException
+      }
+
+      const existingPermissionIds = currentRole.permissions.map((permission) => permission.id)
+      const existingPermissionIdSet = new Set(existingPermissionIds)
+      const desiredPermissionSet = new Set(permissionIds)
+      const shouldConnect = (permissionId: string) => !existingPermissionIdSet.has(permissionId)
+      const shouldDisconnect = (permissionId: string) => !desiredPermissionSet.has(permissionId)
+      const permissionsToConnect = permissionIds.filter(shouldConnect)
+      const permissionsToDisconnect = existingPermissionIds.filter(shouldDisconnect)
+
+      if (permissionsToConnect.length > 0 || permissionsToDisconnect.length > 0) {
+        permissionsUpdate = {
+          ...(permissionsToConnect.length > 0
+            ? { connect: permissionsToConnect.map((permissionId) => ({ id: permissionId })) }
+            : {}),
+          ...(permissionsToDisconnect.length > 0
+            ? { disconnect: permissionsToDisconnect.map((permissionId) => ({ id: permissionId })) }
+            : {})
+        }
+      }
+    }
+
     const role = await this.prismaService.role.update({
       where: {
         id,
@@ -114,11 +154,7 @@ export class RoleRepo {
       data: {
         name: data.name,
         description: data.description,
-        permissions: permissionIds
-          ? {
-              set: permissionIds.map((permissionId) => ({ id: permissionId }))
-            }
-          : undefined,
+        permissions: permissionsUpdate,
         updatedById
       },
       include: roleDetailInclude
