@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import {
   AcknowledgeReportResType,
@@ -101,6 +101,14 @@ export class ReportsRepo {
       createdById,
       isAnonymous: data.isAnonymous ?? false,
       status: RequestStatus.SUBMITTED
+    }
+
+    const assessment = await this.prisma.assessmentForm.findUnique({
+      where: { id: data.assessmentId ?? '' }
+    })
+
+    if (data.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST && !assessment) {
+      throw new BadRequestException('Assessment not found for Assessment Approval Request')
     }
 
     if (data.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST) {
