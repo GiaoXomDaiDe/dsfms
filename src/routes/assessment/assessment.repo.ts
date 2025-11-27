@@ -956,15 +956,6 @@ export class AssessmentRepo {
     if (userRole === 'TRAINEE') {
       // Trainees can only see their own assessments
       whereClause.traineeId = userId
-
-      // Check if trainee has any assessments in this subject
-      const traineeAssessmentCount = await this.prisma.assessmentForm.count({
-        where: { subjectId, traineeId: userId }
-      })
-
-      if (traineeAssessmentCount === 0) {
-        throw TraineeNoAssessmentsInSubjectError
-      }
     } else if (userRole === 'TRAINER') {
       // For trainers, check their role in assessment and filter accordingly
       const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
@@ -1134,15 +1125,6 @@ export class AssessmentRepo {
     if (userRole === 'TRAINEE') {
       // Trainees can only see their own assessments
       whereClause.traineeId = userId
-
-      // Check if trainee has any assessments in this course
-      const traineeAssessmentCount = await this.prisma.assessmentForm.count({
-        where: { courseId, traineeId: userId }
-      })
-
-      if (traineeAssessmentCount === 0) {
-        throw TraineeNoAssessmentsInCourseError
-      }
     } else if (userRole === 'TRAINER') {
       // For course scope, only check CourseInstructor table
       const courseAssignment = await this.prisma.courseInstructor.findFirst({
