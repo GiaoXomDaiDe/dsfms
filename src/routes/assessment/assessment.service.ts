@@ -568,10 +568,6 @@ export class AssessmentService {
         throw new ForbiddenException('You are not assigned to this subject')
       }
 
-      if (error.message === 'Trainee has no assessments in this subject') {
-        throw new ForbiddenException('You have no assessments in this subject')
-      }
-
       if (error.message === 'Subject not found') {
         throw SubjectNotFoundException
       }
@@ -608,10 +604,6 @@ export class AssessmentService {
 
       if (error.message === 'Trainer is not assigned to this course') {
         throw new ForbiddenException('You are not assigned to this course')
-      }
-
-      if (error.message === 'Trainee has no assessments in course') {
-        throw new ForbiddenException('You have no assessments in this course')
       }
 
       if (error.message === 'Course not found') {
@@ -1302,11 +1294,17 @@ export class AssessmentService {
       }
 
       // Check if user has access to this assessment (same department)
-      if (userContext.departmentId) {
+      // Get user's department from database
+      const user = await this.assessmentRepo.prismaClient.user.findUnique({
+        where: { id: userContext.userId },
+        select: { departmentId: true }
+      })
+
+      if (user?.departmentId) {
         const hasAccess = await this.assessmentRepo.checkUserAssessmentAccess(
           assessmentId,
           userContext.userId,
-          userContext.departmentId
+          user.departmentId
         )
         if (!hasAccess) {
           throw new ForbiddenException('You do not have access to this assessment')
@@ -1429,11 +1427,17 @@ export class AssessmentService {
       }
 
       // Check if user has access to this assessment (same department)
-      if (userContext.departmentId) {
+      // Get user's department from database
+      const user = await this.assessmentRepo.prismaClient.user.findUnique({
+        where: { id: userContext.userId },
+        select: { departmentId: true }
+      })
+
+      if (user?.departmentId) {
         const hasAccess = await this.assessmentRepo.checkUserAssessmentAccess(
           assessmentId,
           userContext.userId,
-          userContext.departmentId
+          user.departmentId
         )
         if (!hasAccess) {
           throw new ForbiddenException('You do not have access to this assessment')
