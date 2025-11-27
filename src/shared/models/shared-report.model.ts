@@ -1,10 +1,21 @@
 import z from 'zod'
 import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/report.constant'
+import { userNameSchema } from '~/shared/validation/user.validation'
+
+const reportUserSummarySchema = z.object({
+  id: z.uuid(),
+  firstName: userNameSchema,
+  lastName: userNameSchema,
+  email: z.email().max(255),
+  role: z.object({
+    name: z.string().max(100)
+  })
+})
 
 export const ReportSchema = z.object({
   id: z.uuid(),
   requestType: z.enum([
-    RequestType.ASSESSMENT_APPROVAL_REQUEST,
+    RequestType.FEEDBACK,
     RequestType.COURSE_ORGANIZATION_REPORT,
     RequestType.FACILITIES_REPORT,
     RequestType.FATIGUE_REPORT,
@@ -22,10 +33,12 @@ export const ReportSchema = z.object({
   status: z.enum(RequestStatus),
   managedById: z.uuid().nullable(),
   response: z.string().max(4000).nullable(),
-  assessmentId: z.uuid().nullable(),
   createdAt: z.iso.datetime().transform((d) => new Date(d)),
   updatedAt: z.iso.datetime().transform((d) => new Date(d)),
-  updatedById: z.uuid().nullable()
+  updatedById: z.uuid().nullable(),
+  createdBy: reportUserSummarySchema,
+  updatedBy: reportUserSummarySchema.nullable(),
+  managedBy: reportUserSummarySchema.nullable()
 })
 
 export type ReportType = z.infer<typeof ReportSchema>

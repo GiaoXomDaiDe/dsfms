@@ -117,11 +117,17 @@ export class RoleService {
     let permissionIds: string[] | undefined
 
     if (data.permissionGroupCodes && data.permissionGroupCodes.length > 0) {
-      permissionIds = await this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes)
+      const [groupPermissionIds, defaultPermissionIds] = await Promise.all([
+        this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes),
+        this.sharedPermissionRepo.findActiveIdsByNames(DEFAULT_ROLE_ENDPOINT_PERMISSION_NAMES)
+      ])
+      permissionIds = Array.from(new Set([...groupPermissionIds, ...defaultPermissionIds]))
       this.logger.debug(
         `Updating role '${existingRole.name}' - replacing permissions using group codes: ${data.permissionGroupCodes.join(', ')}`
       )
-      this.logger.debug(`New permission IDs count: ${permissionIds.length}`)
+      this.logger.debug(
+        `New permission IDs count (groups + default): ${groupPermissionIds.length} + ${defaultPermissionIds.length} => ${permissionIds.length}`
+      )
     } else {
       this.logger.debug(
         `Updating role '${existingRole.name}' without permissionGroupCodes - existing permissions will be preserved`

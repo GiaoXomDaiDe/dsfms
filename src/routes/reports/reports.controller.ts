@@ -58,7 +58,7 @@ export class ReportsController {
     @Param() params: CancelReportParamsDTO,
     @ActiveUser('userId') userId: string
   ): Promise<CancelReportResDTO> {
-    return this.reportsService.cancelReport(params.id, userId)
+    return this.reportsService.cancelReport(params.reportId, userId)
   }
 
   @Put(':reportId/acknowledge')
@@ -66,7 +66,8 @@ export class ReportsController {
     @Param() params: AcknowledgeReportParamsDTO,
     @ActiveUser('userId') userId: string
   ): Promise<AcknowledgeReportResDTO> {
-    return this.reportsService.acknowledgeReport(params.id, userId)
+    console.log(params)
+    return this.reportsService.acknowledgeReport(params.reportId, userId)
   }
 
   @Put(':reportId/respond')
@@ -75,6 +76,6 @@ export class ReportsController {
     @Body() body: RespondReportBodyDTO,
     @ActiveUser('userId') userId: string
   ): Promise<RespondReportResDTO> {
-    return this.reportsService.respondToReport(params.id, body, userId)
+    return this.reportsService.respondToReport(params.reportId, body, userId)
   }
 }
