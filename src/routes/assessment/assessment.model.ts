@@ -54,44 +54,42 @@ export type AssessmentValueType = z.infer<typeof AssessmentValueSchema>
 // ===== CREATE ASSESSMENT REQUEST SCHEMAS =====
 
 // Schema for creating assessments for specific trainees
-export const CreateAssessmentBodySchema = z.object({
-  templateId: z.string().uuid('Template ID must be a valid UUID'),
-  subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
-  courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
-  occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
-  name: z.string().min(1, 'Assessment name is required').max(255, 'Assessment name must not exceed 255 characters'),
-  traineeIds: z.array(z.string().uuid('Trainee ID must be a valid UUID')).min(1, 'At least one trainee must be specified')
-}).refine(
-  (data) => data.subjectId || data.courseId,
-  {
+export const CreateAssessmentBodySchema = z
+  .object({
+    templateId: z.string().uuid('Template ID must be a valid UUID'),
+    subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
+    courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
+    name: z.string().min(1, 'Assessment name is required').max(255, 'Assessment name must not exceed 255 characters'),
+    traineeIds: z
+      .array(z.string().uuid('Trainee ID must be a valid UUID'))
+      .min(1, 'At least one trainee must be specified')
+  })
+  .refine((data) => data.subjectId || data.courseId, {
     message: 'Either subjectId or courseId must be provided',
     path: ['subjectId']
-  }
-)
+  })
 
 export type CreateAssessmentBodyType = z.infer<typeof CreateAssessmentBodySchema>
 
 // Schema for creating assessments for ALL enrolled trainees in a course/subject
-export const CreateBulkAssessmentBodySchema = z.object({
-  templateId: z.string().uuid('Template ID must be a valid UUID'),
-  subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
-  courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
-  occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
-  name: z.string().min(1, 'Assessment name is required').max(255, 'Assessment name must not exceed 255 characters'),
-  excludeTraineeIds: z.array(z.string().uuid('Trainee ID must be a valid UUID')).optional().default([])
-}).refine(
-  (data) => data.subjectId || data.courseId,
-  {
+export const CreateBulkAssessmentBodySchema = z
+  .object({
+    templateId: z.string().uuid('Template ID must be a valid UUID'),
+    subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
+    courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
+    name: z.string().min(1, 'Assessment name is required').max(255, 'Assessment name must not exceed 255 characters'),
+    excludeTraineeIds: z.array(z.string().uuid('Trainee ID must be a valid UUID')).optional().default([])
+  })
+  .refine((data) => data.subjectId || data.courseId, {
     message: 'Either subjectId or courseId must be provided',
     path: ['subjectId']
-  }
-).refine(
-  (data) => !(data.subjectId && data.courseId),
-  {
+  })
+  .refine((data) => !(data.subjectId && data.courseId), {
     message: 'Cannot provide both subjectId and courseId, only one is allowed',
     path: ['courseId']
-  }
-)
+  })
 
 export type CreateBulkAssessmentBodyType = z.infer<typeof CreateBulkAssessmentBodySchema>
 
@@ -117,26 +115,30 @@ export const AssessmentFormResSchema = AssessmentFormSchema.extend({
     middleName: z.string().nullable(),
     email: z.string()
   }),
-  subject: z.object({
-    id: z.string(),
-    name: z.string(),
-    code: z.string(),
-    course: z.object({
+  subject: z
+    .object({
       id: z.string(),
       name: z.string(),
-      code: z.string()
+      code: z.string(),
+      course: z.object({
+        id: z.string(),
+        name: z.string(),
+        code: z.string()
+      })
     })
-  }).nullable(),
-  course: z.object({
-    id: z.string(),
-    name: z.string(),
-    code: z.string(),
-    department: z.object({
+    .nullable(),
+  course: z
+    .object({
       id: z.string(),
       name: z.string(),
-      code: z.string()
+      code: z.string(),
+      department: z.object({
+        id: z.string(),
+        name: z.string(),
+        code: z.string()
+      })
     })
-  }).nullable(),
+    .nullable(),
   createdBy: z.object({
     id: z.string(),
     firstName: z.string(),
@@ -144,13 +146,15 @@ export const AssessmentFormResSchema = AssessmentFormSchema.extend({
     middleName: z.string().nullable(),
     email: z.string()
   }),
-  approvedBy: z.object({
-    id: z.string(),
-    firstName: z.string(),
-    lastName: z.string(),
-    middleName: z.string().nullable(),
-    email: z.string()
-  }).nullable()
+  approvedBy: z
+    .object({
+      id: z.string(),
+      firstName: z.string(),
+      lastName: z.string(),
+      middleName: z.string().nullable(),
+      email: z.string()
+    })
+    .nullable()
 })
 
 export type AssessmentFormResType = z.infer<typeof AssessmentFormResSchema>
@@ -172,11 +176,13 @@ export const CreateBulkAssessmentResSchema = z.object({
   assessments: z.array(AssessmentFormResSchema),
   totalCreated: z.number(),
   totalEnrolled: z.number(),
-  skippedTrainees: z.array(z.object({
-    traineeId: z.string(),
-    traineeName: z.string(),
-    reason: z.string()
-  })),
+  skippedTrainees: z.array(
+    z.object({
+      traineeId: z.string(),
+      traineeName: z.string(),
+      reason: z.string()
+    })
+  ),
   entityInfo: z.object({
     id: z.string(),
     name: z.string(),
@@ -198,13 +204,15 @@ export const AssessmentSectionResSchema = AssessmentSectionSchema.extend({
     isSubmittable: z.boolean(),
     isToggleDependent: z.boolean()
   }),
-  assessedBy: z.object({
-    id: z.string(),
-    firstName: z.string(),
-    lastName: z.string(),
-    middleName: z.string().nullable(),
-    email: z.string()
-  }).nullable()
+  assessedBy: z
+    .object({
+      id: z.string(),
+      firstName: z.string(),
+      lastName: z.string(),
+      middleName: z.string().nullable(),
+      email: z.string()
+    })
+    .nullable()
 })
 
 export type AssessmentSectionResType = z.infer<typeof AssessmentSectionResSchema>
@@ -233,34 +241,38 @@ export type AssessmentValueResType = z.infer<typeof AssessmentValueResSchema>
 
 // ===== QUERY SCHEMAS =====
 
-export const GetAssessmentsQuerySchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  status: z.nativeEnum(AssessmentStatus).optional(),
-  templateId: z.string().uuid().optional(),
-  subjectId: z.string().uuid().optional(),
-  courseId: z.string().uuid().optional(),
-  traineeId: z.string().uuid().optional(),
-  fromDate: z.coerce.date().optional(),
-  toDate: z.coerce.date().optional(),
-  includeDeleted: z.coerce.boolean().default(false).optional()
-}).strict()
+export const GetAssessmentsQuerySchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(20),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    templateId: z.string().uuid().optional(),
+    subjectId: z.string().uuid().optional(),
+    courseId: z.string().uuid().optional(),
+    traineeId: z.string().uuid().optional(),
+    fromDate: z.coerce.date().optional(),
+    toDate: z.coerce.date().optional(),
+    includeDeleted: z.coerce.boolean().default(false).optional()
+  })
+  .strict()
 
 export type GetAssessmentsQueryType = z.infer<typeof GetAssessmentsQuerySchema>
 
-export const GetDepartmentAssessmentsQuerySchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  status: z.nativeEnum(AssessmentStatus).optional(),
-  templateId: z.string().uuid().optional(),
-  subjectId: z.string().uuid().optional(),
-  courseId: z.string().uuid().optional(),
-  traineeId: z.string().uuid().optional(),
-  fromDate: z.coerce.date().optional(),
-  toDate: z.coerce.date().optional(),
-  search: z.string().optional(),
-  includeDeleted: z.coerce.boolean().default(false).optional()
-}).strict()
+export const GetDepartmentAssessmentsQuerySchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(20),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    templateId: z.string().uuid().optional(),
+    subjectId: z.string().uuid().optional(),
+    courseId: z.string().uuid().optional(),
+    traineeId: z.string().uuid().optional(),
+    fromDate: z.coerce.date().optional(),
+    toDate: z.coerce.date().optional(),
+    search: z.string().optional(),
+    includeDeleted: z.coerce.boolean().default(false).optional()
+  })
+  .strict()
 
 export type GetDepartmentAssessmentsQueryType = z.infer<typeof GetDepartmentAssessmentsQuerySchema>
 
@@ -282,18 +294,22 @@ export const GetDepartmentAssessmentsResSchema = z.object({
   page: z.number(),
   limit: z.number(),
   totalPages: z.number(),
-  departmentInfo: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-    code: z.string()
-  }).optional()
+  departmentInfo: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string()
+    })
+    .optional()
 })
 
 export type GetDepartmentAssessmentsResType = z.infer<typeof GetDepartmentAssessmentsResSchema>
 
-export const GetAssessmentParamsSchema = z.object({
-  assessmentId: z.string().uuid('Assessment ID must be a valid UUID')
-}).strict()
+export const GetAssessmentParamsSchema = z
+  .object({
+    assessmentId: z.string().uuid('Assessment ID must be a valid UUID')
+  })
+  .strict()
 
 export type GetAssessmentParamsType = z.infer<typeof GetAssessmentParamsSchema>
 
@@ -310,9 +326,11 @@ export type GetAssessmentsResType = z.infer<typeof GetAssessmentsResSchema>
 
 // Single Assessment Detail Response
 export const GetAssessmentDetailResSchema = AssessmentFormResSchema.extend({
-  sections: z.array(AssessmentSectionResSchema.extend({
-    values: z.array(AssessmentValueResSchema)
-  }))
+  sections: z.array(
+    AssessmentSectionResSchema.extend({
+      values: z.array(AssessmentValueResSchema)
+    })
+  )
 })
 
 export type GetAssessmentDetailResType = z.infer<typeof GetAssessmentDetailResSchema>
@@ -320,23 +338,27 @@ export type GetAssessmentDetailResType = z.infer<typeof GetAssessmentDetailResSc
 // ===== TRAINER ASSESSMENT SCHEMAS =====
 
 // Request schemas for trainer assessment lists
-export const GetSubjectAssessmentsQuerySchema = z.object({
-  subjectId: z.string().uuid('Subject ID must be a valid UUID'),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(10),
-  status: z.nativeEnum(AssessmentStatus).optional(),
-  search: z.string().max(255).optional()
-}).strict()
+export const GetSubjectAssessmentsQuerySchema = z
+  .object({
+    subjectId: z.string().uuid('Subject ID must be a valid UUID'),
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(10),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    search: z.string().max(255).optional()
+  })
+  .strict()
 
 export type GetSubjectAssessmentsQueryType = z.infer<typeof GetSubjectAssessmentsQuerySchema>
 
-export const GetCourseAssessmentsQuerySchema = z.object({
-  courseId: z.string().uuid('Course ID must be a valid UUID'),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(10),
-  status: z.nativeEnum(AssessmentStatus).optional(),
-  search: z.string().max(255).optional()
-}).strict()
+export const GetCourseAssessmentsQuerySchema = z
+  .object({
+    courseId: z.string().uuid('Course ID must be a valid UUID'),
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(10),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    search: z.string().max(255).optional()
+  })
+  .strict()
 
 export type GetCourseAssessmentsQueryType = z.infer<typeof GetCourseAssessmentsQuerySchema>
 
@@ -422,12 +444,14 @@ export const AssessmentSectionDetailSchema = z.object({
     isToggleDependent: z.boolean()
   }),
   // Assessor information (if assessed)
-  assessedBy: z.object({
-    id: z.string().uuid(),
-    firstName: z.string(),
-    lastName: z.string(),
-    eid: z.string()
-  }).nullable(),
+  assessedBy: z
+    .object({
+      id: z.string().uuid(),
+      firstName: z.string(),
+      lastName: z.string(),
+      eid: z.string()
+    })
+    .nullable(),
   // Optional field for TRAINER users
   canAssessed: z.boolean().optional()
 })
@@ -450,16 +474,20 @@ export const GetAssessmentSectionsResSchema = z.object({
       id: z.string().uuid(),
       name: z.string()
     }),
-    subject: z.object({
-      id: z.string().uuid(),
-      name: z.string(),
-      code: z.string()
-    }).nullable(),
-    course: z.object({
-      id: z.string().uuid(),
-      name: z.string(),
-      code: z.string()
-    }).nullable(),
+    subject: z
+      .object({
+        id: z.string().uuid(),
+        name: z.string(),
+        code: z.string()
+      })
+      .nullable(),
+    course: z
+      .object({
+        id: z.string().uuid(),
+        name: z.string(),
+        code: z.string()
+      })
+      .nullable(),
     occuranceDate: z.coerce.date(),
     status: z.nativeEnum(AssessmentStatus)
   }),
@@ -624,9 +652,7 @@ export const ApproveRejectAssessmentBodySchema = z.object({
   action: z.enum(['APPROVED', 'REJECTED'], {
     message: 'Action must be either APPROVED or REJECTED'
   }),
-  comment: z.string()
-    .max(1000, 'Comment must not exceed 1000 characters')
-    .optional()
+  comment: z.string().max(1000, 'Comment must not exceed 1000 characters').optional()
 })
 
 export const ApproveRejectAssessmentResSchema = z.object({
@@ -693,7 +719,7 @@ export const GetAssessmentEventsResSchema = z.object({
     events: z.array(AssessmentEventItemSchema),
     pagination: z.object({
       page: z.number().int(),
-      limit: z.number().int(), 
+      limit: z.number().int(),
       total: z.number().int(),
       totalPages: z.number().int(),
       hasNext: z.boolean(),
@@ -702,33 +728,39 @@ export const GetAssessmentEventsResSchema = z.object({
   })
 })
 
-export const UpdateAssessmentEventBodySchema = z.object({
-  name: z.string()
-    .min(1, 'Name is required')
-    .max(255, 'Name must not exceed 255 characters')
-    .optional(),
-  occuranceDate: z.coerce.date()
-    .refine((date) => date > new Date(), {
-      message: 'Occurrence date must be in the future'
-    })
-    .optional()
-}).refine((data) => data.name || data.occuranceDate, {
-  message: 'At least one field (name or occuranceDate) must be provided'
-})
+export const UpdateAssessmentEventBodySchema = z
+  .object({
+    name: z.string().min(1, 'Name is required').max(255, 'Name must not exceed 255 characters').optional(),
+    occuranceDate: z.coerce
+      .date()
+      .refine((date) => date > new Date(), {
+        message: 'Occurrence date must be in the future'
+      })
+      .optional()
+  })
+  .refine((data) => data.name || data.occuranceDate, {
+    message: 'At least one field (name or occuranceDate) must be provided'
+  })
 
-export const UpdateAssessmentEventParamsSchema = z.object({
-  subjectId: z.string().uuid().optional(),
-  courseId: z.string().uuid().optional(),
-  occuranceDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: 'Invalid occurrence date format'
-  }).transform((val) => new Date(val)),
-  name: z.string().min(1).max(255),
-  templateId: z.string().uuid()
-}).refine((data) => data.subjectId || data.courseId, {
-  message: 'Either subjectId or courseId must be provided'
-}).refine((data) => !(data.subjectId && data.courseId), {
-  message: 'Cannot provide both subjectId and courseId'
-})
+export const UpdateAssessmentEventParamsSchema = z
+  .object({
+    subjectId: z.string().uuid().optional(),
+    courseId: z.string().uuid().optional(),
+    occuranceDate: z
+      .string()
+      .refine((val) => !isNaN(Date.parse(val)), {
+        message: 'Invalid occurrence date format'
+      })
+      .transform((val) => new Date(val)),
+    name: z.string().min(1).max(255),
+    templateId: z.string().uuid()
+  })
+  .refine((data) => data.subjectId || data.courseId, {
+    message: 'Either subjectId or courseId must be provided'
+  })
+  .refine((data) => !(data.subjectId && data.courseId), {
+    message: 'Cannot provide both subjectId and courseId'
+  })
 
 export const UpdateAssessmentEventResSchema = z.object({
   success: z.boolean(),

@@ -3,7 +3,13 @@ import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
 import JSZip from 'jszip'
 import { TemplateRepository } from './template.repository'
-import { CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto, ReviewTemplateBodyType, ReviewTemplateResType } from './template.dto'
+import {
+  CreateTemplateFormDto,
+  UpdateTemplateFormDto,
+  CreateTemplateVersionDto,
+  ReviewTemplateBodyType,
+  ReviewTemplateResType
+} from './template.dto'
 import { PdfConverterService } from '~/shared/services/pdf-converter.service'
 import { NodemailerService } from '../email/nodemailer.service'
 import {
@@ -125,30 +131,34 @@ export class TemplateService {
     } catch (error) {
       // Handle docxtemplater specific errors with detailed information
       if (error.properties) {
-        const props = error.properties;
-        const explanation = props.explanation || error.message || 'Unknown template error';
-        const location = props.file ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})` : '';
-        throw new DocxParsingError(`Template parsing failed: ${explanation}${location}`);
+        const props = error.properties
+        const explanation = props.explanation || error.message || 'Unknown template error'
+        const location = props.file
+          ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})`
+          : ''
+        throw new DocxParsingError(`Template parsing failed: ${explanation}${location}`)
       }
-      
+
       // Handle array of errors
       if (error.properties && error.properties.errors instanceof Array) {
         const errorMessages = error.properties.errors
           .map((err: any) => {
-            const explanation = err.properties?.explanation || err.message || 'Unknown error';
-            return explanation;
+            const explanation = err.properties?.explanation || err.message || 'Unknown error'
+            return explanation
           })
-          .join('; ');
-        throw new DocxParsingError(`Template parsing failed: ${errorMessages}`);
+          .join('; ')
+        throw new DocxParsingError(`Template parsing failed: ${errorMessages}`)
       }
-      
+
       // Handle validation errors
       if (error.message && error.message.includes('Invalid file type')) {
-        throw new DocxParsingError('Invalid file format. Please upload a valid DOCX file.');
+        throw new DocxParsingError('Invalid file format. Please upload a valid DOCX file.')
       }
-      
+
       // Default error handling
-      throw new DocxParsingError(error.message || 'Failed to parse DOCX template. Please check if the file is valid and not corrupted.')
+      throw new DocxParsingError(
+        error.message || 'Failed to parse DOCX template. Please check if the file is valid and not corrupted.'
+      )
     }
   }
 
@@ -253,14 +263,14 @@ export class TemplateService {
       parentTempId: string | null
       tempId?: string
     }> = []
-    
+
     let displayOrder = 1
     let currentParent: string | null = null
     const processedSections = new Set<string>()
     const processedToggles = new Set<string>()
     // Track processed fields per section context to allow same field names in different sections
     const processedFieldsByContext = new Map<string, Set<string>>()
-    
+
     // First pass: identify which # tags are conditions (have corresponding ^ tags)
     const conditionNames = new Set<string>()
     for (const tag of tags) {
@@ -270,20 +280,20 @@ export class TemplateService {
         conditionNames.add(conditionName)
       }
     }
-    
+
     // Second pass: process tags in order as they appear in the document
     for (const tag of tags) {
       const cleaned = tag.replace(/[{}]/g, '')
-      
+
       // Skip operators
       if (this.hasOperator(cleaned)) {
         continue
       }
-      
+
       // Handle section start tags (#sectionName)
       if (cleaned.startsWith('#')) {
         const sectionName = cleaned.substring(1)
-        
+
         // Check if this is a condition (has corresponding ^ tag)
         if (conditionNames.has(sectionName)) {
           // This is a condition, skip it - we'll handle it when we encounter the ^ tag
@@ -310,7 +320,7 @@ export class TemplateService {
         }
         continue
       }
-      
+
       // Handle section end tags {/sectionName}
       if (cleaned.startsWith('/')) {
         const endingSectionName = cleaned.substring(1)
@@ -320,11 +330,11 @@ export class TemplateService {
         }
         continue
       }
-      
+
       // Handle inverted sections {^sectionName} - indicates toggle/condition
       if (cleaned.startsWith('^')) {
         const sectionName = cleaned.substring(1)
-        
+
         if (!processedToggles.has(sectionName)) {
           fields.push({
             fieldName: sectionName,
@@ -336,11 +346,11 @@ export class TemplateService {
         }
         continue
       }
-      
+
       // Regular fields - allow same field names in different sections
       const contextKey = currentParent || 'global'
       const contextFields = processedFieldsByContext.get(contextKey) || new Set<string>()
-      
+
       if (!contextFields.has(cleaned)) {
         fields.push({
           fieldName: cleaned,
@@ -352,7 +362,7 @@ export class TemplateService {
         processedFieldsByContext.set(contextKey, contextFields)
       }
     }
-    
+
     return fields
   }
 
@@ -392,7 +402,7 @@ export class TemplateService {
 
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
-      
+
       // Use the structured field parser
       const structuredFields = this.parseStructuredFields(tags)
 
@@ -405,25 +415,29 @@ export class TemplateService {
     } catch (error) {
       // Handle docxtemplater specific errors with detailed information
       if (error.properties) {
-        const props = error.properties;
-        const explanation = props.explanation || error.message || 'Unknown template error';
-        const location = props.file ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})` : '';
-        throw new DocxParsingError(`Field extraction failed: ${explanation}${location}`);
+        const props = error.properties
+        const explanation = props.explanation || error.message || 'Unknown template error'
+        const location = props.file
+          ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})`
+          : ''
+        throw new DocxParsingError(`Field extraction failed: ${explanation}${location}`)
       }
-      
+
       // Handle array of errors
       if (error.properties && error.properties.errors instanceof Array) {
         const errorMessages = error.properties.errors
           .map((err: any) => {
-            const explanation = err.properties?.explanation || err.message || 'Unknown error';
-            return explanation;
+            const explanation = err.properties?.explanation || err.message || 'Unknown error'
+            return explanation
           })
-          .join('; ');
-        throw new DocxParsingError(`Field extraction failed: ${errorMessages}`);
+          .join('; ')
+        throw new DocxParsingError(`Field extraction failed: ${errorMessages}`)
       }
-      
+
       // Default error handling
-      throw new DocxParsingError(error.message || 'Failed to extract fields from DOCX. Please check if the template format is correct.')
+      throw new DocxParsingError(
+        error.message || 'Failed to extract fields from DOCX. Please check if the template format is correct.'
+      )
     }
   }
 
@@ -446,7 +460,7 @@ export class TemplateService {
     try {
       // Download file from S3 URL
       const response = await fetch(s3Url)
-      
+
       if (!response.ok) {
         throw new S3DownloadError(response.status, response.statusText)
       }
@@ -469,7 +483,7 @@ export class TemplateService {
 
       // Extract all placeholders using regex
       const tags = fullText.match(/\{[^}]+\}/g) || []
-      
+
       // Use the structured field parser
       const structuredFields = this.parseStructuredFields(tags)
 
@@ -487,21 +501,23 @@ export class TemplateService {
 
       // Handle docxtemplater specific errors with detailed information
       if (error.properties) {
-        const props = error.properties;
-        const explanation = props.explanation || error.message || 'Unknown template error';
-        const location = props.file ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})` : '';
-        throw new S3DocxParsingError(`S3 template parsing failed: ${explanation}${location}`);
+        const props = error.properties
+        const explanation = props.explanation || error.message || 'Unknown template error'
+        const location = props.file
+          ? ` (Location: ${props.file}${props.offset ? ` at position ${props.offset}` : ''})`
+          : ''
+        throw new S3DocxParsingError(`S3 template parsing failed: ${explanation}${location}`)
       }
-      
+
       // Handle array of errors
       if (error.properties && error.properties.errors instanceof Array) {
         const errorMessages = error.properties.errors
           .map((err: any) => {
-            const explanation = err.properties?.explanation || err.message || 'Unknown error';
-            return explanation;
+            const explanation = err.properties?.explanation || err.message || 'Unknown error'
+            return explanation
           })
-          .join('; ');
-        throw new S3DocxParsingError(`S3 template parsing failed: ${errorMessages}`);
+          .join('; ')
+        throw new S3DocxParsingError(`S3 template parsing failed: ${errorMessages}`)
       }
 
       // Handle other errors
@@ -513,7 +529,10 @@ export class TemplateService {
    * Create a complete template with sections and fields
    * Role validation is handled by RBAC guards
    */
-  async createTemplate(templateData: CreateTemplateFormDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
+  async createTemplate(
+    templateData: CreateTemplateFormDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
     // Validate required fields
     if (!templateData.templateConfig) {
       throw new TemplateConfigRequiredError()
@@ -540,7 +559,12 @@ export class TemplateService {
           if (field.roleRequired !== undefined && field.roleRequired !== null) {
             // Compare values directly (do not hardcode 'TRAINER' or 'TRAINEE')
             if (String(field.roleRequired) !== String(section.editBy)) {
-              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+              throw new RoleRequiredMismatchError(
+                field.fieldName,
+                section.label,
+                String(field.roleRequired),
+                String(section.editBy)
+              )
             }
           }
 
@@ -553,10 +577,11 @@ export class TemplateService {
 
           // Check if PART field has at least one child field
           if (field.fieldType === 'PART') {
-            const hasChildFields = section.fields.some(childField => 
-              childField.parentTempId === field.tempId || 
-              childField.parentTempId === field.fieldName ||
-              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            const hasChildFields = section.fields.some(
+              (childField) =>
+                childField.parentTempId === field.tempId ||
+                childField.parentTempId === field.fieldName ||
+                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
             )
             if (!hasChildFields) {
               throw new PartFieldMissingChildrenError(field.fieldName, section.label)
@@ -578,7 +603,7 @@ export class TemplateService {
       }
 
       // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections)
 
       // Create template with all nested data
       // Use alternative method for large templates if needed
@@ -595,47 +620,49 @@ export class TemplateService {
       }
     } catch (error) {
       console.error('Template creation error:', error)
-      
+
       // Re-throw known custom errors as-is
-      if (error instanceof TemplateConfigRequiredError ||
-          error instanceof DepartmentNotFoundError ||
-          error instanceof TemplateNameAlreadyExistsError ||
-          error instanceof RoleRequiredMismatchError ||
-          error instanceof SignatureFieldMissingRoleError ||
-          error instanceof PartFieldMissingChildrenError ||
-          error instanceof ToggleDependentSectionMissingControlError ||
-          error instanceof ValueListFieldMissingOptionsError ||
-          error instanceof ValueListFieldInvalidOptionsError ||
-          error instanceof MissingSignatureFieldError ||
-          error instanceof MissingFinalScoreFieldsError ||
-          error instanceof DuplicateFinalScoreFieldsError ||
-          error instanceof InvalidFieldTypeError ||
-          error instanceof DuplicateFieldNameError ||
-          error instanceof InvalidReferenceError) {
+      if (
+        error instanceof TemplateConfigRequiredError ||
+        error instanceof DepartmentNotFoundError ||
+        error instanceof TemplateNameAlreadyExistsError ||
+        error instanceof RoleRequiredMismatchError ||
+        error instanceof SignatureFieldMissingRoleError ||
+        error instanceof PartFieldMissingChildrenError ||
+        error instanceof ToggleDependentSectionMissingControlError ||
+        error instanceof ValueListFieldMissingOptionsError ||
+        error instanceof ValueListFieldInvalidOptionsError ||
+        error instanceof MissingSignatureFieldError ||
+        error instanceof MissingFinalScoreFieldsError ||
+        error instanceof DuplicateFinalScoreFieldsError ||
+        error instanceof InvalidFieldTypeError ||
+        error instanceof DuplicateFieldNameError ||
+        error instanceof InvalidReferenceError
+      ) {
         throw error
       }
-      
+
       // Handle Prisma validation errors more gracefully
       if (error.message && error.message.includes('Invalid value for argument')) {
         // Extract field type validation errors
-        const fieldTypeMatch = error.message.match(/fieldType.*Expected ([^.]+)/);
+        const fieldTypeMatch = error.message.match(/fieldType.*Expected ([^.]+)/)
         if (fieldTypeMatch) {
           throw new InvalidFieldTypeError()
         }
       }
-      
+
       // Handle unique constraint violations
       if (error.message && error.message.includes('Unique constraint failed')) {
         if (error.message.includes('sectionId') && error.message.includes('fieldName')) {
           throw new DuplicateFieldNameError()
         }
       }
-      
+
       // Handle other specific errors
       if (error.message && error.message.includes('Foreign key constraint failed')) {
         throw new InvalidReferenceError()
       }
-      
+
       // Default error handling
       throw new TemplateCreationFailedError(error.message || 'An unexpected error occurred while creating the template')
     }
@@ -675,7 +702,7 @@ export class TemplateService {
       description: template.description,
       departmentId: template.departmentId,
       templateContent: template.templateContent,
-      sections: template.sections.map(section => ({
+      sections: template.sections.map((section) => ({
         id: section.id,
         label: section.label,
         displayOrder: section.displayOrder,
@@ -687,7 +714,7 @@ export class TemplateService {
           .filter((field) => !field.parentId) // Get only parent fields first
           .map((field) => this.buildFieldWithChildren(field, section.fields))
       }))
-    };
+    }
 
     return {
       success: true,
@@ -812,7 +839,7 @@ export class TemplateService {
       success: true,
       data: templates,
       message: DEPARTMENT_TEMPLATES_RETRIEVED_SUCCESSFULLY
-    };
+    }
   }
 
   /**
@@ -825,15 +852,15 @@ export class TemplateService {
       success: true,
       data: templates,
       message: TEMPLATES_RETRIEVED_SUCCESSFULLY
-    };
+    }
   }
 
   /**
    * Change template status
    */
   async changeTemplateStatus(
-    templateId: string, 
-    newStatus: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    templateId: string,
+    newStatus: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED',
     userContext: { userId: string; roleName: string; departmentId?: string }
   ) {
     // Check if template exists
@@ -850,9 +877,11 @@ export class TemplateService {
     }
 
     // Only allow PUBLISHED ↔ DISABLED transitions
-    if ((currentStatus === 'PUBLISHED' && newStatus !== 'DISABLED') ||
-        (currentStatus === 'DISABLED' && newStatus !== 'PUBLISHED') ||
-        (currentStatus !== 'PUBLISHED' && currentStatus !== 'DISABLED')) {
+    if (
+      (currentStatus === 'PUBLISHED' && newStatus !== 'DISABLED') ||
+      (currentStatus === 'DISABLED' && newStatus !== 'PUBLISHED') ||
+      (currentStatus !== 'PUBLISHED' && currentStatus !== 'DISABLED')
+    ) {
       throw new InvalidStatusTransitionError(currentStatus, newStatus)
     }
 
@@ -866,8 +895,8 @@ export class TemplateService {
 
     // Update template status
     const updatedTemplate = await this.templateRepository.updateTemplateStatus(
-      templateId, 
-      newStatus, 
+      templateId,
+      newStatus,
       userContext.userId,
       false // This is not a review action
     )
@@ -923,7 +952,8 @@ export class TemplateService {
       )
 
       // Prepare email notification
-      const creatorName = `${templateWithCreator.createdByUser.firstName} ${templateWithCreator.createdByUser.lastName}`.trim()
+      const creatorName =
+        `${templateWithCreator.createdByUser.firstName} ${templateWithCreator.createdByUser.lastName}`.trim()
       const reviewerName = `${reviewerInfo.firstName} ${reviewerInfo.lastName}`.trim()
       const creationDate = new Date(templateWithCreator.createdAt).toLocaleDateString()
       const reviewDate = new Date().toLocaleDateString()
@@ -976,14 +1006,13 @@ export class TemplateService {
           emailSent
         }
       }
-
     } catch (error) {
       console.error('Template review failed:', error)
-      
+
       if (error instanceof TemplateNotFoundError) {
         throw error
       }
-      
+
       if (error.message?.includes('PENDING status')) {
         throw new Error('Template must be in PENDING status to be reviewed')
       }
@@ -1037,7 +1066,12 @@ export class TemplateService {
           // Only validate when roleRequired is explicitly provided
           if (field.roleRequired !== undefined && field.roleRequired !== null) {
             if (String(field.roleRequired) !== String(section.editBy)) {
-              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+              throw new RoleRequiredMismatchError(
+                field.fieldName,
+                section.label,
+                String(field.roleRequired),
+                String(section.editBy)
+              )
             }
           }
 
@@ -1057,7 +1091,7 @@ export class TemplateService {
       this.validateTemplateBusinessRules(templateData.sections)
 
       // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections)
 
       // Update rejected template (recreate with preserved metadata)
       const result = await this.templateRepository.updateRejectedTemplate(
@@ -1122,7 +1156,12 @@ export class TemplateService {
           // Only validate when roleRequired is explicitly provided
           if (field.roleRequired !== undefined && field.roleRequired !== null) {
             if (String(field.roleRequired) !== String(section.editBy)) {
-              throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+              throw new RoleRequiredMismatchError(
+                field.fieldName,
+                section.label,
+                String(field.roleRequired),
+                String(section.editBy)
+              )
             }
           }
 
@@ -1135,10 +1174,11 @@ export class TemplateService {
 
           // Check if PART field has at least one child field
           if (field.fieldType === 'PART') {
-            const hasChildFields = section.fields.some(childField => 
-              childField.parentTempId === field.tempId || 
-              childField.parentTempId === field.fieldName ||
-              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            const hasChildFields = section.fields.some(
+              (childField) =>
+                childField.parentTempId === field.tempId ||
+                childField.parentTempId === field.fieldName ||
+                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
             )
             if (!hasChildFields) {
               throw new PartFieldMissingChildrenError(field.fieldName, section.label)
@@ -1147,10 +1187,11 @@ export class TemplateService {
 
           // Check if CHECK_BOX field has at least one child field
           if (field.fieldType === 'CHECK_BOX') {
-            const hasChildFields = section.fields.some(childField => 
-              childField.parentTempId === field.tempId || 
-              childField.parentTempId === field.fieldName ||
-              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            const hasChildFields = section.fields.some(
+              (childField) =>
+                childField.parentTempId === field.tempId ||
+                childField.parentTempId === field.fieldName ||
+                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
             )
             if (!hasChildFields) {
               throw new CheckBoxFieldMissingChildrenError(field.fieldName, section.label)
@@ -1172,7 +1213,7 @@ export class TemplateService {
       }
 
       // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections);
+      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections)
 
       // Update draft template (recreate with preserved metadata)
       const result = await this.templateRepository.updateDraftTemplate(
@@ -1231,7 +1272,11 @@ export class TemplateService {
     }
 
     // Update template
-    const updatedTemplate = await this.templateRepository.updateTemplateBasicInfo(templateId, updateData, userContext.userId)
+    const updatedTemplate = await this.templateRepository.updateTemplateBasicInfo(
+      templateId,
+      updateData,
+      userContext.userId
+    )
 
     return {
       success: true,
@@ -1246,34 +1291,34 @@ export class TemplateService {
    * Note: This method should be called BEFORE field name processing to maintain original nested structure
    */
   private generateNestedSchemaFromSections(sections: any[]): Record<string, any> {
-    const schema: Record<string, any> = {};
-    
+    const schema: Record<string, any> = {}
+
     // Sort sections by displayOrder first
-    const sortedSections = [...sections].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-    
-    sortedSections.forEach(section => {
+    const sortedSections = [...sections].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+
+    sortedSections.forEach((section) => {
       // Sort fields by displayOrder within each section
-      const sortedFields = [...section.fields].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-      
+      const sortedFields = [...section.fields].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+
       // Build field maps for parent-child relationships using original field names
-      const fieldByTempId = new Map<string, any>();
-      const fieldByName = new Map<string, any>();
-      const rootFields: any[] = [];
-      
+      const fieldByTempId = new Map<string, any>()
+      const fieldByName = new Map<string, any>()
+      const rootFields: any[] = []
+
       // First pass: create field maps and identify parent fields
       sortedFields.forEach((field: any) => {
         // For schema generation, use original field names (without prefix processing)
-        let originalFieldName = field.fieldName;
-        
+        let originalFieldName = field.fieldName
+
         // If this field has a parent, use the original base name for schema structure
         if (field.parentTempId) {
           // Extract the base field name if it's been processed (remove parent prefix)
-          const parentField = section.fields.find((f: any) => f.tempId === field.parentTempId);
+          const parentField = section.fields.find((f: any) => f.tempId === field.parentTempId)
           if (parentField && field.fieldName.startsWith(`${parentField.fieldName}_`)) {
-            originalFieldName = field.fieldName.replace(`${parentField.fieldName}_`, '');
+            originalFieldName = field.fieldName.replace(`${parentField.fieldName}_`, '')
           }
         }
-        
+
         const fieldObj = {
           name: originalFieldName,
           tempId: field.tempId,
@@ -1281,79 +1326,79 @@ export class TemplateService {
           type: this.getSchemaTypeFromFieldType(field.fieldType),
           displayOrder: field.displayOrder || 0,
           children: [] as any[]
-        };
-        
+        }
+
         // Map by both tempId (if exists) and original field name
         if (field.tempId) {
-          fieldByTempId.set(field.tempId, fieldObj);
+          fieldByTempId.set(field.tempId, fieldObj)
         }
-        fieldByName.set(originalFieldName, fieldObj);
-        
+        fieldByName.set(originalFieldName, fieldObj)
+
         // If no parent, it's a root field
         if (!field.parentTempId) {
-          rootFields.push(fieldObj);
+          rootFields.push(fieldObj)
         }
-      });
-      
+      })
+
       // Second pass: build parent-child relationships using tempId references
       sortedFields.forEach((field: any) => {
         if (field.parentTempId) {
-          const parentField = fieldByTempId.get(field.parentTempId);
-          
+          const parentField = fieldByTempId.get(field.parentTempId)
+
           // Get original field name for schema
-          let originalFieldName = field.fieldName;
+          let originalFieldName = field.fieldName
           if (parentField && field.fieldName.startsWith(`${parentField.name}_`)) {
-            originalFieldName = field.fieldName.replace(`${parentField.name}_`, '');
+            originalFieldName = field.fieldName.replace(`${parentField.name}_`, '')
           }
-          
-          const currentField = fieldByName.get(originalFieldName);
-          
+
+          const currentField = fieldByName.get(originalFieldName)
+
           if (parentField && currentField) {
-            parentField.children.push(currentField);
+            parentField.children.push(currentField)
           }
         }
-      });
-      
+      })
+
       // Sort root fields by displayOrder
-      rootFields.sort((a, b) => a.displayOrder - b.displayOrder);
-      
+      rootFields.sort((a, b) => a.displayOrder - b.displayOrder)
+
       // Build nested schema structure
-      this.buildNestedSchemaFromFields(rootFields, schema);
-    });
-    
-    return schema;
+      this.buildNestedSchemaFromFields(rootFields, schema)
+    })
+
+    return schema
   }
-  
+
   /**
    * Recursively build nested schema structure from field hierarchy
    * Children are also sorted by displayOrder
    */
   private buildNestedSchemaFromFields(fields: any[], target: Record<string, any>): void {
-    fields.forEach(field => {
+    fields.forEach((field) => {
       if (field.children && field.children.length > 0) {
         // Sort children by displayOrder before processing
-        const sortedChildren = [...field.children].sort((a, b) => a.displayOrder - b.displayOrder);
-        
+        const sortedChildren = [...field.children].sort((a, b) => a.displayOrder - b.displayOrder)
+
         // This field has children - create an object
         // For PART type fields, use the field name as the object key
         if (field.type === 'part') {
-          target[field.name] = {};
-          this.buildNestedSchemaFromFields(sortedChildren, target[field.name]);
+          target[field.name] = {}
+          this.buildNestedSchemaFromFields(sortedChildren, target[field.name])
         } else {
           // Non-part field with children (shouldn't happen but handle anyway)
-          target[field.name] = {};
-          this.buildNestedSchemaFromFields(sortedChildren, target[field.name]);
+          target[field.name] = {}
+          this.buildNestedSchemaFromFields(sortedChildren, target[field.name])
         }
       } else {
         // Leaf field - set default value based on type
         // Skip PART type fields without children
         if (field.type !== 'part') {
-          target[field.name] = this.getDefaultValueForType(field.type);
+          target[field.name] = this.getDefaultValueForType(field.type)
         }
       }
-    });
+    })
   }
-  
+
   /**
    * Get schema type from FieldType enum
    */
@@ -1361,42 +1406,45 @@ export class TemplateService {
     switch (fieldType) {
       case 'TOGGLE':
       case 'SECTION_CONTROL_TOGGLE':
-        return 'boolean';
+        return 'boolean'
       case 'NUMBER':
       case 'FINAL_SCORE_NUM':
-        return 'number';
+        return 'number'
       case 'PART':
       case 'CHECK_BOX':
-        return 'part'; // Special type for parent/section fields
+        return 'part' // Special type for parent/section fields
       case 'TEXT':
       case 'IMAGE':
       case 'SIGNATURE_DRAW':
       case 'SIGNATURE_IMG':
       case 'VALUE_LIST':
       default:
-        return 'string';
+        return 'string'
     }
   }
-  
+
   /**
    * Get default value for schema type
    */
   private getDefaultValueForType(type: string): any {
     switch (type) {
       case 'boolean':
-        return false;
+        return false
       case 'number':
-        return 0;
+        return 0
       case 'string':
       default:
-        return '';
+        return ''
     }
   }
 
   /**
    * Create a new version of an existing template
    */
-  async createTemplateVersion(templateVersionData: CreateTemplateVersionDto, userContext: { userId: string; roleName: string; departmentId?: string }) {
+  async createTemplateVersion(
+    templateVersionData: CreateTemplateVersionDto,
+    userContext: { userId: string; roleName: string; departmentId?: string }
+  ) {
     // Check if original template exists
     const originalTemplate = await this.templateRepository.findTemplateById(templateVersionData.originalTemplateId)
     if (!originalTemplate) {
@@ -1411,7 +1459,12 @@ export class TemplateService {
         if (field.roleRequired !== undefined && field.roleRequired !== null) {
           // Compare values directly
           if (String(field.roleRequired) !== String(section.editBy)) {
-            throw new RoleRequiredMismatchError(field.fieldName, section.label, String(field.roleRequired), String(section.editBy))
+            throw new RoleRequiredMismatchError(
+              field.fieldName,
+              section.label,
+              String(field.roleRequired),
+              String(section.editBy)
+            )
           }
         }
 
@@ -1424,10 +1477,11 @@ export class TemplateService {
 
         // Check if PART field has at least one child field
         if (field.fieldType === 'PART') {
-          const hasChildFields = section.fields.some(childField => 
-            childField.parentTempId === field.tempId || 
-            childField.parentTempId === field.fieldName ||
-            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          const hasChildFields = section.fields.some(
+            (childField) =>
+              childField.parentTempId === field.tempId ||
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
           )
           if (!hasChildFields) {
             throw new PartFieldMissingChildrenError(field.fieldName, section.label)
@@ -1436,10 +1490,11 @@ export class TemplateService {
 
         // Check if CHECK_BOX field has at least one child field
         if (field.fieldType === 'CHECK_BOX') {
-          const hasChildFields = section.fields.some(childField => 
-            childField.parentTempId === field.tempId || 
-            childField.parentTempId === field.fieldName ||
-            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          const hasChildFields = section.fields.some(
+            (childField) =>
+              childField.parentTempId === field.tempId ||
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
           )
           if (!hasChildFields) {
             throw new CheckBoxFieldMissingChildrenError(field.fieldName, section.label)
@@ -1458,25 +1513,25 @@ export class TemplateService {
 
     // Generate appropriate name for the new version
     let finalTemplateName = templateVersionData.name
-    
+
     // Check if template name already exists
     const nameExists = await this.templateRepository.templateNameExists(templateVersionData.name)
     if (nameExists) {
       // Get the version number that will be assigned to automatically generate versioned name
       // First determine the first version ID for this template group
       const firstVersionId = originalTemplate.referFirstVersionId || templateVersionData.originalTemplateId
-      
+
       // Get max version and calculate new version number
       const maxVersion = await this.templateRepository.getMaxVersionForTemplate(firstVersionId)
       const newVersion = maxVersion + 1
-      
+
       // Append version suffix to the name
       finalTemplateName = `${templateVersionData.name} v.${newVersion}`
     }
 
     try {
       // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections);
+      const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections)
 
       // Create new template version with all nested data
       const result = await this.templateRepository.createTemplateVersion(
@@ -1545,7 +1600,6 @@ export class TemplateService {
       // Convert DOCX to PDF using the shared service
       const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateContent)
       return pdfBuffer
-
     } catch (error) {
       if (error instanceof TemplateNotFoundError) {
         throw error
@@ -1572,7 +1626,6 @@ export class TemplateService {
       // Convert DOCX to PDF using the shared service
       const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateForm.templateConfig)
       return pdfBuffer
-
     } catch (error) {
       if (error instanceof TemplateNotFoundError) {
         throw error
@@ -1597,7 +1650,7 @@ export class TemplateService {
       }
 
       const zip = new JSZip()
-      
+
       // Add template content PDF if exists
       if (templateForm.templateContent) {
         try {
@@ -1621,7 +1674,6 @@ export class TemplateService {
       // Generate ZIP buffer
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
       return zipBuffer
-
     } catch (error) {
       if (error instanceof TemplateNotFoundError) {
         throw error
@@ -1636,10 +1688,10 @@ export class TemplateService {
   private validateTemplateBusinessRules(sections: any[]) {
     // Collect all fields from all sections
     const allFields: any[] = []
-    
+
     for (const section of sections) {
       if (!section.fields || !Array.isArray(section.fields)) continue
-      
+
       // 1. Check toggle dependent sections
       if (section.isToggleDependent === true) {
         const hasControlToggle = section.fields.some((field: any) => field.fieldType === 'SECTION_CONTROL_TOGGLE')
@@ -1647,14 +1699,14 @@ export class TemplateService {
           throw new ToggleDependentSectionMissingControlError(section.label)
         }
       }
-      
+
       // 2. Check VALUE_LIST fields have options
       for (const field of section.fields) {
         if (field.fieldType === 'VALUE_LIST') {
           if (!field.options) {
             throw new ValueListFieldMissingOptionsError(field.fieldName, section.label)
           }
-          
+
           // Validate options format
           try {
             const options = typeof field.options === 'string' ? JSON.parse(field.options) : field.options
@@ -1665,20 +1717,21 @@ export class TemplateService {
             throw new ValueListFieldInvalidOptionsError(field.fieldName, section.label)
           }
         }
-        
+
         allFields.push(field)
       }
-      
+
       // 3. Check CHECK_BOX fields validation
       for (const field of section.fields) {
         if (field.fieldType === 'CHECK_BOX') {
           // Find all child fields of this CHECK_BOX
-          const childFields = section.fields.filter((childField: any) => 
-            childField.parentTempId === field.tempId || 
-            childField.parentTempId === field.fieldName ||
-            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          const childFields = section.fields.filter(
+            (childField: any) =>
+              childField.parentTempId === field.tempId ||
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
           )
-          
+
           // Validate that all child fields are TEXT type only
           for (const childField of childFields) {
             if (childField.fieldType !== 'TEXT') {
@@ -1687,45 +1740,58 @@ export class TemplateService {
           }
         }
       }
-      
+
       // 4. Check PART fields validation
       for (const field of section.fields) {
         if (field.fieldType === 'PART') {
           // Find all child fields of this PART
-          const childFields = section.fields.filter((childField: any) => 
-            childField.parentTempId === field.tempId || 
-            childField.parentTempId === field.fieldName ||
-            (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+          const childFields = section.fields.filter(
+            (childField: any) =>
+              childField.parentTempId === field.tempId ||
+              childField.parentTempId === field.fieldName ||
+              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
           )
-          
+
           // Validate that PART children don't include restricted field types
-          const restrictedTypes = ['PART', 'TOGGLE', 'SECTION_CONTROL_TOGGLE', 'FINAL_SCORE_TEXT', 'FINAL_SCORE_NUM', 'CHECK_BOX']
+          const restrictedTypes = [
+            'PART',
+            'TOGGLE',
+            'SECTION_CONTROL_TOGGLE',
+            'FINAL_SCORE_TEXT',
+            'FINAL_SCORE_NUM',
+            'CHECK_BOX'
+          ]
           for (const childField of childFields) {
             if (restrictedTypes.includes(childField.fieldType)) {
-              throw new PartFieldInvalidChildTypeError(field.fieldName, childField.fieldType, childField.fieldName, restrictedTypes)
+              throw new PartFieldInvalidChildTypeError(
+                field.fieldName,
+                childField.fieldType,
+                childField.fieldName,
+                restrictedTypes
+              )
             }
           }
         }
       }
     }
-    
+
     // 5. Check at least one signature field
-    const hasSignatureField = allFields.some((field: any) => 
-      field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG'
+    const hasSignatureField = allFields.some(
+      (field: any) => field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG'
     )
     if (!hasSignatureField) {
       throw new MissingSignatureFieldError()
     }
-    
+
     // 6. Check at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field
     const finalScoreNumFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_NUM')
     const finalScoreTextFields = allFields.filter((field: any) => field.fieldType === 'FINAL_SCORE_TEXT')
-    
+
     // Must have at least one final score field (either NUM or TEXT)
     if (finalScoreNumFields.length === 0 && finalScoreTextFields.length === 0) {
       throw new MissingFinalScoreFieldsError('FINAL_SCORE_NUM')
     }
-    
+
     // Check maximum one of each type
     if (finalScoreNumFields.length > 1) {
       throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_NUM')
@@ -1733,24 +1799,25 @@ export class TemplateService {
     if (finalScoreTextFields.length > 1) {
       throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
     }
-    
+
     // 7. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
     if (finalScoreTextFields.length > 0) {
       const finalScoreTextField = finalScoreTextFields[0]
       const hasFinalScoreNum = finalScoreNumFields.length > 0
-      
+
       if (!hasFinalScoreNum) {
         // If only FINAL_SCORE_TEXT exists (no FINAL_SCORE_NUM), options are required
         if (!finalScoreTextField.options) {
           throw new FinalScoreTextRequiredOptionsError()
         }
-        
+
         // Validate options format
         try {
-          const options = typeof finalScoreTextField.options === 'string' 
-            ? JSON.parse(finalScoreTextField.options) 
-            : finalScoreTextField.options
-            
+          const options =
+            typeof finalScoreTextField.options === 'string'
+              ? JSON.parse(finalScoreTextField.options)
+              : finalScoreTextField.options
+
           if (!options.items || !Array.isArray(options.items) || options.items.length === 0) {
             throw new FinalScoreTextInvalidOptionsError()
           }
@@ -1767,7 +1834,6 @@ export class TemplateService {
    */
   async exportTemplatePdfFromS3(templateContentUrl: string): Promise<Buffer> {
     try {
-
       if (!templateContentUrl) {
         throw new Error('Template content URL not found')
       }
@@ -1775,7 +1841,6 @@ export class TemplateService {
       // Convert DOCX to PDF using the shared service
       const pdfBuffer = await this.pdfConverterService.convertDocxToPdfFromS3(templateContentUrl)
       return pdfBuffer
-
     } catch (error) {
       if (error instanceof TemplateNotFoundError) {
         throw error
@@ -1795,7 +1860,7 @@ export class TemplateService {
     try {
       // First get template to verify ownership and department
       const template = await this.templateRepository.findTemplateById(templateId)
-      
+
       if (!template) {
         throw new TemplateNotFoundError(templateId)
       }
@@ -1817,12 +1882,8 @@ export class TemplateService {
         success: true,
         message: TEMPLATE_DELETED_SUCCESSFULLY(template.name)
       }
-
     } catch (error) {
-      if (
-        error instanceof TemplateNotFoundError ||
-        error instanceof InvalidDraftTemplateStatusError
-      ) {
+      if (error instanceof TemplateNotFoundError || error instanceof InvalidDraftTemplateStatusError) {
         throw error
       }
       throw new TemplateCreationFailedError(error.message)

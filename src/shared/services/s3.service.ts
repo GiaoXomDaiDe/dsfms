@@ -129,13 +129,13 @@ export class S3Service {
         Bucket: envConfig.AWS_S3_BUCKET_NAME,
         Key: key
       })
-      
+
       const response = await this.s3.send(command)
-      
+
       if (!response.Body) {
         throw new NotFoundException('Object body not found')
       }
-      
+
       return response.Body as Readable
     } catch (error: any) {
       const statusCode = error?.$metadata?.httpStatusCode

@@ -1,9 +1,6 @@
 import { Body, Controller, Get, Post, Patch, Param, Delete } from '@nestjs/common'
 import { GlobalFieldService } from './global-field.service'
-import {
-  CreateGlobalFieldDto,
-  UpdateGlobalFieldDto
-} from '~/routes/global-field/global-field.dto'
+import { CreateGlobalFieldDto, UpdateGlobalFieldDto } from '~/routes/global-field/global-field.dto'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 

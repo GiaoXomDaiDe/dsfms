@@ -274,10 +274,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.getAssessmentSections(
-      params.assessmentId,
-      userContext
-    )
+    return await this.assessmentService.getAssessmentSections(params.assessmentId, userContext)
   }
 
   /**
@@ -298,10 +295,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.getTraineeSections(
-      params.assessmentId,
-      userContext
-    )
+    return await this.assessmentService.getTraineeSections(params.assessmentId, userContext)
   }
 
   /**
@@ -322,10 +316,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.getAssessmentSectionFields(
-      assessmentSectionId,
-      userContext
-    )
+    return await this.assessmentService.getAssessmentSectionFields(assessmentSectionId, userContext)
   }
 
   /**
@@ -368,11 +359,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.toggleTraineeLock(
-      params.assessmentId,
-      body,
-      userContext
-    )
+    return await this.assessmentService.toggleTraineeLock(params.assessmentId, body, userContext)
   }
 
   /**
@@ -393,10 +380,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.submitAssessment(
-      params.assessmentId,
-      userContext
-    )
+    return await this.assessmentService.submitAssessment(params.assessmentId, userContext)
   }
 
   /**
@@ -438,10 +422,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.confirmAssessmentParticipation(
-      params.assessmentId,
-      userContext
-    )
+    return await this.assessmentService.confirmAssessmentParticipation(params.assessmentId, userContext)
   }
 
   /**
@@ -463,11 +444,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.approveRejectAssessment(
-      params.assessmentId,
-      body,
-      userContext
-    )
+    return await this.assessmentService.approveRejectAssessment(params.assessmentId, body, userContext)
   }
 
   /**
