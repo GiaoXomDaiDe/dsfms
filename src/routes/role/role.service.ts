@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import {
   createPermissionGroupNotFoundError,
   createPermissionGroupWithoutPermissionsError,
@@ -31,6 +31,8 @@ import { preventAdminDeletion } from '~/shared/validation/entity-operation.valid
 
 @Injectable()
 export class RoleService {
+  private readonly logger = new Logger(RoleService.name)
+
   constructor(
     private readonly roleRepo: RoleRepo,
     private readonly sharedPermissionRepo: SharedPermissionRepository,
@@ -87,6 +89,11 @@ export class RoleService {
 
     const mergedPermissionIds = Array.from(new Set([...permissionIds, ...defaultPermissionIds]))
 
+    this.logger.debug(
+      `Creating role '${data.name}' with ${permissionIds.length} group permission(s) + ${defaultPermissionIds.length} default permission(s)`
+    )
+    this.logger.debug(`Merged permission IDs: ${mergedPermissionIds.join(', ')}`)
+
     try {
       return await this.roleRepo.create({ createdById, data, permissionIds: mergedPermissionIds })
     } catch (error) {
@@ -104,14 +111,22 @@ export class RoleService {
     data: UpdateRoleBodyType
     updatedById: string
   }): Promise<RoleWithPermissionsType> {
+    const existingRole = await this.sharedRoleRepo.findRolebyId(id)
+    if (!existingRole) throw NotFoundRoleException
+
     let permissionIds: string[] | undefined
 
     if (data.permissionGroupCodes && data.permissionGroupCodes.length > 0) {
       permissionIds = await this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes)
+      this.logger.debug(
+        `Updating role '${existingRole.name}' - replacing permissions using group codes: ${data.permissionGroupCodes.join(', ')}`
+      )
+      this.logger.debug(`New permission IDs count: ${permissionIds.length}`)
+    } else {
+      this.logger.debug(
+        `Updating role '${existingRole.name}' without permissionGroupCodes - existing permissions will be preserved`
+      )
     }
-
-    const role = await this.sharedRoleRepo.findRolebyId(id)
-    if (!role) throw NotFoundRoleException
 
     try {
       return await this.roleRepo.update({ id, updatedById, data, permissionIds })
@@ -126,7 +141,9 @@ export class RoleService {
     const permissionGroups: Awaited<
       ReturnType<SharedPermissionGroupRepository['findActivePermissionMappingsByCodes']>
     > = await this.sharedPermissionGroupRepo.findActivePermissionMappingsByCodes(permissionGroupCodes)
-    console.log(permissionGroups.map((group) => group.permissions))
+    this.logger.debug(
+      `Resolved ${permissionGroups.length} permission group(s) from codes: ${permissionGroupCodes.join(', ')}`
+    )
     const foundCodes = new Set(permissionGroups.map((group) => group.permissionGroupCode))
     const missingCodes = permissionGroupCodes.filter((code) => !foundCodes.has(code))
     if (missingCodes.length > 0) {
@@ -139,12 +156,11 @@ export class RoleService {
         groupsWithoutPermissions.map((group) => group.permissionGroupCode)
       )
     }
-    console.log('group without pers', groupsWithoutPermissions)
 
     const permissionIds = permissionGroups.flatMap((group) =>
       group.permissions.map((permission) => permission.endpointPermissionId)
     )
-    console.log('permissions ID', permissionIds)
+    this.logger.debug(`Collected ${permissionIds.length} permission ID(s) from provided groups`)
     return Array.from(new Set(permissionIds))
   }
 
