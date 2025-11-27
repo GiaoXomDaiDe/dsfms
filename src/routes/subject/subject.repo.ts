@@ -1051,9 +1051,13 @@ export class SubjectRepo {
     const enrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
         traineeUserId,
-        status: SubjectEnrollmentStatus.ENROLLED,
+        status: {
+          notIn: [SubjectEnrollmentStatus.CANCELLED]
+        },
         subject: {
-          status: SubjectStatus.PLANNED,
+          status: {
+            notIn: [SubjectStatus.ARCHIVED]
+          },
           deletedAt: null,
           course: {
             deletedAt: null,

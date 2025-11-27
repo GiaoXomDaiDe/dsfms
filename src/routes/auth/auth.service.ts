@@ -38,9 +38,8 @@ export class AuthService {
       }
 
       // Validate password
-      // const isPasswordValid = await this.hashingService.comparePassword(password, user.passwordHash)
+      const isPasswordValid = await this.hashingService.comparePassword(password, user.passwordHash)
 
-      const isPasswordValid = password === user.passwordHash // Temporary plain text check (to be replaced with hashing)
       if (!isPasswordValid) {
         throw AuthErrors.InvalidCredentialsException
       }
