@@ -1,29 +1,45 @@
 import z from 'zod'
-import { CourseStatus, LevelStatus } from '~/shared/constants/course.constant'
+import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
+import { isoDatetimeSchema, nullableStringField, nullableUuidSchema } from '~/shared/helpers/zod-validation.helper'
+import {
+  courseCodeSchema,
+  courseLevelSchema,
+  courseNameSchema,
+  coursePassScoreSchema,
+  courseStatusSchema
+} from '~/shared/validation/course.validation'
 
 export const CourseSchema = z.object({
   id: z.uuid(),
   departmentId: z.uuid(),
-  name: z.string().min(1).max(255),
-  description: z.string().optional().nullable(),
-  code: z.string().min(1).max(20),
+  name: courseNameSchema,
+  description: nullableStringField(z.string()),
+  code: courseCodeSchema,
   maxNumTrainee: z.number().int().positive(),
-  venue: z.string().optional().nullable(),
-  note: z.string().optional().nullable(),
-  passScore: z.number().min(0).max(100).optional().nullable(),
-  startDate: z.iso.datetime().transform((d) => new Date(d)),
-  endDate: z.iso.datetime().transform((d) => new Date(d)),
-  level: z.enum(LevelStatus),
-  status: z.enum(CourseStatus).default('PLANNED'),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
-  deletedAt: z.iso
-    .datetime()
-    .transform((d) => new Date(d))
-    .nullable(),
-  createdAt: z.iso.datetime().transform((d) => new Date(d)),
-  updatedAt: z.iso.datetime().transform((d) => new Date(d))
+  venue: nullableStringField(z.string()),
+  note: nullableStringField(z.string()),
+  passScore: coursePassScoreSchema.optional(),
+  startDate: isoDatetimeSchema,
+  endDate: isoDatetimeSchema,
+  level: courseLevelSchema,
+  status: courseStatusSchema.default('PLANNED'),
+  createdById: nullableUuidSchema,
+  updatedById: nullableUuidSchema,
+  deletedById: nullableUuidSchema,
+  deletedAt: isoDatetimeSchema.nullable(),
+  createdAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema
+})
+
+export const TeachingCourseSchema = CourseSchema.pick({
+  id: true,
+  code: true,
+  name: true,
+  status: true,
+  startDate: true,
+  endDate: true
+}).extend({
+  role: z.enum(SubjectInstructorRole)
 })
 
 export const CourseIdParamsSchema = z.object({
@@ -31,4 +47,5 @@ export const CourseIdParamsSchema = z.object({
 })
 
 export type CourseType = z.infer<typeof CourseSchema>
+export type TeachingCourseType = z.infer<typeof TeachingCourseSchema>
 export type CourseIdParamsType = string

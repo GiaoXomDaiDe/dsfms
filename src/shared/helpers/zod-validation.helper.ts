@@ -89,7 +89,7 @@ export const optionalAlphabeticCharacter = (value: string | null | undefined) =>
     return true
   }
 
-  const normalized = value.trim()
+  const normalized = normalizeWhitespace(value)
 
   return normalized.length === 0 || hasAlphabeticCharacter(normalized)
 }
@@ -102,3 +102,48 @@ export const urlSchema = nullableStringField(z.url())
 
 /** UUID hợp lệ: chấp nhận null hoặc chuỗi rỗng (được chuyển thành null) */
 export const nullableUuidSchema = nullableStringField(z.uuid())
+
+type NullableNumberOptions = {
+  acceptUndefined?: boolean
+  coerceInteger?: boolean
+}
+
+/**
+ * Chuẩn hoá input number: chấp nhận string/number/null/undefined, trim chuỗi, chuyển rỗng thành null,
+ * và optional ép kiểu integer.
+ */
+export const nullableNumberField = (
+  schema: z.ZodNumber,
+  { acceptUndefined = true, coerceInteger = false }: NullableNumberOptions = {}
+) => {
+  const target = acceptUndefined ? z.union([schema, z.null(), z.undefined()]) : z.union([schema, z.null()])
+
+  return z.preprocess((value) => {
+    if (value === undefined) {
+      return acceptUndefined ? undefined : value
+    }
+
+    if (value === null) {
+      return null
+    }
+
+    const normalizeNumber = (numericValue: number) =>
+      coerceInteger ? (Number.isNaN(numericValue) ? numericValue : Math.trunc(numericValue)) : numericValue
+
+    if (typeof value === 'number') {
+      return normalizeNumber(value)
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (!trimmed) {
+        return null
+      }
+
+      const parsed = Number(trimmed)
+      return Number.isNaN(parsed) ? value : normalizeNumber(parsed)
+    }
+
+    return value
+  }, target)
+}

@@ -7,8 +7,8 @@ import {
   TraineeCannotHaveTrainerProfileException,
   UserNotFoundException
 } from '~/routes/profile/profile.error'
-import { ResetPasswordBodyType, UpdateProfileBodyType, UpdateSignatureBodyType } from '~/routes/profile/profile.model'
-import type { GetUserProfileResType } from '~/routes/user/user.model'
+import { ResetPasswordBodyType, UpdateProfileBodyType } from '~/routes/profile/profile.model'
+import type { GetUserWithProfileResType } from '~/routes/user/user.model'
 import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
@@ -23,7 +23,7 @@ export class ProfileService {
     private readonly hashingService: HashingService
   ) {}
 
-  async getProfile(userId: string): Promise<GetUserProfileResType> {
+  async getProfile(userId: string): Promise<GetUserWithProfileResType> {
     const user = await this.sharedUserRepository.findUniqueIncludeProfile(userId)
 
     if (!user) {
@@ -38,7 +38,7 @@ export class ProfileService {
   }: {
     userId: string
     body: UpdateProfileBodyType
-  }): Promise<GetUserProfileResType> {
+  }): Promise<GetUserWithProfileResType> {
     try {
       const currentUser = await this.sharedUserRepository.findUniqueIncludeProfile(userId)
       if (!currentUser) {
