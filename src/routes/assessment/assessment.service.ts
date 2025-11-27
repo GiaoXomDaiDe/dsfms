@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, ForbiddenException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common'
 import { CourseStatus, SubjectStatus, AssessmentResult } from '@prisma/client'
 import PizZip = require('pizzip')
 import Docxtemplater = require('docxtemplater')
@@ -123,7 +123,7 @@ export class AssessmentService {
         endDate = new Date(course.endDate)
       } else {
         // This should not happen due to Zod validation, but keeping for safety
-        throw new Error('Either subjectId or courseId must be provided')
+        throw new BadRequestException('Either subjectId or courseId must be provided')
       }
 
       // Step 2.1: Validate template fields compatibility with subject/course scoring requirements
@@ -139,12 +139,12 @@ export class AssessmentService {
       if (entityPassScore === null || entityPassScore === undefined) {
         // Entity doesn't use score - template should not require score
         if (hasFinalScoreNumField) {
-          throw new Error(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+          throw new BadRequestException(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
         }
       } else {
         // Entity uses score - template must have score field
         if (!hasFinalScoreNumField) {
-          throw new Error(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+          throw new BadRequestException(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
         }
       }
 
@@ -340,7 +340,7 @@ export class AssessmentService {
         }
       } else {
         // This should not happen due to Zod validation, but keeping for safety
-        throw new Error('Either subjectId or courseId must be provided')
+        throw new BadRequestException('Either subjectId or courseId must be provided')
       }
 
       // Step 2.1: Validate template fields compatibility with subject/course scoring requirements
@@ -356,12 +356,12 @@ export class AssessmentService {
       if (entityPassScore === null || entityPassScore === undefined) {
         // Entity doesn't use score - template should not require score
         if (hasFinalScoreNumField) {
-          throw new Error(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
+          throw new BadRequestException(`The current Template need Final Score to assess Trainee, but this ${entityType} does not use score to assess Trainee! Please report this if this is false error`)
         }
       } else {
         // Entity uses score - template must have score field
         if (!hasFinalScoreNumField) {
-          throw new Error(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
+          throw new BadRequestException(`This ${entityType} requires final score to assess Trainee, but the current Template does not have field to assess score! Please report this if this is false error`)
         }
       }
 
@@ -578,7 +578,7 @@ export class AssessmentService {
         throw new ForbiddenException('You do not have permission to access assessments in this subject')
       }
 
-      throw new Error('Failed to get subject assessments')
+      throw new InternalServerErrorException('Failed to get subject assessments')
     }
   }
 
@@ -608,7 +608,7 @@ export class AssessmentService {
         throw new ForbiddenException('You are not assigned to this course')
       }
       
-      if (error.message === 'Trainee has no assessments in this course') {
+      if (error.message === 'Trainee has no assessments in course') {
         throw new ForbiddenException('You have no assessments in this course')
       }
       
@@ -620,7 +620,7 @@ export class AssessmentService {
         throw new ForbiddenException('You do not have permission to access assessments in this course')
       }
 
-      throw new Error('Failed to get course assessments')
+      throw new InternalServerErrorException('Failed to get course assessments')
     }
   }
 

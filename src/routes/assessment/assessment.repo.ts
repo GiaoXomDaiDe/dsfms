@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { AssessmentResult, AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
+import z from 'zod'
 import {
   AssessmentFormResType,
   CreateAssessmentBodyType,
@@ -17,7 +18,8 @@ import {
   GetUserAssessmentEventsResType,
   UpdateAssessmentEventBodyType,
   UpdateAssessmentEventParamsType,
-  UpdateAssessmentEventResType
+  UpdateAssessmentEventResType,
+  AssessmentEventStatus
 } from './assessment.model'
 import { 
   AssessmentSectionNotFoundError,
@@ -2849,7 +2851,7 @@ export class AssessmentRepo {
   async getAssessmentEvents(
     page: number = 1,
     limit: number = 20,
-    status?: AssessmentStatus,
+    status?: z.infer<typeof AssessmentEventStatus>,
     subjectId?: string,
     courseId?: string,
     templateId?: string,
@@ -2941,39 +2943,40 @@ export class AssessmentRepo {
           select: { id: true, name: true, status: true }
         })
 
-        // Calculate status based on occurrence date and assessment completion
-        let eventStatus: AssessmentStatus
-        const today = new Date()
-        const occuranceDate = new Date(event.occuranceDate)
+        // Calculate status based on all assessments in the event
+        let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
         
-        // Set time to start of day for comparison
-        today.setHours(0, 0, 0, 0)
-        occuranceDate.setHours(0, 0, 0, 0)
+        // Get all assessments for this event
+        const allAssessments = await this.prisma.assessmentForm.findMany({
+          where: {
+            name: event.name,
+            subjectId: event.subjectId,
+            courseId: event.courseId,
+            occuranceDate: event.occuranceDate,
+            templateId: event.templateId
+          },
+          select: { status: true }
+        })
 
-        if (occuranceDate > today) {
-          // Future date - NOT_STARTED
+        // Check if all assessments are NOT_STARTED
+        const allNotStarted = allAssessments.every(assessment => 
+          assessment.status === 'NOT_STARTED'
+        )
+
+        if (allNotStarted) {
           eventStatus = 'NOT_STARTED'
-        } else if (occuranceDate.getTime() === today.getTime()) {
-          // Today - ON_GOING
-          eventStatus = 'ON_GOING'
         } else {
-          // Past date - check if all assessments are finished
-          const allAssessments = await this.prisma.assessmentForm.findMany({
-            where: {
-              name: event.name,
-              subjectId: event.subjectId,
-              courseId: event.courseId,
-              occuranceDate: event.occuranceDate,
-              templateId: event.templateId
-            },
-            select: { status: true }
-          })
-
+          // Check if all assessments are finished (APPROVED or CANCELLED)
           const allFinished = allAssessments.every(assessment => 
-            assessment.status === 'CANCELLED' || assessment.status === 'APPROVED'
+            assessment.status === 'APPROVED' || assessment.status === 'CANCELLED'
           )
 
-          eventStatus = allFinished ? 'APPROVED' : 'ON_GOING'
+          if (allFinished) {
+            eventStatus = 'FINISHED'
+          } else {
+            // If some are started but not all finished, it's ON_GOING
+            eventStatus = 'ON_GOING'
+          }
         }
 
         return {
@@ -3220,39 +3223,40 @@ export class AssessmentRepo {
           select: { id: true, name: true, status: true }
         })
 
-        // Calculate status based on occurrence date and assessment completion
-        let eventStatus: AssessmentStatus
-        const today = new Date()
-        const occuranceDate = new Date(event.occuranceDate)
+        // Calculate status based on all assessments in the event
+        let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
         
-        // Set time to start of day for comparison
-        today.setHours(0, 0, 0, 0)
-        occuranceDate.setHours(0, 0, 0, 0)
+        // Get all assessments for this event
+        const allAssessments = await this.prisma.assessmentForm.findMany({
+          where: {
+            name: event.name,
+            subjectId: event.subjectId,
+            courseId: event.courseId,
+            occuranceDate: event.occuranceDate,
+            templateId: event.templateId
+          },
+          select: { status: true }
+        })
 
-        if (occuranceDate > today) {
-          // Future date - NOT_STARTED
+        // Check if all assessments are NOT_STARTED
+        const allNotStarted = allAssessments.every(assessment => 
+          assessment.status === 'NOT_STARTED'
+        )
+
+        if (allNotStarted) {
           eventStatus = 'NOT_STARTED'
-        } else if (occuranceDate.getTime() === today.getTime()) {
-          // Today - ON_GOING
-          eventStatus = 'ON_GOING'
         } else {
-          // Past date - check if all assessments are finished
-          const allAssessments = await this.prisma.assessmentForm.findMany({
-            where: {
-              name: event.name,
-              subjectId: event.subjectId,
-              courseId: event.courseId,
-              occuranceDate: event.occuranceDate,
-              templateId: event.templateId
-            },
-            select: { status: true }
-          })
-
+          // Check if all assessments are finished (APPROVED or CANCELLED)
           const allFinished = allAssessments.every(assessment => 
-            assessment.status === 'CANCELLED' || assessment.status === 'APPROVED'
+            assessment.status === 'APPROVED' || assessment.status === 'CANCELLED'
           )
 
-          eventStatus = allFinished ? 'APPROVED' : 'ON_GOING'
+          if (allFinished) {
+            eventStatus = 'FINISHED'
+          } else {
+            // If some are started but not all finished, it's ON_GOING
+            eventStatus = 'ON_GOING'
+          }
         }
 
         return {

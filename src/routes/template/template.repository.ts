@@ -654,6 +654,21 @@ export class TemplateRepository {
   }
 
   /**
+   * Check if template has assessments with statuses other than APPROVED or CANCELLED
+   */
+  async templateHasActiveAssessments(templateId: string): Promise<boolean> {
+    const activeAssessmentCount = await this.prismaService.assessmentForm.count({
+      where: {
+        templateId,
+        status: {
+          notIn: ['APPROVED', 'CANCELLED']
+        }
+      }
+    })
+    return activeAssessmentCount > 0
+  }
+
+  /**
    * Check if template name already exists (excluding current template)
    */
   async templateNameExists(name: string, excludeTemplateId?: string): Promise<boolean> {

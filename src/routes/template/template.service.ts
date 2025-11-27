@@ -40,7 +40,9 @@ import {
   FinalScoreTextRequiredOptionsError,
   FinalScoreTextInvalidOptionsError,
   FinalScoreTextInvalidJsonError,
-  CheckBoxFieldMissingChildrenError
+  CheckBoxFieldMissingChildrenError,
+  InvalidStatusTransitionError,
+  TemplateInUseCannotDisableError
 } from './template.error'
 import {
   TEMPLATE_PARSED_SUCCESSFULLY,
@@ -840,16 +842,34 @@ export class TemplateService {
       throw new TemplateNotFoundError()
     }
 
-    // Xem coi đây phải là review action hay không
-    const isReviewAction = existingTemplate.status === 'PENDING' && 
-                          (newStatus === 'PUBLISHED' || newStatus === 'REJECTED')
+    const currentStatus = existingTemplate.status
 
-    // Update
+    // Validate status transitions - only allow PUBLISHED ↔ DISABLED
+    if (currentStatus === 'DRAFT' || currentStatus === 'PENDING' || currentStatus === 'REJECTED') {
+      throw new InvalidStatusTransitionError(currentStatus, newStatus)
+    }
+
+    // Only allow PUBLISHED ↔ DISABLED transitions
+    if ((currentStatus === 'PUBLISHED' && newStatus !== 'DISABLED') ||
+        (currentStatus === 'DISABLED' && newStatus !== 'PUBLISHED') ||
+        (currentStatus !== 'PUBLISHED' && currentStatus !== 'DISABLED')) {
+      throw new InvalidStatusTransitionError(currentStatus, newStatus)
+    }
+
+    // If changing from PUBLISHED to DISABLED, check assessment usage
+    if (currentStatus === 'PUBLISHED' && newStatus === 'DISABLED') {
+      const hasActiveAssessments = await this.templateRepository.templateHasActiveAssessments(templateId)
+      if (hasActiveAssessments) {
+        throw new TemplateInUseCannotDisableError()
+      }
+    }
+
+    // Update template status
     const updatedTemplate = await this.templateRepository.updateTemplateStatus(
       templateId, 
       newStatus, 
       userContext.userId,
-      isReviewAction
+      false // This is not a review action
     )
 
     return {
