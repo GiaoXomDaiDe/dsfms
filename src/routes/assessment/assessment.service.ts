@@ -634,13 +634,18 @@ export class AssessmentService {
     currentUser: { userId: string; roleName: string; departmentId?: string }
   ): Promise<GetDepartmentAssessmentsResType> {
     try {
-      // Department Head must have a department assigned
-      if (!currentUser.departmentId) {
+      // Get user's department from database
+      const user = await this.assessmentRepo.prismaClient.user.findUnique({
+        where: { id: currentUser.userId },
+        select: { departmentId: true }
+      })
+
+      if (!user?.departmentId) {
         throw new ForbiddenException('Department Head must have a department assigned')
       }
 
       const result = await this.assessmentRepo.getDepartmentAssessments(
-        currentUser.departmentId,
+        user.departmentId,
         query.page,
         query.limit,
         query.status,
