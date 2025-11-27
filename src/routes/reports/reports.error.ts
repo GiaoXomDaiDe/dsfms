@@ -31,20 +31,8 @@ export const CanOnlyRespondAcknowledgedReportException = new BadRequestException
   'Can only respond to reports with ACKNOWLEDGED status'
 )
 
-export const AssessmentRequestCannotBeAcknowledgedException = new BadRequestException(
-  'Assessment approval requests skip the acknowledgement step'
-)
-
-export const CanOnlyDecideSubmittedAssessmentException = new BadRequestException(
-  'Assessment approval requests can only be decided when status is SUBMITTED'
-)
-
 export const AssessmentApprovalDecisionInvalidException = new BadRequestException(
   'Assessment approval decision must be APPROVED or REJECTED'
-)
-
-export const RespondStatusMustBeResolvedException = new BadRequestException(
-  'Only RESOLVED status is allowed when responding to this report type'
 )
 
 /**

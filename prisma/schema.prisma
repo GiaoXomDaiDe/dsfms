@@ -351,7 +351,6 @@ model AssessmentForm {
   template        TemplateForm        @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   subject         Subject?            @relation(fields: [subjectId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   course          Course?             @relation(fields: [courseId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  requests        Request[]
   sections        AssessmentSection[]
 
   @@index([createdById])
@@ -397,14 +396,12 @@ model Request {
   status          RequestStatus    @default(SUBMITTED)
   managedById     String?          @db.Uuid
   response        String?
-  assessmentId    String?          @db.Uuid
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @default(now()) @updatedAt
   updatedById     String?          @db.Uuid
   createdBy       User             @relation("RequestCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
   managedBy       User?            @relation("RequestManagedBy", fields: [managedById], references: [id], onUpdate: NoAction)
   updatedBy       User?            @relation("RequestUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
-  assessment      AssessmentForm?  @relation(fields: [assessmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([requestType])
   @@index([status])
@@ -548,7 +545,7 @@ enum RequestType {
   TRAINING_PROGRAM_REPORT
   FACILITIES_REPORT
   COURSE_ORGANIZATION_REPORT
-  ASSESSMENT_APPROVAL_REQUEST
+  FEEDBACK
   OTHER
 }
 
@@ -563,8 +560,6 @@ enum RequestStatus {
   SUBMITTED
   ACKNOWLEDGED
   RESOLVED
-  APPROVED
-  REJECTED
   CANCELLED
 }
 

@@ -34,8 +34,21 @@ export class ReportsRepo {
     RequestType.FACILITIES_REPORT,
     RequestType.COURSE_ORGANIZATION_REPORT,
     RequestType.OTHER,
-    RequestType.ASSESSMENT_APPROVAL_REQUEST
+    RequestType.FEEDBACK
   ]
+  private readonly userSummarySelect = {
+    id: true,
+    firstName: true,
+    lastName: true,
+    email: true,
+    role: { select: { name: true } }
+  } as const
+
+  private readonly reportInclude = {
+    createdBy: { select: this.userSummarySelect },
+    updatedBy: { select: this.userSummarySelect },
+    managedBy: { select: this.userSummarySelect }
+  } as const
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -52,7 +65,8 @@ export class ReportsRepo {
       where: {
         id,
         requestType: { in: this.reportTypes }
-      }
+      },
+      include: this.reportInclude
     })
 
     if (!report) {
@@ -69,7 +83,7 @@ export class ReportsRepo {
     const { severity, status, isAnonymous, requestType } = query
 
     const where: Prisma.RequestWhereInput = {
-      requestType: { in: requestType ? [requestType as RequestTypeValue] : this.reportTypes },
+      ...(requestType && { requestType: { in: requestType } }),
       ...(severity && { severity: severity as RequestSeverityValue }),
       ...(status && { status: status as RequestStatusValue }),
       ...(isAnonymous !== undefined && { isAnonymous }),
@@ -79,7 +93,8 @@ export class ReportsRepo {
     const [totalItems, reports] = await this.prisma.$transaction([
       this.prisma.request.count({ where }),
       this.prisma.request.findMany({
-        where
+        where,
+        include: this.reportInclude
       })
     ])
 
@@ -96,36 +111,18 @@ export class ReportsRepo {
     data: CreateReportBodyType
     createdById: string
   }): Promise<CreateReportResType> {
-    const baseData = {
-      requestType: data.requestType as RequestTypeValue,
-      createdById,
-      isAnonymous: data.isAnonymous ?? false,
-      status: RequestStatus.SUBMITTED
-    }
-
-    if (data.requestType === RequestType.ASSESSMENT_APPROVAL_REQUEST) {
-      const report = await this.prisma.request.create({
-        data: {
-          ...baseData,
-          assessmentId: data.assessmentId,
-          severity: null,
-          title: null,
-          description: null,
-          actionsTaken: null
-        }
-      })
-      return report
-    }
-
     const report = await this.prisma.request.create({
       data: {
-        ...baseData,
-        severity: data.severity as RequestSeverityValue,
-        title: data.title,
+        requestType: data.requestType as RequestTypeValue,
+        createdById,
+        isAnonymous: data.isAnonymous ?? false,
+        status: RequestStatus.SUBMITTED,
+        severity: (data.severity as RequestSeverityValue) ?? null,
+        title: data.title ?? null,
         description: data.description ?? null,
-        actionsTaken: data.actionsTaken ?? null,
-        assessmentId: null
-      }
+        actionsTaken: data.actionsTaken ?? null
+      },
+      include: this.reportInclude
     })
 
     return report
@@ -140,7 +137,8 @@ export class ReportsRepo {
       data: {
         status: RequestStatus.CANCELLED,
         updatedById
-      }
+      },
+      include: this.reportInclude
     })
 
     return report
@@ -156,7 +154,8 @@ export class ReportsRepo {
         status: RequestStatus.ACKNOWLEDGED,
         managedById,
         updatedById: managedById
-      }
+      },
+      include: this.reportInclude
     })
 
     return report
@@ -165,13 +164,11 @@ export class ReportsRepo {
   async respond({
     id,
     data,
-    managedById,
-    status
+    managedById
   }: {
     id: string
     data: RespondReportBodyType
     managedById: string
-    status: RequestStatusValue
   }): Promise<RespondReportResType> {
     const report = await this.prisma.request.update({
       where: {
@@ -179,11 +176,12 @@ export class ReportsRepo {
         requestType: { in: this.reportTypes }
       },
       data: {
-        status,
+        status: RequestStatus.RESOLVED,
         response: data.response,
         managedById,
         updatedById: managedById
-      }
+      },
+      include: this.reportInclude
     })
 
     return report
