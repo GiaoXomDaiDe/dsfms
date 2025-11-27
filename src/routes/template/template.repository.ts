@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '~/shared/services/prisma.service'
 import { CreateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
-import { TemplateNotFoundError, InvalidTemplateStatusForUpdateError, TemplateInUseCannotUpdateError, InvalidDraftTemplateStatusError } from './template.error'
+import {
+  TemplateNotFoundError,
+  InvalidTemplateStatusForUpdateError,
+  TemplateInUseCannotUpdateError,
+  InvalidDraftTemplateStatusError
+} from './template.error'
 
 @Injectable()
 export class TemplateRepository {
@@ -154,7 +159,7 @@ export class TemplateRepository {
           const createdFieldsForSection = []
 
           // First pass: Create parent fields (those without parentTempId)
-          const parentFields = sectionData.fields.filter(field => !field.parentTempId)
+          const parentFields = sectionData.fields.filter((field) => !field.parentTempId)
           for (const fieldData of parentFields) {
             const field = await tx.templateField.create({
               data: {
@@ -170,7 +175,7 @@ export class TemplateRepository {
               }
             })
             createdFieldsForSection.push(field)
-            
+
             // Map tempId to actual field for child field references
             if (fieldData.tempId) {
               tempIdToFieldMap.set(fieldData.tempId, field)
@@ -178,15 +183,17 @@ export class TemplateRepository {
           }
 
           // Second pass: Create child fields (those with parentTempId)
-          const childFields = sectionData.fields.filter(field => field.parentTempId)
+          const childFields = sectionData.fields.filter((field) => field.parentTempId)
           for (const fieldData of childFields) {
             // Find the parent field using tempId mapping
             const parentField = fieldData.parentTempId ? tempIdToFieldMap.get(fieldData.parentTempId) : null
-            
+
             if (fieldData.parentTempId && !parentField) {
-              throw new Error(`Parent field with tempId '${fieldData.parentTempId}' not found for field '${fieldData.fieldName}'`)
+              throw new Error(
+                `Parent field with tempId '${fieldData.parentTempId}' not found for field '${fieldData.fieldName}'`
+              )
             }
-            
+
             const field = await tx.templateField.create({
               data: {
                 sectionId: section.id,
@@ -371,10 +378,10 @@ export class TemplateRepository {
   }
 
   async findAllTemplates(status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
-    const whereCondition: any = {};
+    const whereCondition: any = {}
 
     if (status) {
-      whereCondition.status = status;
+      whereCondition.status = status
     }
 
     return this.prismaService.templateForm.findMany({
@@ -409,11 +416,11 @@ export class TemplateRepository {
   async findTemplatesByDepartment(departmentId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED') {
     const whereCondition: any = {
       departmentId
-    };
+    }
 
     // If status is provided, add it to where condition, otherwise get all statuses
     if (status) {
-      whereCondition.status = status;
+      whereCondition.status = status
     }
 
     return this.prismaService.templateForm.findMany({
@@ -448,11 +455,11 @@ export class TemplateRepository {
   async findTemplatesByUser(userId: string, status?: 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED' | 'DRAFT') {
     const whereCondition: any = {
       createdByUserId: userId
-    };
+    }
 
     // If status is provided, add it to where condition, otherwise get all statuses
     if (status) {
-      whereCondition.status = status;
+      whereCondition.status = status
     }
 
     return this.prismaService.templateForm.findMany({
@@ -579,8 +586,8 @@ export class TemplateRepository {
   // }
 
   async updateTemplateStatus(
-    id: string, 
-    status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED', 
+    id: string,
+    status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'DISABLED' | 'REJECTED',
     updatedByUserId: string,
     isReviewAction: boolean = false
   ) {
@@ -756,10 +763,10 @@ export class TemplateRepository {
         // 1. Get original template to get departmentId and calculate new version
         const originalTemplate = await tx.templateForm.findUnique({
           where: { id: originalTemplateId },
-          select: { 
-            id: true, 
-            departmentId: true, 
-            referFirstVersionId: true 
+          select: {
+            id: true,
+            departmentId: true,
+            referFirstVersionId: true
           }
         })
 
@@ -1030,8 +1037,8 @@ export class TemplateRepository {
         const sectionIdMap = new Map<number, string>()
 
         // Create section mapping by display order
-        createdSections.forEach(section => {
-          const originalSection = templateData.sections.find(s => s.displayOrder === section.displayOrder)
+        createdSections.forEach((section) => {
+          const originalSection = templateData.sections.find((s) => s.displayOrder === section.displayOrder)
           if (originalSection) {
             sectionIdMap.set(section.displayOrder, section.id)
           }
@@ -1047,9 +1054,8 @@ export class TemplateRepository {
             let parentId: string | null = null
             if (fieldData.parentTempId) {
               // Find parent field within the same section by tempId or fieldName
-              const parentField = sectionData.fields.find(f => 
-                f.tempId === fieldData.parentTempId || 
-                f.fieldName === fieldData.parentTempId
+              const parentField = sectionData.fields.find(
+                (f) => f.tempId === fieldData.parentTempId || f.fieldName === fieldData.parentTempId
               )
               if (parentField) {
                 // We'll need to update this after parent is created
@@ -1094,7 +1100,7 @@ export class TemplateRepository {
 
           // Map fieldName to actual ID for parent resolution
           createdFieldsMap.set(fieldData.fieldName, createdField.id)
-          
+
           // If this field has a parent, queue it for update
           if (fieldData.parentTempId) {
             fieldsToUpdateParent.push({
@@ -1276,8 +1282,8 @@ export class TemplateRepository {
         const sectionIdMap = new Map<number, string>()
 
         // Create section mapping by display order
-        createdSections.forEach(section => {
-          const originalSection = templateData.sections.find(s => s.displayOrder === section.displayOrder)
+        createdSections.forEach((section) => {
+          const originalSection = templateData.sections.find((s) => s.displayOrder === section.displayOrder)
           if (originalSection) {
             sectionIdMap.set(section.displayOrder, section.id)
           }
@@ -1328,7 +1334,7 @@ export class TemplateRepository {
           if (fieldData.tempId) {
             createdFieldsMap.set(fieldData.tempId, createdField.id)
           }
-          
+
           // If this field has a parent, queue it for update
           if (fieldData.parentTempId) {
             fieldsToUpdateParent.push({
@@ -1418,8 +1424,8 @@ export class TemplateRepository {
         // First verify template exists and is DRAFT
         const template = await tx.templateForm.findUnique({
           where: { id: templateId },
-          select: { 
-            id: true, 
+          select: {
+            id: true,
             status: true,
             name: true
           }
@@ -1439,7 +1445,9 @@ export class TemplateRepository {
         })
 
         if (assessmentCount > 0) {
-          throw new Error(`Cannot delete template '${template.name}' because it is being used in ${assessmentCount} assessment(s)`)
+          throw new Error(
+            `Cannot delete template '${template.name}' because it is being used in ${assessmentCount} assessment(s)`
+          )
         }
 
         // Delete template - cascade will handle sections and fields

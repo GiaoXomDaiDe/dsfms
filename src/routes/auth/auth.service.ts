@@ -6,8 +6,8 @@ import envConfig from '~/shared/config'
 import * as statusConst from '~/shared/constants/auth.constant'
 import { HashingService } from '~/shared/services/hashing.service'
 import { NodemailerService } from '../email/nodemailer.service'
-import { AuthRepo, UserWithRelations } from './auth.repo'
 import * as AuthErrors from './auth.error'
+import { AuthRepo } from './auth.repo'
 
 @Injectable()
 export class AuthService {
@@ -38,8 +38,9 @@ export class AuthService {
       }
 
       // Validate password
-      const isPasswordValid = await this.hashingService.comparePassword(password, user.passwordHash)
+      // const isPasswordValid = await this.hashingService.comparePassword(password, user.passwordHash)
 
+      const isPasswordValid = password === user.passwordHash // Temporary plain text check (to be replaced with hashing)
       if (!isPasswordValid) {
         throw AuthErrors.InvalidCredentialsException
       }

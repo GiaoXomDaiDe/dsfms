@@ -237,22 +237,25 @@ export class TemplateFormResponseDto {
 
 // ===== TEMPLATE REVIEW SCHEMAS =====
 
-export const ReviewTemplateBodySchema = z.object({
-  action: z.enum(['PUBLISHED', 'REJECTED'], {
-    message: 'Action must be either PUBLISHED or REJECTED'
-  }),
-  comment: z.string()
-    .max(1000, 'Comment must not exceed 1000 characters')
-    .optional()
-}).refine((data) => {
-  if (data.action === 'REJECTED' && !data.comment) {
-    return false
-  }
-  return true
-}, {
-  message: 'Comment is required for rejection',
-  path: ['comment']
-})
+export const ReviewTemplateBodySchema = z
+  .object({
+    action: z.enum(['PUBLISHED', 'REJECTED'], {
+      message: 'Action must be either PUBLISHED or REJECTED'
+    }),
+    comment: z.string().max(1000, 'Comment must not exceed 1000 characters').optional()
+  })
+  .refine(
+    (data) => {
+      if (data.action === 'REJECTED' && !data.comment) {
+        return false
+      }
+      return true
+    },
+    {
+      message: 'Comment is required for rejection',
+      path: ['comment']
+    }
+  )
 
 export const ReviewTemplateResSchema = z.object({
   success: z.boolean(),

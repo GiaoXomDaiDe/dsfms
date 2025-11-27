@@ -1,11 +1,34 @@
-import { Controller, Post, Get, Patch, Put, Delete, Param, Body, Query, UploadedFile, UseInterceptors, BadRequestException, Res, Header } from '@nestjs/common'
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
+  Res,
+  Header
+} from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import type { Response } from 'express'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
-import { ParseTemplateResponseDTO, ExtractFieldsResponseDTO, CreateTemplateFormDto, UpdateTemplateFormDto, CreateTemplateVersionDto, ReviewTemplateBodyDTO, ReviewTemplateResDTO } from './template.dto'
+import {
+  ParseTemplateResponseDTO,
+  ExtractFieldsResponseDTO,
+  CreateTemplateFormDto,
+  UpdateTemplateFormDto,
+  CreateTemplateVersionDto,
+  ReviewTemplateBodyDTO,
+  ReviewTemplateResDTO
+} from './template.dto'
 import { TemplateService } from './template.service'
 
 @Controller('templates')
@@ -151,14 +174,14 @@ export class TemplateController {
   @Get('pdf/:templateFormId')
   @Header('Content-Type', 'application/pdf')
   async getTemplatePdf(
-    @Param('templateFormId') templateFormId: string, 
+    @Param('templateFormId') templateFormId: string,
     @Res() res: Response,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
   ) {
     const pdfBuffer = await this.templateService.getTemplatePdf(templateFormId)
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="template-${templateFormId}.pdf"`,
+      'Content-Disposition': `inline; filename="template-${templateFormId}.pdf"`
     })
     res.send(pdfBuffer)
   }
@@ -170,14 +193,14 @@ export class TemplateController {
   @Get('pdf-config/:templateFormId')
   @Header('Content-Type', 'application/pdf')
   async getTemplateConfigPdf(
-    @Param('templateFormId') templateFormId: string, 
+    @Param('templateFormId') templateFormId: string,
     @Res() res: Response,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
   ) {
     const pdfBuffer = await this.templateService.getTemplateConfigPdf(templateFormId)
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="template-config-${templateFormId}.pdf"`,
+      'Content-Disposition': `inline; filename="template-config-${templateFormId}.pdf"`
     })
     res.send(pdfBuffer)
   }
@@ -188,26 +211,26 @@ export class TemplateController {
    */
   @Get('pdf-both/:templateFormId')
   async getTemplateBothPdf(
-    @Param('templateFormId') templateFormId: string, 
+    @Param('templateFormId') templateFormId: string,
     @Res() res: Response,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
   ) {
     const zipBuffer = await this.templateService.getTemplateBothPdf(templateFormId)
     res.set({
       'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="template-${templateFormId}.zip"`,
+      'Content-Disposition': `attachment; filename="template-${templateFormId}.zip"`
     })
     res.send(zipBuffer)
   }
 
-   /**
+  /**
    * GET /templates/pdf-content-test
    * Test endpoint for exporting PDF from S3 URL
    */
   @Get('pdf-content-test')
   @Header('Content-Type', 'application/pdf')
   async getTemplatePdfFromS3(
-    @Body() body: { templateContentUrl: string }, 
+    @Body() body: { templateContentUrl: string },
     @Res() res: Response,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] }
   ) {
@@ -218,7 +241,7 @@ export class TemplateController {
     const pdfBuffer = await this.templateService.exportTemplatePdfFromS3(body.templateContentUrl)
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="template-${Date.now()}.pdf"`,
+      'Content-Disposition': `inline; filename="template-${Date.now()}.pdf"`
     })
     res.send(pdfBuffer)
   }
