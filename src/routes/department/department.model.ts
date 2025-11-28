@@ -1,6 +1,7 @@
 import z from 'zod'
 import { CourseSchema } from '~/shared/models/shared-course.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
+import { SubjectSchema } from '~/shared/models/shared-subject.model'
 
 export type DepartmentType = z.infer<typeof DepartmentSchema>
 
@@ -33,38 +34,20 @@ export const DepartmentResSchema = DepartmentSchema.extend({
       })
     })
     .nullable(),
-  courseCount: z.number().default(0),
-  traineeCount: z.number().default(0),
-  trainerCount: z.number().default(0)
-})
-
-// Trainer Detail Schema
-export const DepartmentTrainerSchema = z.object({
-  id: z.string(),
-  eid: z.string(),
-  firstName: z.string(),
-  middleName: z.string().nullable(),
-  lastName: z.string(),
-  email: z.string(),
-  status: z.string().nullable(),
-  address: z.string().nullable(),
-  avatarUrl: z.string().nullable(),
-  gender: z.string().nullable(),
-  phoneNumber: z.string().nullable()
+  courseCount: z.number().default(0)
 })
 
 // Course Detail Schema for Department
 export const DepartmentCourseSchema = CourseSchema.extend({
-  subjectCount: z.number().int().default(0)
+  subjectCount: z.number().int().default(0),
+  subjects: z.array(SubjectSchema)
 })
 
 export const DepartmentDetailResSchema = DepartmentResSchema.extend({
-  trainers: z.array(DepartmentTrainerSchema),
   courses: z.array(DepartmentCourseSchema)
 })
 
 export type DepartmentDetailResType = z.infer<typeof DepartmentDetailResSchema>
-export type DepartmentTrainerType = z.infer<typeof DepartmentTrainerSchema>
 export type DepartmentCourseType = z.infer<typeof DepartmentCourseSchema>
 
 // Response Schemas

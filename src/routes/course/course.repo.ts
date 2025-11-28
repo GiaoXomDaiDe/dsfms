@@ -45,9 +45,9 @@ type CourseInstructorSummary = TrainerInfo & {
 
 @Injectable()
 @SerializeAll(['aggregateCourseTrainees'])
-export class CourseRepo {
+export class CourseRepository {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prismaService: PrismaService,
     private readonly sharedSubjectRepo: SharedSubjectRepository,
     private readonly sharedSubjectEnrollmentRepo: SharedSubjectEnrollmentRepository
   ) {}
@@ -63,8 +63,8 @@ export class CourseRepo {
         }
 
     const [totalItems, courses] = await Promise.all([
-      this.prisma.course.count({ where: whereClause }),
-      this.prisma.course.findMany({
+      this.prismaService.course.count({ where: whereClause }),
+      this.prismaService.course.findMany({
         where: whereClause,
         include: {
           department: {
@@ -161,7 +161,7 @@ export class CourseRepo {
           },
           deletedAt: null
         }
-    const course = await this.prisma.course.findFirst({
+    const course = await this.prismaService.course.findFirst({
       where: whereClause,
       include: {
         department: {
@@ -192,7 +192,7 @@ export class CourseRepo {
     if (!course) return null
 
     const [traineeCount, courseInstructorRecords] = await Promise.all([
-      this.prisma.subjectEnrollment
+      this.prismaService.subjectEnrollment
         .findMany({
           where: {
             subject: {
@@ -206,7 +206,7 @@ export class CourseRepo {
           distinct: ['traineeUserId']
         })
         .then((enrollments) => enrollments.length),
-      this.prisma.courseInstructor.findMany({
+      this.prismaService.courseInstructor.findMany({
         where: {
           courseId: id,
           trainer: {
@@ -293,7 +293,7 @@ export class CourseRepo {
     data: CreateCourseBodyType
     createdById: string
   }): Promise<CreateCourseResType> {
-    return this.prisma.course.create({
+    return this.prismaService.course.create({
       data: {
         ...data,
         createdById,
@@ -324,7 +324,7 @@ export class CourseRepo {
     data: UpdateCourseBodyType
     updatedById: string
   }): Promise<UpdateCourseResType> {
-    return this.prisma.course.update({
+    return this.prismaService.course.update({
       where: { id },
       data: {
         ...data,
@@ -351,7 +351,7 @@ export class CourseRepo {
     const now = new Date()
 
     if (status === CourseStatus.PLANNED) {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prismaService.$transaction(async (tx) => {
         await tx.subjectEnrollment.updateMany({
           where: {
             subject: {
@@ -398,7 +398,7 @@ export class CourseRepo {
     }
 
     if (status === CourseStatus.ON_GOING) {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prismaService.$transaction(async (tx) => {
         const activeSubjectCount = await tx.subject.count({
           where: {
             courseId: id,
@@ -441,7 +441,7 @@ export class CourseRepo {
       })
     }
 
-    return this.prisma.course.update({
+    return this.prismaService.course.update({
       where: { id },
       data: {
         deletedAt: now,
@@ -501,7 +501,7 @@ export class CourseRepo {
     trainerUserId: string
     roleInSubject: SubjectInstructorRoleValue
   }): Promise<AssignCourseTrainerResType> {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prismaService.$transaction(async (tx) => {
       const course = await tx.course.findFirst({
         where: {
           id: courseId,
@@ -596,7 +596,7 @@ export class CourseRepo {
     trainerUserId: string
     newRoleInSubject: SubjectInstructorRoleValue
   }): Promise<UpdateCourseTrainerAssignmentResType> {
-    const assignment = await this.prisma.courseInstructor.update({
+    const assignment = await this.prismaService.courseInstructor.update({
       where: {
         trainerUserId_courseId: {
           trainerUserId,
@@ -646,7 +646,7 @@ export class CourseRepo {
     courseId: string
     trainerUserId: string
   }): Promise<void> {
-    await this.prisma.courseInstructor.delete({
+    await this.prismaService.courseInstructor.delete({
       where: {
         trainerUserId_courseId: {
           trainerUserId,
@@ -663,7 +663,7 @@ export class CourseRepo {
     courseId: string
     trainerUserId: string
   }): Promise<boolean> {
-    const assignment = await this.prisma.courseInstructor.findUnique({
+    const assignment = await this.prismaService.courseInstructor.findUnique({
       where: {
         trainerUserId_courseId: {
           trainerUserId,
