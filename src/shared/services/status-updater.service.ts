@@ -18,10 +18,6 @@ export class StatusUpdaterService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Cron job chạy mỗi ngày đúng 00:00 (vừa qua ngày mới)
-   * để cập nhật status của Course, Subject và Enrollment
-   */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'update-academic-statuses',
     timeZone: 'Asia/Ho_Chi_Minh'
@@ -40,7 +36,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_1AM, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'assessment-schedule-keeper',
     timeZone: 'Asia/Ho_Chi_Minh'
   })
@@ -55,7 +51,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_2AM, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'assessment-cancel-on-enrollment',
     timeZone: 'Asia/Ho_Chi_Minh'
   })
@@ -72,73 +68,28 @@ export class StatusUpdaterService {
     }
   }
 
-  /**
-   * Cập nhật status của tất cả Courses dựa trên startDate và endDate
-   */
   private async updateCourseStatuses() {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0) // Reset về đầu ngày để so sánh chính xác
+    const today = this.getStartOfToday()
 
-    // Cập nhật Course sang ON_GOING (startDate <= now <= endDate)
+    // PLANNED → ON_GOING (startDate <= today <= endDate)
     const ongoingResult = await this.prisma.course.updateMany({
       where: {
         status: CourseStatus.PLANNED,
         deletedAt: null,
-        startDate: {
-          lte: now
-        },
-        endDate: {
-          gte: now
-        },
-        AND: [
-          {
-            OR: [
-              {
-                instructors: {
-                  some: {}
-                }
-              },
-              {
-                subjects: {
-                  some: {
-                    instructors: {
-                      some: {}
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          {
-            subjects: {
-              some: {
-                enrollments: {
-                  some: {
-                    status: {
-                      not: SubjectEnrollmentStatus.CANCELLED
-                    }
-                  }
-                }
-              }
-            }
-          }
-        ]
+        startDate: { lte: today },
+        endDate: { gte: today }
       },
       data: {
         status: CourseStatus.ON_GOING
       }
     })
 
-    // Cập nhật Course sang COMPLETED (now > endDate)
+    // PLANNED or ON_GOING → COMPLETED (today > endDate)
     const completedResult = await this.prisma.course.updateMany({
       where: {
-        status: {
-          in: [CourseStatus.PLANNED, CourseStatus.ON_GOING]
-        },
+        status: { in: [CourseStatus.PLANNED, CourseStatus.ON_GOING] },
         deletedAt: null,
-        endDate: {
-          lt: now
-        }
+        endDate: { lt: today }
       },
       data: {
         status: CourseStatus.COMPLETED
@@ -148,95 +99,37 @@ export class StatusUpdaterService {
     this.logger.log(`Course statuses updated: ${ongoingResult.count} → ON_GOING, ${completedResult.count} → COMPLETED`)
   }
 
-  /**
-   * Cập nhật status của tất cả Subjects dựa trên startDate và endDate
-   */
   private async updateSubjectStatuses() {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
+    const today = this.getStartOfToday()
 
-    const archivedResult = await this.prisma.subject.updateMany({
-      where: {
-        status: SubjectStatus.PLANNED,
-        deletedAt: null,
-        startDate: {
-          lte: now
-        },
-        OR: [
-          {
-            instructors: {
-              none: {}
-            }
-          },
-          {
-            enrollments: {
-              none: {}
-            }
-          }
-        ]
-      },
-      data: {
-        status: SubjectStatus.ARCHIVED
-      }
-    })
-
-    // Cập nhật Subject sang ON_GOING
+    // PLANNED → ON_GOING
     const ongoingResult = await this.prisma.subject.updateMany({
       where: {
         status: SubjectStatus.PLANNED,
         deletedAt: null,
-        startDate: {
-          lte: now
-        },
-        endDate: {
-          gte: now
-        },
-        instructors: {
-          some: {}
-        },
-        enrollments: {
-          some: {
-            status: {
-              not: SubjectEnrollmentStatus.CANCELLED
-            }
-          }
-        }
+        startDate: { lte: today },
+        endDate: { gte: today }
       },
       data: {
         status: SubjectStatus.ON_GOING
       }
     })
 
-    // Cập nhật Subject sang COMPLETED
+    // PLANNED or ON_GOING → COMPLETED
     const completedResult = await this.prisma.subject.updateMany({
       where: {
-        status: {
-          in: [SubjectStatus.PLANNED, SubjectStatus.ON_GOING]
-        },
+        status: { in: [SubjectStatus.PLANNED, SubjectStatus.ON_GOING] },
         deletedAt: null,
-        endDate: {
-          lt: now
-        }
+        endDate: { lt: today }
       },
       data: {
         status: SubjectStatus.COMPLETED
       }
     })
 
-    if (archivedResult.count > 0) {
-      this.logger.warn(`Subject statuses auto-archived due to missing trainers or enrollments: ${archivedResult.count}`)
-    }
-
     this.logger.log(`Subject statuses updated: ${ongoingResult.count} → ON_GOING, ${completedResult.count} → COMPLETED`)
   }
 
-  /**
-   * Cập nhật status của tất cả Enrollments dựa trên Subject status
-   * Enrollment follows Subject status:
-   * - Subject PLANNED → Enrollment ENROLLED
-   * - Subject ON_GOING → Enrollment ON_GOING
-   * - Subject COMPLETED → Enrollment FINISHED
-   */
   private async updateEnrollmentStatuses() {
     // 1. Cập nhật Enrollment sang ON_GOING khi Subject = ON_GOING
     const ongoingResult = await this.prisma.subjectEnrollment.updateMany({
@@ -381,14 +274,5 @@ export class StatusUpdaterService {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     return today
-  }
-
-  /**
-   * Manual trigger để test hoặc force update
-   * Có thể gọi từ admin endpoint nếu cần
-   */
-  async forceUpdateAllStatuses() {
-    this.logger.log('Manual status update triggered')
-    await this.handleStatusUpdate()
   }
 }
