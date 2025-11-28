@@ -36,6 +36,7 @@ import {
   ValueListFieldMissingOptionsError,
   ValueListFieldInvalidOptionsError,
   MissingSignatureFieldError,
+  MissingSubmittableSectionError,
   MissingFinalScoreFieldsError,
   DuplicateFinalScoreFieldsError,
   InvalidFieldTypeError,
@@ -633,6 +634,7 @@ export class TemplateService {
         error instanceof ValueListFieldMissingOptionsError ||
         error instanceof ValueListFieldInvalidOptionsError ||
         error instanceof MissingSignatureFieldError ||
+        error instanceof MissingSubmittableSectionError ||
         error instanceof MissingFinalScoreFieldsError ||
         error instanceof DuplicateFinalScoreFieldsError ||
         error instanceof InvalidFieldTypeError ||
@@ -1781,6 +1783,12 @@ export class TemplateService {
     )
     if (!hasSignatureField) {
       throw new MissingSignatureFieldError()
+    }
+
+    // 5.1. Check at least one submittable section
+    const hasSubmittableSection = sections.some((section: any) => section.isSubmittable === true)
+    if (!hasSubmittableSection) {
+      throw new MissingSubmittableSectionError()
     }
 
     // 6. Check at least one FINAL_SCORE_NUM or FINAL_SCORE_TEXT field

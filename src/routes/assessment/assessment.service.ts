@@ -163,8 +163,15 @@ export class AssessmentService {
         throw TemplateDepartmentMismatchException
       }
 
-      // Step 4: Validate occurrence date is after start date (no end date restriction)
+      // Step 4: Validate occurrence date is not in the past and is after start date
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
       const occurrenceDate = new Date(data.occuranceDate)
+      occurrenceDate.setHours(0, 0, 0, 0)
+
+      if (occurrenceDate < today) {
+        throw new BadRequestException('Cannot create assessment with occurrence date in the past')
+      }
 
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
@@ -388,8 +395,15 @@ export class AssessmentService {
         throw TemplateDepartmentMismatchException
       }
 
-      // Step 6: Validate occurrence date is after start date (no end date restriction)
+      // Step 6: Validate occurrence date is not in the past and is after start date
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
       const occurrenceDate = new Date(data.occuranceDate)
+      occurrenceDate.setHours(0, 0, 0, 0)
+
+      if (occurrenceDate < today) {
+        throw new BadRequestException('Cannot create assessment with occurrence date in the past')
+      }
 
       if (occurrenceDate < startDate) {
         throw OccurrenceDateBeforeStartException(startDate, data.subjectId ? 'subject' : 'course')
@@ -1564,11 +1578,20 @@ export class AssessmentService {
       }
       // Case 2: Only FINAL_SCORE_TEXT exists
       else if (finalScoreTextValue && !finalScoreNumValue) {
-        // User manually enters text, keep resultScore as null
+        // User manually enters text, read the value they entered
         resultScore = null
-        resultText = AssessmentResult.NOT_APPLICABLE
+        
+        // Read the user's FINAL_SCORE_TEXT value
+        const textValue = finalScoreTextValue.answerValue?.toUpperCase()
+        if (textValue === 'PASS') {
+          resultText = AssessmentResult.PASS
+        } else if (textValue === 'FAIL') {
+          resultText = AssessmentResult.FAIL
+        } else {
+          resultText = AssessmentResult.NOT_APPLICABLE
+        }
 
-        console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - keeping resultScore as null`)
+        console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - resultText: ${resultText}`)
       }
       // Case 3: Only FINAL_SCORE_NUM exists
       else if (finalScoreNumValue && !finalScoreTextValue && passScore !== null) {
