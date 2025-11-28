@@ -1695,7 +1695,10 @@ export class AssessmentService {
     })
 
     // Use templateSchema as base and populate with actual values using path mapping
-    return this.populateSchemaWithPathValues(templateSchema, pathValueMap)
+    const populatedSchema = this.populateSchemaWithPathValues(templateSchema, pathValueMap)
+    
+    // Convert null values to empty strings in nested objects (PART/CHECK_BOX fields)
+    return this.convertNullsToEmptyStringsInNestedObjects(populatedSchema)
   }
 
   /**
@@ -1855,6 +1858,63 @@ export class AssessmentService {
 
     // Return as string for all other field types (TEXT, VALUE_LIST, etc.)
     return value
+  }
+
+  /**
+   * Convert null values to empty strings in nested objects (PART/CHECK_BOX fields)
+   * This ensures proper rendering in DOCX templates where null values cause issues
+   */
+  private convertNullsToEmptyStringsInNestedObjects(obj: any): any {
+    if (Array.isArray(obj)) {
+      // Handle arrays - recurse into each element
+      return obj.map(item => this.convertNullsToEmptyStringsInNestedObjects(item))
+    } else if (typeof obj === 'object' && obj !== null) {
+      const result: any = {}
+      
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          // This is a nested object (likely PART/CHECK_BOX field)
+          // Recurse and convert nulls to empty strings in nested object
+          result[key] = this.convertNullsInObject(value)
+        } else {
+          // Keep the value as-is for root level fields (preserve nulls for top-level)
+          result[key] = value
+        }
+      }
+      
+      return result
+    }
+    
+    return obj
+  }
+
+  /**
+   * Convert all null values to empty strings in an object
+   * Used for nested objects (PART/CHECK_BOX children)
+   */
+  private convertNullsInObject(obj: any): any {
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.convertNullsToEmptyStringsInNestedObjects(item))
+    } else if (typeof obj === 'object' && obj !== null) {
+      const result: any = {}
+      
+      for (const [key, value] of Object.entries(obj)) {
+        if (value === null) {
+          // Convert null to empty string in nested objects
+          result[key] = ""
+        } else if (typeof value === 'object') {
+          // Recurse for deeper nesting
+          result[key] = this.convertNullsInObject(value)
+        } else {
+          // Keep non-null values as-is
+          result[key] = value
+        }
+      }
+      
+      return result
+    }
+    
+    return obj === null ? "" : obj
   }
 
   /**
