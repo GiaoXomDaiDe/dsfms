@@ -1050,6 +1050,7 @@ export class AssessmentRepo {
         resultText: true,
         pdfUrl: true,
         comment: true,
+        isTraineeLocked: true,
         trainee: {
           select: {
             id: true,
@@ -1221,6 +1222,7 @@ export class AssessmentRepo {
         resultText: true,
         pdfUrl: true,
         comment: true,
+        isTraineeLocked: true,
         trainee: {
           select: {
             id: true,
@@ -1606,7 +1608,7 @@ export class AssessmentRepo {
 
     const userMainRole = user?.role.name || 'UNKNOWN'
 
-    // First filter sections user can access
+    // Process sections based on user role - TRAINER can see both TRAINER and TRAINEE sections
     const accessibleSections = assessment.sections
       .map((section) => {
         let canAssess = false
@@ -1630,7 +1632,12 @@ export class AssessmentRepo {
         } else if (section.templateSection.editBy === 'TRAINEE') {
           // Section requires trainee access
           roleRequirement = 'TRAINEE'
-          canAssess = userMainRole === 'TRAINEE' && assessment.traineeId === userId && !assessment.isTraineeLocked
+          if (userMainRole === 'TRAINEE') {
+            canAssess = assessment.traineeId === userId && !assessment.isTraineeLocked
+          } else if (userMainRole === 'TRAINER') {
+            // TRAINER can see TRAINEE sections but cannot assess them
+            canAssess = true
+          }
         }
 
         return {
@@ -1647,16 +1654,26 @@ export class AssessmentRepo {
       // Re-number displayOrder sequentially for filtered sections
       const frontendDisplayOrder = index + 1
 
-      // For TRAINER: New logic - can assess any section with matching role
+      // For TRAINER: Determine canAssessed based on section type
       let canAssessed: boolean | undefined = undefined
 
       if (userMainRole === 'TRAINER') {
-        const sectionNotAssessed = item.section.assessedById === null
-        const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
-        const sectionAssessedByCurrentUser = item.section.assessedById === userId
+        if (item.section.templateSection.editBy === 'TRAINER') {
+          // For TRAINER sections, check if they can assess based on role match
+          if (item.roleRequirement && userRoleInAssessment === item.roleRequirement) {
+            const sectionNotAssessed = item.section.assessedById === null
+            const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
+            const sectionAssessedByCurrentUser = item.section.assessedById === userId
 
-        // canAssessed: true if section is not assessed yet OR already assessed by current user
-        canAssessed = sectionRequiredAssessment && (sectionNotAssessed || sectionAssessedByCurrentUser)
+            // canAssessed: true if section is not assessed yet OR already assessed by current user
+            canAssessed = sectionRequiredAssessment && (sectionNotAssessed || sectionAssessedByCurrentUser)
+          } else {
+            canAssessed = false
+          }
+        } else if (item.section.templateSection.editBy === 'TRAINEE') {
+          // For TRAINEE sections, TRAINER can view but cannot assess
+          canAssessed = false
+        }
       }
 
       const baseSection = {
@@ -1733,17 +1750,11 @@ export class AssessmentRepo {
         status: assessment.status
       },
       sections: sectionsWithPermissions,
-      userRole: userRoleInAssessment || userMainRole
+      userRole: userRoleInAssessment || userMainRole,
+      isTraineeLocked: assessment.isTraineeLocked
     }
 
-    // Add role-specific fields to response
-    if (userMainRole === 'TRAINEE') {
-      return {
-        ...baseResponse,
-        isTraineeLocked: assessment.isTraineeLocked
-      }
-    }
-
+    // Return response with isTraineeLocked for all users
     return baseResponse
   }
 
@@ -2243,13 +2254,70 @@ export class AssessmentRepo {
         }
       })
 
+    // Get current user's role and assessment permissions  
+    let userRoleInAssessment: string | null = null
+    let userMainRole: string = 'UNKNOWN'
+
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          role: {
+            select: {
+              name: true
+            }
+          }
+        }
+      })
+      userMainRole = user?.role.name || 'UNKNOWN'
+
+      // Get user's role in the course/subject
+      if (assessmentSection.assessmentForm.subjectId) {
+        const subjectInstructor = await this.prisma.subjectInstructor.findFirst({
+          where: {
+            subjectId: assessmentSection.assessmentForm.subjectId,
+            trainerUserId: userId
+          },
+          select: {
+            roleInAssessment: true
+          }
+        })
+        userRoleInAssessment = subjectInstructor?.roleInAssessment || null
+      } else if (assessmentSection.assessmentForm.courseId) {
+        const courseInstructor = await this.prisma.courseInstructor.findFirst({
+          where: {
+            courseId: assessmentSection.assessmentForm.courseId,
+            trainerUserId: userId
+          },
+          select: {
+            roleInAssessment: true
+          }
+        })
+        userRoleInAssessment = courseInstructor?.roleInAssessment || null
+      }
+    }
+
+    // Determine if current user can assess this section type
+    let canAssessSection = false
+    if (assessmentSection.templateSection.editBy === 'TRAINEE') {
+      canAssessSection = userMainRole === 'TRAINEE' && assessmentSection.assessmentForm.traineeId === userId
+    } else if (assessmentSection.templateSection.editBy === 'TRAINER') {
+      if (userMainRole === 'TRAINER') {
+        if (assessmentSection.templateSection.roleInSubject) {
+          canAssessSection = userRoleInAssessment === assessmentSection.templateSection.roleInSubject
+        } else {
+          canAssessSection = userRoleInAssessment !== null
+        }
+      }
+    }
+
     // Determine if current user can update this section
-    // canUpdated: true if section was assessed by current user, false otherwise
-    const canUpdated = assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
+    // canUpdated: true if section was assessed by current user AND user can assess this section type
+    const canUpdated = canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
 
     // Determine if current user can save this section
-    // canSave: true if section hasn't been assessed by anyone yet, false if already assessed
-    const canSave = assessmentSection.assessedById === null
+    // canSave: true if section hasn't been assessed yet AND user can assess this section type
+    const canSave = canAssessSection && assessmentSection.assessedById === null
 
     return {
       success: true,
