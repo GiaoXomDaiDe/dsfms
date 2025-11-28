@@ -77,11 +77,11 @@ export class AssessmentRepo {
           some: {
             subjectId,
             status: {
-              in: ['ON_GOING', 'FINISHED']
+              in: [ 'ENROLLED','ON_GOING', 'FINISHED']
             },
             subject: {
               status: {
-                in: ['ON_GOING', 'COMPLETED']
+                in: ['PLANNED','ON_GOING', 'COMPLETED']
               }
             }
           }
@@ -98,11 +98,11 @@ export class AssessmentRepo {
           where: {
             subjectId,
             status: {
-              in: ['ON_GOING', 'FINISHED']
+              in: ['ENROLLED','ON_GOING', 'FINISHED']
             },
             subject: {
               status: {
-                in: ['ON_GOING', 'COMPLETED']
+                in: ['PLANNED','ON_GOING', 'COMPLETED']
               }
             }
           },
@@ -151,11 +151,11 @@ export class AssessmentRepo {
             subject: {
               courseId,
               status: {
-                in: ['ON_GOING', 'COMPLETED'] // Only consider ongoing or completed subjects
+                in: ['PLANNED','ON_GOING', 'COMPLETED'] // Only consider ongoing or completed subjects
               }
             },
             status: {
-              in: ['ON_GOING', 'FINISHED']
+              in: ['ENROLLED', 'ON_GOING', 'FINISHED']
             }
           }
         }
@@ -172,11 +172,11 @@ export class AssessmentRepo {
             subject: {
               courseId,
               status: {
-                in: ['ON_GOING', 'COMPLETED']
+                in: ['PLANNED','ON_GOING', 'COMPLETED']
               }
             },
             status: {
-              in: ['ON_GOING', 'FINISHED']
+              in: ['ENROLLED', 'ON_GOING', 'FINISHED']
             }
           },
           select: {
