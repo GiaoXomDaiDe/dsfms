@@ -225,6 +225,16 @@ export class AssessmentRepo {
         }
       }
 
+      // Determine initial status based on occurrence date
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const occurrenceDate = new Date(assessmentData.occuranceDate)
+      occurrenceDate.setHours(0, 0, 0, 0)
+      
+      // If occurrence date is today, start with ON_GOING, otherwise NOT_STARTED (future dates)
+      // Past dates are prevented at service layer validation
+      const initialStatus = occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
+
       for (const traineeId of assessmentData.traineeIds) {
         // Create the main assessment form
         const assessmentForm = await tx.assessmentForm.create({
@@ -237,7 +247,7 @@ export class AssessmentRepo {
             createdById,
             updatedById: createdById,
             traineeId,
-            status: AssessmentStatus.NOT_STARTED,
+            status: initialStatus,
             isTraineeLocked: true,
             // All nullable fields remain null by default
             submittedAt: null,
@@ -2200,6 +2210,13 @@ export class AssessmentRepo {
           // Check for SIGNATURE_IMG field type and auto-populate with user's signatureImageUrl
           if (templateField.fieldType === 'SIGNATURE_IMG' && currentUser?.signatureImageUrl) {
             finalAnswerValue = currentUser.signatureImageUrl
+          } else if (templateField.fieldType === 'SIGNATURE_DRAW') {
+            // For SIGNATURE_DRAW, if value is null, fallback to assessor's full name
+            if (currentUser) {
+              finalAnswerValue = `${currentUser.firstName} ${currentUser.middleName || ''} ${currentUser.lastName}`.trim()
+            } else if (assessmentSection.assessedBy) {
+              finalAnswerValue = `${assessmentSection.assessedBy.firstName} ${assessmentSection.assessedBy.middleName || ''} ${assessmentSection.assessedBy.lastName}`.trim()
+            }
           } else {
             const systemValue = getSystemFieldValue(templateField.fieldName)
             if (systemValue) {
@@ -2230,6 +2247,10 @@ export class AssessmentRepo {
     // canUpdated: true if section was assessed by current user, false otherwise
     const canUpdated = assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
 
+    // Determine if current user can save this section
+    // canSave: true if section hasn't been assessed by anyone yet, false if already assessed
+    const canSave = assessmentSection.assessedById === null
+
     return {
       success: true,
       message: 'Assessment section fields retrieved successfully',
@@ -2238,6 +2259,7 @@ export class AssessmentRepo {
         assessmentFormId: assessmentSection.assessmentFormId,
         templateSectionId: assessmentSection.templateSectionId,
         status: assessmentSection.status,
+        canSave: canSave,
         canUpdated: canUpdated,
         templateSection: {
           id: assessmentSection.templateSection.id,
@@ -2263,6 +2285,22 @@ export class AssessmentRepo {
     userId: string
   ) {
     return await this.prisma.$transaction(async (tx) => {
+      // First check if section hasn't been assessed yet (safety check)
+      const assessmentSection = await tx.assessmentSection.findUnique({
+        where: { id: assessmentSectionId },
+        select: {
+          assessedById: true
+        }
+      })
+
+      if (!assessmentSection) {
+        throw new Error('Assessment section not found')
+      }
+
+      if (assessmentSection.assessedById !== null) {
+        throw new Error('This section has already been assessed. Use update API instead.')
+      }
+
       // Update each assessment value
       let updatedCount = 0
       for (const value of values) {

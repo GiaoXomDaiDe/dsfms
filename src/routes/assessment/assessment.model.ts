@@ -538,6 +538,7 @@ export const GetAssessmentSectionFieldsResSchema = z.object({
     templateSectionId: z.string().uuid(),
     status: z.nativeEnum(AssessmentSectionStatus),
     canUpdated: z.boolean(),
+    canSave: z.boolean(),
     templateSection: z.object({
       id: z.string().uuid(),
       label: z.string(),

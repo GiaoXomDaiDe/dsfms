@@ -176,6 +176,12 @@ export class MissingSignatureFieldError extends BadRequestException {
   }
 }
 
+export class MissingSubmittableSectionError extends BadRequestException {
+  constructor() {
+    super('Template must have at least one section with isSubmittable = true')
+  }
+}
+
 export class MissingFinalScoreFieldsError extends BadRequestException {
   constructor(missingType: 'FINAL_SCORE_NUM' | 'FINAL_SCORE_TEXT') {
     super(`Template must have exactly one field with fieldType ${missingType}`)
