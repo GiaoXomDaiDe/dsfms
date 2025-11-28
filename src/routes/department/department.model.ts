@@ -90,6 +90,7 @@ export type GetDepartmentDetailQueryType = z.infer<typeof GetDepartmentDetailQue
 export const DepartmentHeadUserSchema = z.object({
   id: z.string(),
   firstName: z.string(),
+  middleName: z.string().nullable(),
   lastName: z.string(),
   email: z.string(),
   eid: z.string().nullable()
