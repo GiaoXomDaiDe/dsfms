@@ -264,6 +264,7 @@ export class DepartmentRepository {
           id: true,
           eid: true,
           firstName: true,
+          middleName: true,
           lastName: true,
           email: true
         },
