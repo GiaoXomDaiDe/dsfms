@@ -374,6 +374,7 @@ export const TrainerAssessmentListItemSchema = z.object({
   resultText: z.nativeEnum(AssessmentResult).nullable(),
   pdfUrl: z.string().nullable(),
   comment: z.string().nullable(),
+  isTraineeLocked: z.boolean(),
   trainee: z.object({
     id: z.string().uuid(),
     eid: z.string(),
