@@ -910,6 +910,9 @@ export class AssessmentService {
             // Section just requires trainer role
             canAccess = userRoleInAssessment !== null // Must be assigned to subject/course
           }
+        } else if (currentUser.roleName === 'DEPARTMENT_HEAD' || currentUser.roleName === 'DEPARTMENT HEAD') {
+          // DEPARTMENT_HEAD can view all sections (already passed checkAssessmentAccess)
+          canAccess = true
         }
       } else if (templateSection.editBy === 'TRAINEE') {
         // Section requires trainee access - trainee can access their own assessment
@@ -919,6 +922,9 @@ export class AssessmentService {
         } else if (currentUser.roleName === 'TRAINER') {
           // Trainers who can assess this assessment form can view trainee sections
           canAccess = userRoleInAssessment !== null // Must be assigned to subject/course
+        } else if (currentUser.roleName === 'DEPARTMENT_HEAD' || currentUser.roleName === 'DEPARTMENT HEAD') {
+          // DEPARTMENT_HEAD can view all sections (already passed checkAssessmentAccess)
+          canAccess = true
         }
       }
 
