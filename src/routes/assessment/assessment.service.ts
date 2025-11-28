@@ -1515,6 +1515,13 @@ export class AssessmentService {
       // Build data object from assessment values (refresh after processing result)
       const assessmentData = await this.buildAssessmentDataFromValues(assessmentId, templateSchema)
 
+      // DEBUG: Log schema after mapping data
+      console.log('=== SCHEMA AFTER MAPPING DATA ===')
+      console.log('Assessment ID:', assessmentId)
+      console.log('Template Schema (original):', JSON.stringify(templateSchema, null, 2))
+      console.log('Assessment Data (mapped):', JSON.stringify(assessmentData, null, 2))
+      console.log('=== END SCHEMA DEBUG ===')
+
       // Render DOCX with data
       const renderedDocxBuffer = await this.renderDocxTemplate(templateBuffer, assessmentData)
 
@@ -1837,6 +1844,10 @@ export class AssessmentService {
       const num = Number(value)
       return isNaN(num) ? null : num
     }
+
+    // Note: CHECK_BOX is a parent field (like PART) that contains child fields
+    // It doesn't have a value itself, only its children have values
+    // So CHECK_BOX fields are not processed here - only their TEXT children are
 
     // For other field types, do NOT auto-convert boolean or number
     // Only convert to actual data types when field type explicitly requires it
