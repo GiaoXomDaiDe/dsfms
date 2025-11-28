@@ -1654,7 +1654,7 @@ export class AssessmentRepo {
       // Re-number displayOrder sequentially for filtered sections
       const frontendDisplayOrder = index + 1
 
-      // For TRAINER: Determine canAssessed based on section type
+      // Determine canAssessed based on user role and section type
       let canAssessed: boolean | undefined = undefined
 
       if (userMainRole === 'TRAINER') {
@@ -1672,6 +1672,20 @@ export class AssessmentRepo {
           }
         } else if (item.section.templateSection.editBy === 'TRAINEE') {
           // For TRAINEE sections, TRAINER can view but cannot assess
+          canAssessed = false
+        }
+      } else if (userMainRole === 'TRAINEE') {
+        if (item.section.templateSection.editBy === 'TRAINEE') {
+          // For TRAINEE sections, check if trainee can assess
+          const sectionNotAssessed = item.section.assessedById === null
+          const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
+          const sectionAssessedByCurrentUser = item.section.assessedById === userId
+          const traineeNotLocked = !assessment.isTraineeLocked
+
+          // canAssessed: true if trainee is not locked AND (section not assessed OR already assessed by current trainee)
+          canAssessed = traineeNotLocked && sectionRequiredAssessment && (sectionNotAssessed || sectionAssessedByCurrentUser)
+        } else {
+          // TRAINEE cannot assess TRAINER sections
           canAssessed = false
         }
       }
@@ -1702,7 +1716,7 @@ export class AssessmentRepo {
       }
 
       // Add role-specific fields
-      if (userMainRole === 'TRAINER' && canAssessed !== undefined) {
+      if ((userMainRole === 'TRAINER' || userMainRole === 'TRAINEE') && canAssessed !== undefined) {
         return {
           roleRequirement: item.roleRequirement,
           ...baseSection,
