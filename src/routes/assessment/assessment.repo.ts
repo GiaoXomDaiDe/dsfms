@@ -865,6 +865,13 @@ export class AssessmentRepo {
    * Used for authorization checks
    */
   async checkAssessmentAccess(assessmentId: string, userId: string, userRole: string): Promise<boolean> {
+    // Debug logging
+    console.log('=== checkAssessmentAccess START ===', {
+      assessmentId,
+      userId,
+      userRole
+    })
+
     const assessment = await this.prisma.assessmentForm.findUnique({
       where: { id: assessmentId },
       select: {
@@ -902,10 +909,22 @@ export class AssessmentRepo {
       }
     })
 
-    if (!assessment) return false
+    if (!assessment) {
+      console.log('Assessment not found:', assessmentId)
+      return false
+    }
+
+    console.log('Assessment found:', {
+      traineeId: assessment.traineeId,
+      createdById: assessment.createdById,
+      subjectId: assessment.subjectId,
+      courseId: assessment.courseId,
+      templateDeptId: assessment.template.department?.id
+    })
 
     // Trainee can access their own assessments
     if (userRole === 'TRAINEE' && assessment.traineeId === userId) {
+      console.log('TRAINEE access granted')
       return true
     }
 
@@ -933,15 +952,26 @@ export class AssessmentRepo {
     }
 
     // Department head can access assessments in their department
-    if (userRole === 'DEPARTMENT_HEAD') {
+    if (userRole === 'DEPARTMENT_HEAD' || userRole === 'DEPARTMENT HEAD') {
       const userDept = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { departmentId: true }
       })
 
+      // Debug logging (remove in production)
+      console.log('DEPARTMENT_HEAD Access Check:', {
+        userId,
+        userDepartmentId: userDept?.departmentId,
+        templateDepartmentId: assessment.template.department?.id,
+        assessmentId,
+        hasUserDept: !!userDept?.departmentId,
+        hasTemplateDept: !!assessment.template.department?.id
+      })
+
       return userDept?.departmentId === assessment.template.department?.id
     }
 
+    console.log('=== checkAssessmentAccess END: Access DENIED ===')
     return false
   }
 
@@ -1628,6 +1658,9 @@ export class AssessmentRepo {
               roleRequirement = 'TRAINER'
               canAssess = userRoleInAssessment !== null // Must be assigned to subject/course
             }
+          } else if (userMainRole === 'DEPARTMENT HEAD') {
+            // DEPARTMENT_HEAD can see all sections but cannot assess them
+            canAssess = true
           }
         } else if (section.templateSection.editBy === 'TRAINEE') {
           // Section requires trainee access
@@ -1636,6 +1669,9 @@ export class AssessmentRepo {
             canAssess = assessment.traineeId === userId && !assessment.isTraineeLocked
           } else if (userMainRole === 'TRAINER') {
             // TRAINER can see TRAINEE sections but cannot assess them
+            canAssess = true
+          } else if (userMainRole === 'DEPARTMENT HEAD') {
+            // DEPARTMENT_HEAD can see all sections but cannot assess them
             canAssess = true
           }
         }
@@ -1688,6 +1724,9 @@ export class AssessmentRepo {
           // TRAINEE cannot assess TRAINER sections
           canAssessed = false
         }
+      } else if (userMainRole === 'DEPARTMENT HEAD') {
+        // DEPARTMENT_HEAD can view all sections but cannot assess any
+        canAssessed = false
       }
 
       const baseSection = {
@@ -1716,7 +1755,7 @@ export class AssessmentRepo {
       }
 
       // Add role-specific fields
-      if ((userMainRole === 'TRAINER' || userMainRole === 'TRAINEE') && canAssessed !== undefined) {
+      if ((userMainRole === 'TRAINER' || userMainRole === 'TRAINEE' || userMainRole === 'DEPARTMENT_HEAD' || userMainRole === 'DEPARTMENT HEAD') && canAssessed !== undefined) {
         return {
           roleRequirement: item.roleRequirement,
           ...baseSection,
@@ -2326,12 +2365,20 @@ export class AssessmentRepo {
     }
 
     // Determine if current user can update this section
-    // canUpdated: true if section was assessed by current user AND user can assess this section type
-    const canUpdated = canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
+    // canUpdated: false by default, true if section was assessed by current user AND user can assess this section type
+    // DEPARTMENT_HEAD always has canUpdated = false
+    let canUpdated = false
+    if (userMainRole !== 'DEPARTMENT HEAD') {
+      canUpdated = canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
+    }
 
-    // Determine if current user can save this section
-    // canSave: true if section hasn't been assessed yet AND user can assess this section type
-    const canSave = canAssessSection && assessmentSection.assessedById === null
+    // Determine if current user can save this section  
+    // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type
+    // DEPARTMENT_HEAD always has canSave = false
+    let canSave = false
+    if (userMainRole !== 'DEPARTMENT HEAD') {
+      canSave = canAssessSection && assessmentSection.assessedById === null
+    }
 
     return {
       success: true,
