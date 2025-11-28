@@ -15,7 +15,7 @@ import {
   OnlyAdministratorCanEnableDepartmentException
 } from '~/routes/department/department.error'
 import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/department/department.model'
-import { DepartmentRepo } from '~/routes/department/department.repo'
+import { DepartmentRepository } from '~/routes/department/department.repo'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -24,8 +24,8 @@ import { PrismaService } from '~/shared/services/prisma.service'
 @Injectable()
 export class DepartmentService {
   constructor(
-    private readonly departmentRepo: DepartmentRepo,
-    private readonly prisma: PrismaService,
+    private readonly departmentRepo: DepartmentRepository,
+    private readonly prismaService: PrismaService,
     private readonly sharedUserRepo: SharedUserRepository
   ) {}
 
@@ -55,7 +55,7 @@ export class DepartmentService {
   }
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
-    return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    return await this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
       let validatedHead: { id: string; departmentId: string | null } | null = null
 
       if (data.headUserId) {
@@ -96,7 +96,7 @@ export class DepartmentService {
 
   async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
     try {
-      return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      return await this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
         const existingDepartment = await tx.department.findUnique({
           where: {
             id,
@@ -162,13 +162,13 @@ export class DepartmentService {
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
     try {
       const [activeCourseCount, activeSubjectCount] = await Promise.all([
-        this.prisma.course.count({
+        this.prismaService.course.count({
           where: {
             departmentId: id,
             deletedAt: null
           }
         }),
-        this.prisma.subject.count({
+        this.prismaService.subject.count({
           where: {
             deletedAt: null,
             course: {

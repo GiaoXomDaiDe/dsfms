@@ -37,7 +37,7 @@ export class CourseController {
 
   @Get()
   @ZodSerializerDto(GetCoursesResDto)
-  async getCourses(@Query() { includeDeleted }: GetCoursesQueryDto, @ActiveRolePermissions('name') roleName: string) {
+  async list(@Query() { includeDeleted }: GetCoursesQueryDto, @ActiveRolePermissions('name') roleName: string) {
     return await this.courseService.list({
       includeDeleted,
       activeUserRoleName: roleName
@@ -62,13 +62,13 @@ export class CourseController {
 
   @Post()
   @ZodSerializerDto(CreateCourseResDto)
-  async createCourse(
-    @Body() createCourseDto: CreateCourseBodyDto,
+  async create(
+    @Body() body: CreateCourseBodyDto,
     @ActiveRolePermissions('name') roleName: string,
     @ActiveUser('userId') userId: string
   ) {
     return await this.courseService.create({
-      data: createCourseDto,
+      data: body,
       createdById: userId,
       createdByRoleName: roleName
     })
@@ -76,7 +76,7 @@ export class CourseController {
 
   @Put(':courseId')
   @ZodSerializerDto(UpdateCourseResDto)
-  async updateCourse(
+  async update(
     @Param() params: GetCourseParamsDto,
     @Body() updateCourseDto: UpdateCourseBodyDto,
     @ActiveRolePermissions('name') roleName: string,

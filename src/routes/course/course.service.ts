@@ -40,12 +40,12 @@ import {
   UpdateCourseTrainerAssignmentBodyType,
   UpdateCourseTrainerAssignmentResType
 } from './course.model'
-import { CourseRepo } from './course.repo'
+import { CourseRepository } from './course.repo'
 
 @Injectable()
 export class CourseService {
   constructor(
-    private readonly courseRepo: CourseRepo,
+    private readonly courseRepo: CourseRepository,
     private readonly sharedDepartmentRepo: SharedDepartmentRepository,
     private readonly subjectService: SubjectService
   ) {}
