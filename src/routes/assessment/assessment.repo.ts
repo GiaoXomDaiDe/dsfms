@@ -1690,19 +1690,19 @@ export class AssessmentRepo {
       // Re-number displayOrder sequentially for filtered sections
       const frontendDisplayOrder = index + 1
 
-      // Determine canAssessed based on user role and section type
+      // Determine canAssessed based on assessedBy field and user permissions
       let canAssessed: boolean | undefined = undefined
+
+      // Basic assessedBy logic: true if not assessed OR assessed by current user, false if assessed by someone else
+      const sectionNotAssessed = item.section.assessedById === null
+      const sectionAssessedByCurrentUser = item.section.assessedById === userId
+      const basicCanAssess = sectionNotAssessed || sectionAssessedByCurrentUser
 
       if (userMainRole === 'TRAINER') {
         if (item.section.templateSection.editBy === 'TRAINER') {
           // For TRAINER sections, check if they can assess based on role match
           if (item.roleRequirement && userRoleInAssessment === item.roleRequirement) {
-            const sectionNotAssessed = item.section.assessedById === null
-            const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
-            const sectionAssessedByCurrentUser = item.section.assessedById === userId
-
-            // canAssessed: true if section is not assessed yet OR already assessed by current user
-            canAssessed = sectionRequiredAssessment && (sectionNotAssessed || sectionAssessedByCurrentUser)
+            canAssessed = basicCanAssess
           } else {
             canAssessed = false
           }
@@ -1712,14 +1712,9 @@ export class AssessmentRepo {
         }
       } else if (userMainRole === 'TRAINEE') {
         if (item.section.templateSection.editBy === 'TRAINEE') {
-          // For TRAINEE sections, check if trainee can assess
-          const sectionNotAssessed = item.section.assessedById === null
-          const sectionRequiredAssessment = item.section.status === 'REQUIRED_ASSESSMENT'
-          const sectionAssessedByCurrentUser = item.section.assessedById === userId
+          // For TRAINEE sections, apply basic logic if trainee is not locked
           const traineeNotLocked = !assessment.isTraineeLocked
-
-          // canAssessed: true if trainee is not locked AND (section not assessed OR already assessed by current trainee)
-          canAssessed = traineeNotLocked && sectionRequiredAssessment && (sectionNotAssessed || sectionAssessedByCurrentUser)
+          canAssessed = traineeNotLocked ? basicCanAssess : false
         } else {
           // TRAINEE cannot assess TRAINER sections
           canAssessed = false

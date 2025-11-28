@@ -645,7 +645,8 @@ export class AssessmentService {
         where: { id: currentUser.userId },
         select: { departmentId: true }
       })
-
+      // console.log ('Current User ID:', currentUser.userId)
+      // console.log ('User department ID:', user?.departmentId)
       if (!user?.departmentId) {
         throw new ForbiddenException('Department Head must have a department assigned')
       }
