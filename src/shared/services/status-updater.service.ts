@@ -179,13 +179,16 @@ export class StatusUpdaterService {
     const today = this.getStartOfToday()
     this.logToday('activateAssessmentsForToday', today)
 
+    const current = await this.prisma.assessmentForm.findUnique({
+      where: { id: '2d3c695e-9b52-4585-b159-871d4e9d3437' }
+    })
+    this.logger.log(`[activate] current=${JSON.stringify(current)}`)
+
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
         id: '2d3c695e-9b52-4585-b159-871d4e9d3437',
-        occuranceDate: {
-          equals: today
-        }
+        occuranceDate: { equals: today }
       },
       data: {
         status: AssessmentStatus.ON_GOING
@@ -199,11 +202,18 @@ export class StatusUpdaterService {
     const today = this.getStartOfToday()
     this.logToday('cancelExpiredAssessments', today)
 
+    const current = await this.prisma.assessmentForm.findUnique({
+      where: { id: '2d3c695e-9b52-4585-b159-871d4e9d3437' }
+    })
+    this.logger.log(
+      `[cancel] current=${JSON.stringify(current)}, cancellableStatuses=${JSON.stringify(
+        StatusUpdaterService.cancellableAssessmentStatuses
+      )}`
+    )
+
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
-        occuranceDate: {
-          lt: today
-        },
+        occuranceDate: { lt: today },
         id: '2d3c695e-9b52-4585-b159-871d4e9d3437',
         status: {
           in: StatusUpdaterService.cancellableAssessmentStatuses
