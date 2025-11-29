@@ -13,6 +13,8 @@ dayjs.extend(timezone)
 
 const APP_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
+const TEST_ASSESSMENT_ID = '2d3c695e-9b52-4585-b159-871d4e9d3437'
+
 @Injectable()
 export class StatusUpdaterService {
   private readonly logger = new Logger(StatusUpdaterService.name)
@@ -78,7 +80,8 @@ export class StatusUpdaterService {
   }
 
   private async updateCourseStatuses() {
-    const today = this.getStartOfToday()
+    const today = this.getTodayDate()
+    this.logToday('updateCourseStatuses', today)
 
     // PLANNED → ON_GOING (startDate <= today <= endDate)
     const ongoingResult = await this.prisma.course.updateMany({
@@ -109,7 +112,8 @@ export class StatusUpdaterService {
   }
 
   private async updateSubjectStatuses() {
-    const today = this.getStartOfToday()
+    const today = this.getTodayDate()
+    this.logToday('updateSubjectStatuses', today)
 
     // PLANNED → ON_GOING
     const ongoingResult = await this.prisma.subject.updateMany({
@@ -174,48 +178,60 @@ export class StatusUpdaterService {
       `Enrollment statuses updated: ${ongoingResult.count} → ON_GOING, ${finishedResult.count} → FINISHED`
     )
   }
-
+  private getTodayDateString(): string {
+    return dayjs().tz(APP_TIMEZONE).format('YYYY-MM-DD')
+  }
   private async activateAssessmentsForToday() {
-    const today = this.getStartOfToday()
-    this.logToday('activateAssessmentsForToday', today)
+    const today = this.getTodayDate()
+    this.logToday('cancelExpiredAssessments', today)
 
-    const current = await this.prisma.assessmentForm.findUnique({
-      where: { id: '2d3c695e-9b52-4585-b159-871d4e9d3437' }
-    })
-    console.log('current, ', current)
-    this.logger.log(`[activate] current=${JSON.stringify(current)}`)
+    if (TEST_ASSESSMENT_ID) {
+      const current = await this.prisma.assessmentForm.findUnique({
+        where: { id: TEST_ASSESSMENT_ID }
+      })
+      this.logger.log(`[activate] current=${JSON.stringify(current)}`)
+    }
 
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
-        id: '2d3c695e-9b52-4585-b159-871d4e9d3437',
-        occuranceDate: { equals: today }
+        // TODO: bỏ id filter này khi xong test
+        ...(TEST_ASSESSMENT_ID && { id: TEST_ASSESSMENT_ID }),
+        occuranceDate: {
+          equals: today // DATE 'YYYY-MM-DD'
+        }
       },
       data: {
         status: AssessmentStatus.ON_GOING
       }
     })
+
     this.logger.log(`activateAssessmentsForToday updated=${count}`)
     return count
   }
 
   private async cancelExpiredAssessments() {
-    const today = this.getStartOfToday()
+    const today = this.getTodayDate()
     this.logToday('cancelExpiredAssessments', today)
 
-    const current = await this.prisma.assessmentForm.findUnique({
-      where: { id: '2d3c695e-9b52-4585-b159-871d4e9d3437' }
-    })
-    this.logger.log(
-      `[cancel] current=${JSON.stringify(current)}, cancellableStatuses=${JSON.stringify(
-        StatusUpdaterService.cancellableAssessmentStatuses
-      )}`
-    )
+    // DEBUG record test
+    if (TEST_ASSESSMENT_ID) {
+      const current = await this.prisma.assessmentForm.findUnique({
+        where: { id: TEST_ASSESSMENT_ID }
+      })
+      this.logger.log(
+        `[cancel] current=${JSON.stringify(current)}, cancellableStatuses=${JSON.stringify(
+          StatusUpdaterService.cancellableAssessmentStatuses
+        )}`
+      )
+    }
 
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
-        occuranceDate: { lt: today },
-        id: '2d3c695e-9b52-4585-b159-871d4e9d3437',
+        occuranceDate: {
+          lt: today // mọi ngày < hôm nay
+        },
+        ...(TEST_ASSESSMENT_ID && { id: TEST_ASSESSMENT_ID }),
         status: {
           in: StatusUpdaterService.cancellableAssessmentStatuses
         }
@@ -224,6 +240,7 @@ export class StatusUpdaterService {
         status: AssessmentStatus.CANCELLED
       }
     })
+
     this.logger.log(`cancelExpiredAssessments updated=${count}`)
     return count
   }
@@ -237,7 +254,7 @@ export class StatusUpdaterService {
         FROM "Assessment_Form" af
         JOIN "Subject_Enrollment" se
           ON se."subjectId" = af."subjectId"
-         AND se."traineeUserId" = af."traineeId"
+          AND se."traineeUserId" = af."traineeId"
         WHERE af."subjectId" IS NOT NULL
           AND af."status" IN (${Prisma.join(cancellableStatuses)})
           AND se."status" = ${SubjectEnrollmentStatus.CANCELLED}
@@ -296,13 +313,15 @@ export class StatusUpdaterService {
     return count
   }
 
-  private getStartOfToday() {
+  private getTodayDate(): Date {
     return dayjs().tz(APP_TIMEZONE).startOf('day').toDate()
   }
 
   private logToday(context: string, today: Date) {
     this.logger.log(
-      `[${context}] today (VN) = ${dayjs(today).tz(APP_TIMEZONE).format('YYYY-MM-DD HH:mm:ss')}, iso=${today.toISOString()}`
+      `[${context}] today (VN) = ${dayjs(today)
+        .tz(APP_TIMEZONE)
+        .format('YYYY-MM-DD HH:mm:ss')}, iso=${today.toISOString()}`
     )
   }
 }
