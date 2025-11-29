@@ -62,14 +62,14 @@ import {
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
 } from './subject.model'
-import { SubjectRepo } from './subject.repo'
+import { SubjectRepository } from './subject.repo'
 
 @Injectable()
 export class SubjectService {
   constructor(
-    private readonly subjectRepo: SubjectRepo,
-    private readonly sharedSubjectRepository: SharedSubjectRepository,
-    private readonly sharedCourseRepository: SharedCourseRepository
+    private readonly subjectRepo: SubjectRepository,
+    private readonly sharedSubjectRepo: SharedSubjectRepository,
+    private readonly sharedCourseRepo: SharedCourseRepository
   ) {}
 
   async list(query: GetSubjectsQueryType, userRoleName: string): Promise<GetSubjectsResType> {
@@ -115,7 +115,7 @@ export class SubjectService {
     createdById: string
   }): Promise<SubjectType> {
     try {
-      const course = await this.sharedCourseRepository.findById(subject.courseId)
+      const course = await this.sharedCourseRepo.findById(subject.courseId)
       if (!course) {
         throw CourseNotFoundException
       }
@@ -157,7 +157,7 @@ export class SubjectService {
   }): Promise<BulkCreateSubjectsResType> {
     const { courseId, subjects } = data
 
-    const course = await this.sharedCourseRepository.findById(courseId)
+    const course = await this.sharedCourseRepo.findById(courseId)
     if (!course) {
       throw CourseNotFoundException
     }
@@ -170,7 +170,7 @@ export class SubjectService {
       const subject = subjects[i]
 
       try {
-        const codeExists = await this.sharedSubjectRepository.checkCodeExists(subject.code, courseId)
+        const codeExists = await this.sharedSubjectRepo.checkCodeExists(subject.code, courseId)
         if (codeExists) {
           throw BulkSubjectCodeAlreadyExistsAtIndexException(i, subject.code)
         }
@@ -223,7 +223,7 @@ export class SubjectService {
     updatedById: string
   }): Promise<GetSubjectDetailResType> {
     try {
-      const existingSubject = await this.sharedSubjectRepository.findById(id)
+      const existingSubject = await this.sharedSubjectRepo.findById(id)
       if (!existingSubject) {
         throw SubjectNotFoundException
       }
@@ -231,20 +231,20 @@ export class SubjectService {
       const existingCourseId = existingSubject.courseId
       const finalCourseId = data.courseId || existingCourseId
       if (data.courseId && data.courseId !== existingCourseId) {
-        course = await this.sharedCourseRepository.findById(data.courseId)
+        course = await this.sharedCourseRepo.findById(data.courseId)
         if (!course) {
           throw CourseNotFoundException
         }
       } else {
         // Lấy course hiện tại nếu không thay đổi nhưng có thay đổi dates
         if ((data.startDate || data.endDate) && finalCourseId) {
-          course = await this.sharedCourseRepository.findById(finalCourseId)
+          course = await this.sharedCourseRepo.findById(finalCourseId)
         }
       }
 
       // Validate subject code unique nếu thay đổi
       if (data.code && data.code !== existingSubject.code) {
-        const codeExists = await this.sharedSubjectRepository.checkCodeExists(data.code, finalCourseId, id)
+        const codeExists = await this.sharedSubjectRepo.checkCodeExists(data.code, finalCourseId, id)
         if (codeExists) {
           throw SubjectCodeAlreadyExistsException
         }
@@ -292,7 +292,7 @@ export class SubjectService {
   }
 
   async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<MessageResType> {
-    const existingSubject = await this.sharedSubjectRepository.findById(id)
+    const existingSubject = await this.sharedSubjectRepo.findById(id)
     if (!existingSubject) {
       throw SubjectNotFoundException
     }
@@ -323,7 +323,7 @@ export class SubjectService {
     subjectId: string
     data: AssignTrainerBodyType
   }): Promise<AssignTrainerResType> {
-    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    const subject = await this.sharedSubjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
@@ -409,7 +409,7 @@ export class SubjectService {
     subjectId: string
     data: AssignTraineesBodyType
   }): Promise<AssignTraineesResType> {
-    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    const subject = await this.sharedSubjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
@@ -502,7 +502,7 @@ export class SubjectService {
   }
 
   async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
-    const course = await this.sharedCourseRepository.findById(courseId)
+    const course = await this.sharedCourseRepo.findById(courseId)
     if (!course) {
       throw CourseNotFoundException
     }
@@ -523,7 +523,7 @@ export class SubjectService {
     data: RemoveEnrollmentsBodyType
   }): Promise<RemoveEnrollmentsResType> {
     // Kiểm tra subject tồn tại
-    const subject = await this.sharedSubjectRepository.findById(subjectId)
+    const subject = await this.sharedSubjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
@@ -548,7 +548,7 @@ export class SubjectService {
     courseId: string
     batchCode: string
   }): Promise<RemoveCourseEnrollmentsByBatchResType> {
-    const course = await this.sharedCourseRepository.findById(courseId)
+    const course = await this.sharedCourseRepo.findById(courseId)
     if (!course) {
       throw CourseNotFoundException
     }

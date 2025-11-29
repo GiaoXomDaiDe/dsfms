@@ -57,7 +57,7 @@ export class SubjectController {
 
   @Get(':subjectId')
   @ZodSerializerDto(GetSubjectDetailResDto)
-  async getSubjectDetails(@Param() { subjectId }: SubjectIdParamsDto, @ActiveRolePermissions('name') roleName: string) {
+  async findByIds(@Param() { subjectId }: SubjectIdParamsDto, @ActiveRolePermissions('name') roleName: string) {
     return await this.subjectService.findById(subjectId, { roleName })
   }
 

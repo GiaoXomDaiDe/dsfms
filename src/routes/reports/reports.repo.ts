@@ -25,7 +25,7 @@ import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 @SerializeAll()
-export class ReportsRepo {
+export class ReportsRepository {
   private readonly reportTypes: RequestTypeValue[] = [
     RequestType.SAFETY_REPORT,
     RequestType.INSTRUCTOR_REPORT,

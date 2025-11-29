@@ -16,12 +16,12 @@ import {
   RespondReportBodyType,
   RespondReportResType
 } from '~/routes/reports/reports.model'
-import { ReportsRepo } from '~/routes/reports/reports.repo'
+import { ReportsRepository } from '~/routes/reports/reports.repo'
 import { RequestStatus } from '~/shared/constants/report.constant'
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly reportsRepo: ReportsRepo) {}
+  constructor(private readonly reportsRepo: ReportsRepository) {}
 
   async getReports(query: GetReportsQueryType): Promise<GetReportsResType> {
     return this.reportsRepo.list(query)
