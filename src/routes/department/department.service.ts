@@ -125,8 +125,22 @@ export class DepartmentService {
           tx
         )
 
-        // Nếu có head mới hợp lệ và user này chưa gắn đúng departmentId,
-        // thì sync departmentId cho user
+        // Nếu có head mới khác với head cũ -> clear departmentId của head cũ
+        if (
+          validatedHead && // có head mới
+          existingDepartment.headUserId && // trước đó có head cũ
+          existingDepartment.headUserId !== validatedHead.id // head mới khác head cũ
+        ) {
+          await tx.user.update({
+            where: { id: existingDepartment.headUserId },
+            data: {
+              departmentId: null,
+              updatedById
+            }
+          })
+        }
+
+        // Đảm bảo head mới luôn có departmentId = id
         if (validatedHead && validatedHead.departmentId !== id) {
           await tx.user.update({
             where: { id: validatedHead.id },
