@@ -112,6 +112,7 @@ export class DepartmentService {
         let validatedHead: { id: string; departmentId: string | null } | null = null
 
         if (data.headUserId) {
+          // kiểm tra user có đủ điều kiện làm head cho department id
           validatedHead = await this.validateDepartmentHead(data.headUserId, id)
         }
 
@@ -124,16 +125,8 @@ export class DepartmentService {
           tx
         )
 
-        if (validatedHead && validatedHead.departmentId === null) {
-          await tx.user.update({
-            where: { id: validatedHead.id },
-            data: {
-              departmentId: null,
-              updatedById
-            }
-          })
-        }
-
+        // Nếu có head mới hợp lệ và user này chưa gắn đúng departmentId,
+        // thì sync departmentId cho user
         if (validatedHead && validatedHead.departmentId !== id) {
           await tx.user.update({
             where: { id: validatedHead.id },
@@ -258,7 +251,27 @@ export class DepartmentService {
     if (!user) throw DepartmentHeadUserNotFoundException
     if (user.role.name !== RoleName.DEPARTMENT_HEAD) throw DepartmentHeadMustHaveRoleException
     if (user.role.isActive === false) throw DepartmentHeadRoleInactiveException
-    if (user.department?.id && user.department?.id !== targetDepartmentId) {
+
+    // 1) Kiểm tra membership hiện tại (departmentId trên User)
+    // - Nếu user đã thuộc department khác (không phải targetDepartmentId) → reject
+    if (user.department?.id && user.department.id !== targetDepartmentId) {
+      throw DepartmentHeadBelongsToAnotherDepartmentException
+    }
+
+    // 2) (tuỳ chọn nhưng khuyến khích) Kiểm tra head theo headUserId, phòng tránh drift dữ liệu
+    //    Dùng PrismaService trực tiếp, không qua repo để tránh circular.
+    const existingHeadOfDepartment = await this.prismaService.department.findFirst({
+      where: {
+        headUserId: headUserId,
+        deletedAt: null,
+        // Nếu đang update cùng department thì cho phép (tránh tự chặn chính mình)
+        NOT: targetDepartmentId ? { id: targetDepartmentId } : undefined
+      },
+      select: { id: true }
+    })
+
+    if (existingHeadOfDepartment) {
+      // Nếu user đã là head của department khác
       throw DepartmentHeadBelongsToAnotherDepartmentException
     }
 

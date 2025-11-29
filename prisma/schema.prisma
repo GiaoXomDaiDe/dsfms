@@ -34,7 +34,6 @@ model User {
   updatedCourses             Course[]            @relation("CourseUpdatedBy")
   createdDepartments         Department[]        @relation("DeptCreatedBy")
   deletedDepartments         Department[]        @relation("DeptDeletedBy")
-  headOfDepartments          Department[]        @relation("DepartmentHead")
   updatedDepartments         Department[]        @relation("DeptUpdatedBy")
   createdGlobalFields        GlobalField[]       @relation("GlobalFieldCreatedBy")
   updatedGlobalFields        GlobalField[]       @relation("GlobalFieldUpdatedBy")
@@ -74,6 +73,7 @@ model User {
   createdRequests            Request[]           @relation("RequestCreatedBy")
   managedRequests            Request[]           @relation("RequestManagedBy")
   updatedRequests            Request[]           @relation("RequestUpdatedBy")
+  headOfDepartment           Department?         @relation("DepartmentHead")
   createdAssessmentForms     AssessmentForm[]    @relation("AssessmentFormCreatedBy")
   updatedAssessmentForms     AssessmentForm[]    @relation("AssessmentFormUpdatedBy")
   traineeAssessmentForms     AssessmentForm[]    @relation("AssessmentFormTrainee")
@@ -196,7 +196,7 @@ model Department {
   id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name          String         @unique
   description   String?
-  headUserId    String?        @db.Uuid
+  headUserId    String?        @unique @db.Uuid
   createdById   String?        @db.Uuid
   updatedById   String?        @db.Uuid
   createdAt     DateTime       @default(now())
