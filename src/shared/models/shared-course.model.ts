@@ -1,6 +1,11 @@
 import z from 'zod'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
-import { isoDatetimeSchema, nullableStringField, nullableUuidSchema } from '~/shared/helpers/zod-validation.helper'
+import {
+  isoDateSchema,
+  isoDatetimeSchema,
+  nullableStringField,
+  nullableUuidSchema
+} from '~/shared/helpers/zod-validation.helper'
 import {
   courseCodeSchema,
   courseLevelSchema,
@@ -19,8 +24,8 @@ export const CourseSchema = z.object({
   venue: nullableStringField(z.string()),
   note: nullableStringField(z.string()),
   passScore: coursePassScoreSchema.optional(),
-  startDate: isoDatetimeSchema,
-  endDate: isoDatetimeSchema,
+  startDate: isoDateSchema,
+  endDate: isoDateSchema,
   level: courseLevelSchema,
   status: courseStatusSchema.default('PLANNED'),
   createdById: nullableUuidSchema,

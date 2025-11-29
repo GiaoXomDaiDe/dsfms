@@ -97,6 +97,9 @@ export const optionalAlphabeticCharacter = (value: string | null | undefined) =>
 /** Chuyển chuỗi ISO datetime thành Date nguyên thuỷ. */
 export const isoDatetimeSchema = z.iso.datetime().transform((value) => new Date(value))
 
+/** Chuyển chuỗi ISO date thành Date nguyên thuỷ. */
+export const isoDateSchema = z.iso.date().transform((value) => new Date(value))
+
 /** URL hợp lệ: chấp nhận null hoặc chuỗi rỗng (được chuyển thành null) */
 export const urlSchema = nullableStringField(z.url())
 

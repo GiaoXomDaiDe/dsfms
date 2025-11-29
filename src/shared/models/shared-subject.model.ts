@@ -1,5 +1,5 @@
 import z from 'zod'
-import { isoDatetimeSchema } from '~/shared/helpers/zod-validation.helper'
+import { isoDateSchema, isoDatetimeSchema } from '~/shared/helpers/zod-validation.helper'
 import {
   subjectCodeSchema,
   subjectDescriptionSchema,
@@ -29,8 +29,8 @@ export const SubjectSchema = z.object({
   timeSlot: subjectTimeSlotSchema,
   isSIM: z.boolean(),
   passScore: subjectPassScoreSchema,
-  startDate: isoDatetimeSchema,
-  endDate: isoDatetimeSchema,
+  startDate: isoDateSchema,
+  endDate: isoDateSchema,
   status: subjectStatusSchema,
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
