@@ -178,10 +178,11 @@ export class StatusUpdaterService {
   private async activateAssessmentsForToday() {
     const today = this.getStartOfToday()
     this.logToday('activateAssessmentsForToday', today)
+
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
-        id: '2d3c695e-9b52-4585-b159-871d4e9d3437', // Temporary fix for demo purposes
+        id: '2d3c695e-9b52-4585-b159-871d4e9d3437',
         occuranceDate: {
           equals: today
         }
@@ -190,12 +191,14 @@ export class StatusUpdaterService {
         status: AssessmentStatus.ON_GOING
       }
     })
+    this.logger.log(`activateAssessmentsForToday updated=${count}`)
     return count
   }
 
   private async cancelExpiredAssessments() {
     const today = this.getStartOfToday()
     this.logToday('cancelExpiredAssessments', today)
+
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         occuranceDate: {
@@ -210,6 +213,7 @@ export class StatusUpdaterService {
         status: AssessmentStatus.CANCELLED
       }
     })
+    this.logger.log(`cancelExpiredAssessments updated=${count}`)
     return count
   }
 
