@@ -182,6 +182,7 @@ export class StatusUpdaterService {
     const current = await this.prisma.assessmentForm.findUnique({
       where: { id: '2d3c695e-9b52-4585-b159-871d4e9d3437' }
     })
+    console.log('current, ', current)
     this.logger.log(`[activate] current=${JSON.stringify(current)}`)
 
     const { count } = await this.prisma.assessmentForm.updateMany({
