@@ -1,13 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { AssessmentStatus, Prisma } from '@prisma/client'
+import dayjs from 'dayjs'
+import timezone from 'dayjs/plugin/timezone'
+import utc from 'dayjs/plugin/utc'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectEnrollmentStatus, SubjectStatus } from '~/shared/constants/subject.constant'
 import { PrismaService } from '~/shared/services/prisma.service'
 
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
+const APP_TIMEZONE = 'Asia/Ho_Chi_Minh'
+
 @Injectable()
 export class StatusUpdaterService {
   private readonly logger = new Logger(StatusUpdaterService.name)
+
   private static readonly cancellableAssessmentStatuses: AssessmentStatus[] = [
     AssessmentStatus.NOT_STARTED,
     AssessmentStatus.ON_GOING,
@@ -20,7 +29,7 @@ export class StatusUpdaterService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'update-academic-statuses',
-    timeZone: 'Asia/Ho_Chi_Minh'
+    timeZone: APP_TIMEZONE
   })
   async handleStatusUpdate() {
     this.logger.log('Starting automatic status update...')
@@ -38,7 +47,7 @@ export class StatusUpdaterService {
 
   @Cron(CronExpression.EVERY_MINUTE, {
     name: 'assessment-schedule-keeper',
-    timeZone: 'Asia/Ho_Chi_Minh'
+    timeZone: APP_TIMEZONE
   })
   async handleAssessmentSchedule() {
     this.logger.log('Starting assessment schedule cron...')
@@ -53,7 +62,7 @@ export class StatusUpdaterService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'assessment-cancel-on-enrollment',
-    timeZone: 'Asia/Ho_Chi_Minh'
+    timeZone: APP_TIMEZONE
   })
   async handleCancelledEnrollmentAssessments() {
     this.logger.log('Starting assessment cancellation cron for cancelled enrollments...')
@@ -168,6 +177,7 @@ export class StatusUpdaterService {
 
   private async activateAssessmentsForToday() {
     const today = this.getStartOfToday()
+    this.logToday('activateAssessmentsForToday', today)
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
@@ -187,6 +197,7 @@ export class StatusUpdaterService {
 
   private async cancelExpiredAssessments() {
     const today = this.getStartOfToday()
+    this.logToday('cancelExpiredAssessments', today)
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         occuranceDate: {
@@ -274,8 +285,12 @@ export class StatusUpdaterService {
   }
 
   private getStartOfToday() {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return today
+    return dayjs().tz(APP_TIMEZONE).startOf('day').toDate()
+  }
+
+  private logToday(context: string, today: Date) {
+    this.logger.log(
+      `[${context}] today (VN) = ${dayjs(today).tz(APP_TIMEZONE).format('YYYY-MM-DD HH:mm:ss')}, iso=${today.toISOString()}`
+    )
   }
 }
