@@ -190,8 +190,6 @@ export class StatusUpdaterService {
         status: AssessmentStatus.ON_GOING
       }
     })
-    // log debug: today's date
-    this.logger.log(`Running activateAssessmentsForToday for today=${today.toISOString()}`)
     return count
   }
 
@@ -212,7 +210,6 @@ export class StatusUpdaterService {
         status: AssessmentStatus.CANCELLED
       }
     })
-    this.logger.log(`Running cancelExpiredAssessments for today=${today.toISOString()}`)
     return count
   }
 
