@@ -113,7 +113,7 @@ type EnrollmentWithTrainee = Prisma.SubjectEnrollmentGetPayload<{
 
 @Injectable()
 @SerializeAll()
-export class SubjectRepo {
+export class SubjectRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sharedCourseRepo: SharedCourseRepository,

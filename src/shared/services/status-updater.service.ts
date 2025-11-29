@@ -36,7 +36,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+  @Cron(CronExpression.EVERY_MINUTE, {
     name: 'assessment-schedule-keeper',
     timeZone: 'Asia/Ho_Chi_Minh'
   })
@@ -171,8 +171,9 @@ export class StatusUpdaterService {
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
+        id: '2d3c695e-9b52-4585-b159-871d4e9d3437', // Temporary fix for demo purposes
         occuranceDate: {
-          lte: today
+          equals: today
         }
       },
       data: {
@@ -190,6 +191,7 @@ export class StatusUpdaterService {
         occuranceDate: {
           lt: today
         },
+        id: '2d3c695e-9b52-4585-b159-871d4e9d3437',
         status: {
           in: StatusUpdaterService.cancellableAssessmentStatuses
         }
@@ -198,7 +200,7 @@ export class StatusUpdaterService {
         status: AssessmentStatus.CANCELLED
       }
     })
-
+    this.logger.log(`Running cancelExpiredAssessments for today=${today.toISOString()}`)
     return count
   }
 
