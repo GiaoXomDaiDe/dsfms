@@ -94,11 +94,24 @@ export const optionalAlphabeticCharacter = (value: string | null | undefined) =>
   return normalized.length === 0 || hasAlphabeticCharacter(normalized)
 }
 
-/** Chuyển chuỗi ISO datetime thành Date nguyên thuỷ. */
-export const isoDatetimeSchema = z.iso.datetime().transform((value) => new Date(value))
+const coerceToIsoDatetimeString = (value: unknown) => {
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
 
-/** Chuyển chuỗi ISO date thành Date nguyên thuỷ. */
-export const isoDateSchema = z.iso.date().transform((value) => new Date(value))
+  return value
+}
+
+const truncateToUtcMidnight = (value: Date) =>
+  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()))
+
+/** Chuyển chuỗi/Date ISO datetime thành Date nguyên thuỷ. */
+export const isoDatetimeSchema = z
+  .preprocess(coerceToIsoDatetimeString, z.iso.datetime())
+  .transform((value) => new Date(value))
+
+/** Chuyển chuỗi/Date thành Date với phần thời gian được đưa về 00:00:00 UTC. */
+export const isoDateSchema = z.coerce.date().transform((value) => truncateToUtcMidnight(value))
 
 /** URL hợp lệ: chấp nhận null hoặc chuỗi rỗng (được chuyển thành null) */
 export const urlSchema = nullableStringField(z.url())
