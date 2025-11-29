@@ -1570,7 +1570,13 @@ export class AssessmentRepo {
                 editBy: true,
                 roleInSubject: true,
                 isSubmittable: true,
-                isToggleDependent: true
+                isToggleDependent: true,
+                fields: {
+                  select: {
+                    id: true,
+                    fieldType: true
+                  }
+                }
               }
             },
             assessedBy: {
@@ -1638,8 +1644,24 @@ export class AssessmentRepo {
 
     const userMainRole = user?.role.name || 'UNKNOWN'
 
+    // Filter out TRAINEE sections that only have SIGNATURE_DRAW fields
+    const filteredSections = assessment.sections.filter((section) => {
+      // Only filter TRAINEE sections
+      if (section.templateSection.editBy === 'TRAINEE') {
+        const fields = section.templateSection.fields
+        
+        // If section has only one field and it's SIGNATURE_DRAW, exclude it
+        if (fields.length === 1 && fields[0].fieldType === 'SIGNATURE_DRAW') {
+          return false
+        }
+      }
+      
+      // Keep all other sections
+      return true
+    })
+
     // Process sections based on user role - TRAINER can see both TRAINER and TRAINEE sections
-    const accessibleSections = assessment.sections
+    const accessibleSections = filteredSections
       .map((section) => {
         let canAssess = false
         let roleRequirement: string | null = null
@@ -2258,6 +2280,12 @@ export class AssessmentRepo {
         if (templateField.fieldType === 'FINAL_SCORE_TEXT' && shouldHideFinalScoreText) {
           return false
         }
+        
+        // Filter out SIGNATURE_DRAW fields for TRAINEE sections (signature handling is in separate screen)
+        if (assessmentSection.templateSection.editBy === 'TRAINEE' && templateField.fieldType === 'SIGNATURE_DRAW') {
+          return false
+        }
+        
         return true
       })
       .map((templateField) => {

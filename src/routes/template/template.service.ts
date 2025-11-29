@@ -598,18 +598,25 @@ export class TemplateService {
         status
       } as CreateTemplateFormDto & { status: 'DRAFT' | 'PENDING' }
 
-      // Validate business rules only if status is PENDING
-      if (status === 'PENDING') {
-        this.validateTemplateBusinessRules(templateData.sections)
+      // Preprocess FINAL_SCORE_TEXT options before validation and schema generation
+      const processedSections = this.preprocessFinalScoreTextOptions(templateData.sections)
+      const templateDataWithProcessedSections = {
+        ...templateDataWithStatus,
+        sections: processedSections
       }
 
-      // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections)
+      // Validate business rules only if status is PENDING
+      if (status === 'PENDING') {
+        this.validateTemplateBusinessRules(processedSections)
+      }
+
+      // Generate nested template schema from processed sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(processedSections)
 
       // Create template with all nested data
       // Use alternative method for large templates if needed
       const result = await this.templateRepository.createTemplateWithSectionsAndFields(
-        templateDataWithStatus,
+        templateDataWithProcessedSections,
         userContext.userId,
         templateSchema
       )
@@ -874,7 +881,7 @@ export class TemplateService {
     const currentStatus = existingTemplate.status
 
     // Validate status transitions - only allow PUBLISHED ↔ DISABLED
-    if (currentStatus === 'DRAFT' || currentStatus === 'PENDING' || currentStatus === 'REJECTED') {
+    if (currentStatus === 'DRAFT' || currentStatus === 'PENDING') {
       throw new InvalidStatusTransitionError(currentStatus, newStatus)
     }
 
@@ -1089,16 +1096,23 @@ export class TemplateService {
         }
       }
 
-      // Validate business rules - updated template status will be changed to PENDING
-      this.validateTemplateBusinessRules(templateData.sections)
+      // Preprocess FINAL_SCORE_TEXT options before validation and schema generation
+      const processedSections = this.preprocessFinalScoreTextOptions(templateData.sections)
+      const templateDataWithProcessedSections = {
+        ...templateData,
+        sections: processedSections
+      }
 
-      // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections)
+      // Validate business rules - updated template status will be changed to PENDING
+      this.validateTemplateBusinessRules(processedSections)
+
+      // Generate nested template schema from processed sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(processedSections)
 
       // Update rejected template (recreate with preserved metadata)
       const result = await this.templateRepository.updateRejectedTemplate(
         templateId,
-        templateData,
+        templateDataWithProcessedSections,
         userContext.userId,
         templateSchema
       )
@@ -1209,18 +1223,25 @@ export class TemplateService {
         status
       } as CreateTemplateFormDto & { status: 'DRAFT' | 'PENDING' }
 
-      // Validate business rules only if status is PENDING
-      if (status === 'PENDING') {
-        this.validateTemplateBusinessRules(templateData.sections)
+      // Preprocess FINAL_SCORE_TEXT options before validation and schema generation
+      const processedSections = this.preprocessFinalScoreTextOptions(templateData.sections)
+      const templateDataWithProcessedSections = {
+        ...templateDataWithStatus,
+        sections: processedSections
       }
 
-      // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateData.sections)
+      // Validate business rules only if status is PENDING
+      if (status === 'PENDING') {
+        this.validateTemplateBusinessRules(processedSections)
+      }
+
+      // Generate nested template schema from processed sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(processedSections)
 
       // Update draft template (recreate with preserved metadata)
       const result = await this.templateRepository.updateDraftTemplate(
         templateId,
-        templateDataWithStatus,
+        templateDataWithProcessedSections,
         userContext.userId,
         templateSchema
       )
@@ -1508,9 +1529,12 @@ export class TemplateService {
     // Set default status to DRAFT if not provided
     const status = templateVersionData.status || 'DRAFT'
 
+    // Preprocess FINAL_SCORE_TEXT options before validation and schema generation
+    const processedSections = this.preprocessFinalScoreTextOptions(templateVersionData.sections)
+
     // Validate business rules only if status is PENDING
     if (status === 'PENDING') {
-      this.validateTemplateBusinessRules(templateVersionData.sections)
+      this.validateTemplateBusinessRules(processedSections)
     }
 
     // Generate appropriate name for the new version
@@ -1532,8 +1556,8 @@ export class TemplateService {
     }
 
     try {
-      // Generate nested template schema from sections and fields
-      const templateSchema = this.generateNestedSchemaFromSections(templateVersionData.sections)
+      // Generate nested template schema from processed sections and fields
+      const templateSchema = this.generateNestedSchemaFromSections(processedSections)
 
       // Create new template version with all nested data
       const result = await this.templateRepository.createTemplateVersion(
@@ -1543,7 +1567,7 @@ export class TemplateService {
           description: templateVersionData.description,
           templateContent: templateVersionData.templateContent,
           templateConfig: templateVersionData.templateConfig,
-          sections: templateVersionData.sections,
+          sections: processedSections,
           status: status
         },
         userContext.userId,
@@ -1685,6 +1709,48 @@ export class TemplateService {
   }
 
   /**
+   * Preprocess sections to set hardcoded options for FINAL_SCORE_TEXT when FINAL_SCORE_NUM is not present
+   */
+  private preprocessFinalScoreTextOptions(sections: any[]): any[] {
+    // Collect all fields from all sections to check for FINAL_SCORE_NUM
+    const allFields: any[] = []
+    for (const section of sections) {
+      if (section.fields && Array.isArray(section.fields)) {
+        allFields.push(...section.fields)
+      }
+    }
+
+    const hasFinalScoreNum = allFields.some((field: any) => field.fieldType === 'FINAL_SCORE_NUM')
+
+    // If no FINAL_SCORE_NUM exists, set hardcoded options for FINAL_SCORE_TEXT fields
+    if (!hasFinalScoreNum) {
+      const processedSections = sections.map((section) => {
+        if (!section.fields || !Array.isArray(section.fields)) return section
+
+        const processedFields = section.fields.map((field: any) => {
+          if (field.fieldType === 'FINAL_SCORE_TEXT') {
+            return {
+              ...field,
+              options: { items: ["Pass", "Fail"] } // Hardcoded JSONB options
+            }
+          }
+          return field
+        })
+
+        return {
+          ...section,
+          fields: processedFields
+        }
+      })
+
+      return processedSections
+    }
+
+    // If FINAL_SCORE_NUM exists, return sections as-is
+    return sections
+  }
+
+  /**
    * Validate template business rules
    */
   private validateTemplateBusinessRules(sections: any[]) {
@@ -1808,33 +1874,9 @@ export class TemplateService {
       throw new DuplicateFinalScoreFieldsError('FINAL_SCORE_TEXT')
     }
 
-    // 7. Validate FINAL_SCORE_TEXT options based on FINAL_SCORE_NUM presence
-    if (finalScoreTextFields.length > 0) {
-      const finalScoreTextField = finalScoreTextFields[0]
-      const hasFinalScoreNum = finalScoreNumFields.length > 0
-
-      if (!hasFinalScoreNum) {
-        // If only FINAL_SCORE_TEXT exists (no FINAL_SCORE_NUM), options are required
-        if (!finalScoreTextField.options) {
-          throw new FinalScoreTextRequiredOptionsError()
-        }
-
-        // Validate options format
-        try {
-          const options =
-            typeof finalScoreTextField.options === 'string'
-              ? JSON.parse(finalScoreTextField.options)
-              : finalScoreTextField.options
-
-          if (!options.items || !Array.isArray(options.items) || options.items.length === 0) {
-            throw new FinalScoreTextInvalidOptionsError()
-          }
-        } catch (parseError) {
-          throw new FinalScoreTextInvalidJsonError()
-        }
-      }
-      // If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist, options are optional for FINAL_SCORE_TEXT
-    }
+    // 7. FINAL_SCORE_TEXT validation - options are automatically set if needed
+    // No validation needed here as options are handled in preprocessing
+    // If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist, options are optional for FINAL_SCORE_TEXT
   }
 
   /**

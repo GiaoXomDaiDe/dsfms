@@ -1353,6 +1353,9 @@ export class AssessmentService {
 
       // Send email notification if assessment is rejected
       if (body.action === 'REJECTED') {
+        // Log that rejection comment is being saved to assessment form
+        console.log(`Assessment ${assessmentId} rejected with comment: "${body.comment || 'No comment provided'}" - Comment saved to assessment form`)
+        
         try {
           // Get detailed assessment information for email
           const detailedAssessment = await this.assessmentRepo.getAssessmentWithDetails(assessmentId)
@@ -1607,7 +1610,7 @@ export class AssessmentService {
 
         console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - resultText: ${resultText}`)
       }
-      // Case 3: Only FINAL_SCORE_NUM exists
+      // Case 3: Only FINAL_SCORE_NUM exists AND passScore is defined
       else if (finalScoreNumValue && !finalScoreTextValue && passScore !== null) {
         const scoreValue = parseFloat(finalScoreNumValue.answerValue || '0')
         resultScore = scoreValue
@@ -1620,13 +1623,31 @@ export class AssessmentService {
           `Assessment ${assessmentId} has only FINAL_SCORE_NUM field - score: ${scoreValue}, result: ${resultText}`
         )
       }
+      // Case 4: Only FINAL_SCORE_NUM exists BUT no passScore is defined
+      else if (finalScoreNumValue && !finalScoreTextValue && passScore === null) {
+        const scoreValue = parseFloat(finalScoreNumValue.answerValue || '0')
+        resultScore = scoreValue
+        // Since no passScore is defined, cannot determine PASS/FAIL
+        resultText = AssessmentResult.NOT_APPLICABLE
+
+        console.log(
+          `Assessment ${assessmentId} has FINAL_SCORE_NUM but no passScore defined - score: ${scoreValue}, cannot calculate result`
+        )
+      }
+
+      // Prepare comment for cases where result cannot be calculated due to missing passScore
+      let comment: string | null = null
+      if (finalScoreNumValue && passScore === null) {
+        comment = 'Cannot calculate result because Course does not have pass Score defined, ask Administrator to check through report'
+      }
 
       // Update AssessmentForm with calculated results
       await this.assessmentRepo.prismaClient.assessmentForm.update({
         where: { id: assessmentId },
         data: {
           resultScore: resultScore,
-          resultText: resultText
+          resultText: resultText,
+          ...(comment && { comment: comment })
         }
       })
 
