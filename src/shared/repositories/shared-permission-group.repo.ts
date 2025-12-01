@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import {
+  permissionGroupActiveEndpointMappingSelect,
+  permissionGroupOrderBy,
+  permissionGroupSummarySelect
+} from '~/shared/prisma-presets/shared-permission-group.prisma-presets'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 type ActivePermissionGroupMapping = {
   id: string
   permissionGroupCode: string
   groupName: string
+  name: string
   permissions: {
     endpointPermissionId: string
   }[]
@@ -31,13 +37,8 @@ export class SharedPermissionGroupRepository {
           }
         }
       },
-      select: {
-        id: true,
-        groupName: true,
-        permissionGroupCode: true,
-        name: true
-      },
-      orderBy: [{ groupName: 'asc' }, { permissionGroupCode: 'asc' }]
+      select: permissionGroupSummarySelect,
+      orderBy: permissionGroupOrderBy
     })
   }
 
@@ -58,22 +59,10 @@ export class SharedPermissionGroupRepository {
     return endpoints.map((endpoint) => endpoint.id)
   }
 
-  findAllGroupsWithActiveEndpointMappings() {
+  findAllGroupsWithActiveEndpointMappings(): Promise<ActivePermissionGroupMapping[]> {
     return this.prismaService.permissionGroup.findMany({
-      include: {
-        permissions: {
-          where: {
-            endpointPermission: {
-              deletedAt: null,
-              isActive: true
-            }
-          },
-          select: {
-            endpointPermissionId: true
-          }
-        }
-      },
-      orderBy: [{ groupName: 'asc' }, { permissionGroupCode: 'asc' }]
+      select: permissionGroupActiveEndpointMappingSelect,
+      orderBy: permissionGroupOrderBy
     })
   }
 
@@ -88,22 +77,7 @@ export class SharedPermissionGroupRepository {
           in: permissionGroupCodes
         }
       },
-      select: {
-        id: true,
-        permissionGroupCode: true,
-        groupName: true,
-        permissions: {
-          where: {
-            endpointPermission: {
-              deletedAt: null,
-              isActive: true
-            }
-          },
-          select: {
-            endpointPermissionId: true
-          }
-        }
-      }
+      select: permissionGroupActiveEndpointMappingSelect
     })
   }
 }

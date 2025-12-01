@@ -1,5 +1,5 @@
 import z from 'zod'
-import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/report.constant'
+import { ReportSeverity, ReportStatus, ReportType } from '~/shared/constants/report.constant'
 import { userNameSchema } from '~/shared/validation/user.validation'
 
 const reportUserSummarySchema = z.object({
@@ -15,22 +15,22 @@ const reportUserSummarySchema = z.object({
 export const ReportSchema = z.object({
   id: z.uuid(),
   requestType: z.enum([
-    RequestType.FEEDBACK,
-    RequestType.COURSE_ORGANIZATION_REPORT,
-    RequestType.FACILITIES_REPORT,
-    RequestType.FATIGUE_REPORT,
-    RequestType.INSTRUCTOR_REPORT,
-    RequestType.TRAINING_PROGRAM_REPORT,
-    RequestType.OTHER,
-    RequestType.SAFETY_REPORT
+    ReportType.FEEDBACK,
+    ReportType.COURSE_ORGANIZATION_REPORT,
+    ReportType.FACILITIES_REPORT,
+    ReportType.FATIGUE_REPORT,
+    ReportType.INSTRUCTOR_REPORT,
+    ReportType.TRAINING_PROGRAM_REPORT,
+    ReportType.OTHER,
+    ReportType.SAFETY_REPORT
   ]),
   createdById: z.uuid(),
-  severity: z.enum(RequestSeverity).nullable(),
+  severity: z.enum(ReportSeverity).nullable(),
   title: z.string().max(255).nullable(),
   description: z.string().max(4000).nullable(),
   actionsTaken: z.string().max(2000).nullable(),
   isAnonymous: z.boolean().default(false),
-  status: z.enum(RequestStatus),
+  status: z.enum(ReportStatus),
   managedById: z.uuid().nullable(),
   response: z.string().max(4000).nullable(),
   createdAt: z.iso.datetime().transform((d) => new Date(d)),
@@ -41,4 +41,4 @@ export const ReportSchema = z.object({
   managedBy: reportUserSummarySchema.nullable()
 })
 
-export type ReportType = z.infer<typeof ReportSchema>
+export type ReportModel = z.infer<typeof ReportSchema>

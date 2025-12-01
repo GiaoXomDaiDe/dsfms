@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException } from '@nestjs/common'
 import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 /* =========================
@@ -6,7 +6,7 @@ import { ValidationException } from '~/shared/exceptions/validation.exception'
  * ========================= */
 
 // Lỗi khi không tìm thấy role
-export const NotFoundRoleException = new NotFoundException('Role not found')
+export const NotFoundRoleException = new BadRequestException('Role not found')
 
 // Lỗi khi tạo role với tên đã tồn tại
 export const RoleAlreadyExistsException = new ValidationException([
@@ -51,7 +51,7 @@ export const DuplicatePermissionIdsException = new BadRequestException({
 })
 
 // Lỗi khi không tìm thấy permission cho role
-export const PermissionNotFoundForRoleException = new NotFoundException({
+export const PermissionNotFoundForRoleException = new BadRequestException({
   message: 'One or more permissions not found',
   errorCode: 'PERMISSION_NOT_FOUND_FOR_ROLE'
 })
@@ -67,20 +67,20 @@ export const CannotDeleteRoleWithUsersException = new ConflictException({
 })
 
 // Lỗi khi xóa system roles
-export const CannotDeleteSystemRoleException = new ForbiddenException({
+export const CannotDeleteSystemRoleException = new BadRequestException({
   message: 'Cannot delete system roles (ADMINISTRATOR, DEPARTMENT_HEAD, ACADEMIC_DEPARTMENT)',
   errorCode: 'CANNOT_DELETE_SYSTEM_ROLE'
 })
 
 // Lỗi khi thực hiện hành động bị cấm trên base role
-export const ProhibitedActionOnBaseRoleException = new ForbiddenException('Prohibited action on base role')
+export const ProhibitedActionOnBaseRoleException = new BadRequestException('Prohibited action on base role')
 
 /* =========================
  * Role Access Control Exceptions - Lỗi về quyền truy cập
  * ========================= */
 
 // Lỗi khi chỉ admin mới được quản lý roles
-export const OnlyAdminCanManageRolesException = new ForbiddenException({
+export const OnlyAdminCanManageRolesException = new BadRequestException({
   message: 'Only administrators can manage roles',
   errorCode: 'ONLY_ADMIN_CAN_MANAGE_ROLES'
 })
@@ -92,7 +92,7 @@ export const CannotDeactivateOwnRoleException = new ConflictException({
 })
 
 // Lỗi khi cố gắng modify system roles
-export const CannotModifySystemRoleException = new ForbiddenException({
+export const CannotModifySystemRoleException = new BadRequestException({
   message: 'Cannot modify system roles (ADMINISTRATOR, DEPARTMENT_HEAD, ACADEMIC_DEPARTMENT)',
   errorCode: 'CANNOT_MODIFY_SYSTEM_ROLE'
 })
@@ -158,7 +158,7 @@ export function createRoleAlreadyActiveError(roleName: string) {
  * Lỗi khi không có quyền admin để thực hiện operation
  */
 export function createRequireAdminPermissionError(operation: string) {
-  return new ForbiddenException({
+  return new BadRequestException({
     message: `Only administrators can ${operation}`,
     errorCode: 'REQUIRE_ADMIN_PERMISSION',
     operation,
@@ -167,7 +167,7 @@ export function createRequireAdminPermissionError(operation: string) {
 }
 
 export function createPermissionGroupNotFoundError(permissionGroupCodes: string[]) {
-  return new NotFoundException({
+  return new BadRequestException({
     message: `Permission group codes not found: ${permissionGroupCodes.join(', ')}`,
     errorCode: 'PERMISSION_GROUP_NOT_FOUND',
     permissionGroupCodes

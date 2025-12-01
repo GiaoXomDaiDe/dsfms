@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common'
+import {
+  permissionGroupDetailSelect,
+  permissionGroupOrderBy
+} from '~/shared/prisma-presets/shared-permission-group.prisma-presets'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CreatePermissionGroupBodyType,
@@ -16,7 +20,7 @@ export class PermissionGroupRepo {
 
   list(): Promise<PermissionGroupType[]> {
     return this.prisma.permissionGroup.findMany({
-      orderBy: [{ groupName: 'asc' }, { permissionGroupCode: 'asc' }]
+      orderBy: permissionGroupOrderBy
     })
   }
 
@@ -27,28 +31,7 @@ export class PermissionGroupRepo {
   findDetailById(id: string) {
     return this.prisma.permissionGroup.findUnique({
       where: { id },
-      select: {
-        id: true,
-        groupName: true,
-        name: true,
-        permissionGroupCode: true,
-        permissions: {
-          select: {
-            endpointPermission: {
-              select: {
-                id: true,
-                name: true,
-                method: true,
-                path: true,
-                module: true,
-                description: true,
-                viewModule: true,
-                viewName: true
-              }
-            }
-          }
-        }
-      }
+      select: permissionGroupDetailSelect
     })
   }
 

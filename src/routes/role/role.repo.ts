@@ -9,30 +9,12 @@ import {
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import {
+  activeEndpointPermissionFilter,
+  roleDetailInclude,
+  roleListWithUserCountInclude
+} from '~/shared/prisma-presets/shared-role.prisma-presets'
 import { PrismaService } from '~/shared/services/prisma.service'
-
-const activePermissionFilter = {
-  deletedAt: null,
-  isActive: true
-} satisfies Prisma.EndpointPermissionWhereInput
-
-const roleDetailInclude = {
-  permissions: {
-    where: activePermissionFilter
-  },
-  _count: {
-    select: {
-      users: {
-        where: {
-          deletedAt: null
-        }
-      },
-      permissions: {
-        where: activePermissionFilter
-      }
-    }
-  }
-} as const
 @Injectable()
 @SerializeAll()
 export class RoleRepo {
@@ -40,13 +22,7 @@ export class RoleRepo {
 
   async list(): Promise<GetRolesResType> {
     const rolesWithCount = await this.prismaService.role.findMany({
-      include: {
-        _count: {
-          select: {
-            users: true
-          }
-        }
-      }
+      include: roleListWithUserCountInclude
     })
 
     const roles = rolesWithCount.map(({ _count, ...role }) => ({
@@ -221,7 +197,7 @@ export class RoleRepo {
       where: { id: roleId },
       include: {
         permissions: {
-          where: activePermissionFilter,
+          where: activeEndpointPermissionFilter,
           select: { id: true }
         }
       }
@@ -251,7 +227,7 @@ export class RoleRepo {
     const addedPermissions = await this.prismaService.endpointPermission.findMany({
       where: {
         id: { in: newPermissionIds },
-        ...activePermissionFilter
+        ...activeEndpointPermissionFilter
       }
     })
 
@@ -271,7 +247,7 @@ export class RoleRepo {
       where: { id: roleId },
       include: {
         permissions: {
-          where: activePermissionFilter,
+          where: activeEndpointPermissionFilter,
           select: { id: true }
         }
       }
@@ -301,7 +277,7 @@ export class RoleRepo {
     const removedPermissions = await this.prismaService.endpointPermission.findMany({
       where: {
         id: { in: permissionIdsToRemove },
-        ...activePermissionFilter
+        ...activeEndpointPermissionFilter
       }
     })
 

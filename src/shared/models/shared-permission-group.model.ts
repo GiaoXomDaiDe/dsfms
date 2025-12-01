@@ -19,5 +19,17 @@ export const PermissionGroupPermissionSchema = z.object({
   viewName: z.string().nullable()
 })
 
+export const PermissionGroupCollectionItemSchema = z.object({
+  code: z.string(),
+  name: z.string()
+})
+
+export const PermissionGroupCollectionSchema = z.object({
+  featureGroup: z.string(),
+  permissions: PermissionGroupCollectionItemSchema.array()
+})
+
 export type PermissionGroupType = z.infer<typeof PermissionGroupSchema>
 export type PermissionGroupPermissionType = z.infer<typeof PermissionGroupPermissionSchema>
+export type PermissionGroupCollectionItemType = z.infer<typeof PermissionGroupCollectionItemSchema>
+export type PermissionGroupCollectionType = z.infer<typeof PermissionGroupCollectionSchema>

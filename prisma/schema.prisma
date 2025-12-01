@@ -70,9 +70,9 @@ model User {
   role                       Role                @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedBy                  User?               @relation("UserUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
   updatedUsers               User[]              @relation("UserUpdatedBy")
-  createdRequests            Request[]           @relation("RequestCreatedBy")
-  managedRequests            Request[]           @relation("RequestManagedBy")
-  updatedRequests            Request[]           @relation("RequestUpdatedBy")
+  createdReports             Report[]            @relation("ReportCreatedBy")
+  managedReports             Report[]            @relation("ReportManagedBy")
+  updatedReports             Report[]            @relation("ReportUpdatedBy")
   headOfDepartment           Department?         @relation("DepartmentHead")
   createdAssessmentForms     AssessmentForm[]    @relation("AssessmentFormCreatedBy")
   updatedAssessmentForms     AssessmentForm[]    @relation("AssessmentFormUpdatedBy")
@@ -384,31 +384,31 @@ model AssessmentSection {
   @@map("Assessment_Section")
 }
 
-model Request {
+model Report {
   id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  requestType     RequestType
+  requestType     ReportType
   createdById     String           @db.Uuid
-  severity        RequestSeverity?
+  severity        ReportSeverity?
   title           String?
   description     String?
   actionsTaken    String?
   isAnonymous     Boolean          @default(false)
-  status          RequestStatus    @default(SUBMITTED)
+  status          ReportStatus     @default(SUBMITTED)
   managedById     String?          @db.Uuid
   response        String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @default(now()) @updatedAt
   updatedById     String?          @db.Uuid
-  createdBy       User             @relation("RequestCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
-  managedBy       User?            @relation("RequestManagedBy", fields: [managedById], references: [id], onUpdate: NoAction)
-  updatedBy       User?            @relation("RequestUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
+  createdBy       User             @relation("ReportCreatedBy", fields: [createdById], references: [id], onUpdate: NoAction)
+  managedBy       User?            @relation("ReportManagedBy", fields: [managedById], references: [id], onUpdate: NoAction)
+  updatedBy       User?            @relation("ReportUpdatedBy", fields: [updatedById], references: [id], onUpdate: NoAction)
 
   @@index([requestType])
   @@index([status])
   @@index([createdById])
   @@index([managedById])
   @@index([createdAt])
-  @@map("Request")
+  @@map("Report")
 }
 
 model GlobalField {
@@ -538,7 +538,7 @@ enum UserStatus {
   DISABLED
 }
 
-enum RequestType {
+enum ReportType {
   SAFETY_REPORT
   INSTRUCTOR_REPORT
   FATIGUE_REPORT
@@ -549,14 +549,14 @@ enum RequestType {
   OTHER
 }
 
-enum RequestSeverity {
+enum ReportSeverity {
   LOW
   MEDIUM
   HIGH
   CRITICAL
 }
 
-enum RequestStatus {
+enum ReportStatus {
   SUBMITTED
   ACKNOWLEDGED
   RESOLVED
