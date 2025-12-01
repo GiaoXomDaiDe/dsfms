@@ -111,7 +111,7 @@ export class RoleService {
     data: UpdateRoleBodyType
     updatedById: string
   }): Promise<RoleWithPermissionsType> {
-    const existingRole = await this.sharedRoleRepo.findRolebyId(id)
+    const existingRole = await this.sharedRoleRepo.findById(id)
     if (!existingRole) throw NotFoundRoleException
 
     let permissionIds: string[] | undefined

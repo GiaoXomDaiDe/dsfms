@@ -1,20 +1,17 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
 import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
 import {
   BulkDuplicateDataFoundMessage,
   BulkEmailAlreadyExistsMessage,
   BulkUnknownErrorMessage,
-  DuplicateEmailInBatchMessage,
   UserNotFoundException
 } from '~/routes/user/user.error'
 import {
-  BulkCreateResultType,
+  BulkCreateResType,
   BulkUserData,
-  CreateUserInternalType,
-  GetUsersQueryType,
+  CreateUserOnlyType,
+  GetUserResType,
   GetUsersResType,
-  GetUserWithProfileResType,
   UserProfileWithoutTeachingType,
   UserWithProfileRelationType
 } from '~/routes/user/user.model'
@@ -31,10 +28,10 @@ import {
 import { PrismaService } from '~/shared/services/prisma.service'
 
 const mapToUserProfileWithoutTeaching = (user: UserWithProfileRelationType): UserProfileWithoutTeachingType => {
-  const { passwordHash: _passwordHash, roleId: _roleId, departmentId: _departmentId, ...publicFields } = user
+  const { passwordHash: _passwordHash, roleId: _roleId, departmentId: _departmentId, ...safeUser } = user
 
   return {
-    ...publicFields,
+    ...safeUser,
     role: user.role,
     department: user.department ?? null,
     trainerProfile: user.trainerProfile ?? null,
@@ -42,12 +39,16 @@ const mapToUserProfileWithoutTeaching = (user: UserWithProfileRelationType): Use
   }
 }
 
-const withTeachingAssignmentDefaults = (user: UserWithProfileRelationType | null): GetUserWithProfileResType | null => {
+const withTeachingAssignmentDefaults = (user: UserWithProfileRelationType | null): GetUserResType | null => {
   if (!user) {
     return null
   }
 
   const baseProfile = mapToUserProfileWithoutTeaching(user)
+
+  if (user.role.name !== RoleName.TRAINER) {
+    return baseProfile as GetUserResType
+  }
 
   return {
     ...baseProfile,
@@ -61,17 +62,8 @@ const withTeachingAssignmentDefaults = (user: UserWithProfileRelationType | null
 export class UserRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async list({ roleName }: GetUsersQueryType = {}): Promise<GetUsersResType> {
-    const whereClause: Prisma.UserWhereInput = roleName
-      ? {
-          role: {
-            name: roleName
-          }
-        }
-      : {}
-
+  async list(): Promise<GetUsersResType> {
     const data = await this.prismaService.user.findMany({
-      where: whereClause,
       omit: {
         passwordHash: true,
         roleId: true,
@@ -85,7 +77,7 @@ export class UserRepository {
     }
   }
 
-  async createWithProfile({
+  async create({
     createdById,
     userData,
     roleName,
@@ -93,11 +85,11 @@ export class UserRepository {
     traineeProfile
   }: {
     createdById: string | null
-    userData: CreateUserInternalType
+    userData: CreateUserOnlyType
     roleName: string
     trainerProfile?: CreateTrainerProfileType
     traineeProfile?: CreateTraineeProfileType
-  }): Promise<GetUserWithProfileResType | null> {
+  }): Promise<GetUserResType | null> {
     return await this.prismaService.$transaction(async (tx) => {
       // Bước 1: Tạo user cơ bản
       const newUser = await tx.user.create({
@@ -124,11 +116,11 @@ export class UserRepository {
         await tx.traineeProfile.create({
           data: {
             userId: newUser.id,
-            dob: traineeProfile.dob,
-            enrollmentDate: new Date(traineeProfile.enrollmentDate || ''),
+            dob: new Date(traineeProfile.dob),
+            enrollmentDate: traineeProfile.enrollmentDate ? new Date(traineeProfile.enrollmentDate) : null,
             trainingBatch: traineeProfile.trainingBatch,
             passportNo: traineeProfile.passportNo,
-            nation: traineeProfile.nation || null,
+            nation: traineeProfile.nation ?? null,
             createdById
           }
         })
@@ -152,8 +144,8 @@ export class UserRepository {
     usersData: BulkUserData[]
     createdById: string
     chunkSize?: number
-  }): Promise<BulkCreateResultType> {
-    const results: BulkCreateResultType = {
+  }): Promise<BulkCreateResType> {
+    const results: BulkCreateResType = {
       success: [],
       failed: [],
       summary: {
@@ -162,8 +154,6 @@ export class UserRepository {
         failed: 0
       }
     }
-
-    const seenEmails = new Map<string, number>()
 
     const toFailedUserData = (userData: BulkUserData) => {
       const { roleId, passwordHash, eid, roleName, ...originalUserData } = userData
@@ -178,200 +168,172 @@ export class UserRepository {
     for (let i = 0; i < usersData.length; i += chunkSize) {
       const chunk = usersData.slice(i, i + chunkSize)
 
-      const chunkEntries = chunk.map((userData, chunkIndex) => ({
+      const entries = chunk.map((userData, chunkIndex) => ({
         userData,
         originalIndex: i + chunkIndex
       }))
 
-      const payloadDuplicateFailures: Array<{
-        index: number
-        error: string
-        userData: ReturnType<typeof toFailedUserData>
-      }> = []
-      const candidatesForTransaction: Array<{
-        userData: BulkUserData
-        originalIndex: number
-      }> = []
-
-      chunkEntries.forEach(({ userData, originalIndex }) => {
-        const email = userData.email
-        const firstSeenIndex = seenEmails.get(email)
-
-        if (firstSeenIndex !== undefined) {
-          payloadDuplicateFailures.push({
-            index: originalIndex,
-            error: DuplicateEmailInBatchMessage(email, firstSeenIndex, originalIndex),
-            userData: toFailedUserData(userData)
-          })
-        } else {
-          seenEmails.set(email, originalIndex)
-          candidatesForTransaction.push({ userData, originalIndex })
-        }
-      })
-
-      if (candidatesForTransaction.length > 0) {
-        try {
-          const chunkResults = await this.prismaService.$transaction(
-            async (tx) => {
-              const emails = candidatesForTransaction.map(({ userData }) => userData.email)
-
-              const existingUsers = await tx.user.findMany({
-                where: {
-                  email: { in: emails },
-                  deletedAt: null
-                },
-                select: { email: true }
-              })
-
-              const existingEmails = new Set(existingUsers.map((u) => u.email))
-
-              const validUsersInChunk: Array<{ userData: BulkUserData; originalIndex: number }> = []
-              const duplicateUsersInChunk: Array<{ userData: BulkUserData; originalIndex: number }> = []
-
-              candidatesForTransaction.forEach((entry) => {
-                if (existingEmails.has(entry.userData.email)) {
-                  duplicateUsersInChunk.push(entry)
-                } else {
-                  validUsersInChunk.push(entry)
-                }
-              })
-
-              if (validUsersInChunk.length === 0) {
-                return {
-                  created: [],
-                  duplicates: duplicateUsersInChunk
-                }
-              }
-
-              const usersToCreate = validUsersInChunk.map(({ userData }) => ({
-                ...userData,
-                createdById,
-                trainerProfile: undefined,
-                traineeProfile: undefined,
-                roleName: undefined
-              }))
-
-              const createdUsers = await tx.user.createManyAndReturn({
-                data: usersToCreate,
-                include: userRoleDepartmentInclude
-              })
-
-              const trainerProfiles: any[] = []
-              const traineeProfiles: any[] = []
-
-              validUsersInChunk.forEach(({ userData }, index) => {
-                const userId = createdUsers[index].id
-
-                if (userData.roleName === RoleName.TRAINER && userData.trainerProfile) {
-                  trainerProfiles.push({
-                    userId,
-                    specialization: userData.trainerProfile.specialization,
-                    certificationNumber: userData.trainerProfile.certificationNumber,
-                    yearsOfExp: Number(userData.trainerProfile.yearsOfExp),
-                    bio: userData.trainerProfile.bio,
-                    createdById
-                  })
-                }
-
-                if (userData.roleName === RoleName.TRAINEE && userData.traineeProfile) {
-                  traineeProfiles.push({
-                    userId,
-                    dob: userData.traineeProfile.dob,
-                    enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
-                    trainingBatch: userData.traineeProfile.trainingBatch,
-                    passportNo: userData.traineeProfile.passportNo || null,
-                    nation: userData.traineeProfile.nation || null,
-                    createdById
-                  })
-                }
-              })
-
-              if (trainerProfiles.length > 0) {
-                await tx.trainerProfile.createMany({
-                  data: trainerProfiles
-                })
-              }
-
-              if (traineeProfiles.length > 0) {
-                await tx.traineeProfile.createMany({
-                  data: traineeProfiles
-                })
-              }
-
-              const completeUsers = await tx.user.findMany({
-                where: {
-                  id: { in: createdUsers.map((u) => u.id) }
-                },
-                include: {
-                  ...userRoleDepartmentInclude,
-                  trainerProfile: true,
-                  traineeProfile: true
-                }
-              })
-
-              const finalUsers = completeUsers.map((user) => {
-                const { trainerProfile, traineeProfile, ...baseUser } = user
-
-                if (user.role.name === RoleName.TRAINER && trainerProfile) {
-                  return { ...baseUser, trainerProfile }
-                }
-
-                if (user.role.name === RoleName.TRAINEE && traineeProfile) {
-                  return { ...baseUser, traineeProfile }
-                }
-
-                return baseUser
-              })
-
-              return {
-                created: finalUsers,
-                duplicates: duplicateUsersInChunk
-              }
-            },
-            {
-              timeout: 30000
-            }
-          )
-
-          results.success.push(...chunkResults.created)
-          results.summary.successful += chunkResults.created.length
-
-          chunkResults.duplicates.forEach(({ userData, originalIndex }) => {
-            results.failed.push({
-              index: originalIndex,
-              error: BulkEmailAlreadyExistsMessage(userData.email),
-              userData: toFailedUserData(userData)
-            })
-          })
-          results.summary.failed += chunkResults.duplicates.length
-        } catch (error) {
-          candidatesForTransaction.forEach(({ userData, originalIndex }) => {
-            let errorMessage = BulkUnknownErrorMessage
-            if (error instanceof Error) {
-              if (error.message.includes('Unique constraint failed on the fields: (`email`)')) {
-                errorMessage = BulkEmailAlreadyExistsMessage(userData.email)
-              } else if (error.message.includes('Unique constraint failed')) {
-                errorMessage = BulkDuplicateDataFoundMessage
-              } else {
-                errorMessage = error.message
-              }
-            }
-
-            results.failed.push({
-              index: originalIndex,
-              error: errorMessage,
-              userData: toFailedUserData(userData)
-            })
-          })
-          results.summary.failed += candidatesForTransaction.length
-
-          console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
-        }
+      if (entries.length === 0) {
+        continue
       }
 
-      if (payloadDuplicateFailures.length > 0) {
-        results.failed.push(...payloadDuplicateFailures)
-        results.summary.failed += payloadDuplicateFailures.length
+      try {
+        const chunkResults = await this.prismaService.$transaction(
+          async (tx) => {
+            // Lấy danh sách email trong chunk
+            const emails = entries.map(({ userData }) => userData.email)
+
+            // Check email đã tồn tại trong DB
+            const existingUsers = await tx.user.findMany({
+              where: {
+                email: { in: emails },
+                deletedAt: null
+              },
+              select: { email: true }
+            })
+
+            const existingEmails = new Set(existingUsers.map((u) => u.email))
+
+            const validUsersInChunk: Array<{ userData: BulkUserData; originalIndex: number }> = []
+            const duplicateUsersInChunk: Array<{ userData: BulkUserData; originalIndex: number }> = []
+
+            entries.forEach((entry) => {
+              if (existingEmails.has(entry.userData.email)) {
+                duplicateUsersInChunk.push(entry) // email đã tồn tại trong DB
+              } else {
+                validUsersInChunk.push(entry) // email chưa tồn tại, được phép tạo
+              }
+            })
+
+            if (validUsersInChunk.length === 0) {
+              return {
+                created: [],
+                duplicates: duplicateUsersInChunk
+              }
+            }
+
+            // Chuẩn bị data tạo user
+            const usersToCreate = validUsersInChunk.map(({ userData }) => ({
+              ...userData,
+              createdById,
+              trainerProfile: undefined,
+              traineeProfile: undefined,
+              roleName: undefined
+            }))
+
+            const createdUsers = await tx.user.createManyAndReturn({
+              data: usersToCreate,
+              include: userRoleDepartmentInclude
+            })
+
+            const trainerProfiles: any[] = []
+            const traineeProfiles: any[] = []
+
+            validUsersInChunk.forEach(({ userData }, index) => {
+              const userId = createdUsers[index].id
+
+              if (userData.roleName === RoleName.TRAINER && userData.trainerProfile) {
+                trainerProfiles.push({
+                  userId,
+                  specialization: userData.trainerProfile.specialization,
+                  certificationNumber: userData.trainerProfile.certificationNumber,
+                  yearsOfExp: Number(userData.trainerProfile.yearsOfExp),
+                  bio: userData.trainerProfile.bio,
+                  createdById
+                })
+              }
+
+              if (userData.roleName === RoleName.TRAINEE && userData.traineeProfile) {
+                traineeProfiles.push({
+                  userId,
+                  dob: userData.traineeProfile.dob,
+                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
+                  trainingBatch: userData.traineeProfile.trainingBatch,
+                  passportNo: userData.traineeProfile.passportNo || null,
+                  nation: userData.traineeProfile.nation || null,
+                  createdById
+                })
+              }
+            })
+
+            if (trainerProfiles.length > 0) {
+              await tx.trainerProfile.createMany({ data: trainerProfiles })
+            }
+
+            if (traineeProfiles.length > 0) {
+              await tx.traineeProfile.createMany({ data: traineeProfiles })
+            }
+
+            const completeUsers = await tx.user.findMany({
+              where: {
+                id: { in: createdUsers.map((u) => u.id) }
+              },
+              include: {
+                ...userRoleDepartmentInclude,
+                trainerProfile: true,
+                traineeProfile: true
+              }
+            })
+
+            const finalUsers = completeUsers.map((user) => {
+              const { trainerProfile, traineeProfile, ...baseUser } = user
+
+              if (user.role.name === RoleName.TRAINER && trainerProfile) {
+                return { ...baseUser, trainerProfile }
+              }
+
+              if (user.role.name === RoleName.TRAINEE && traineeProfile) {
+                return { ...baseUser, traineeProfile }
+              }
+
+              return baseUser
+            })
+
+            return {
+              created: finalUsers,
+              duplicates: duplicateUsersInChunk
+            }
+          },
+          { timeout: 30000 }
+        )
+
+        // Merge user tạo thành công
+        results.success.push(...chunkResults.created)
+        results.summary.successful += chunkResults.created.length
+
+        // Merge user trùng email với DB
+        chunkResults.duplicates.forEach(({ userData, originalIndex }) => {
+          results.failed.push({
+            index: originalIndex,
+            error: BulkEmailAlreadyExistsMessage(userData.email),
+            userData: toFailedUserData(userData)
+          })
+        })
+        results.summary.failed += chunkResults.duplicates.length
+      } catch (error) {
+        // Transaction lỗi -> coi tất cả entries trong chunk là failed
+        entries.forEach(({ userData, originalIndex }) => {
+          let errorMessage = BulkUnknownErrorMessage
+
+          if (error instanceof Error) {
+            if (error.message.includes('Unique constraint failed on the fields: (`email`)')) {
+              errorMessage = BulkEmailAlreadyExistsMessage(userData.email)
+            } else if (error.message.includes('Unique constraint failed')) {
+              errorMessage = BulkDuplicateDataFoundMessage
+            } else {
+              errorMessage = error.message
+            }
+          }
+
+          results.failed.push({
+            index: originalIndex,
+            error: errorMessage,
+            userData: toFailedUserData(userData)
+          })
+        })
+        results.summary.failed += entries.length
+
+        console.error(`Bulk create chunk ${i}-${i + chunkSize} failed:`, error)
       }
     }
 
@@ -393,12 +355,12 @@ export class UserRepository {
     }: {
       id: string
       updatedById: string
-      userData: Partial<CreateUserInternalType>
+      userData: Partial<CreateUserOnlyType>
       roleName: string
       trainerProfile?: any
       traineeProfile?: any
     }
-  ): Promise<GetUserWithProfileResType | null> {
+  ): Promise<GetUserResType | null> {
     return await this.prismaService.$transaction(async (tx) => {
       // Cập nhật thông tin user cơ bản nếu có dữ liệu
       if (Object.keys(userData).length > 0) {

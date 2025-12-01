@@ -13,7 +13,7 @@ export class SharedRoleRepository {
 
   constructor(private readonly prismaService: PrismaService) {}
 
-  async findRolebyId(roleId: string): Promise<RoleType | null> {
+  async findById(roleId: string): Promise<RoleType | null> {
     return this.prismaService.role.findUnique({
       where: {
         id: roleId,

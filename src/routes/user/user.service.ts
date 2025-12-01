@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { NodemailerService } from '~/routes/email/nodemailer.service'
 import {
-  BulkDepartmentNotFoundAtIndexException,
   BulkEidCountMismatchException,
   BulkForbiddenProfileException,
   BulkRequiredProfileMissingException,
@@ -14,7 +13,6 @@ import {
   DefaultRoleValidationException,
   DepartmentHeadAlreadyExistsException,
   DepartmentIsDisabledException,
-  DepartmentNotFoundException,
   ForbiddenProfileException,
   OnlyAdminCanManageAdminRoleException,
   RequiredProfileMissingException,
@@ -29,12 +27,12 @@ import {
 } from '~/routes/user/user.error'
 import { UserMes } from '~/routes/user/user.message'
 import {
-  BulkCreateResultType,
+  BulkCreateResType,
+  BulkUserData,
   CreateBulkUsersBodyType,
-  CreateUserBodyWithProfileType,
-  GetUsersQueryType,
+  CreateUserBodyType,
+  GetUserResType,
   GetUsersResType,
-  GetUserWithProfileResType,
   UpdateUserBodyWithProfileType
 } from '~/routes/user/user.model'
 import { UserRepository } from '~/routes/user/user.repo'
@@ -48,6 +46,7 @@ import {
   isUniqueConstraintPrismaError,
   type RoleProfilePayload
 } from '~/shared/helper'
+import { RoleType } from '~/shared/models/shared-role.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -58,6 +57,24 @@ interface ProcessRoleChangeResult {
   newRoleId: string
   newRoleName: RoleNameType
   roleIdForPermissionCheck: string
+}
+
+type RoleValidationSuccess = {
+  index: number
+  success: true
+  targetRole: RoleType
+}
+
+type RoleValidationFailure = {
+  index: number
+  success: false
+  error: string
+}
+
+type RoleValidationResult = RoleValidationSuccess | RoleValidationFailure
+
+type PreparedBulkUser = BulkUserData & {
+  originalIndex: number
 }
 
 @Injectable()
@@ -72,52 +89,33 @@ export class UserService {
     private readonly sharedDepartmentRepo: SharedDepartmentRepository
   ) {}
 
-  list(query: GetUsersQueryType = {}): Promise<GetUsersResType> {
-    return this.userRepo.list(query)
+  list(): Promise<GetUsersResType> {
+    return this.userRepo.list()
   }
 
-  async findById(id: string): Promise<GetUserWithProfileResType> {
+  async findById(id: string): Promise<GetUserResType> {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile(id)
 
     if (!user) {
       throw UserNotFoundException
     }
 
-    return this.formatUserProfileForRole(user)
+    return user
   }
 
-  async create({
-    data,
-    createdById
-  }: {
-    data: CreateUserBodyWithProfileType
-    createdById: string
-  }): Promise<GetUserWithProfileResType> {
+  async create({ data, createdById }: { data: CreateUserBodyType; createdById: string }): Promise<GetUserResType> {
     try {
       // Lấy thông tin role mục tiêu
-      const targetRole = await this.sharedRoleRepo.findRolebyId(data.role.id)
+      const targetRole = await this.sharedRoleRepo.findById(data.role.id)
+
       if (!targetRole) {
         throw RoleNotFoundException
       }
 
-      // Kiểm tra departmentId có tồn tại và active không (nếu được cung cấp)
-      if (data.departmentId) {
-        const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId)
-        if (!department) {
-          throw DepartmentNotFoundException
-        }
-      }
-
-      // Kiểm tra dữ liệu profile có hợp lệ không
+      // Kiểm tra dữ liệu profile có hợp lệ không, đảo bảo an ninh nhiều lớp
       this.validateProfileData(targetRole.name, {
         trainerProfile: data.trainerProfile,
         traineeProfile: data.traineeProfile
-      })
-
-      // Kiểm tra unique department head constraint
-      await this.validateUniqueDepartmentHead({
-        departmentId: data.departmentId ?? undefined,
-        roleName: targetRole.name
       })
 
       // Sinh eid theo role
@@ -129,7 +127,7 @@ export class UserService {
       // Tách profile và role ra khỏi data
       const { trainerProfile, traineeProfile, role, ...userData } = data
 
-      const createdUser = await this.userRepo.createWithProfile({
+      const createdUser = await this.userRepo.create({
         createdById,
         userData: {
           ...userData,
@@ -164,7 +162,7 @@ export class UserService {
         // Nếu gửi email lỗi thì chỉ log, không throw
         console.error(`Failed to send welcome email to ${data.email}:`, emailError)
       }
-      return this.formatUserProfileForRole(userWithProfile)
+      return userWithProfile
     } catch (error) {
       if (isForeignKeyConstraintPrismaError(error)) {
         throw RoleNotFoundException
@@ -183,92 +181,64 @@ export class UserService {
   }: {
     data: CreateBulkUsersBodyType
     createdById: string
-  }): Promise<BulkCreateResultType> {
+  }): Promise<BulkCreateResType> {
     try {
-      const users = data.users
-
-      // Bước 0: kiểm tra trùng department heads trong batch
-      const departmentHeadMap = new Map<string, number>()
-      for (let i = 0; i < users.length; i++) {
-        const userData = users[i]
-        const role = await this.sharedRoleRepo.findRolebyId(userData.role.id)
-
-        if (role?.name === RoleName.DEPARTMENT_HEAD && userData.departmentId) {
-          const existingIndex = departmentHeadMap.get(userData.departmentId)
-          if (existingIndex !== undefined) {
-            const department = await this.sharedDepartmentRepo.findDepartmentById(userData.departmentId)
-            throw new Error(
-              `Duplicate department heads in batch: Users at index ${existingIndex} and ${i} are both assigned as department head for "${department?.name || 'Unknown'}"`
-            )
-          }
-          departmentHeadMap.set(userData.departmentId, i)
-        }
-      }
+      const { users } = data
 
       // Bước 1: Validate tất cả các role và profile
-      const roleValidationPromises = users.map(async (userData, index) => {
+      const roleValidationPromises: Promise<RoleValidationResult>[] = users.map(async (user, index) => {
         try {
-          const targetRole = await this.sharedRoleRepo.findRolebyId(userData.role.id)
+          const targetRole = await this.sharedRoleRepo.findById(user.role.id)
           if (!targetRole) {
             throw new Error(BulkRoleNotFoundAtIndexException(index))
           }
 
-          if (userData.departmentId) {
-            const department = await this.sharedDepartmentRepo.findDepartmentById(userData.departmentId)
-            if (!department) {
-              throw new Error(BulkDepartmentNotFoundAtIndexException(index, userData.departmentId))
-            }
-          }
+          this.validateProfileDataForRole(targetRole.name, user, index)
 
-          // Kiểm tra profile có đúng không
-          this.validateProfileDataForRole(targetRole.name, userData, index)
-
-          // Kiểm định unique department head constraint
-          await this.validateUniqueDepartmentHead({
-            departmentId: userData.departmentId ?? undefined,
-            roleName: targetRole.name
-          })
-
-          return { index, targetRole, success: true }
+          return { index, targetRole, success: true as const }
         } catch (error) {
           return {
             index,
             error: error instanceof Error ? error.message : DefaultRoleValidationException.message,
-            success: false
+            success: false as const
           }
         }
       })
 
       const roleValidationResults = await Promise.all(roleValidationPromises)
 
-      // Lọc ra những thằng ko hợp lệ và hợp lệ
-      const validUsers: Array<{
-        index: number
-        roleName: string
-        userData: CreateUserBodyWithProfileType
-      }> = []
+      const { validUsers, invalidUsers } = roleValidationResults.reduce(
+        (acc, result) => {
+          const userData = users[result.index]
+          if (result.success) {
+            acc.validUsers.push({
+              index: result.index,
+              roleName: result.targetRole.name,
+              userData
+            })
+          } else {
+            acc.invalidUsers.push({
+              index: result.index,
+              error: result.error,
+              userData
+            })
+          }
 
-      const invalidUsers: Array<{
-        index: number
-        error: string
-        userData: CreateUserBodyWithProfileType
-      }> = []
-
-      roleValidationResults.forEach((result) => {
-        if (result.success && 'targetRole' in result && result.targetRole) {
-          validUsers.push({
-            userData: users[result.index],
-            roleName: result.targetRole.name,
-            index: result.index
-          })
-        } else if (!result.success && 'error' in result && result.error) {
-          invalidUsers.push({
-            index: result.index,
-            error: result.error,
-            userData: users[result.index]
-          })
+          return acc
+        },
+        {
+          validUsers: [] as Array<{
+            index: number
+            roleName: string
+            userData: CreateUserBodyType
+          }>,
+          invalidUsers: [] as Array<{
+            index: number
+            error: string
+            userData: CreateUserBodyType
+          }>
         }
-      })
+      )
 
       if (validUsers.length === 0) {
         return {
@@ -283,7 +253,7 @@ export class UserService {
       }
 
       // Bước 2: Gom nhóm người dùng theo role để sinh EID tối ưu
-      const usersByRole = new Map<string, Array<{ userData: CreateUserBodyWithProfileType; index: number }>>()
+      const usersByRole = new Map<string, Array<{ userData: CreateUserBodyType; index: number }>>()
 
       validUsers.forEach(({ userData, roleName, index }) => {
         if (!usersByRole.has(roleName)) {
@@ -293,23 +263,23 @@ export class UserService {
       })
 
       // Bước 3: Sinh EIDs hàng loạt cho từng role và xử lý người dùng
-      const processedUsersData = []
-      const eidGenerationErrors = []
+      const preparedUsers: PreparedBulkUser[] = []
+      const eidErrors: Array<{ index: number; error: string; userData: CreateUserBodyType }> = []
 
-      for (const [roleName, usersForRole] of usersByRole) {
+      for (const [roleName, usersInRoleGroup] of usersByRole) {
         try {
           // Tạo số lượng EID cần thiết cho role này
-          const count = usersForRole.length
-          const generatedEids = await this.eidService.generateEid({ roleName, count })
+          const userCount = usersInRoleGroup.length
+          const generatedEids = await this.eidService.generateEid({ roleName, count: userCount })
           const eids = Array.isArray(generatedEids) ? generatedEids : [generatedEids]
 
-          if (eids.length !== count) {
-            throw BulkEidCountMismatchException(count, eids.length)
+          if (eids.length !== userCount) {
+            throw BulkEidCountMismatchException(userCount, eids.length)
           }
 
           // Gán EID cho từng người dùng
-          for (let i = 0; i < usersForRole.length; i++) {
-            const { userData, index } = usersForRole[i]
+          for (let i = 0; i < usersInRoleGroup.length; i++) {
+            const { userData, index } = usersInRoleGroup[i]
             const eid = eids[i]
 
             try {
@@ -319,7 +289,7 @@ export class UserService {
 
               const { trainerProfile, traineeProfile, role, ...userBasicData } = userData
 
-              processedUsersData.push({
+              preparedUsers.push({
                 ...userBasicData,
                 roleId: role.id,
                 passwordHash: hashedPassword,
@@ -330,7 +300,7 @@ export class UserService {
                 originalIndex: index
               })
             } catch (error) {
-              eidGenerationErrors.push({
+              eidErrors.push({
                 index,
                 error: `Failed to process user with EID ${eid}: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 userData
@@ -338,20 +308,23 @@ export class UserService {
             }
           }
         } catch (error) {
-          usersForRole.forEach(({ userData, index }) => {
-            eidGenerationErrors.push({
+          // Lỗi ở mức độ group (không sinh được EID cho cả role này)
+          for (const { userData, index } of usersInRoleGroup) {
+            eidErrors.push({
               index,
-              error: `Failed to generate EIDs for role ${roleName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              error: `Failed to generate EIDs for role ${roleName}: ${
+                error instanceof Error ? error.message : 'Unknown error'
+              }`,
               userData
             })
-          })
+          }
         }
       }
 
       // Gộp tất cả lỗi phát sinh trong quá trình sinh EID
-      invalidUsers.push(...eidGenerationErrors)
+      invalidUsers.push(...eidErrors)
 
-      if (processedUsersData.length === 0) {
+      if (preparedUsers.length === 0) {
         return {
           success: [],
           failed: invalidUsers,
@@ -364,9 +337,9 @@ export class UserService {
       }
 
       // Bước 4: Sắp xếp lại theo thứ tự ban đầu của input
-      processedUsersData.sort((a, b) => a.originalIndex - b.originalIndex)
+      preparedUsers.sort((a, b) => a.originalIndex - b.originalIndex)
 
-      const finalUsersData = processedUsersData.map(({ originalIndex, ...userData }) => userData)
+      const finalUsersData = preparedUsers.map(({ originalIndex, ...userData }) => userData)
 
       try {
         const bulkResult = await this.userRepo.createBulk({
@@ -395,18 +368,17 @@ export class UserService {
                 role: user.role.name
               }
             })
-
-            const emailResults = await this.nodemailerService.sendBulkNewUserAccountEmails(emailUsers)
-
-            console.log(
-              `Bulk email sending completed: ${emailResults.results.filter((r) => r.success).length}/${emailResults.results.length} emails sent successfully`
-            )
-
-            // Log từng lỗi email để debug
-            emailResults.results.forEach((result) => {
-              if (!result.success) {
-                console.error(`Failed to send welcome email to ${result.email}: ${result.message}`)
-              }
+            // cách làm này có rủi ro, nếu trong lúc trả response mà process NestJS bị dừng, email sẽ không được gửi
+            this.nodemailerService.sendBulkNewUserAccountEmails(emailUsers).then((emailResults) => {
+              console.log(
+                `Bulk email sending completed: ${emailResults.results.filter((r) => r.success).length}/${emailResults.results.length} emails sent successfully`
+              )
+              // Log từng lỗi email để debug
+              emailResults.results.forEach((result) => {
+                if (!result.success) {
+                  console.error(`Failed to send welcome email to ${result.email}: ${result.message}`)
+                }
+              })
             })
           } catch (emailError) {
             // Log lỗi gửi email nhưng không làm thất bại việc tạo user
@@ -419,7 +391,7 @@ export class UserService {
         console.error('Database error in bulk creation:', dbError)
 
         // Nếu lỗi là do ràng buộc duy nhất (unique constraint) thì báo lỗi trùng lặp
-        const allFailed = processedUsersData.map(({ originalIndex, eid }) => ({
+        const allFailed = preparedUsers.map(({ originalIndex, eid }) => ({
           index: originalIndex,
           error:
             dbError instanceof Error && dbError.message.includes('Unique constraint')
@@ -441,7 +413,7 @@ export class UserService {
     } catch (error) {
       console.error('Bulk user creation failed:', error)
 
-      // Trả ra tất cả là thất bại nếu có lỗi nghiêm trọng
+      // Trả ra tất cả là failed nếu có lỗi nghiêm trọng
       return {
         success: [],
         failed: data.users.map((userData, index) => ({
@@ -458,54 +430,6 @@ export class UserService {
     }
   }
 
-  private validateProfileData(roleName: string, data: RoleProfilePayload): void {
-    const violations = evaluateRoleProfileRules(roleName, data)
-    if (violations.length === 0) {
-      return
-    }
-
-    const violation = violations[0]
-
-    switch (violation.type) {
-      case ROLE_PROFILE_VIOLATION_TYPES.MISSING_REQUIRED:
-        throw RequiredProfileMissingException(roleName, violation.profileKey)
-      case ROLE_PROFILE_VIOLATION_TYPES.FORBIDDEN_PRESENT:
-        throw ForbiddenProfileException(roleName, violation.profileKey, violation.message)
-      case ROLE_PROFILE_VIOLATION_TYPES.UNEXPECTED_PROFILE:
-        if (violation.profileKey === 'trainerProfile') {
-          throw TrainerProfileNotAllowedException(roleName)
-        }
-        throw TraineeProfileNotAllowedException(roleName)
-    }
-  }
-
-  /**
-   * Kiểm tra quyền hạn của người thực hiện đối với role mục tiêu.
-   * Chỉ có ADMINISTRATOR mới có quyền:
-   * - Tạo user có role ADMINISTRATOR
-   * - Cập nhật role thành ADMINISTRATOR
-   * - Xóa user có role ADMINISTRATOR
-   *
-   * Các role khác không được phép tác động đến ADMINISTRATOR.
-   *
-   * @param roleNameAgent - Role của người thực hiện hành động
-   * @param roleIdTarget - ID role của đối tượng bị tác động
-   */
-  private async verifyRole({ roleNameAgent, roleIdTarget }: { roleNameAgent: string; roleIdTarget: string }) {
-    // Nếu người thực hiện là admin thì có toàn quyền
-    if (roleNameAgent === RoleName.ADMINISTRATOR) {
-      return true
-    }
-
-    // Nếu không phải admin thì không được tác động đến admin
-    const adminRoleId = await this.sharedRoleRepo.getAdminRoleId()
-    if (roleIdTarget === adminRoleId) {
-      throw OnlyAdminCanManageAdminRoleException
-    }
-    return true
-  }
-
-  /** Cập nhật thông tin người dùng. Chỉ ADMINISTRATOR mới được phép update user bị disabled. */
   async update({
     id,
     data,
@@ -516,7 +440,7 @@ export class UserService {
     data: UpdateUserBodyWithProfileType
     updatedById: string
     updatedByRoleName: string
-  }): Promise<GetUserWithProfileResType> {
+  }): Promise<GetUserResType> {
     try {
       // Không thể cập nhật chính mình
       this.verifyYourself({
@@ -530,10 +454,6 @@ export class UserService {
         throw UserNotFoundException
       }
 
-      if (currentUser.deletedAt && updatedByRoleName !== RoleName.ADMINISTRATOR) {
-        throw UserNotFoundException
-      }
-
       // Bước 3: Xử lý role change logic
       const { newRoleId, newRoleName } = await this.processRoleChange({
         data,
@@ -541,31 +461,31 @@ export class UserService {
         updatedByRoleName
       })
 
-      // Bước 4: Kiểm tra department exists và active (nếu có)
-      if (data.departmentId !== undefined && data.departmentId !== null) {
-        const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId)
-        if (!department) {
-          throw DepartmentNotFoundException
-        }
+      // // Bước 4: Kiểm tra department exists và active (nếu có)
+      // if (data.departmentId !== undefined && data.departmentId !== null) {
+      //   const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId)
+      //   if (!department) {
+      //     throw DepartmentNotFoundException
+      //   }
 
-        // Kiểm tra department có đang active không
-        if (department.isActive !== true) {
-          throw DepartmentIsDisabledException
-        }
-      }
+      //   // Kiểm tra department có đang active không
+      //   if (department.isActive !== true) {
+      //     throw DepartmentIsDisabledException
+      //   }
+      // }
 
-      // Bước 4.5: Validate unique department head constraint
-      // Chỉ validate nếu role hoặc department đang được thay đổi
-      const isRoleChanging = data.role?.id && data.role.id !== currentUser.role.id
-      const isDepartmentChanging = data.departmentId !== undefined && data.departmentId !== currentUser.department?.id
+      // // Bước 4.5: Validate unique department head constraint
+      // // Chỉ validate nếu role hoặc department đang được thay đổi
+      // const isRoleChanging = data.role?.id && data.role.id !== currentUser.role.id
+      // const isDepartmentChanging = data.departmentId !== undefined && data.departmentId !== currentUser.department?.id
 
-      if (isRoleChanging || isDepartmentChanging) {
-        await this.validateUniqueDepartmentHead({
-          departmentId: data.departmentId ?? currentUser.department?.id ?? undefined,
-          roleName: newRoleName,
-          excludeUserId: id // Important: exclude current user
-        })
-      }
+      // if (isRoleChanging || isDepartmentChanging) {
+      //   await this.validateUniqueDepartmentHead({
+      //     departmentId: data.departmentId ?? currentUser.department?.id ?? undefined,
+      //     roleName: newRoleName,
+      //     excludeUserId: id // Important: exclude current user
+      //   })
+      // }
 
       // Bước 5: Thực hiện update
       const { role, trainerProfile, traineeProfile, ...userData } = data
@@ -574,8 +494,7 @@ export class UserService {
         {
           updatedById,
           userData: {
-            ...userData,
-            roleId: newRoleId
+            ...userData
           },
           newRoleName,
           trainerProfile,
@@ -648,7 +567,7 @@ export class UserService {
     }
 
     // Lấy thông tin role mới
-    const newRole = await this.sharedRoleRepo.findRolebyId(inputRole.id)
+    const newRole = await this.sharedRoleRepo.findById(inputRole.id)
     if (!newRole) {
       throw RoleNotFoundException
     }
@@ -775,6 +694,60 @@ export class UserService {
   }
 
   /**
+   * Kiểm tra bộ dữ liệu profile (trainer/trainee) có hợp lệ với role đang được xử lý hay không.
+   * - Phát hiện thiếu profile bắt buộc (ví dụ TRAINER thiếu trainerProfile) và ném lỗi rõ ràng.
+   * - Ngăn chặn trường hợp đính kèm profile không hợp lệ cho role hiện tại (ví dụ SQA có trainerProfile).
+   * - Giữ nguyên tắc defense-in-depth: ngay cả khi DTO đã validate, service vẫn tự bảo vệ trước dữ liệu sai.
+   * Nếu phát hiện vi phạm đầu tiên, hàm sẽ throw exception tương ứng để dừng luồng xử lý ngay lập tức.
+   */
+  private validateProfileData(roleName: string, data: RoleProfilePayload): void {
+    const violations = evaluateRoleProfileRules(roleName, data)
+    if (violations.length === 0) {
+      return
+    }
+
+    const violation = violations[0]
+
+    switch (violation.type) {
+      case ROLE_PROFILE_VIOLATION_TYPES.MISSING_REQUIRED:
+        throw RequiredProfileMissingException(roleName, violation.profileKey)
+      case ROLE_PROFILE_VIOLATION_TYPES.FORBIDDEN_PRESENT:
+        throw ForbiddenProfileException(roleName, violation.profileKey, violation.message)
+      case ROLE_PROFILE_VIOLATION_TYPES.UNEXPECTED_PROFILE:
+        if (violation.profileKey === 'trainerProfile') {
+          throw TrainerProfileNotAllowedException(roleName)
+        }
+        throw TraineeProfileNotAllowedException(roleName)
+    }
+  }
+
+  /**
+   * Kiểm tra quyền hạn của người thực hiện đối với role mục tiêu.
+   * Chỉ có ADMINISTRATOR mới có quyền:
+   * - Tạo user có role ADMINISTRATOR
+   * - Cập nhật role thành ADMINISTRATOR
+   * - Xóa user có role ADMINISTRATOR
+   *
+   * Các role khác không được phép tác động đến ADMINISTRATOR.
+   *
+   * @param roleNameAgent - Role của người thực hiện hành động
+   * @param roleIdTarget - ID role của đối tượng bị tác động
+   */
+  private async verifyRole({ roleNameAgent, roleIdTarget }: { roleNameAgent: string; roleIdTarget: string }) {
+    // Nếu người thực hiện là admin thì có toàn quyền
+    if (roleNameAgent === RoleName.ADMINISTRATOR) {
+      return true
+    }
+
+    // Nếu không phải admin thì không được tác động đến admin
+    const adminRoleId = await this.sharedRoleRepo.getAdminRoleId()
+    if (roleIdTarget === adminRoleId) {
+      throw OnlyAdminCanManageAdminRoleException
+    }
+    return true
+  }
+
+  /**
    * Kiểm tra tính hợp lệ của dữ liệu profile theo role cho bulk create.
    * Ngăn chặn các trường hợp như SQA_AUDITOR có trainer/trainee profile.
    *
@@ -782,11 +755,7 @@ export class UserService {
    * @param userData - Dữ liệu user với profile
    * @param userIndex - Vị trí user trong mảng bulk (để báo lỗi)
    */
-  private validateProfileDataForRole(
-    roleName: string,
-    userData: CreateUserBodyWithProfileType,
-    userIndex: number
-  ): void {
+  private validateProfileDataForRole(roleName: string, userData: CreateUserBodyType, userIndex: number): void {
     const violations = evaluateRoleProfileRules(roleName, userData)
     if (violations.length === 0) {
       return
@@ -846,32 +815,26 @@ export class UserService {
     }
   }
 
-  private formatUserProfileForRole(user: GetUserWithProfileResType): GetUserWithProfileResType {
+  private formatUserProfileForRole(user: GetUserResType): GetUserResType {
     const { trainerProfile, traineeProfile, ...baseUser } = user
-    const roleName = user.role?.name
+    const roleName = user.role.name
 
     if (roleName === RoleName.TRAINER && trainerProfile) {
-      const formattedTrainer = {
+      return {
         ...baseUser,
         trainerProfile
-      } satisfies GetUserWithProfileResType
-
-      return formattedTrainer
+      } satisfies GetUserResType
     }
 
     if (roleName === RoleName.TRAINEE && traineeProfile) {
-      const formattedTrainee = {
+      return {
         ...baseUser,
         traineeProfile
-      } satisfies GetUserWithProfileResType
-
-      return formattedTrainee
+      } satisfies GetUserResType
     }
 
-    const formattedUser = {
+    return {
       ...baseUser
-    } satisfies GetUserWithProfileResType
-
-    return formattedUser
+    } satisfies GetUserResType
   }
 }

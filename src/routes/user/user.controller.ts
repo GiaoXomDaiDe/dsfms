@@ -1,15 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
-  BulkCreateResultDTO,
+  BulkCreateResDTO,
   CreateBulkUsersBodyDTO,
-  CreateUserBodyWithProfileDTO,
+  CreateUserBodyDTO,
   CreateUserResDTO,
   GetUserParamsDTO,
-  GetUsersQueryDTO,
+  GetUserResDTO,
   GetUsersResDTO,
-  GetUserWithProfileResDTO,
-  UpdateUserBodyWithProfileDTO,
+  UpdateUserBodyDTO,
   UpdateUserResDTO
 } from '~/routes/user/user.dto'
 import { UserMes } from '~/routes/user/user.message'
@@ -24,8 +23,8 @@ export class UserController {
 
   @Get()
   @ZodSerializerDto(GetUsersResDTO)
-  async list(@Query() query: GetUsersQueryDTO) {
-    const result = await this.userService.list(query)
+  async list() {
+    const result = await this.userService.list()
     return {
       message: UserMes.LIST_SUCCESS,
       data: result
@@ -33,7 +32,7 @@ export class UserController {
   }
 
   @Get(':userId')
-  @ZodSerializerDto(GetUserWithProfileResDTO)
+  @ZodSerializerDto(GetUserResDTO)
   async findById(@Param() params: GetUserParamsDTO) {
     const data = await this.userService.findById(params.userId)
     return {
@@ -44,7 +43,7 @@ export class UserController {
 
   @Post()
   @ZodSerializerDto(CreateUserResDTO)
-  async create(@Body() body: CreateUserBodyWithProfileDTO, @ActiveUser('userId') userId: string) {
+  async create(@Body() body: CreateUserBodyDTO, @ActiveUser('userId') userId: string) {
     const data = await this.userService.create({
       data: body,
       createdById: userId
@@ -56,7 +55,7 @@ export class UserController {
   }
 
   @Post('bulk')
-  @ZodSerializerDto(BulkCreateResultDTO)
+  @ZodSerializerDto(BulkCreateResDTO)
   async createBulk(@Body() body: CreateBulkUsersBodyDTO, @ActiveUser('userId') userId: string) {
     const data = await this.userService.createBulk({
       data: body,
@@ -71,7 +70,7 @@ export class UserController {
   @Put(':userId')
   @ZodSerializerDto(UpdateUserResDTO)
   async update(
-    @Body() body: UpdateUserBodyWithProfileDTO,
+    @Body() body: UpdateUserBodyDTO,
     @Param() params: GetUserParamsDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions('name') roleName: string
