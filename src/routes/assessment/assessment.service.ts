@@ -1794,16 +1794,19 @@ export class AssessmentService {
   /**
    * Build assessment data object from assessment values using template schema as base structure
    * Use parent context to handle fields with duplicate names in different parent sections
-   * Includes fallback logic for IMAGE, SIGNATURE_DRAW, and SIGNATURE_IMG fields
+   * Pre-populates AssessmentValue records with signature data before schema mapping
    */
   private async buildAssessmentDataFromValues(
     assessmentId: string,
     templateSchema: Record<string, any>
   ): Promise<Record<string, any>> {
-    // Get all assessment values with field names and parent hierarchy for precise mapping
+    // Step 1: Pre-populate SIGNATURE_IMG fields with trainer signatureImageUrl
+    await this.prePopulateSignatureFields(assessmentId)
+
+    // Step 2: Get all assessment values (now with pre-populated signature data)
     const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
 
-    // Get assessment form with trainee and section assessor information for signature fallbacks
+    // Step 3: Get assessment form info for fallback scenarios only
     const assessmentForm = await this.assessmentRepo.prismaClient.assessmentForm.findUnique({
       where: { id: assessmentId },
       include: {
@@ -1822,8 +1825,7 @@ export class AssessmentService {
                 id: true,
                 firstName: true,
                 middleName: true,
-                lastName: true,
-                signatureImageUrl: true
+                lastName: true
               }
             },
             templateSection: {
@@ -1841,7 +1843,7 @@ export class AssessmentService {
       throw new Error('Assessment form not found')
     }
 
-    // Create a map to track which section each assessment value belongs to
+    // Step 4: Create section mapping for fallback scenarios
     const sectionAssessorMap = new Map<string, any>()
     for (const section of assessmentForm.sections) {
       sectionAssessorMap.set(section.id, {
@@ -1868,7 +1870,7 @@ export class AssessmentService {
       valueToSectionMap.set(av.id, av.assessmentSectionId)
     })
 
-    // Create field path mapping using parent hierarchy to handle duplicate field names
+    // Step 5: Create field path mapping - all data comes from AssessmentValue now
     const pathValueMap = new Map<string, any>()
 
     assessmentValues.forEach((assessmentValue) => {
@@ -1878,36 +1880,24 @@ export class AssessmentService {
           assessmentValue.templateField.fieldType
         )
 
-        // Handle signature and image field fallbacks when value is null/empty
-        if ((finalValue === null || finalValue === '') && assessmentValue.templateField.fieldType) {
-          const fieldType = assessmentValue.templateField.fieldType
+        // Only do fallbacks for SIGNATURE_DRAW fields (SIGNATURE_IMG was pre-populated)
+        if ((finalValue === null || finalValue === '') && assessmentValue.templateField.fieldType === 'SIGNATURE_DRAW') {
           const roleRequired = assessmentValue.templateField.roleRequired
           const sectionId = valueToSectionMap.get(assessmentValue.id)
           const sectionInfo = sectionId ? sectionAssessorMap.get(sectionId) : null
 
-          if (fieldType === 'IMAGE') {
-            // IMAGE fields: keep null/empty as is (no fallback needed for images)
-            finalValue = finalValue || ''
-          } else if (fieldType === 'SIGNATURE_IMG') {
-            // SIGNATURE_IMG fallback based on roleRequired
-            if (roleRequired === 'TRAINER' && sectionInfo?.assessedBy) {
-              // TRAINER SIGNATURE_IMG: fallback to assessor's signatureImageUrl, then to full name
-              finalValue = sectionInfo.assessedBy.signatureImageUrl || 
-                `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
-            } else if (roleRequired === 'TRAINEE') {
-              // TRAINEE SIGNATURE_IMG: no special fallback, keep empty (trainee doesn't have signatureImageUrl typically)
-              finalValue = ''
-            }
-          } else if (fieldType === 'SIGNATURE_DRAW') {
-            // SIGNATURE_DRAW fallbacks based on roleRequired
-            if (roleRequired === 'TRAINER' && sectionInfo?.assessedBy) {
-              // TRAINER SIGNATURE_DRAW: fallback to assessor's full name
-              finalValue = `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
-            } else if (roleRequired === 'TRAINEE') {
-              // TRAINEE SIGNATURE_DRAW: fallback to trainee's full name
-              finalValue = `${assessmentForm.trainee.firstName} ${assessmentForm.trainee.middleName || ''} ${assessmentForm.trainee.lastName}`.trim()
-            }
+          if (roleRequired === 'TRAINER' && sectionInfo?.assessedBy) {
+            // TRAINER SIGNATURE_DRAW: fallback to assessor's full name
+            finalValue = `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
+          } else if (roleRequired === 'TRAINEE') {
+            // TRAINEE SIGNATURE_DRAW: fallback to trainee's full name
+            finalValue = `${assessmentForm.trainee.firstName} ${assessmentForm.trainee.middleName || ''} ${assessmentForm.trainee.lastName}`.trim()
           }
+        }
+
+        // If still null/empty for IMAGE fields, set to empty string
+        if ((finalValue === null || finalValue === '') && assessmentValue.templateField.fieldType === 'IMAGE') {
+          finalValue = ''
         }
 
         // Build field path from parent hierarchy to ensure uniqueness
@@ -1922,11 +1912,80 @@ export class AssessmentService {
       }
     })
 
-    // Use templateSchema as base and populate with actual values using path mapping
+    // Step 6: Use templateSchema as base and populate with actual values using path mapping
     const populatedSchema = this.populateSchemaWithPathValues(templateSchema, pathValueMap)
     
     // Convert null values to empty strings in nested objects (PART/CHECK_BOX fields)
     return this.convertNullsToEmptyStringsInNestedObjects(populatedSchema)
+  }
+
+  /**
+   * Pre-populate SIGNATURE_IMG fields with trainer signatureImageUrl in AssessmentValue records
+   * This ensures all data comes from AssessmentValue, not direct fallbacks during schema mapping
+   */
+  private async prePopulateSignatureFields(assessmentId: string): Promise<void> {
+    // Get all SIGNATURE_IMG fields for TRAINER with empty/null values
+    const signatureImgFields = await this.assessmentRepo.prismaClient.assessmentValue.findMany({
+      where: {
+        assessmentSection: {
+          assessmentFormId: assessmentId
+        },
+        templateField: {
+          fieldType: 'SIGNATURE_IMG',
+          roleRequired: 'TRAINER'
+        },
+        OR: [
+          { answerValue: null },
+          { answerValue: '' }
+        ]
+      },
+      include: {
+        assessmentSection: {
+          include: {
+            assessedBy: {
+              select: {
+                signatureImageUrl: true,
+                firstName: true,
+                middleName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        templateField: {
+          select: {
+            fieldType: true,
+            roleRequired: true
+          }
+        }
+      }
+    })
+
+    // Update each SIGNATURE_IMG field with trainer's signatureImageUrl or fallback to name
+    const updatePromises = signatureImgFields.map(async (field) => {
+      let signatureValue = ''
+      
+      if (field.assessmentSection.assessedBy?.signatureImageUrl) {
+        // Use trainer's signature image URL
+        signatureValue = field.assessmentSection.assessedBy.signatureImageUrl
+      } else if (field.assessmentSection.assessedBy) {
+        // Fallback to trainer's full name if no signature image
+        signatureValue = `${field.assessmentSection.assessedBy.firstName} ${field.assessmentSection.assessedBy.middleName || ''} ${field.assessmentSection.assessedBy.lastName}`.trim()
+      }
+
+      // Update the assessment value if we have a signature value
+      if (signatureValue) {
+        return this.assessmentRepo.prismaClient.assessmentValue.update({
+          where: { id: field.id },
+          data: { answerValue: signatureValue }
+        })
+      }
+    })
+
+    // Execute all updates
+    await Promise.all(updatePromises.filter(Boolean))
+    
+    console.log(`Pre-populated ${signatureImgFields.length} TRAINER SIGNATURE_IMG fields for assessment ${assessmentId}`)
   }
 
   /**
@@ -2219,8 +2278,8 @@ export class AssessmentService {
               // Set default size (self configurable)
               let width = dimensions.width
               let height = dimensions.height
-              const maxWidth = 107
-              const maxHeight = 80
+              const maxWidth = 57
+              const maxHeight = 30
 
               // Scale down if image is too large
               if (width > maxWidth || height > maxHeight) {
@@ -2237,7 +2296,7 @@ export class AssessmentService {
             } catch (error) {
               console.error(`Failed to get image size for ${tagName}:`, error)
               // Return default size if size detection fails
-              return [150, 150]
+              return [57, 30]
             }
           }
         }
