@@ -23,6 +23,7 @@ import {
   SubmitAssessmentResDTO,
   UpdateAssessmentValuesBodyDTO,
   UpdateAssessmentValuesResDTO,
+  ConfirmAssessmentParticipationBodyDTO,
   ConfirmAssessmentParticipationResDTO,
   GetDepartmentAssessmentsQueryDTO,
   GetDepartmentAssessmentsResDTO,
@@ -410,12 +411,13 @@ export class AssessmentController {
 
   /**
    * PUT /assessments/:assessmentId/confirm-participation
-   * Confirm trainee participation and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Confirm trainee participation, save signature, and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
    */
   @Put(':assessmentId/confirm-participation')
   @ZodSerializerDto(ConfirmAssessmentParticipationResDTO)
   async confirmAssessmentParticipation(
     @Param() params: GetAssessmentParamsDTO,
+    @Body() body: ConfirmAssessmentParticipationBodyDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
     @ActiveUser() currentUser: { userId: string; departmentId?: string }
@@ -426,7 +428,7 @@ export class AssessmentController {
       departmentId: currentUser.departmentId
     }
 
-    return await this.assessmentService.confirmAssessmentParticipation(params.assessmentId, userContext)
+    return await this.assessmentService.confirmAssessmentParticipation(params.assessmentId, body, userContext)
   }
 
   /**

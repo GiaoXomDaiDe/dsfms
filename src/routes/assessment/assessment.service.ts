@@ -34,6 +34,7 @@ import {
   SubmitAssessmentResType,
   UpdateAssessmentValuesBodyType,
   UpdateAssessmentValuesResType,
+  ConfirmAssessmentParticipationBodyType,
   ConfirmAssessmentParticipationResType,
   GetDepartmentAssessmentsQueryType,
   GetDepartmentAssessmentsResType,
@@ -1242,11 +1243,12 @@ export class AssessmentService {
   }
 
   /**
-   * Confirm assessment participation - Change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Confirm assessment participation - Save trainee signature and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
    * Only the trainee assigned to this assessment can confirm participation
    */
   async confirmAssessmentParticipation(
     assessmentId: string,
+    body: ConfirmAssessmentParticipationBodyType,
     userContext: { userId: string; roleName: string; departmentId?: string }
   ): Promise<ConfirmAssessmentParticipationResType> {
     try {
@@ -1271,17 +1273,18 @@ export class AssessmentService {
         throw new BadRequestException('Assessment must be in SIGNATURE_PENDING status to confirm participation')
       }
 
-      // Update status to READY_TO_SUBMIT
-      const result = await this.assessmentRepo.confirmAssessmentParticipation(assessmentId)
+      // Update status and save trainee signature
+      const result = await this.assessmentRepo.confirmAssessmentParticipation(assessmentId, body.traineeSignatureUrl, userContext.userId)
 
       return {
         success: true,
-        message: 'Assessment participation confirmed successfully',
+        message: 'Assessment participation confirmed and signature saved successfully',
         assessmentFormId: assessmentId,
         traineeId: userContext.userId,
         confirmedAt: result.updatedAt,
         status: result.status,
-        previousStatus: 'SIGNATURE_PENDING'
+        previousStatus: 'SIGNATURE_PENDING',
+        signatureSaved: result.signatureSaved
       }
     } catch (error: any) {
       // Handle specific known errors
@@ -1791,6 +1794,7 @@ export class AssessmentService {
   /**
    * Build assessment data object from assessment values using template schema as base structure
    * Use parent context to handle fields with duplicate names in different parent sections
+   * Includes fallback logic for IMAGE, SIGNATURE_DRAW, and SIGNATURE_IMG fields
    */
   private async buildAssessmentDataFromValues(
     assessmentId: string,
@@ -1799,24 +1803,121 @@ export class AssessmentService {
     // Get all assessment values with field names and parent hierarchy for precise mapping
     const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
 
+    // Get assessment form with trainee and section assessor information for signature fallbacks
+    const assessmentForm = await this.assessmentRepo.prismaClient.assessmentForm.findUnique({
+      where: { id: assessmentId },
+      include: {
+        trainee: {
+          select: {
+            id: true,
+            firstName: true,
+            middleName: true,
+            lastName: true
+          }
+        },
+        sections: {
+          include: {
+            assessedBy: {
+              select: {
+                id: true,
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                signatureImageUrl: true
+              }
+            },
+            templateSection: {
+              select: {
+                id: true,
+                editBy: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!assessmentForm) {
+      throw new Error('Assessment form not found')
+    }
+
+    // Create a map to track which section each assessment value belongs to
+    const sectionAssessorMap = new Map<string, any>()
+    for (const section of assessmentForm.sections) {
+      sectionAssessorMap.set(section.id, {
+        assessedBy: section.assessedBy,
+        editBy: section.templateSection.editBy
+      })
+    }
+
+    // Get section mapping for assessment values
+    const assessmentValuesWithSections = await this.assessmentRepo.prismaClient.assessmentValue.findMany({
+      where: {
+        assessmentSection: {
+          assessmentFormId: assessmentId
+        }
+      },
+      select: {
+        id: true,
+        assessmentSectionId: true
+      }
+    })
+
+    const valueToSectionMap = new Map<string, string>()
+    assessmentValuesWithSections.forEach(av => {
+      valueToSectionMap.set(av.id, av.assessmentSectionId)
+    })
+
     // Create field path mapping using parent hierarchy to handle duplicate field names
     const pathValueMap = new Map<string, any>()
 
     assessmentValues.forEach((assessmentValue) => {
       if (assessmentValue.templateField && assessmentValue.templateField.fieldName) {
-        const parsedValue = this.parseAssessmentValue(
+        let finalValue = this.parseAssessmentValue(
           assessmentValue.answerValue,
           assessmentValue.templateField.fieldType
         )
 
+        // Handle signature and image field fallbacks when value is null/empty
+        if ((finalValue === null || finalValue === '') && assessmentValue.templateField.fieldType) {
+          const fieldType = assessmentValue.templateField.fieldType
+          const roleRequired = assessmentValue.templateField.roleRequired
+          const sectionId = valueToSectionMap.get(assessmentValue.id)
+          const sectionInfo = sectionId ? sectionAssessorMap.get(sectionId) : null
+
+          if (fieldType === 'IMAGE') {
+            // IMAGE fields: keep null/empty as is (no fallback needed for images)
+            finalValue = finalValue || ''
+          } else if (fieldType === 'SIGNATURE_IMG') {
+            // SIGNATURE_IMG fallback based on roleRequired
+            if (roleRequired === 'TRAINER' && sectionInfo?.assessedBy) {
+              // TRAINER SIGNATURE_IMG: fallback to assessor's signatureImageUrl, then to full name
+              finalValue = sectionInfo.assessedBy.signatureImageUrl || 
+                `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
+            } else if (roleRequired === 'TRAINEE') {
+              // TRAINEE SIGNATURE_IMG: no special fallback, keep empty (trainee doesn't have signatureImageUrl typically)
+              finalValue = ''
+            }
+          } else if (fieldType === 'SIGNATURE_DRAW') {
+            // SIGNATURE_DRAW fallbacks based on roleRequired
+            if (roleRequired === 'TRAINER' && sectionInfo?.assessedBy) {
+              // TRAINER SIGNATURE_DRAW: fallback to assessor's full name
+              finalValue = `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
+            } else if (roleRequired === 'TRAINEE') {
+              // TRAINEE SIGNATURE_DRAW: fallback to trainee's full name
+              finalValue = `${assessmentForm.trainee.firstName} ${assessmentForm.trainee.middleName || ''} ${assessmentForm.trainee.lastName}`.trim()
+            }
+          }
+        }
+
         // Build field path from parent hierarchy to ensure uniqueness
         // e.g., "Apk_Grade.grade1", "Com_Grade.grade1", "root.isPf"
         const fieldPath = this.buildFieldPath(assessmentValue.templateField)
-        pathValueMap.set(fieldPath, parsedValue)
+        pathValueMap.set(fieldPath, finalValue)
 
         // Also set simple fieldName for root-level fields (backward compatibility)
         if (!assessmentValue.templateField.parentId) {
-          pathValueMap.set(assessmentValue.templateField.fieldName, parsedValue)
+          pathValueMap.set(assessmentValue.templateField.fieldName, finalValue)
         }
       }
     })
@@ -1973,6 +2074,11 @@ export class AssessmentService {
     if (fieldType === 'NUMBER' || fieldType === 'FINAL_SCORE_NUM') {
       const num = Number(value)
       return isNaN(num) ? null : num
+    }
+
+    // Handle signature and image field types - these are strings (URLs or names)
+    if (fieldType === 'IMAGE' || fieldType === 'SIGNATURE_DRAW' || fieldType === 'SIGNATURE_IMG') {
+      return value // Return as string (URL for images/signature images, name for signature draws)
     }
 
     // Note: CHECK_BOX is a parent field (like PART) that contains child fields

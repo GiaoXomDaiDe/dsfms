@@ -636,6 +636,10 @@ export type UpdateAssessmentValuesResType = z.infer<typeof UpdateAssessmentValue
 
 // ===== CONFIRM ASSESSMENT PARTICIPATION SCHEMAS =====
 
+export const ConfirmAssessmentParticipationBodySchema = z.object({
+  traineeSignatureUrl: z.string().min(1, 'Trainee signature URL is required')
+})
+
 export const ConfirmAssessmentParticipationResSchema = z.object({
   success: z.boolean(),
   message: z.string(),
@@ -643,9 +647,11 @@ export const ConfirmAssessmentParticipationResSchema = z.object({
   traineeId: z.string().uuid(),
   confirmedAt: z.coerce.date(),
   status: z.nativeEnum(AssessmentStatus),
-  previousStatus: z.nativeEnum(AssessmentStatus)
+  previousStatus: z.nativeEnum(AssessmentStatus),
+  signatureSaved: z.boolean()
 })
 
+export type ConfirmAssessmentParticipationBodyType = z.infer<typeof ConfirmAssessmentParticipationBodySchema>
 export type ConfirmAssessmentParticipationResType = z.infer<typeof ConfirmAssessmentParticipationResSchema>
 
 // ===== APPROVE/REJECT ASSESSMENT SCHEMAS =====

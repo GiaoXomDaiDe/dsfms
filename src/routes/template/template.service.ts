@@ -216,6 +216,20 @@ export class TemplateService {
         // console.log(`  -> Skipped inverted section: ${cleaned}`)
         continue
       }
+      // Image field: {%name}
+      else if (cleaned.startsWith('%')) {
+        const fieldName = cleaned.substring(1) // Remove % prefix for image fields in schema
+        
+        if (currentSection && !conditionalSections.has(currentSection)) {
+          // field thuộc về section hiện tại (section object bình thường)
+          schema[currentSection][fieldName] = ''
+          // console.log(`  -> Added image field ${fieldName} to section ${currentSection}`)
+        } else {
+          // field là ở root level (hoặc ko có section hiện tại hoặc đang trong conditional section)
+          schema[fieldName] = ''
+          // console.log(`  -> Added root image field: ${fieldName}`)
+        }
+      }
       // field bình thường: {name}
       else {
         if (currentSection && !conditionalSections.has(currentSection)) {
@@ -235,11 +249,11 @@ export class TemplateService {
 
   /**
    * Check if a field contains mathematical operators (+, -, *, /)
-   * Excludes section tags that start with # ^ or /
+   * Excludes section tags that start with #, ^, /, or %
    */
   private hasOperator(field: string): boolean {
-    // Skip section tags (starting with #, ^, or /)
-    if (field.startsWith('#') || field.startsWith('^') || field.startsWith('/')) {
+    // Skip section tags (starting with #, ^, /, or %)
+    if (field.startsWith('#') || field.startsWith('^') || field.startsWith('/') || field.startsWith('%')) {
       return false
     }
     // Check for mathematical operations
@@ -344,6 +358,25 @@ export class TemplateService {
             parentTempId: currentParent
           })
           processedToggles.add(sectionName)
+        }
+        continue
+      }
+
+      // Handle image fields {%fieldName}
+      if (cleaned.startsWith('%')) {
+        const fieldName = cleaned.substring(1) // Remove % prefix for image fields
+        const contextKey = currentParent || 'global'
+        const contextFields = processedFieldsByContext.get(contextKey) || new Set<string>()
+
+        if (!contextFields.has(cleaned)) {
+          fields.push({
+            fieldName: fieldName,
+            fieldType: 'IMAGE',
+            displayOrder: displayOrder++,
+            parentTempId: currentParent
+          })
+          contextFields.add(cleaned)
+          processedFieldsByContext.set(contextKey, contextFields)
         }
         continue
       }
@@ -1843,12 +1876,28 @@ export class TemplateService {
       }
     }
 
-    // 5. Check at least one signature field
+    // 5. Check signature field requirements
     const hasSignatureField = allFields.some(
       (field: any) => field.fieldType === 'SIGNATURE_DRAW' || field.fieldType === 'SIGNATURE_IMG'
     )
     if (!hasSignatureField) {
       throw new MissingSignatureFieldError()
+    }
+
+    // 5.1. Check TRAINEE must have at least one SIGNATURE_DRAW field (trainee must sign)
+    const traineeSignatureDrawFields = allFields.filter(
+      (field: any) => field.fieldType === 'SIGNATURE_DRAW' && field.roleRequired === 'TRAINEE'
+    )
+    if (traineeSignatureDrawFields.length === 0) {
+      throw new Error('Template must have at least one SIGNATURE_DRAW field with roleRequired set to TRAINEE')
+    }
+
+    // 5.2. Check TRAINEE cannot use SIGNATURE_IMG (only SIGNATURE_DRAW allowed)
+    const traineeSignatureImgFields = allFields.filter(
+      (field: any) => field.fieldType === 'SIGNATURE_IMG' && field.roleRequired === 'TRAINEE'
+    )
+    if (traineeSignatureImgFields.length > 0) {
+      throw new Error('TRAINEE roleRequired fields cannot use SIGNATURE_IMG fieldType, only SIGNATURE_DRAW is allowed for trainees')
     }
 
     // 5.1. Check at least one submittable section

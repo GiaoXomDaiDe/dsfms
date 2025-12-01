@@ -2474,8 +2474,33 @@ export class AssessmentRepo {
           assessmentForm: {
             include: {
               sections: {
+                include: {
+                  templateSection: {
+                    select: {
+                      editBy: true,
+                      fields: {
+                        select: {
+                          fieldType: true,
+                          roleRequired: true
+                        }
+                      }
+                    }
+                  }
+                },
                 select: {
-                  status: true
+                  id: true,
+                  status: true,
+                  templateSection: {
+                    select: {
+                      editBy: true,
+                      fields: {
+                        select: {
+                          fieldType: true,
+                          roleRequired: true
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2483,8 +2508,24 @@ export class AssessmentRepo {
         }
       })
 
+      // Check for TRAINEE sections that contain only a single SIGNATURE_DRAW field
+      const traineeSignatureOnlySections = updatedSection.assessmentForm.sections.filter((section) => {
+        const isTraineeSection = section.templateSection.editBy === 'TRAINEE'
+        if (!isTraineeSection) return false
+
+        const fields = section.templateSection.fields
+        const hasOnlySignatureDraw = fields.length === 1 && 
+          fields[0].fieldType === 'SIGNATURE_DRAW' && 
+          fields[0].roleRequired === 'TRAINEE'
+        
+        return hasOnlySignatureDraw
+      })
+
       // Get total number of sections in this assessment form
       const totalSections = updatedSection.assessmentForm.sections.length
+      
+      // Calculate effective total sections (excluding TRAINEE signature-only sections)
+      const effectiveTotalSections = totalSections - traineeSignatureOnlySections.length
 
       // Check current assessment form status
       let newAssessmentStatus = updatedSection.assessmentForm.status
@@ -2494,20 +2535,21 @@ export class AssessmentRepo {
         (section) => section.status === AssessmentSectionStatus.DRAFT
       ).length
 
-      if (totalSections === 1) {
-        // Single section: ON_GOING → SIGNATURE_PENDING
+      if (effectiveTotalSections === 1) {
+        // Single effective section: ON_GOING → SIGNATURE_PENDING
         if (newAssessmentStatus === AssessmentStatus.ON_GOING) {
           newAssessmentStatus = AssessmentStatus.SIGNATURE_PENDING
         }
-      } else {
-        // Multiple sections
+      } else if (effectiveTotalSections > 1) {
+        // Multiple effective sections
         if (newAssessmentStatus === AssessmentStatus.ON_GOING && draftSectionsCount === 1) {
           // First section completed: ON_GOING → DRAFT
           newAssessmentStatus = AssessmentStatus.DRAFT
         }
 
-        if (newAssessmentStatus === AssessmentStatus.DRAFT && draftSectionsCount === totalSections) {
-          // Last section completed: DRAFT → SIGNATURE_PENDING
+        if (newAssessmentStatus === AssessmentStatus.DRAFT && draftSectionsCount === effectiveTotalSections) {
+          // All effective sections completed: DRAFT → SIGNATURE_PENDING
+          // This happens when all non-signature-only sections are completed
           newAssessmentStatus = AssessmentStatus.SIGNATURE_PENDING
         }
 
@@ -2745,17 +2787,72 @@ export class AssessmentRepo {
   }
 
   /**
-   * Confirm assessment participation - Change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Confirm assessment participation - Save trainee signature and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
    */
-  async confirmAssessmentParticipation(assessmentId: string) {
-    return await this.prisma.assessmentForm.update({
-      where: {
-        id: assessmentId,
-        status: AssessmentStatus.SIGNATURE_PENDING
-      },
-      data: {
-        status: AssessmentStatus.READY_TO_SUBMIT,
-        updatedAt: new Date()
+  async confirmAssessmentParticipation(assessmentId: string, traineeSignatureUrl: string, userId: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Find TRAINEE SIGNATURE_DRAW field in this assessment
+      const assessmentForm = await tx.assessmentForm.findUnique({
+        where: { id: assessmentId },
+        include: {
+          sections: {
+            include: {
+              templateSection: {
+                include: {
+                  fields: {
+                    where: {
+                      fieldType: 'SIGNATURE_DRAW',
+                      roleRequired: 'TRAINEE'
+                    }
+                  }
+                }
+              },
+              values: true
+            }
+          }
+        }
+      })
+
+      if (!assessmentForm) {
+        throw new Error('Assessment not found')
+      }
+
+      let signatureSaved = false
+
+      // Find and update the TRAINEE SIGNATURE_DRAW field value
+      for (const section of assessmentForm.sections) {
+        for (const templateField of section.templateSection.fields) {
+          if (templateField.fieldType === 'SIGNATURE_DRAW' && templateField.roleRequired === 'TRAINEE') {
+            // Find the corresponding assessment value
+            const assessmentValue = section.values.find(value => value.templateFieldId === templateField.id)
+            
+            if (assessmentValue) {
+              // Update the signature URL
+              await tx.assessmentValue.update({
+                where: { id: assessmentValue.id },
+                data: { answerValue: traineeSignatureUrl }
+              })
+              signatureSaved = true
+            }
+          }
+        }
+      }
+
+      // Update assessment form status
+      const updatedAssessment = await tx.assessmentForm.update({
+        where: {
+          id: assessmentId,
+          status: AssessmentStatus.SIGNATURE_PENDING
+        },
+        data: {
+          status: AssessmentStatus.READY_TO_SUBMIT,
+          updatedAt: new Date()
+        }
+      })
+
+      return {
+        ...updatedAssessment,
+        signatureSaved
       }
     })
   }
@@ -3678,6 +3775,7 @@ export class AssessmentRepo {
             id: true,
             fieldName: true,
             fieldType: true,
+            roleRequired: true,
             parentId: true,
             parent: {
               select: {
