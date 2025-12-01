@@ -1,4 +1,4 @@
-export const RequestType = {
+export const ReportType = {
   SAFETY_REPORT: 'SAFETY_REPORT',
   INSTRUCTOR_REPORT: 'INSTRUCTOR_REPORT',
   FATIGUE_REPORT: 'FATIGUE_REPORT',
@@ -9,20 +9,20 @@ export const RequestType = {
   OTHER: 'OTHER'
 } as const
 
-export const RequestSeverity = {
+export const ReportSeverity = {
   LOW: 'LOW',
   MEDIUM: 'MEDIUM',
   HIGH: 'HIGH',
   CRITICAL: 'CRITICAL'
 } as const
 
-export const RequestStatus = {
+export const ReportStatus = {
   SUBMITTED: 'SUBMITTED',
   ACKNOWLEDGED: 'ACKNOWLEDGED',
   RESOLVED: 'RESOLVED',
   CANCELLED: 'CANCELLED'
 } as const
 
-export type RequestTypeValue = (typeof RequestType)[keyof typeof RequestType]
-export type RequestSeverityValue = (typeof RequestSeverity)[keyof typeof RequestSeverity]
-export type RequestStatusValue = (typeof RequestStatus)[keyof typeof RequestStatus]
+export type ReportTypeValue = (typeof ReportType)[keyof typeof ReportType]
+export type ReportSeverityValue = (typeof ReportSeverity)[keyof typeof ReportSeverity]
+export type ReportStatusValue = (typeof ReportStatus)[keyof typeof ReportStatus]

@@ -1,19 +1,19 @@
 import { z } from 'zod'
-import type { RequestTypeValue } from '~/shared/constants/report.constant'
-import { RequestSeverity, RequestStatus, RequestType } from '~/shared/constants/report.constant'
+import type { ReportTypeValue } from '~/shared/constants/report.constant'
+import { ReportSeverity, ReportStatus, ReportType } from '~/shared/constants/report.constant'
 import { ReportSchema } from '~/shared/models/shared-report.model'
 
-export const REQUEST_TYPE_FILTER_MAP: Record<'INCIDENT' | 'FEEDBACK' | 'OTHER', RequestTypeValue[]> = {
+export const REQUEST_TYPE_FILTER_MAP: Record<'INCIDENT' | 'FEEDBACK' | 'OTHER', ReportTypeValue[]> = {
   INCIDENT: [
-    RequestType.SAFETY_REPORT,
-    RequestType.INSTRUCTOR_REPORT,
-    RequestType.FATIGUE_REPORT,
-    RequestType.TRAINING_PROGRAM_REPORT,
-    RequestType.FACILITIES_REPORT,
-    RequestType.COURSE_ORGANIZATION_REPORT
+    ReportType.SAFETY_REPORT,
+    ReportType.INSTRUCTOR_REPORT,
+    ReportType.FATIGUE_REPORT,
+    ReportType.TRAINING_PROGRAM_REPORT,
+    ReportType.FACILITIES_REPORT,
+    ReportType.COURSE_ORGANIZATION_REPORT
   ],
-  FEEDBACK: [RequestType.FEEDBACK],
-  OTHER: [RequestType.OTHER]
+  FEEDBACK: [ReportType.FEEDBACK],
+  OTHER: [ReportType.OTHER]
 }
 
 export const GetReportsQuerySchema = z
@@ -22,8 +22,8 @@ export const GetReportsQuerySchema = z
       .enum(['INCIDENT', 'FEEDBACK', 'OTHER'])
       .optional()
       .transform((value) => (value ? REQUEST_TYPE_FILTER_MAP[value] : undefined)),
-    status: z.enum(RequestStatus).optional(),
-    severity: z.enum(RequestSeverity).optional(),
+    status: z.enum(ReportStatus).optional(),
+    severity: z.enum(ReportSeverity).optional(),
     isAnonymous: z.coerce.boolean().optional()
   })
   .strict()
@@ -46,16 +46,16 @@ export const GetReportParamsSchema = z
 const ReportTypeSchema = z.object({
   isAnonymous: z.boolean().optional().default(false),
   requestType: z.enum([
-    RequestType.SAFETY_REPORT,
-    RequestType.INSTRUCTOR_REPORT,
-    RequestType.FATIGUE_REPORT,
-    RequestType.TRAINING_PROGRAM_REPORT,
-    RequestType.FACILITIES_REPORT,
-    RequestType.COURSE_ORGANIZATION_REPORT,
-    RequestType.FEEDBACK,
-    RequestType.OTHER
+    ReportType.SAFETY_REPORT,
+    ReportType.INSTRUCTOR_REPORT,
+    ReportType.FATIGUE_REPORT,
+    ReportType.TRAINING_PROGRAM_REPORT,
+    ReportType.FACILITIES_REPORT,
+    ReportType.COURSE_ORGANIZATION_REPORT,
+    ReportType.FEEDBACK,
+    ReportType.OTHER
   ]),
-  severity: z.enum(RequestSeverity).optional(),
+  severity: z.enum(ReportSeverity).optional(),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().min(1).max(4000).optional(),
   actionsTaken: z.string().trim().min(1).max(2000).optional()

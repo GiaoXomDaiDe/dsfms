@@ -13,28 +13,28 @@ import {
   RespondReportResType
 } from '~/routes/reports/reports.model'
 import {
-  RequestSeverityValue,
-  RequestStatus,
-  RequestStatusValue,
-  RequestType,
-  RequestTypeValue
+  ReportSeverityValue,
+  ReportStatus,
+  ReportStatusValue,
+  ReportType,
+  ReportTypeValue
 } from '~/shared/constants/report.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { ReportType } from '~/shared/models/shared-report.model'
+import { ReportModel } from '~/shared/models/shared-report.model'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 @SerializeAll()
 export class ReportsRepository {
-  private readonly reportTypes: RequestTypeValue[] = [
-    RequestType.SAFETY_REPORT,
-    RequestType.INSTRUCTOR_REPORT,
-    RequestType.FATIGUE_REPORT,
-    RequestType.TRAINING_PROGRAM_REPORT,
-    RequestType.FACILITIES_REPORT,
-    RequestType.COURSE_ORGANIZATION_REPORT,
-    RequestType.OTHER,
-    RequestType.FEEDBACK
+  private readonly reportTypes: ReportTypeValue[] = [
+    ReportType.SAFETY_REPORT,
+    ReportType.INSTRUCTOR_REPORT,
+    ReportType.FATIGUE_REPORT,
+    ReportType.TRAINING_PROGRAM_REPORT,
+    ReportType.FACILITIES_REPORT,
+    ReportType.COURSE_ORGANIZATION_REPORT,
+    ReportType.OTHER,
+    ReportType.FEEDBACK
   ]
   private readonly userSummarySelect = {
     id: true,
@@ -61,7 +61,7 @@ export class ReportsRepository {
   }
 
   async findById(id: string): Promise<GetReportResType | null> {
-    const report = await this.prisma.request.findUnique({
+    const report = await this.prisma.report.findUnique({
       where: {
         id,
         requestType: { in: this.reportTypes }
@@ -79,20 +79,20 @@ export class ReportsRepository {
   private async getReports(
     query: GetReportsQueryType,
     userId?: string
-  ): Promise<{ reports: ReportType[]; totalItems: number }> {
+  ): Promise<{ reports: ReportModel[]; totalItems: number }> {
     const { severity, status, isAnonymous, requestType } = query
 
-    const where: Prisma.RequestWhereInput = {
+    const where: Prisma.ReportWhereInput = {
       ...(requestType && { requestType: { in: requestType } }),
-      ...(severity && { severity: severity as RequestSeverityValue }),
-      ...(status && { status: status as RequestStatusValue }),
+      ...(severity && { severity: severity as ReportSeverityValue }),
+      ...(status && { status: status as ReportStatusValue }),
       ...(isAnonymous !== undefined && { isAnonymous }),
       ...(userId && { createdById: userId })
     }
 
     const [totalItems, reports] = await this.prisma.$transaction([
-      this.prisma.request.count({ where }),
-      this.prisma.request.findMany({
+      this.prisma.report.count({ where }),
+      this.prisma.report.findMany({
         where,
         include: this.reportInclude
       })
@@ -111,13 +111,13 @@ export class ReportsRepository {
     data: CreateReportBodyType
     createdById: string
   }): Promise<CreateReportResType> {
-    const report = await this.prisma.request.create({
+    const report = await this.prisma.report.create({
       data: {
-        requestType: data.requestType as RequestTypeValue,
+        requestType: data.requestType as ReportTypeValue,
         createdById,
         isAnonymous: data.isAnonymous ?? false,
-        status: RequestStatus.SUBMITTED,
-        severity: (data.severity as RequestSeverityValue) ?? null,
+        status: ReportStatus.SUBMITTED,
+        severity: (data.severity as ReportSeverityValue) ?? null,
         title: data.title ?? null,
         description: data.description ?? null,
         actionsTaken: data.actionsTaken ?? null
@@ -129,13 +129,13 @@ export class ReportsRepository {
   }
 
   async cancel({ id, updatedById }: { id: string; updatedById: string }): Promise<CancelReportResType> {
-    const report = await this.prisma.request.update({
+    const report = await this.prisma.report.update({
       where: {
         id,
         requestType: { in: this.reportTypes }
       },
       data: {
-        status: RequestStatus.CANCELLED,
+        status: ReportStatus.CANCELLED,
         updatedById
       },
       include: this.reportInclude
@@ -145,13 +145,13 @@ export class ReportsRepository {
   }
 
   async acknowledge({ id, managedById }: { id: string; managedById: string }): Promise<AcknowledgeReportResType> {
-    const report = await this.prisma.request.update({
+    const report = await this.prisma.report.update({
       where: {
         id,
         requestType: { in: this.reportTypes }
       },
       data: {
-        status: RequestStatus.ACKNOWLEDGED,
+        status: ReportStatus.ACKNOWLEDGED,
         managedById,
         updatedById: managedById
       },
@@ -170,13 +170,13 @@ export class ReportsRepository {
     data: RespondReportBodyType
     managedById: string
   }): Promise<RespondReportResType> {
-    const report = await this.prisma.request.update({
+    const report = await this.prisma.report.update({
       where: {
         id,
         requestType: { in: this.reportTypes }
       },
       data: {
-        status: RequestStatus.RESOLVED,
+        status: ReportStatus.RESOLVED,
         response: data.response,
         managedById,
         updatedById: managedById

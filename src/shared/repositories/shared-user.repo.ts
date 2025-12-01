@@ -27,7 +27,7 @@ import {
   roleNameSelect,
   roleSummarySelect,
   userRoleDepartmentProfileInclude
-} from '~/shared/prisma-presets/user.prisma-presets'
+} from '~/shared/prisma-presets/shared-user.prisma-presets'
 import { EidService } from '~/shared/services/eid.service'
 import { PrismaService } from '~/shared/services/prisma.service'
 
