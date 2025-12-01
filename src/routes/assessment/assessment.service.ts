@@ -2216,11 +2216,11 @@ export class AssessmentService {
               const dimensions = sizeOf(img)
               console.log(`Image ${tagName} dimensions: ${dimensions.width}x${dimensions.height}`)
               
-              // Set default size or scale down if too large
+              // Set default size (self configurable)
               let width = dimensions.width
               let height = dimensions.height
-              const maxWidth = 200
-              const maxHeight = 150
+              const maxWidth = 107
+              const maxHeight = 80
 
               // Scale down if image is too large
               if (width > maxWidth || height > maxHeight) {
