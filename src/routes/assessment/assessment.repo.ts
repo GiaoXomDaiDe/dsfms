@@ -3775,6 +3775,7 @@ export class AssessmentRepo {
             id: true,
             fieldName: true,
             fieldType: true,
+            roleRequired: true,
             parentId: true,
             parent: {
               select: {
