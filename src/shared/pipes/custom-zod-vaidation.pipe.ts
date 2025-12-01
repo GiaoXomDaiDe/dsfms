@@ -1,17 +1,16 @@
 import { createZodValidationPipe, ZodValidationPipe } from 'nestjs-zod'
 import { ZodError } from 'zod'
+import { getFieldLabel } from '~/shared/constants/validation-labels.constant'
 import { ValidationException } from '~/shared/exceptions/validation.exception'
 
 const CustomZodValidationPipe: typeof ZodValidationPipe = createZodValidationPipe({
   createValidationException: (error: ZodError) => {
-    // Format errors properly
     const errors = error.issues.map((err) => ({
-      field: err.path.join('.'),
+      field: err.path.join('.') || 'payload',
       message: formatErrorMessage(err),
       code: err.code
     }))
 
-    // Return with proper structure
     return new ValidationException(
       errors.map(({ field, message, ...rest }) => ({
         path: field,
@@ -24,39 +23,83 @@ const CustomZodValidationPipe: typeof ZodValidationPipe = createZodValidationPip
 })
 
 function formatErrorMessage(error: any): string {
-  const field = error.path.join('.')
+  const path = error.path.join('.') || 'payload'
+  const field = getFieldLabel(path) ?? humanize(path)
 
   switch (error.code) {
     case 'invalid_type':
       if (error.received === 'undefined') {
-        return `${field} is required`
+        return `${field} is required.`
       }
-      return `${field} must be ${error.expected}`
+      return `${field} must be ${describeType(error.expected)}.`
 
     case 'invalid_string':
       if (error.validation === 'uuid') {
-        return `${field} must be a valid UUID`
+        return `${field} needs to be a valid UUID.`
       }
       if (error.validation === 'email') {
-        return `${field} must be a valid email`
+        return `${field} should look like an email address (name@example.com).`
       }
-      return `Invalid ${field}`
+      return `${field} is not formatted correctly.`
+
+    case 'invalid_enum_value':
+      if (Array.isArray(error.options)) {
+        return `${field} must be one of: ${error.options.join(', ')}.`
+      }
+      return `${field} is not an allowed value.`
 
     case 'too_small':
       if (error.type === 'string') {
-        return `${field} must be at least ${error.minimum} characters`
+        return `${field} needs at least ${error.minimum} characters.`
       }
-      return `${field} must be at least ${error.minimum}`
+      if (error.type === 'array') {
+        return `${field} should include at least ${error.minimum} item(s).`
+      }
+      return `${field} must be greater than or equal to ${error.minimum}.`
 
     case 'too_big':
       if (error.type === 'string') {
-        return `${field} must not exceed ${error.maximum} characters`
+        return `${field} should not exceed ${error.maximum} characters.`
       }
-      return `${field} must not exceed ${error.maximum}`
+      if (error.type === 'array') {
+        return `${field} should not have more than ${error.maximum} item(s).`
+      }
+      return `${field} must be less than or equal to ${error.maximum}.`
+
+    case 'unrecognized_keys': {
+      const keys = Array.isArray(error.keys) ? error.keys.join(', ') : 'an unknown field'
+      return `${field} has unexpected field: ${keys}.`
+    }
 
     default:
-      return error.message
+      return error.message ?? `${field} is invalid.`
   }
+}
+
+function humanize(path: string): string {
+  if (!path || path === 'payload') {
+    return 'Payload'
+  }
+
+  return path
+    .split('.')
+    .map((segment) =>
+      segment
+        .replace(/\[(\d+)\]/g, ' $1')
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/_/g, ' ')
+        .trim()
+    )
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ')
+}
+
+function describeType(expected: string | undefined): string {
+  if (!expected) return 'a valid value'
+  if (expected === 'string') return 'text'
+  if (expected === 'number') return 'a number'
+  if (expected === 'boolean') return 'true or false'
+  return expected
 }
 
 export default CustomZodValidationPipe

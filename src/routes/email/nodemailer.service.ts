@@ -235,17 +235,17 @@ This account was created on ${creationDate}.`
       message: string
     }>
   }> {
-    const results = []
+    const results = await Promise.all(
+      users.map(async (user) => {
+        const result = await this.sendNewUserAccountEmail(user.email, user.eid, user.password, user.fullName, user.role)
 
-    for (const user of users) {
-      const result = await this.sendNewUserAccountEmail(user.email, user.eid, user.password, user.fullName, user.role)
-
-      results.push({
-        email: user.email,
-        success: result.success,
-        message: result.message
+        return {
+          email: user.email,
+          success: result.success,
+          message: result.message
+        }
       })
-    }
+    )
 
     const successCount = results.filter((r) => r.success).length
 

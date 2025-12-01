@@ -1,9 +1,7 @@
 import z from 'zod'
-import { isoDatetimeSchema } from '~/shared/helpers/zod-validation.helper'
+import { isoDateSchema, isoDatetimeSchema, nullableUuidSchema } from '~/shared/helpers/zod-validation.helper'
 import { UserSchema } from '~/shared/models/shared-user.model'
 import {
-  traineeDobSchema,
-  traineeEnrollmentDateSchema,
   traineeNationSchema,
   traineePassportSchema,
   traineeTrainingBatchSchema,
@@ -18,9 +16,9 @@ export const TrainerProfileSchema = z.object({
   certificationNumber: trainerCertificationNumberSchema,
   yearsOfExp: trainerYearsOfExperienceSchema,
   bio: trainerBioSchema,
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
+  createdById: nullableUuidSchema,
+  updatedById: nullableUuidSchema,
+  deletedById: nullableUuidSchema,
   deletedAt: isoDatetimeSchema.nullable(),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema
@@ -28,14 +26,14 @@ export const TrainerProfileSchema = z.object({
 
 export const TraineeProfileSchema = z
   .object({
-    dob: traineeDobSchema,
-    enrollmentDate: traineeEnrollmentDateSchema,
+    dob: isoDateSchema,
+    enrollmentDate: isoDateSchema.nullable(),
     trainingBatch: traineeTrainingBatchSchema,
     passportNo: traineePassportSchema,
     nation: traineeNationSchema,
-    createdById: z.uuid().nullable(),
-    updatedById: z.uuid().nullable(),
-    deletedById: z.uuid().nullable(),
+    createdById: nullableUuidSchema,
+    updatedById: nullableUuidSchema,
+    deletedById: nullableUuidSchema,
     deletedAt: isoDatetimeSchema.nullable(),
     createdAt: isoDatetimeSchema,
     updatedAt: isoDatetimeSchema

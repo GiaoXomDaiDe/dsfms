@@ -22,33 +22,43 @@ export const evaluateRoleProfileRules = (roleName: string, data: RoleProfilePayl
   const rules = ROLE_PROFILE_RULES[roleName as keyof typeof ROLE_PROFILE_RULES]
   const violations: RoleProfileViolation[] = []
 
+  // 1. Nếu có rule cho role này (TRAINER / TRAINEE)
   if (rules) {
-    const requiredKey = rules.requiredProfile
-    const forbiddenKey = rules.forbiddenProfile
+    const { requiredProfile, forbiddenProfile, requiredMessage, forbiddenMessage } = rules
 
-    const requiredProfile = data[requiredKey]
-    const forbiddenProfile = data[forbiddenKey]
+    // requiredProfile & forbiddenProfile là key: 'trainerProfile' | 'traineeProfile'
+    // data[requiredProfile] / data[forbiddenProfile] có thể là object hoặc undefined/null
+    // Dùng !! để convert về boolean:
+    //   - truthy (có profile)  -> true
+    //   - falsy  (không có)    -> false
+    const hasRequired = !!data[requiredProfile] // user có gửi profile bắt buộc cho role này không?
+    const hasForbidden = !!data[forbiddenProfile] // user có gửi profile bị cấm cho role này không?
 
-    if (!requiredProfile) {
+    if (!hasRequired) {
       violations.push({
         type: ROLE_PROFILE_VIOLATION_TYPES.MISSING_REQUIRED,
-        profileKey: requiredKey,
-        message: rules.requiredMessage
+        profileKey: requiredProfile,
+        message: requiredMessage
       })
     }
 
-    if (forbiddenProfile) {
+    if (hasForbidden) {
       violations.push({
         type: ROLE_PROFILE_VIOLATION_TYPES.FORBIDDEN_PRESENT,
-        profileKey: forbiddenKey,
-        message: rules.forbiddenMessage
+        profileKey: forbiddenProfile,
+        message: forbiddenMessage
       })
     }
 
     return violations
   }
 
-  PROFILE_KEYS.forEach((profileKey) => {
+  // 2. Các role không có rule (ADMIN, DEPARTMENT_HEAD, ...)
+  //    => không được phép có bất kỳ profile nào
+  // Dùng for...of thay vì forEach vì:
+  // - Ít "callback noise" → đọc thẳng control flow, dễ debug
+  // - Cho phép dùng break / continue nếu sau này cần tối ưu
+  for (const profileKey of PROFILE_KEYS) {
     if (data[profileKey]) {
       violations.push({
         type: ROLE_PROFILE_VIOLATION_TYPES.UNEXPECTED_PROFILE,
@@ -56,9 +66,21 @@ export const evaluateRoleProfileRules = (roleName: string, data: RoleProfilePayl
         message: ProfileNotAllowedForRoleMessage(profileKey, roleName)
       })
     }
-  })
+  }
 
   return violations
+}
+
+export const validateRoleProfile = (roleName: string, data: RoleProfilePayload, ctx: z.RefinementCtx) => {
+  const violations = evaluateRoleProfileRules(roleName, data)
+
+  violations.forEach((violation) => {
+    ctx.addIssue({
+      code: 'custom',
+      message: violation.message,
+      path: [violation.profileKey]
+    })
+  })
 }
 
 export function isUniqueConstraintPrismaError(error: any): error is PrismaClientKnownRequestError {
@@ -83,18 +105,6 @@ export function createResponseDto<T extends z.ZodTypeAny>(dataSchema: T, default
     data: dataSchema
   })
   return createZodDto(schema)
-}
-
-export const validateRoleProfile = (roleName: string, data: RoleProfilePayload, ctx: z.RefinementCtx) => {
-  const violations = evaluateRoleProfileRules(roleName, data)
-
-  violations.forEach((violation) => {
-    ctx.addIssue({
-      code: 'custom',
-      message: violation.message,
-      path: [violation.profileKey]
-    })
-  })
 }
 
 export const generateRandomFilename = (filename: string) => {

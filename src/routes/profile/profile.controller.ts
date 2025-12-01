@@ -2,7 +2,7 @@ import { Body, Controller, Get, Put } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { ResetPasswordBodyDTO, UpdateProfileBodyDTO, UpdateSignatureBodyDTO } from '~/routes/profile/profile.dto'
 import { ProfileService } from '~/routes/profile/profile.service'
-import { GetUserWithProfileResDTO, UpdateUserResDTO } from '~/routes/user/user.dto'
+import { GetUserResDTO, UpdateUserResDTO } from '~/routes/user/user.dto'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
@@ -11,7 +11,7 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   @Get()
-  @ZodSerializerDto(GetUserWithProfileResDTO)
+  @ZodSerializerDto(GetUserResDTO)
   async getProfile(@ActiveUser('userId') userId: string) {
     const profile = await this.profileService.getProfile(userId)
     return { data: profile }

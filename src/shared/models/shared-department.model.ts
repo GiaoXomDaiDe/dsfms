@@ -1,16 +1,21 @@
 import z from 'zod'
-import { isoDatetimeSchema } from '~/shared/helpers/zod-validation.helper'
+import { isoDatetimeSchema, nullableUuidSchema } from '~/shared/helpers/zod-validation.helper'
+import {
+  departmentCodeSchema,
+  departmentDescriptionSchema,
+  departmentNameSchema
+} from '~/shared/validation/department.validation'
 
 export const DepartmentSchema = z.object({
   id: z.uuid(),
-  name: z.string().min(1).max(255),
-  code: z.string().min(1).max(50),
-  description: z.string().max(1000).nullable(),
-  headUserId: z.uuid().nullable().optional(),
+  name: departmentNameSchema,
+  code: departmentCodeSchema,
+  description: departmentDescriptionSchema,
+  headUserId: nullableUuidSchema.optional(),
   isActive: z.boolean().default(true),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
+  createdById: nullableUuidSchema,
+  updatedById: nullableUuidSchema,
+  deletedById: nullableUuidSchema,
   deletedAt: isoDatetimeSchema.nullable(),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema

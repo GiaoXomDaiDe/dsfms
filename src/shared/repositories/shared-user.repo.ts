@@ -8,7 +8,7 @@ import {
 } from '~/routes/profile/profile.model'
 import { UserNotFoundException } from '~/routes/user/user.error'
 import {
-  GetUserWithProfileResType,
+  GetUserResType,
   UpdateUserInternalType,
   UserProfileWithoutTeachingType,
   UserWithProfileRelationType
@@ -56,10 +56,11 @@ type BasicUserInfoWithDepartment = Pick<UserType, 'id' | 'eid' | 'firstName' | '
   department: DepartmentSummaryType | null
 }
 
-const userProfileInclude = userRoleDepartmentProfileInclude
-
 type UserProfilePayload = UserWithProfileRelationType
 
+// Map entity user (đã include role/department/profile) sang DTO profile
+// nhưng chưa có teachingCourses/teachingSubjects.
+// Đồng thời loại bỏ các field nhạy cảm (passwordHash, roleId, departmentId).
 const mapToUserProfileWithoutTeaching = (user: UserProfilePayload): UserProfileWithoutTeachingType => {
   const { passwordHash: _passwordHash, roleId: _roleId, departmentId: _departmentId, ...publicFields } = user
 
@@ -250,19 +251,17 @@ export class SharedUserRepository {
       }
     }) as Promise<BasicUserInfoWithDepartment | null>
   }
-
-  async findUniqueIncludeProfile(id: string): Promise<GetUserWithProfileResType | null> {
-    const user = await this.prismaService.user.findFirst({
+  //done
+  async findUniqueIncludeProfile(id: string): Promise<GetUserResType | null> {
+    const user = await this.prismaService.user.findUnique({
       where: {
         id
       },
-      include: userProfileInclude
+      include: userRoleDepartmentProfileInclude
     })
-    if (!user) {
-      return null
-    }
-
-    return this.enrichUserProfile(user as UserProfilePayload)
+    if (!user) return null
+    // user đã include role/department/profile ở trên bổ sung thêm teachingCourses/teachingSubjects
+    return this.buildUserProfileWithTeaching(user)
   }
 
   async updateWithProfile(
@@ -282,14 +281,14 @@ export class SharedUserRepository {
       traineeProfile?: UpdateTraineeProfileType
       includeDeleted?: boolean
     }
-  ): Promise<GetUserWithProfileResType> {
+  ): Promise<GetUserResType> {
     return this.prismaService.$transaction(async (tx) => {
       const currentUser = (await tx.user.findUnique({
         where: {
           id: where.id,
           deletedAt: includeDeleted ? undefined : null
         },
-        include: userProfileInclude
+        include: userRoleDepartmentProfileInclude
       })) as UserProfilePayload | null
       if (!currentUser) throw UserNotFoundException
 
@@ -343,14 +342,14 @@ export class SharedUserRepository {
 
       const refreshedUser = (await tx.user.findUnique({
         where: { id: where.id },
-        include: userProfileInclude
+        include: userRoleDepartmentProfileInclude
       })) as UserProfilePayload | null
 
       if (!refreshedUser) {
         throw UserNotFoundException
       }
 
-      return this.enrichUserProfile(refreshedUser)
+      return this.buildUserProfileWithTeaching(refreshedUser)
     })
   }
   private shouldGenerateNewEid(
@@ -583,28 +582,34 @@ export class SharedUserRepository {
   private hasProfilePayload<T extends Record<string, unknown> | undefined>(payload?: T): payload is T {
     return !!payload && Object.keys(payload).length > 0
   }
-
-  private async enrichUserProfile(user: UserProfilePayload): Promise<GetUserWithProfileResType> {
-    const teachingAssignments = await this.buildTeachingAssignments(user)
+  /**
+   * Tạo DTO user profile đầy đủ (bao gồm teachingCourses/teachingSubjects)
+   * từ dữ liệu user đã include quan hệ, đồng thời ẩn profile không phù hợp theo role.
+   */
+  private async buildUserProfileWithTeaching(user: UserProfilePayload): Promise<GetUserResType> {
     const baseProfile = mapToUserProfileWithoutTeaching(user)
-    return {
+    const teachingAssignments = await this.buildTeachingAssignments(user)
+
+    const fullProfile: GetUserResType = {
       ...baseProfile,
-      teachingCourses: teachingAssignments.teachingCourses,
-      teachingSubjects: teachingAssignments.teachingSubjects
+      teachingCourses: teachingAssignments?.teachingCourses ?? [],
+      teachingSubjects: teachingAssignments?.teachingSubjects ?? []
     }
+
+    return this.formatUserProfileForRole(fullProfile)
   }
 
+  /**
+   * Teaching assignments chỉ áp dụng cho TRAINER active:
+   * - Role khác: luôn trả []
+   * - TRAINER inactive / deleted: luôn trả []
+   */
   private async buildTeachingAssignments(
     user: UserProfilePayload
-  ): Promise<Pick<GetUserWithProfileResType, 'teachingCourses' | 'teachingSubjects'>> {
-    if (user.role.name !== RoleName.TRAINER) {
-      return {
-        teachingCourses: [],
-        teachingSubjects: []
-      }
-    }
+  ): Promise<Pick<GetUserResType, 'teachingCourses' | 'teachingSubjects'> | null> {
+    const isActiveTrainer = user.role.name === RoleName.TRAINER && user.status === UserStatus.ACTIVE && !user.deletedAt
 
-    if (user.status !== UserStatus.ACTIVE || user.deletedAt) {
+    if (!isActiveTrainer) {
       return {
         teachingCourses: [],
         teachingSubjects: []
@@ -617,9 +622,7 @@ export class SharedUserRepository {
           trainerUserId: user.id,
           course: {
             deletedAt: null,
-            status: {
-              not: CourseStatus.ARCHIVED
-            }
+            status: { not: CourseStatus.ARCHIVED }
           }
         },
         select: {
@@ -641,9 +644,7 @@ export class SharedUserRepository {
           trainerUserId: user.id,
           subject: {
             deletedAt: null,
-            status: {
-              not: SubjectStatus.ARCHIVED
-            }
+            status: { not: SubjectStatus.ARCHIVED }
           }
         },
         select: {
@@ -664,49 +665,63 @@ export class SharedUserRepository {
     ])
 
     const teachingCourses = courseAssignments
-      .flatMap((assignment) => {
-        if (!assignment.course) {
-          return []
-        }
-
-        return [
-          {
-            id: assignment.course.id,
-            code: assignment.course.code,
-            name: assignment.course.name,
-            status: assignment.course.status,
-            startDate: assignment.course.startDate,
-            endDate: assignment.course.endDate,
-            role: assignment.roleInAssessment
-          }
-        ]
-      })
+      .flatMap((assignment) =>
+        assignment.course
+          ? [
+              {
+                id: assignment.course.id,
+                code: assignment.course.code,
+                name: assignment.course.name,
+                status: assignment.course.status,
+                startDate: assignment.course.startDate,
+                endDate: assignment.course.endDate,
+                role: assignment.roleInAssessment
+              }
+            ]
+          : []
+      )
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
 
     const teachingSubjects = subjectAssignments
-      .flatMap((assignment) => {
-        if (!assignment.subject) {
-          return []
-        }
-
-        return [
-          {
-            id: assignment.subject.id,
-            courseId: assignment.subject.courseId,
-            code: assignment.subject.code,
-            name: assignment.subject.name,
-            status: assignment.subject.status,
-            startDate: assignment.subject.startDate,
-            endDate: assignment.subject.endDate,
-            role: assignment.roleInAssessment
-          }
-        ]
-      })
+      .flatMap((assignment) =>
+        assignment.subject
+          ? [
+              {
+                id: assignment.subject.id,
+                courseId: assignment.subject.courseId,
+                code: assignment.subject.code,
+                name: assignment.subject.name,
+                status: assignment.subject.status,
+                startDate: assignment.subject.startDate,
+                endDate: assignment.subject.endDate,
+                role: assignment.roleInAssessment
+              }
+            ]
+          : []
+      )
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
 
     return {
       teachingCourses,
       teachingSubjects
     }
+  }
+
+  /**
+   * Ẩn trainerProfile / traineeProfile không phù hợp với role.
+   */
+  private formatUserProfileForRole(user: GetUserResType): GetUserResType {
+    const { trainerProfile, traineeProfile, ...baseUser } = user
+    const roleName = user.role.name
+
+    if (roleName === RoleName.TRAINER && trainerProfile) {
+      return { ...baseUser, trainerProfile }
+    }
+
+    if (roleName === RoleName.TRAINEE && traineeProfile) {
+      return { ...baseUser, traineeProfile }
+    }
+
+    return { ...baseUser }
   }
 }

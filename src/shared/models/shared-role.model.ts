@@ -1,5 +1,5 @@
 import z from 'zod'
-import { isoDatetimeSchema } from '~/shared/helpers/zod-validation.helper'
+import { isoDatetimeSchema, nullableUuidSchema } from '~/shared/helpers/zod-validation.helper'
 import { roleDescriptionSchema, roleNameSchema } from '~/shared/validation/role.validation'
 
 export const RoleSchema = z.object({
@@ -7,9 +7,9 @@ export const RoleSchema = z.object({
   name: roleNameSchema,
   description: roleDescriptionSchema,
   isActive: z.boolean().default(true),
-  createdById: z.uuid().nullable(),
-  updatedById: z.uuid().nullable(),
-  deletedById: z.uuid().nullable(),
+  createdById: nullableUuidSchema,
+  updatedById: nullableUuidSchema,
+  deletedById: nullableUuidSchema,
   deletedAt: isoDatetimeSchema.nullable(),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema
