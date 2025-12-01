@@ -275,7 +275,7 @@ export class TemplateController {
 
   /**
    * PATCH /templates/:id/status
-   * Change template status
+   * Enable/Disable a status of a template
    */
   @Patch(':id/status')
   async changeTemplateStatus(

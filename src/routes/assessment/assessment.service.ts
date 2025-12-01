@@ -2219,8 +2219,8 @@ export class AssessmentService {
               // Set default size or scale down if too large
               let width = dimensions.width
               let height = dimensions.height
-              const maxWidth = 400
-              const maxHeight = 300
+              const maxWidth = 200
+              const maxHeight = 150
 
               // Scale down if image is too large
               if (width > maxWidth || height > maxHeight) {
@@ -2237,7 +2237,7 @@ export class AssessmentService {
             } catch (error) {
               console.error(`Failed to get image size for ${tagName}:`, error)
               // Return default size if size detection fails
-              return [200, 150]
+              return [150, 150]
             }
           }
         }

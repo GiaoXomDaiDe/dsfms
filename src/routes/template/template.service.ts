@@ -899,6 +899,8 @@ export class TemplateService {
 
   /**
    * Change template status
+   * - Disable: PUBLISHED/REJECTED → DISABLED (with assessment usage check)
+   * - Enable: DISABLED → PENDING
    */
   async changeTemplateStatus(
     templateId: string,
@@ -913,22 +915,25 @@ export class TemplateService {
 
     const currentStatus = existingTemplate.status
 
-    // Validate status transitions - only allow PUBLISHED ↔ DISABLED
+    // Validate status transitions
     if (currentStatus === 'DRAFT' || currentStatus === 'PENDING') {
       throw new InvalidStatusTransitionError(currentStatus, newStatus)
     }
 
-    // Only allow PUBLISHED ↔ DISABLED transitions
-    if (
-      (currentStatus === 'PUBLISHED' && newStatus !== 'DISABLED') ||
-      (currentStatus === 'DISABLED' && newStatus !== 'PUBLISHED') ||
-      (currentStatus !== 'PUBLISHED' && currentStatus !== 'DISABLED')
-    ) {
+    // Define allowed transitions
+    const allowedTransitions: Record<string, string[]> = {
+      PUBLISHED: ['DISABLED'], // Published can be disabled
+      REJECTED: ['DISABLED'],  // Rejected can be disabled
+      DISABLED: ['PENDING']    // Disabled can be enabled (moved to PENDING for review)
+    }
+
+    // Check if the transition is allowed
+    if (!allowedTransitions[currentStatus] || !allowedTransitions[currentStatus].includes(newStatus)) {
       throw new InvalidStatusTransitionError(currentStatus, newStatus)
     }
 
-    // If changing from PUBLISHED to DISABLED, check assessment usage
-    if (currentStatus === 'PUBLISHED' && newStatus === 'DISABLED') {
+    // If disabling template (PUBLISHED/REJECTED → DISABLED), check assessment usage
+    if ((currentStatus === 'PUBLISHED' || currentStatus === 'REJECTED') && newStatus === 'DISABLED') {
       const hasActiveAssessments = await this.templateRepository.templateHasActiveAssessments(templateId)
       if (hasActiveAssessments) {
         throw new TemplateInUseCannotDisableError()
