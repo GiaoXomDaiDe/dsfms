@@ -247,7 +247,9 @@ export class UserRepository {
                 traineeProfiles.push({
                   userId,
                   dob: userData.traineeProfile.dob,
-                  enrollmentDate: new Date(userData.traineeProfile.enrollmentDate || ''),
+                  enrollmentDate: userData.traineeProfile.enrollmentDate
+                    ? new Date(userData.traineeProfile.enrollmentDate)
+                    : null,
                   trainingBatch: userData.traineeProfile.trainingBatch,
                   passportNo: userData.traineeProfile.passportNo || null,
                   nation: userData.traineeProfile.nation || null,

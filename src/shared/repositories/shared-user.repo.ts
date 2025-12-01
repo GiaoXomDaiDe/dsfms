@@ -282,44 +282,24 @@ export class SharedUserRepository {
       includeDeleted?: boolean
     }
   ): Promise<GetUserResType> {
-    return this.prismaService.$transaction(async (tx) => {
-      const currentUser = (await tx.user.findUnique({
-        where: {
-          id: where.id,
-          deletedAt: includeDeleted ? undefined : null
-        },
-        include: userRoleDepartmentProfileInclude
-      })) as UserProfilePayload | null
-      if (!currentUser) throw UserNotFoundException
+    return this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
+      // baseWhere:
+      // - Nếu includeDeleted = false: chỉ thao tác với user đang ACTIVE, chưa bị deleted
+      // - Nếu includeDeleted = true: cho phép thao tác với cả user đã bị soft-delete
+      const baseWhere = includeDeleted ? { id: where.id } : { id: where.id, deletedAt: null, status: UserStatus.ACTIVE }
 
-      const hasExistingTrainerProfile = Array.isArray(currentUser.trainerProfile)
-        ? currentUser.trainerProfile.length > 0
-        : !!currentUser.trainerProfile
-      const hasExistingTraineeProfile = Array.isArray(currentUser.traineeProfile)
-        ? currentUser.traineeProfile.length > 0
-        : !!currentUser.traineeProfile
+      // 1) Lấy thông tin user hiện tại (kèm role, department, profile) trong transaction
+      const currentUser = await this.loadCurrentUserForUpdate(tx, baseWhere)
 
-      const isRoleChanging = newRoleName !== currentUser.role.name
-      let newEid = currentUser.eid
+      // 2) Xác định user hiện tại đang có trainerProfile / traineeProfile hay không
+      const profileFlags = this.getExistingProfileFlags(currentUser)
 
-      if (isRoleChanging) {
-        const shouldGenerateNewEid = this.shouldGenerateNewEid(
-          currentUser.eid,
-          newRoleName,
-          hasExistingTrainerProfile,
-          hasExistingTraineeProfile
-        )
+      // 3) Nếu có đổi role, quyết định có cần sinh EID mới hay giữ nguyên EID cũ
+      const newEid = await this.computeNewEidIfNeeded(currentUser, newRoleName, profileFlags)
 
-        if (shouldGenerateNewEid) {
-          newEid = (await this.eidService.generateEid({ roleName: newRoleName })) as string
-        }
-      }
-
+      // 4) Cập nhật bản ghi user (thông tin cơ bản + EID + updatedById)
       const updatedUser = await tx.user.update({
-        where: {
-          ...where,
-          deletedAt: includeDeleted ? undefined : null
-        },
+        where: baseWhere,
         data: {
           ...userData,
           eid: newEid,
@@ -327,8 +307,12 @@ export class SharedUserRepository {
         }
       })
       if (!updatedUser) {
+        // Trường hợp cực hiếm: update không trả về user -> xem như không tìm thấy user
         throw UserNotFoundException
       }
+
+      // 5) Cập nhật / tạo mới / xoá trainerProfile / traineeProfile
+      //    tuỳ theo role mới và trạng thái profile hiện tại
       await this.handleProfileUpdates(tx, {
         userId: where.id,
         newRoleName,
@@ -336,19 +320,14 @@ export class SharedUserRepository {
         trainerProfile,
         traineeProfile,
         updatedById,
-        hasExistingTrainerProfile,
-        hasExistingTraineeProfile
+        hasExistingTrainerProfile: profileFlags.hasTrainer,
+        hasExistingTraineeProfile: profileFlags.hasTrainee
       })
 
-      const refreshedUser = (await tx.user.findUnique({
-        where: { id: where.id },
-        include: userRoleDepartmentProfileInclude
-      })) as UserProfilePayload | null
+      // 6) Load lại user sau khi update, kèm đầy đủ role/department/profile để trả về cho service
+      const refreshedUser = await this.reloadUserWithProfile(tx, where.id)
 
-      if (!refreshedUser) {
-        throw UserNotFoundException
-      }
-
+      // 7) Build lại dữ liệu user theo format cuối cùng (bao gồm thông tin teaching nếu có)
       return this.buildUserProfileWithTeaching(refreshedUser)
     })
   }
@@ -398,57 +377,74 @@ export class SharedUserRepository {
     const isRoleChanging = newRoleName !== currentRoleName
 
     if (isRoleChanging) {
-      if (newRoleName === RoleName.TRAINER) {
-        if (hasExistingTraineeProfile) {
-          await this.softDeleteTraineeProfile(tx, userId, updatedById)
-        }
+      await this.handleRoleChangeProfileUpdates(tx, {
+        userId,
+        newRoleName,
+        updatedById,
+        trainerProfile,
+        traineeProfile,
+        hasExistingTrainerProfile,
+        hasExistingTraineeProfile
+      })
+      return
+    }
 
-        await this.upsertTrainerProfile(tx, {
-          userId,
-          updatedById,
-          trainerProfile
-        })
-        return
-      }
+    // Không đổi role, chỉ update nội dung profile nếu có payload
+    if (newRoleName === RoleName.TRAINER && trainerProfile) {
+      await this.upsertTrainerProfile(tx, { userId, updatedById, trainerProfile })
+    }
 
-      if (newRoleName === RoleName.TRAINEE) {
-        if (hasExistingTrainerProfile) {
-          await this.softDeleteTrainerProfile(tx, userId, updatedById)
-        }
+    if (newRoleName === RoleName.TRAINEE && traineeProfile) {
+      await this.upsertTraineeProfile(tx, { userId, updatedById, traineeProfile })
+    }
+  }
 
-        await this.upsertTraineeProfile(tx, {
-          userId,
-          updatedById,
-          traineeProfile
-        })
-        return
-      }
-
-      if (hasExistingTrainerProfile) {
-        await this.softDeleteTrainerProfile(tx, userId, updatedById)
-      }
-
+  private async handleRoleChangeProfileUpdates(
+    tx: Prisma.TransactionClient,
+    {
+      userId,
+      newRoleName,
+      updatedById,
+      trainerProfile,
+      traineeProfile,
+      hasExistingTrainerProfile,
+      hasExistingTraineeProfile
+    }: {
+      userId: string
+      newRoleName: RoleNameType
+      updatedById: string
+      trainerProfile?: UpdateTrainerProfileType
+      traineeProfile?: UpdateTraineeProfileType
+      hasExistingTrainerProfile: boolean
+      hasExistingTraineeProfile: boolean
+    }
+  ): Promise<void> {
+    if (newRoleName === RoleName.TRAINER) {
       if (hasExistingTraineeProfile) {
         await this.softDeleteTraineeProfile(tx, userId, updatedById)
       }
 
+      await this.upsertTrainerProfile(tx, { userId, updatedById, trainerProfile })
       return
     }
 
-    if (newRoleName === RoleName.TRAINER && trainerProfile) {
-      await this.upsertTrainerProfile(tx, {
-        userId,
-        updatedById,
-        trainerProfile
-      })
+    if (newRoleName === RoleName.TRAINEE) {
+      if (hasExistingTrainerProfile) {
+        await this.softDeleteTrainerProfile(tx, userId, updatedById)
+      }
+
+      await this.upsertTraineeProfile(tx, { userId, updatedById, traineeProfile })
+      return
     }
 
-    if (newRoleName === RoleName.TRAINEE && traineeProfile) {
-      await this.upsertTraineeProfile(tx, {
-        userId,
-        updatedById,
-        traineeProfile
-      })
+    // Role mới KHÔNG phải TRAINER/TRAINEE:
+    // -> soft delete mọi profile trainer/trainee hiện có
+    if (hasExistingTrainerProfile) {
+      await this.softDeleteTrainerProfile(tx, userId, updatedById)
+    }
+
+    if (hasExistingTraineeProfile) {
+      await this.softDeleteTraineeProfile(tx, userId, updatedById)
     }
   }
 
@@ -708,7 +704,10 @@ export class SharedUserRepository {
   }
 
   /**
-   * Ẩn trainerProfile / traineeProfile không phù hợp với role.
+   * Ẩn bớt trainerProfile / traineeProfile không phù hợp với role.
+   * - Nếu role là TRAINER: chỉ trả về trainerProfile (ẩn traineeProfile nếu có).
+   * - Nếu role là TRAINEE: chỉ trả về traineeProfile (ẩn trainerProfile nếu có).
+   * - Các role khác: không trả về bất kỳ profile nào.
    */
   private formatUserProfileForRole(user: GetUserResType): GetUserResType {
     const { trainerProfile, traineeProfile, ...baseUser } = user
@@ -723,5 +722,84 @@ export class SharedUserRepository {
     }
 
     return { ...baseUser }
+  }
+
+  /**
+   * Lấy user hiện tại để chuẩn bị update:
+   * - Luôn include role, department, trainerProfile, traineeProfile.
+   * - Ném UserNotFoundException nếu không tìm thấy user (theo điều kiện where đã filter sẵn).
+   */
+  private async loadCurrentUserForUpdate(
+    tx: Prisma.TransactionClient,
+    where: { id: string; deletedAt?: null; status?: 'ACTIVE' }
+  ): Promise<UserProfilePayload> {
+    const currentUser = (await tx.user.findUnique({
+      where,
+      include: userRoleDepartmentProfileInclude
+    })) as UserProfilePayload | null
+
+    if (!currentUser) throw UserNotFoundException
+    return currentUser
+  }
+
+  /**
+   * Tính toán xem user hiện tại đang có trainerProfile / traineeProfile hay không.
+   * Hỗ trợ cả trường hợp quan hệ 1-1 và 1-n (array).
+   */
+  private getExistingProfileFlags(currentUser: UserProfilePayload): {
+    hasTrainer: boolean
+    hasTrainee: boolean
+  } {
+    const hasTrainer = Array.isArray(currentUser.trainerProfile)
+      ? currentUser.trainerProfile.length > 0
+      : !!currentUser.trainerProfile
+
+    const hasTrainee = Array.isArray(currentUser.traineeProfile)
+      ? currentUser.traineeProfile.length > 0
+      : !!currentUser.traineeProfile
+
+    return { hasTrainer, hasTrainee }
+  }
+
+  /**
+   * Quyết định EID cuối cùng sau khi update:
+   * - Nếu role không đổi -> giữ nguyên EID hiện tại.
+   * - Nếu role đổi:
+   *   - Gọi shouldGenerateNewEid(...) để xem có cần sinh EID mới không.
+   *   - Nếu cần -> sinh EID mới theo role mới.
+   *   - Nếu không cần -> giữ EID cũ.
+   */
+  private async computeNewEidIfNeeded(
+    currentUser: UserProfilePayload,
+    newRoleName: RoleNameType,
+    flags: { hasTrainer: boolean; hasTrainee: boolean }
+  ): Promise<string> {
+    const isRoleChanging = newRoleName !== currentUser.role.name
+    if (!isRoleChanging) return currentUser.eid
+
+    const shouldGenerateNewEid = this.shouldGenerateNewEid(
+      currentUser.eid,
+      newRoleName,
+      flags.hasTrainer,
+      flags.hasTrainee
+    )
+
+    if (!shouldGenerateNewEid) return currentUser.eid
+
+    return (await this.eidService.generateEid({ roleName: newRoleName })) as string
+  }
+
+  /**
+   * Sau khi cập nhật xong user + profile, load lại user (kèm role/department/profile)
+   * để đảm bảo dữ liệu trả về là phiên bản mới nhất trong DB.
+   */
+  private async reloadUserWithProfile(tx: Prisma.TransactionClient, id: string): Promise<UserProfilePayload> {
+    const refreshedUser = (await tx.user.findUnique({
+      where: { id },
+      include: userRoleDepartmentProfileInclude
+    })) as UserProfilePayload | null
+
+    if (!refreshedUser) throw UserNotFoundException
+    return refreshedUser
   }
 }

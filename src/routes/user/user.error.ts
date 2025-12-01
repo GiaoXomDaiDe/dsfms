@@ -38,13 +38,13 @@ export const CannotDisableActiveDepartmentHeadException = (departmentName?: stri
     'Validation failed'
   )
 
-export const CannotUpdateOrDeleteYourselfException = new ForbiddenException('Cannot update or delete yourself')
+export const CannotUpdateOrDeleteYourselfException = new BadRequestException('Cannot update or delete yourself')
 
-export const CannotDeleteAdminUserException = new ForbiddenException('Cannot delete admin user')
+export const CannotDeleteAdminUserException = new BadRequestException('Cannot delete admin user')
 
-export const CannotUpdateAdminUserException = new ForbiddenException('Cannot update admin user')
+export const CannotUpdateAdminUserException = new BadRequestException('Cannot update admin user')
 
-export const CannotSetAdminRoleToUserException = new ForbiddenException('Cannot set admin role to user')
+export const CannotSetAdminRoleToUserException = new BadRequestException('Cannot set admin role to user')
 
 export const OnlyAdminCanManageAdminRoleException = new ForbiddenException(
   'Only ADMINISTRATOR can create, update, or delete users with ADMINISTRATOR role.'
@@ -57,7 +57,7 @@ export const RoleNotFoundException = new ValidationException([
   }
 ])
 
-export const RoleIsDisabledException = new ForbiddenException('Cannot create user with disabled role')
+export const RoleIsDisabledException = new BadRequestException('Cannot create user with disabled role')
 
 export const DefaultRoleValidationException = new BadRequestException({
   message: 'Role validation failed',
@@ -71,10 +71,10 @@ export const DepartmentNotFoundException = new ValidationException([
   }
 ])
 
-export const DepartmentIsDisabledException = new ForbiddenException('Cannot assign user to disabled department')
+export const DepartmentIsDisabledException = new BadRequestException('Cannot assign user to disabled department')
 
 export const InvalidDepartmentAssignmentException = (roleName: string) =>
-  new ForbiddenException(`Only TRAINER or DEPARTMENT_HEAD can be assigned to a department. Current role: ${roleName}`)
+  new BadRequestException(`Only TRAINER or DEPARTMENT_HEAD can be assigned to a department. Current role: ${roleName}`)
 
 export const RequiredProfileMissingException = (roleName: string, requiredProfile: string) =>
   new ConflictException(`Role ${roleName} must have ${requiredProfile}. Please provide profile information.`)
@@ -93,38 +93,45 @@ export const TraineeProfileNotAllowedException = (roleName: string) =>
   )
 
 export const BulkDepartmentIsDisabledAtIndexException = (index: number, departmentName: string) =>
-  `User at index ${index}: Cannot assign user to disabled department "${departmentName}"`
+  new BadRequestException(`User at index ${index}: Cannot assign user to disabled department "${departmentName}"`)
 
 export const BulkDepartmentNotFoundAtIndexException = (index: number, departmentId: string) =>
-  `User at index ${index}: Department with ID "${departmentId}" not found`
+  new BadRequestException(`User at index ${index}: Department with ID "${departmentId}" not found`)
 
 export const BulkForbiddenProfileException = (
   userIndex: number,
   roleName: string,
   forbiddenProfile: string,
   message: string
-) => `User at index ${userIndex}: Role ${roleName} cannot have ${forbiddenProfile}. ${message}`
+) => new BadRequestException(`User at index ${userIndex}: Role ${roleName} cannot have ${forbiddenProfile}. ${message}`)
 
 export const BulkInvalidDepartmentAssignmentException = (index: number, roleName: string) =>
-  `User at index ${index}: Department assignment not allowed for ${roleName} role. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
+  new BadRequestException(
+    `User at index ${index}: Department assignment not allowed for ${roleName} role. Only TRAINER and DEPARTMENT_HEAD roles are allowed.`
+  )
 
 export const BulkRoleIsDisabledAtIndexException = (index: number, roleName: string) =>
-  `User at index ${index}: Cannot create user with disabled role "${roleName}"`
+  new BadRequestException(`User at index ${index}: Cannot create user with disabled role "${roleName}"`)
 
-export const BulkRoleNotFoundAtIndexException = (index: number) => `Role not found for user at index ${index}`
+export const BulkRoleNotFoundAtIndexException = (index: number) =>
+  new BadRequestException(`Role not found for user at index ${index}`)
 
 export const BulkRequiredProfileMissingException = (
   userIndex: number,
   roleName: string,
   requiredProfile: string,
   message: string
-) => `User at index ${userIndex}: Role ${roleName} must have ${requiredProfile}. ${message}`
+) => new BadRequestException(`User at index ${userIndex}: Role ${roleName} must have ${requiredProfile}. ${message}`)
 
 export const BulkTrainerProfileNotAllowedException = (userIndex: number, roleName: string) =>
-  `User at index ${userIndex}: Role ${roleName} cannot have trainerProfile. Only TRAINER role is allowed to have trainer profile.`
+  new BadRequestException(
+    `User at index ${userIndex}: Role ${roleName} cannot have trainerProfile. Only TRAINER role is allowed to have trainer profile.`
+  )
 
 export const BulkTraineeProfileNotAllowedException = (userIndex: number, roleName: string) =>
-  `User at index ${userIndex}: Role ${roleName} cannot have traineeProfile. Only TRAINEE role is allowed to have trainee profile.`
+  new BadRequestException(
+    `User at index ${userIndex}: Role ${roleName} cannot have traineeProfile. Only TRAINEE role is allowed to have trainee profile.`
+  )
 
 export const BulkEidCountMismatchException = (expected: number, actual: number) =>
   new ConflictException({
@@ -187,9 +194,19 @@ export const BulkDepartmentHeadAlreadyExistsAtIndexException = (
   existingHead: string,
   eid: string
 ) =>
-  `User at index ${index}: Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
+  new BadRequestException(
+    `User at index ${index}: Department "${departmentName}" already has a department head: ${existingHead} (${eid}). Each department can only have one department head.`
+  )
 
 export const CannotChangeRoleOfActiveDepartmentHeadException = (departmentName: string, eid: string) =>
-  new ForbiddenException(
+  new ConflictException(
     `Cannot change role of active department head (${eid}) for department "${departmentName}". Please assign a new department head first, then change this user's role.`
   )
+export const CannotChangeRoleTrainerWithOngoingCourseException = (eid: string) =>
+  new BadRequestException(`Cannot change role for trainer ${eid} because they are assigned to ongoing courses.`)
+
+export const CannotChangeRoleTrainerWithOngoingSubjectException = (eid: string) =>
+  new BadRequestException(`Cannot change role for trainer ${eid} because they are assigned to ongoing subjects.`)
+
+export const CannotChangeRoleTraineeWithOngoingEnrollmentException = (eid: string) =>
+  new BadRequestException(`Cannot change role for trainee ${eid} because they have ongoing subject enrollments.`)

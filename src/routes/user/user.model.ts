@@ -19,7 +19,10 @@ import { roleIdNameSchema, roleSummarySchema } from '~/shared/models/shared-role
 import { TeachingSubjectSchema } from '~/shared/models/shared-subject.model'
 import { UserListItemSchema, UserSchema } from '~/shared/models/shared-user.model'
 
-/* --------BASE--------- */
+/* =========================
+ * Base schemas
+ * =======================*/
+
 const BaseUserWithRoleDeptSchema = UserSchema.omit({
   passwordHash: true,
   roleId: true,
@@ -31,13 +34,22 @@ const BaseUserWithRoleDeptSchema = UserSchema.omit({
   traineeProfile: TraineeProfileSchema.nullable().optional()
 })
 
-/* --------LIST--------- */
+export const UserWithProfileRelationSchema = UserSchema.extend({
+  role: roleSummarySchema,
+  department: departmentSummarySchema.nullable(),
+  trainerProfile: TrainerProfileSchema.nullable().optional(),
+  traineeProfile: TraineeProfileSchema.nullable().optional()
+})
+
+/* =========================
+ * Response schemas
+ * =======================*/
+
 export const GetUsersResSchema = z.object({
   users: z.array(UserListItemSchema),
   totalItems: z.number()
 })
 
-/* --------DETAIL--------- */
 export const GetUserParamsSchema = z
   .object({
     userId: z.uuid()
@@ -49,7 +61,12 @@ export const GetUserResSchema = BaseUserWithRoleDeptSchema.extend({
   teachingSubjects: z.array(TeachingSubjectSchema).optional()
 })
 
-/* --------CREATE--------- */
+export const UpdateUserResSchema = GetUserResSchema
+
+/* =========================
+ * Request schemas (create/update)
+ * =======================*/
+
 export const CreateUserBodySchema = UserSchema.pick({
   firstName: true,
   lastName: true,
@@ -68,14 +85,12 @@ export const CreateUserBodySchema = UserSchema.pick({
   .strict()
   .superRefine(superRefineCreateUserProfile)
 
-export const UserWithProfileRelationSchema = UserSchema.extend({
-  role: roleSummarySchema,
-  department: departmentSummarySchema.nullable(),
-  trainerProfile: TrainerProfileSchema.nullable().optional(),
-  traineeProfile: TraineeProfileSchema.nullable().optional()
-})
+export const UpdateUserBodySchema = CreateUserBodySchema.partial().superRefine(superRefineUpdateRoleProfile)
 
-/* --------CREATE_BULK--------- */
+/* =========================
+ * Request schemas (bulk)
+ * =======================*/
+
 export const CreateBulkUsersBodySchema = z
   .object({
     users: z.array(CreateUserBodySchema).min(1, AtLeastOneUserRequiredMessage).max(100, MaximumUsersAllowedMessage)
@@ -99,35 +114,25 @@ export const BulkCreateResSchema = z.object({
   })
 })
 
-/* --------UPDATE--------- */
-export const UpdateUserResSchema = GetUserResSchema
-
-export const UpdateUserBodySchema = CreateUserBodySchema.partial().superRefine(superRefineUpdateRoleProfile)
+/* =========================
+ * Types
+ * =======================*/
 
 export type GetUsersResType = z.infer<typeof GetUsersResSchema>
 export type GetUserResType = z.infer<typeof GetUserResSchema>
 export type GetUserParamsType = z.infer<typeof GetUserParamsSchema>
-export type CreateUserBodyType = z.infer<typeof CreateUserBodySchema>
-export type UserWithProfileRelationType = z.infer<typeof UserWithProfileRelationSchema>
 
+export type CreateUserBodyType = z.infer<typeof CreateUserBodySchema>
 export type UpdateUserBodyType = z.infer<typeof UpdateUserBodySchema>
-export type UpdateUserInternalType = Omit<UpdateUserBodyType, 'role' | 'trainerProfile' | 'traineeProfile'> & {
-  passwordHash?: string
-  eid?: string
-}
-export type UpdateUserBodyWithProfileType = z.infer<typeof UpdateUserBodySchema>
-export type CreateBulkUsersBodyType = z.infer<typeof CreateBulkUsersBodySchema>
-export type BulkCreateResType = z.infer<typeof BulkCreateResSchema>
+
+export type UserWithProfileRelationType = z.infer<typeof UserWithProfileRelationSchema>
 export type UserProfileWithoutTeachingType = Omit<GetUserResType, 'teachingCourses' | 'teachingSubjects'>
 
 export type UpdateUserResType = z.infer<typeof UpdateUserResSchema>
-export type BulkUserData = CreateUserOnlyType & {
-  roleName: string
-  trainerProfile?: CreateTrainerProfileType
-  traineeProfile?: CreateTraineeProfileType
-}
 
-// ----- Internal types (service/repo) -----
+export type CreateBulkUsersBodyType = z.infer<typeof CreateBulkUsersBodySchema>
+export type BulkCreateResType = z.infer<typeof BulkCreateResSchema>
+
 export type CreateUserBaseType = Omit<CreateUserBodyType, 'role' | 'trainerProfile' | 'traineeProfile'>
 
 export type CreateUserOnlyType = CreateUserBaseType & {
@@ -135,6 +140,21 @@ export type CreateUserOnlyType = CreateUserBaseType & {
   passwordHash: string
   eid: string
 }
+
+export type BulkUserData = CreateUserOnlyType & {
+  roleName: string
+  trainerProfile?: CreateTrainerProfileType
+  traineeProfile?: CreateTraineeProfileType
+}
+
+export type UpdateUserInternalType = Omit<UpdateUserBodyType, 'role' | 'trainerProfile' | 'traineeProfile'> & {
+  passwordHash?: string
+  eid?: string
+}
+
+/* =========================
+ * Super refine helpers
+ * =======================*/
 
 function superRefineCreateUserProfile(data: z.infer<typeof CreateUserBodySchema>, ctx: z.RefinementCtx) {
   validateRoleProfile(data.role.name, data, ctx)
@@ -146,11 +166,10 @@ function superRefineUpdateRoleProfile(data: z.infer<typeof UpdateUserBodySchema>
 }
 
 function superRefineBulkEmails(data: z.infer<typeof CreateBulkUsersBodySchema>, ctx: z.RefinementCtx) {
-  // Map email -> list index trong mảng users
   const emailIndexMap = new Map<string, number[]>()
 
   data.users.forEach((user, index) => {
-    const key = user.email.toLowerCase().trim() //case-insensitive
+    const key = user.email.toLowerCase().trim()
     const indices = emailIndexMap.get(key)
     if (indices) {
       indices.push(index)
@@ -159,7 +178,6 @@ function superRefineBulkEmails(data: z.infer<typeof CreateBulkUsersBodySchema>, 
     }
   })
 
-  // Với mỗi email xuất hiện > 1 lần, add issue cho từng index bị trùng
   for (const [email, indices] of emailIndexMap.entries()) {
     if (indices.length <= 1) continue
 

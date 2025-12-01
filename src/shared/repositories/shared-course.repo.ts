@@ -103,4 +103,18 @@ export class SharedCourseRepository {
 
     return course?.departmentId ?? null
   }
+
+  async existsInstructorOngoingCourse(trainerUserId: string): Promise<boolean> {
+    return (
+      (await this.prismaService.courseInstructor.count({
+        where: {
+          trainerUserId,
+          course: {
+            deletedAt: null,
+            status: CourseStatus.ON_GOING
+          }
+        }
+      })) > 0
+    )
+  }
 }

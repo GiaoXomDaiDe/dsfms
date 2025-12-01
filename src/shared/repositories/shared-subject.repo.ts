@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { SubjectEnrollmentStatus, SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { SubjectType } from '~/shared/models/shared-subject.model'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -54,5 +55,33 @@ export class SharedSubjectRepository {
     })
 
     return existing !== null
+  }
+
+  async existsInstructorOngoingSubject(trainerUserId: string): Promise<boolean> {
+    return (
+      (await this.prismaService.subjectInstructor.count({
+        where: {
+          trainerUserId,
+          subject: {
+            deletedAt: null,
+            status: SubjectStatus.ON_GOING
+          }
+        }
+      })) > 0
+    )
+  }
+
+  async existTraineeOngoingEnrollment(traineeUserId: string): Promise<boolean> {
+    return (
+      (await this.prismaService.subjectEnrollment.count({
+        where: {
+          traineeUserId,
+          subject: {
+            deletedAt: null,
+            status: SubjectEnrollmentStatus.ON_GOING
+          }
+        }
+      })) > 0
+    )
   }
 }
