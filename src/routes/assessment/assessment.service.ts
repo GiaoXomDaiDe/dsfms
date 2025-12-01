@@ -2278,8 +2278,8 @@ export class AssessmentService {
               // Set default size (self configurable)
               let width = dimensions.width
               let height = dimensions.height
-              const maxWidth = 57
-              const maxHeight = 30
+              const maxWidth = 87
+              const maxHeight = 60
 
               // Scale down if image is too large
               if (width > maxWidth || height > maxHeight) {
