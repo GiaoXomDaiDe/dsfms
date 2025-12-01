@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Put, Query, Res, Header } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
+import type { Response } from 'express'
 import {
   CreateAssessmentBodyDTO,
   CreateBulkAssessmentBodyDTO,
@@ -27,6 +28,8 @@ import {
   GetDepartmentAssessmentsResDTO,
   ApproveRejectAssessmentBodyDTO,
   ApproveRejectAssessmentResDTO,
+  RenderDocxTemplateBodyDTO,
+  RenderDocxTemplateResDTO,
   GetAssessmentEventsQueryDTO,
   GetAssessmentEventsResDTO,
   GetUserAssessmentEventsQueryDTO,
@@ -38,6 +41,7 @@ import {
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
+import { IsPublic } from '~/shared/decorators/auth.decorator'
 
 @Controller('assessments')
 export class AssessmentController {
@@ -465,5 +469,56 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.getAssessmentPdfUrl(params.assessmentId, userContext)
+  }
+
+  /**
+   * POST /assessments/render-docx-template
+   * Render DOCX template with provided data for testing purposes
+   * Public endpoint - no authentication required
+   */
+  @Post('render-docx-template')
+  @IsPublic()
+  @ZodSerializerDto(RenderDocxTemplateResDTO)
+  async renderDocxTemplateForTesting(@Body() body: RenderDocxTemplateBodyDTO) {
+    return await this.assessmentService.renderDocxTemplateForTesting(body)
+  }
+
+  /**
+   * POST /assessments/render-docx-template-with-images
+   * Render DOCX template with image support for testing purposes
+   * Images are loaded from S3 URLs provided in the data
+   * Public endpoint - no authentication required
+   */
+  @Post('render-docx-template-with-images')
+  @IsPublic()
+  @ZodSerializerDto(RenderDocxTemplateResDTO)
+  async renderDocxTemplateWithImagesForTesting(@Body() body: RenderDocxTemplateBodyDTO) {
+    return await this.assessmentService.renderDocxTemplateWithImagesForTesting(body)
+  }
+
+  /**
+   * POST /assessments/render-docx-template-with-images/download
+   * Render DOCX template with image support and return as direct download
+   * Images are loaded from S3 URLs provided in the data
+   * Public endpoint - no authentication required
+   */
+  @Post('render-docx-template-with-images/download')
+  @IsPublic()
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  async renderDocxTemplateWithImagesForDownload(
+    @Body() body: RenderDocxTemplateBodyDTO,
+    @Res() res: Response
+  ) {
+    const result = await this.assessmentService.renderDocxTemplateWithImagesForTesting(body)
+    
+    // Convert base64 back to buffer
+    const buffer = Buffer.from(result.data.buffer, 'base64')
+    
+    // Set headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${result.data.filename}"`)
+    res.setHeader('Content-Length', buffer.length)
+    
+    // Send the buffer directly
+    res.send(buffer)
   }
 }

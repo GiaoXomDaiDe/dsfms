@@ -814,3 +814,23 @@ export type GetUserAssessmentEventsResType = z.infer<typeof GetUserAssessmentEve
 export type UpdateAssessmentEventBodyType = z.infer<typeof UpdateAssessmentEventBodySchema>
 export type UpdateAssessmentEventParamsType = z.infer<typeof UpdateAssessmentEventParamsSchema>
 export type UpdateAssessmentEventResType = z.infer<typeof UpdateAssessmentEventResSchema>
+
+// ===== DOCX TEMPLATE RENDERING SCHEMAS =====
+
+export const RenderDocxTemplateBodySchema = z.object({
+  templateUrl: z.string().url('Must be a valid URL to the DOCX template'),
+  data: z.record(z.string(), z.any())
+})
+
+export const RenderDocxTemplateResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    filename: z.string(),
+    contentType: z.string(),
+    buffer: z.string() // Base64 encoded DOCX file
+  })
+})
+
+export type RenderDocxTemplateBodyType = z.infer<typeof RenderDocxTemplateBodySchema>
+export type RenderDocxTemplateResType = z.infer<typeof RenderDocxTemplateResSchema>

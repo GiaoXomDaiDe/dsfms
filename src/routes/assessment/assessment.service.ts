@@ -45,7 +45,9 @@ import {
   GetUserAssessmentEventsResType,
   UpdateAssessmentEventBodyType,
   UpdateAssessmentEventParamsType,
-  UpdateAssessmentEventResType
+  UpdateAssessmentEventResType,
+  RenderDocxTemplateBodyType,
+  RenderDocxTemplateResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -1489,6 +1491,107 @@ export class AssessmentService {
   }
 
   /**
+   * Render DOCX template with provided data for testing purposes
+   * Public API to test template rendering without going through approval process
+   */
+  async renderDocxTemplateForTesting(
+    body: RenderDocxTemplateBodyType
+  ): Promise<RenderDocxTemplateResType> {
+    try {
+      // Download the template from the provided URL
+      const templateBuffer = await this.downloadFileFromS3(body.templateUrl)
+
+      // Render the template with provided data
+      const renderedDocxBuffer = await this.renderDocxTemplate(templateBuffer, body.data)
+
+      // Generate filename with timestamp for testing
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `test-template-${timestamp}.docx`
+
+      // Convert buffer to base64 for response
+      const base64Buffer = renderedDocxBuffer.toString('base64')
+
+      return {
+        success: true,
+        message: 'DOCX template rendered successfully',
+        data: {
+          filename: filename,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          buffer: base64Buffer
+        }
+      }
+    } catch (error: any) {
+      console.error('DOCX template rendering for testing failed:', error)
+
+      // Handle specific known errors
+      if (error instanceof BadRequestException) {
+        throw error
+      }
+
+      if (error.message?.includes('Failed to download')) {
+        throw new BadRequestException('Failed to download template file from provided URL')
+      }
+
+      if (error.message?.includes('Template rendering failed')) {
+        throw new BadRequestException(error.message)
+      }
+
+      throw new BadRequestException('Failed to render DOCX template')
+    }
+  }
+
+  /**
+   * Render DOCX template with image support for testing purposes
+   * Public API to test template rendering with images from S3 URLs without going through approval process
+   * Now uses the unified renderDocxTemplate method that handles both text and images
+   */
+  async renderDocxTemplateWithImagesForTesting(
+    body: RenderDocxTemplateBodyType
+  ): Promise<RenderDocxTemplateResType> {
+    try {
+      // Download the template from the provided URL
+      const templateBuffer = await this.downloadFileFromS3(body.templateUrl)
+
+      // Render the template with provided data using unified method
+      const renderedDocxBuffer = await this.renderDocxTemplate(templateBuffer, body.data)
+
+      // Generate filename with timestamp for testing
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `test-template-with-mixed-data-${timestamp}.docx`
+
+      // Convert buffer to base64 for response
+      const base64Buffer = renderedDocxBuffer.toString('base64')
+
+      return {
+        success: true,
+        message: 'DOCX template with mixed data (text + images) rendered successfully',
+        data: {
+          filename: filename,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          buffer: base64Buffer
+        }
+      }
+    } catch (error: any) {
+      console.error('DOCX template with mixed data rendering for testing failed:', error)
+
+      // Handle specific known errors
+      if (error instanceof BadRequestException) {
+        throw error
+      }
+
+      if (error.message?.includes('Failed to download')) {
+        throw new BadRequestException('Failed to download template file from provided URL')
+      }
+
+      if (error.message?.includes('Template rendering failed') || error.message?.includes('Image processing failed')) {
+        throw new BadRequestException(error.message)
+      }
+
+      throw new BadRequestException('Failed to render DOCX template with mixed data')
+    }
+  }
+
+  /**
    * Render assessment data into DOCX template and convert to PDF
    * Called after assessment is approved
    */
@@ -1682,6 +1785,8 @@ export class AssessmentService {
       throw new BadRequestException('Failed to download template file')
     }
   }
+
+
 
   /**
    * Build assessment data object from assessment values using template schema as base structure
@@ -1940,36 +2045,161 @@ export class AssessmentService {
   }
 
   /**
-   * Render DOCX template with data using docxtemplater
-   * Following official documentation: https://docxtemplater.com/docs/get-started-node/
+   * Render DOCX template with data and image support using docxtemplater
+   * Supports both regular text fields and image fields from S3 URLs
    */
   private async renderDocxTemplate(templateBuffer: Buffer, data: Record<string, any>): Promise<Buffer> {
     try {
-      // Load template with PizZip (unzip the content of the file)
-      const zip = new PizZip(templateBuffer)
+      const PizZip = require('pizzip')
+      const Docxtemplater = require('docxtemplater')
+      const ImageModule = require('docxtemplater-image-module-free')
+      const https = require('https')
+      const sizeOf = require('image-size')
 
-      // Custom nullGetter to return empty string instead of "undefined" for null/undefined values
-      const nullGetter = (part: any, scopeManager: any) => {
-        // For all cases (simple tags, raw XML, etc.), return empty string
-        return ''
+      // Helper function to download image from S3 URL
+      const downloadImageFromUrl = (url: string): Promise<Buffer> => {
+        return new Promise((resolve, reject) => {
+          https.get(url, (response: any) => {
+            if (response.statusCode !== 200) {
+              return reject(new Error(`Failed to download image from ${url}, status: ${response.statusCode}`))
+            }
+
+            const chunks: Buffer[] = []
+            response.on('data', (chunk: Buffer) => chunks.push(chunk))
+            response.on('end', () => resolve(Buffer.concat(chunks)))
+            response.on('error', reject)
+          }).on('error', reject)
+        })
       }
 
-      // Parse the template - this throws an error if template is invalid
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        nullGetter: nullGetter
-      })
+      // Check if data contains any image fields (URLs starting with http/https)
+      const hasImages = Object.values(data).some(value => 
+        typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))
+      )
 
-      // Render the document with data
-      doc.render(data)
+      if (hasImages) {
+        // Use image module for templates with images
+        console.log('Template contains images, using image module')
+        
+        // Configure image module options
+        const imageOpts = {
+          centered: false, // Set to true to center all images
+          fileType: "docx", // Document type
 
-      // Get the output document as Node.js buffer
-      const buffer = doc.toBuffer()
+          // Async function to get image from S3 URL
+          getImage: async (tagValue: string, tagName: string) => {
+            try {
+              // Only process if the value looks like a URL
+              if (typeof tagValue === 'string' && (tagValue.startsWith('http://') || tagValue.startsWith('https://'))) {
+                console.log(`Downloading image for tag ${tagName}: ${tagValue}`)
+                const imageBuffer = await downloadImageFromUrl(tagValue)
+                console.log(`Successfully downloaded image for tag ${tagName}, size: ${imageBuffer.length} bytes`)
+                return imageBuffer
+              }
+              // If not a URL, return null (will be handled as regular text)
+              return null
+            } catch (error) {
+              console.error(`Failed to download image for tag ${tagName} from ${tagValue}:`, error)
+              throw new Error(`Image processing failed for ${tagName}: ${error.message}`)
+            }
+          },
 
-      return buffer
-    } catch (error) {
-      console.error('Failed to render DOCX template:', error)
+          // Function to determine image size
+          getSize: (img: Buffer, tagValue: string, tagName: string) => {
+            try {
+              const dimensions = sizeOf(img)
+              console.log(`Image ${tagName} dimensions: ${dimensions.width}x${dimensions.height}`)
+              
+              // Set default size or scale down if too large
+              let width = dimensions.width
+              let height = dimensions.height
+              const maxWidth = 400
+              const maxHeight = 300
+
+              // Scale down if image is too large
+              if (width > maxWidth || height > maxHeight) {
+                const widthRatio = maxWidth / width
+                const heightRatio = maxHeight / height
+                const ratio = Math.min(widthRatio, heightRatio)
+                
+                width = Math.round(width * ratio)
+                height = Math.round(height * ratio)
+                console.log(`Scaled image ${tagName} to: ${width}x${height}`)
+              }
+
+              return [width, height]
+            } catch (error) {
+              console.error(`Failed to get image size for ${tagName}:`, error)
+              // Return default size if size detection fails
+              return [200, 150]
+            }
+          }
+        }
+
+        // Create image module instance
+        const imageModule = new ImageModule(imageOpts)
+
+        // Create zip instance from template buffer
+        const zip = new PizZip(templateBuffer)
+
+        // Create docxtemplater instance with image module
+        const doc = new Docxtemplater()
+          .loadZip(zip)
+          .attachModule(imageModule)
+          .compile()
+
+        console.log('Rendering DOCX template with mixed data (text + images):', Object.keys(data))
+
+        // Render template with data (supports async operations)
+        await doc.resolveData(data)
+        doc.render()
+
+        // Generate final document buffer
+        const buffer = doc.getZip().generate({
+          type: 'nodebuffer',
+          compression: 'DEFLATE'
+        })
+
+        console.log('DOCX template with mixed data rendered successfully')
+        return buffer
+
+      } else {
+        // Use regular docxtemplater for text-only templates
+        console.log('Template contains only text data, using regular docxtemplater')
+        
+        // Load template with PizZip (unzip the content of the file)
+        const zip = new PizZip(templateBuffer)
+
+        // Custom nullGetter to return empty string instead of "undefined" for null/undefined values
+        const nullGetter = (part: any, scopeManager: any) => {
+          // For all cases (simple tags, raw XML, etc.), return empty string
+          return ''
+        }
+
+        // Parse the template - this throws an error if template is invalid
+        const doc = new Docxtemplater(zip, {
+          paragraphLoop: true,
+          linebreaks: true,
+          nullGetter: nullGetter
+        })
+
+        // Render the document with data
+        doc.render(data)
+
+        // Get the output document as Node.js buffer
+        const buffer = doc.toBuffer()
+
+        console.log('DOCX template with text data rendered successfully')
+        return buffer
+      }
+
+    } catch (error: any) {
+      console.error('DOCX template rendering failed:', error)
+      
+      // Handle image processing errors
+      if (error.message?.includes('Image processing failed')) {
+        throw new BadRequestException(`Template rendering failed: ${error.message}`)
+      }
 
       // Handle specific docxtemplater errors
       if (error.properties && error.properties.errors instanceof Array) {
@@ -1977,7 +2207,7 @@ export class AssessmentService {
         throw new BadRequestException(`Template rendering failed: ${errorMessages}`)
       }
 
-      throw new BadRequestException('Failed to render document template')
+      throw new BadRequestException(`Failed to render document template: ${error.message || 'Unknown error'}`)
     }
   }
 

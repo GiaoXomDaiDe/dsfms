@@ -33,6 +33,8 @@ import {
   GetDepartmentAssessmentsResSchema,
   ApproveRejectAssessmentBodySchema,
   ApproveRejectAssessmentResSchema,
+  RenderDocxTemplateBodySchema,
+  RenderDocxTemplateResSchema,
   GetAssessmentEventsQuerySchema,
   GetAssessmentEventsResSchema,
   GetUserAssessmentEventsQuerySchema,
@@ -140,6 +142,12 @@ export class UpdateAssessmentEventParamsDTO extends createZodDto(UpdateAssessmen
 
 export class UpdateAssessmentEventResDTO extends createZodDto(UpdateAssessmentEventResSchema) {}
 
+// ===== DOCX TEMPLATE RENDERING DTOs =====
+
+export class RenderDocxTemplateBodyDTO extends createZodDto(RenderDocxTemplateBodySchema) {}
+
+export class RenderDocxTemplateResDTO extends createZodDto(RenderDocxTemplateResSchema) {}
+
 // ===== TYPE EXPORTS =====
 
 export type {
@@ -167,5 +175,7 @@ export type {
   GetAssessmentSectionFieldsQueryType,
   GetAssessmentSectionFieldsResType,
   GetUserAssessmentEventsQueryType,
-  GetUserAssessmentEventsResType
+  GetUserAssessmentEventsResType,
+  RenderDocxTemplateBodyType,
+  RenderDocxTemplateResType
 } from './assessment.model'
