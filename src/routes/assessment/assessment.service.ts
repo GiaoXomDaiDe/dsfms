@@ -34,6 +34,7 @@ import {
   SubmitAssessmentResType,
   UpdateAssessmentValuesBodyType,
   UpdateAssessmentValuesResType,
+  ConfirmAssessmentParticipationBodyType,
   ConfirmAssessmentParticipationResType,
   GetDepartmentAssessmentsQueryType,
   GetDepartmentAssessmentsResType,
@@ -1242,11 +1243,12 @@ export class AssessmentService {
   }
 
   /**
-   * Confirm assessment participation - Change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Confirm assessment participation - Save trainee signature and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
    * Only the trainee assigned to this assessment can confirm participation
    */
   async confirmAssessmentParticipation(
     assessmentId: string,
+    body: ConfirmAssessmentParticipationBodyType,
     userContext: { userId: string; roleName: string; departmentId?: string }
   ): Promise<ConfirmAssessmentParticipationResType> {
     try {
@@ -1271,17 +1273,18 @@ export class AssessmentService {
         throw new BadRequestException('Assessment must be in SIGNATURE_PENDING status to confirm participation')
       }
 
-      // Update status to READY_TO_SUBMIT
-      const result = await this.assessmentRepo.confirmAssessmentParticipation(assessmentId)
+      // Update status and save trainee signature
+      const result = await this.assessmentRepo.confirmAssessmentParticipation(assessmentId, body.traineeSignatureUrl, userContext.userId)
 
       return {
         success: true,
-        message: 'Assessment participation confirmed successfully',
+        message: 'Assessment participation confirmed and signature saved successfully',
         assessmentFormId: assessmentId,
         traineeId: userContext.userId,
         confirmedAt: result.updatedAt,
         status: result.status,
-        previousStatus: 'SIGNATURE_PENDING'
+        previousStatus: 'SIGNATURE_PENDING',
+        signatureSaved: result.signatureSaved
       }
     } catch (error: any) {
       // Handle specific known errors

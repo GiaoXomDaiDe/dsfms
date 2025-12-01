@@ -2787,17 +2787,72 @@ export class AssessmentRepo {
   }
 
   /**
-   * Confirm assessment participation - Change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Confirm assessment participation - Save trainee signature and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
    */
-  async confirmAssessmentParticipation(assessmentId: string) {
-    return await this.prisma.assessmentForm.update({
-      where: {
-        id: assessmentId,
-        status: AssessmentStatus.SIGNATURE_PENDING
-      },
-      data: {
-        status: AssessmentStatus.READY_TO_SUBMIT,
-        updatedAt: new Date()
+  async confirmAssessmentParticipation(assessmentId: string, traineeSignatureUrl: string, userId: string) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Find TRAINEE SIGNATURE_DRAW field in this assessment
+      const assessmentForm = await tx.assessmentForm.findUnique({
+        where: { id: assessmentId },
+        include: {
+          sections: {
+            include: {
+              templateSection: {
+                include: {
+                  fields: {
+                    where: {
+                      fieldType: 'SIGNATURE_DRAW',
+                      roleRequired: 'TRAINEE'
+                    }
+                  }
+                }
+              },
+              values: true
+            }
+          }
+        }
+      })
+
+      if (!assessmentForm) {
+        throw new Error('Assessment not found')
+      }
+
+      let signatureSaved = false
+
+      // Find and update the TRAINEE SIGNATURE_DRAW field value
+      for (const section of assessmentForm.sections) {
+        for (const templateField of section.templateSection.fields) {
+          if (templateField.fieldType === 'SIGNATURE_DRAW' && templateField.roleRequired === 'TRAINEE') {
+            // Find the corresponding assessment value
+            const assessmentValue = section.values.find(value => value.templateFieldId === templateField.id)
+            
+            if (assessmentValue) {
+              // Update the signature URL
+              await tx.assessmentValue.update({
+                where: { id: assessmentValue.id },
+                data: { answerValue: traineeSignatureUrl }
+              })
+              signatureSaved = true
+            }
+          }
+        }
+      }
+
+      // Update assessment form status
+      const updatedAssessment = await tx.assessmentForm.update({
+        where: {
+          id: assessmentId,
+          status: AssessmentStatus.SIGNATURE_PENDING
+        },
+        data: {
+          status: AssessmentStatus.READY_TO_SUBMIT,
+          updatedAt: new Date()
+        }
+      })
+
+      return {
+        ...updatedAssessment,
+        signatureSaved
       }
     })
   }

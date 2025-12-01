@@ -28,6 +28,7 @@ import {
   SubmitAssessmentResSchema,
   UpdateAssessmentValuesBodySchema,
   UpdateAssessmentValuesResSchema,
+  ConfirmAssessmentParticipationBodySchema,
   ConfirmAssessmentParticipationResSchema,
   GetDepartmentAssessmentsQuerySchema,
   GetDepartmentAssessmentsResSchema,
@@ -115,6 +116,8 @@ export class SubmitAssessmentResDTO extends createZodDto(SubmitAssessmentResSche
 export class UpdateAssessmentValuesBodyDTO extends createZodDto(UpdateAssessmentValuesBodySchema) {}
 
 export class UpdateAssessmentValuesResDTO extends createZodDto(UpdateAssessmentValuesResSchema) {}
+
+export class ConfirmAssessmentParticipationBodyDTO extends createZodDto(ConfirmAssessmentParticipationBodySchema) {}
 
 export class ConfirmAssessmentParticipationResDTO extends createZodDto(ConfirmAssessmentParticipationResSchema) {}
 
