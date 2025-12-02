@@ -37,7 +37,13 @@ import {
   GetUserAssessmentEventsResDTO,
   UpdateAssessmentEventBodyDTO,
   UpdateAssessmentEventParamsDTO,
-  UpdateAssessmentEventResDTO
+  UpdateAssessmentEventResDTO,
+  GetEventSubjectAssessmentsBodyDTO,
+  GetEventSubjectAssessmentsQueryDTO,
+  GetEventSubjectAssessmentsResDTO,
+  GetEventCourseAssessmentsBodyDTO,
+  GetEventCourseAssessmentsQueryDTO,
+  GetEventCourseAssessmentsResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -172,6 +178,54 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.getAssessmentEvents(query, userContext)
+  }
+
+  /**
+   * POST /assessments/events/subject
+   * Get assessments for a specific event in a subject
+   * Body: subjectId, templateId, occuranceDate, name
+   * Query params: page, limit, status, search
+   */
+  @Post('events/subject')
+  @ZodSerializerDto(GetEventSubjectAssessmentsResDTO)
+  async getEventSubjectAssessments(
+    @Body() body: GetEventSubjectAssessmentsBodyDTO,
+    @Query() query: GetEventSubjectAssessmentsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getEventSubjectAssessments(body, query, userContext)
+  }
+
+  /**
+   * POST /assessments/events/course
+   * Get assessments for a specific event in a course
+   * Body: courseId, templateId, occuranceDate, name
+   * Query params: page, limit, status, search
+   */
+  @Post('events/course')
+  @ZodSerializerDto(GetEventCourseAssessmentsResDTO)
+  async getEventCourseAssessments(
+    @Body() body: GetEventCourseAssessmentsBodyDTO,
+    @Query() query: GetEventCourseAssessmentsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getEventCourseAssessments(body, query, userContext)
   }
 
   /**

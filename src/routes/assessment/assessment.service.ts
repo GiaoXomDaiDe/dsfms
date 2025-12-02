@@ -48,7 +48,13 @@ import {
   UpdateAssessmentEventParamsType,
   UpdateAssessmentEventResType,
   RenderDocxTemplateBodyType,
-  RenderDocxTemplateResType
+  RenderDocxTemplateResType,
+  GetEventSubjectAssessmentsBodyType,
+  GetEventSubjectAssessmentsQueryType,
+  GetEventSubjectAssessmentsResType,
+  GetEventCourseAssessmentsBodyType,
+  GetEventCourseAssessmentsQueryType,
+  GetEventCourseAssessmentsResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -2535,6 +2541,100 @@ export class AssessmentService {
 
       console.error('Update assessment event failed:', error)
       throw new BadRequestException('Failed to update assessment event')
+    }
+  }
+
+  /**
+   * Get assessments for a specific event in a subject
+   * Combines event validation with assessment listing in the same response format as getSubjectAssessments
+   */
+  async getEventSubjectAssessments(
+    body: GetEventSubjectAssessmentsBodyType,
+    query: GetEventSubjectAssessmentsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetEventSubjectAssessmentsResType> {
+    try {
+      const result = await this.assessmentRepo.getEventSubjectAssessments(
+        body.subjectId,
+        body.templateId,
+        body.occuranceDate,
+        body.name,
+        currentUser.userId,
+        currentUser.roleName,
+        query.page,
+        query.limit,
+        query.status,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get event subject assessments failed:', error)
+
+      if (error.message === 'Event not found in subject') {
+        throw new NotFoundException('Assessment event not found in the specified subject')
+      }
+
+      if (error.message === 'Trainer is not assigned to this subject') {
+        throw new ForbiddenException('You are not assigned to this subject')
+      }
+
+      if (error.message === 'Subject not found') {
+        throw SubjectNotFoundException
+      }
+
+      if (error.message === 'Access denied') {
+        throw new ForbiddenException('You do not have permission to access assessments in this subject')
+      }
+
+      throw new InternalServerErrorException('Failed to get event subject assessments')
+    }
+  }
+
+  /**
+   * Get assessments for a specific event in a course
+   * Combines event validation with assessment listing in the same response format as getCourseAssessments
+   */
+  async getEventCourseAssessments(
+    body: GetEventCourseAssessmentsBodyType,
+    query: GetEventCourseAssessmentsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetEventCourseAssessmentsResType> {
+    try {
+      const result = await this.assessmentRepo.getEventCourseAssessments(
+        body.courseId,
+        body.templateId,
+        body.occuranceDate,
+        body.name,
+        currentUser.userId,
+        currentUser.roleName,
+        query.page,
+        query.limit,
+        query.status,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get event course assessments failed:', error)
+
+      if (error.message === 'Event not found in course') {
+        throw new NotFoundException('Assessment event not found in the specified course')
+      }
+
+      if (error.message === 'Trainer is not assigned to this course') {
+        throw new ForbiddenException('You are not assigned to this course')
+      }
+
+      if (error.message === 'Course not found') {
+        throw CourseNotFoundException
+      }
+
+      if (error.message === 'Access denied') {
+        throw new ForbiddenException('You do not have permission to access assessments in this course')
+      }
+
+      throw new InternalServerErrorException('Failed to get event course assessments')
     }
   }
 }
