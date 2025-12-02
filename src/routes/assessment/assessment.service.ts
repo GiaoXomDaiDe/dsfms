@@ -2297,7 +2297,7 @@ export class AssessmentService {
             } catch (error) {
               console.error(`Failed to get image size for ${tagName}:`, error)
               // Return default size if size detection fails
-              return [57, 30]
+              return [87, 60]
             }
           }
         }
