@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Response Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        .title {
+            color: #212529;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .highlight {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border-left: 4px solid #6c757d;
+        }
+        .important {
+            font-weight: bold;
+            color: #495057;
+        }
+        .content {
+            margin: 20px 0;
+        }
+        .details {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .details-table td {
+            padding: 8px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .details-table td:first-child {
+            font-weight: bold;
+            color: #495057;
+            width: 30%;
+        }
+        .response-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            font-size: 14px;
+            color: #6c757d;
+            text-align: center;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .button:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="[LOGO_URL]" alt="DSFMS Logo" class="logo">
+            <h1 class="title">Report Response Confirmation</h1>
+        </div>
+
+        <div class="content">
+            <p>Dear [MANAGER_NAME],</p>
+            
+            <div class="highlight">
+                <p class="important">This is a confirmation that you have successfully responded to a report.</p>
+            </div>
+
+            <div class="details">
+                <h3 style="color: #495057; margin-top: 0;">Report Information</h3>
+                <table class="details-table">
+                    <tr>
+                        <td>Report Type:</td>
+                        <td>[REPORT_TYPE]</td>
+                    </tr>
+                    <tr>
+                        <td>Title:</td>
+                        <td class="important">[REPORT_TITLE]</td>
+                    </tr>
+                    <tr>
+                        <td>Original Reporter:</td>
+                        <td>[REPORTER_NAME]</td>
+                    </tr>
+                    <tr>
+                        <td>Submission Date:</td>
+                        <td>[SUBMISSION_DATE]</td>
+                    </tr>
+                    <tr>
+                        <td>Response Date:</td>
+                        <td class="important">[RESPONSE_DATE]</td>
+                    </tr>
+                    <tr>
+                        <td>Final Status:</td>
+                        <td class="important">[REPORT_STATUS]</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="response-box">
+                <h4 style="margin-top: 0; color: #495057;">Your Response:</h4>
+                <p>[RESPONSE_MESSAGE]</p>
+            </div>
+
+            <div class="highlight">
+                <p><strong>Action Required:</strong> The report creator and other relevant parties have been notified of your response. No further action is needed unless additional follow-up is required.</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated confirmation from the DSFMS System.</p>
+            <p>If you have any questions, please contact the system administrator.</p>
+            <p><small>Sent on [CURRENT_DATE]</small></p>
+        </div>
+    </div>
+</body>
+</html>
