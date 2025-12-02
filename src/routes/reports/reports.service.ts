@@ -19,6 +19,8 @@ import {
 } from '~/routes/reports/reports.model'
 import { ReportsRepository } from '~/routes/reports/reports.repo'
 import { ReportStatus } from '~/shared/constants/report.constant'
+import { PrismaService } from '~/shared/services/prisma.service'
+import { RoleName } from '~/shared/constants/role.constant'
 
 @Injectable()
 export class ReportsService {
@@ -61,7 +63,7 @@ export class ReportsService {
           reportDescription: report.description || 'No description provided',
           reporterName: report.isAnonymous 
             ? 'Anonymous User' 
-            : `${report.createdBy.firstName} ${report.createdBy.lastName}`,
+            : `${report.createdBy?.firstName} ${report.createdBy?.lastName}`,
           creationDate: report.createdAt.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
@@ -189,7 +191,7 @@ export class ReportsService {
           updatedReport.title || 'Untitled Report',
           updatedReport.isAnonymous 
             ? 'Anonymous User' 
-            : `${updatedReport.createdBy.firstName} ${updatedReport.createdBy.lastName}`,
+            : `${updatedReport.createdBy?.lastName} ${updatedReport.createdBy?.firstName}`,
           submissionDate,
           responseDate,
           data.response

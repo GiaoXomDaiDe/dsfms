@@ -14,3 +14,5 @@ export const ROLE_PROFILE_RULES = {
     forbiddenMessage: 'Cannot provide trainer profile for trainee role'
   }
 } as const
+
+export { RoleName }
