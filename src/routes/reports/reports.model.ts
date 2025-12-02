@@ -43,7 +43,7 @@ export const GetReportParamsSchema = z
   })
   .strict()
 
-const ReportTypeSchema = z.object({
+export const CreateReportBodySchema = z.object({
   isAnonymous: z.boolean().optional().default(false),
   requestType: z.enum([
     ReportType.SAFETY_REPORT,
@@ -60,9 +60,6 @@ const ReportTypeSchema = z.object({
   description: z.string().trim().min(1).max(4000).optional(),
   actionsTaken: z.string().trim().min(1).max(2000).optional()
 })
-
-// Discriminated Union dựa theo requestType
-export const CreateReportBodySchema = ReportTypeSchema
 
 export const CreateReportResSchema = ReportSchema
 

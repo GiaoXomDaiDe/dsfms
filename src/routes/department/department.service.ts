@@ -14,9 +14,14 @@ import {
   NotFoundDepartmentException,
   OnlyAdministratorCanEnableDepartmentException
 } from '~/routes/department/department.error'
-import { CreateDepartmentBodyType, UpdateDepartmentBodyType } from '~/routes/department/department.model'
+import { DepartmentMes } from '~/routes/department/department.message'
+import {
+  CreateDepartmentBodyType,
+  DepartmentDetailResType,
+  UpdateDepartmentBodyType
+} from '~/routes/department/department.model'
 import { DepartmentRepository } from '~/routes/department/department.repo'
-import { RoleName } from '~/shared/constants/auth.constant'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -29,29 +34,37 @@ export class DepartmentService {
     private readonly sharedUserRepo: SharedUserRepository
   ) {}
 
-  async list({ includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}) {
-    return await this.departmentRepo.list({
-      includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
-    })
+  async list() {
+    return await this.departmentRepo.list()
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false, userRole }: { includeDeleted?: boolean; userRole?: string } = {}
-  ) {
-    try {
-      const department = await this.departmentRepo.findById(id, {
-        includeDeleted: userRole === RoleName.ADMINISTRATOR ? includeDeleted : false
-      })
+  async findById(id: string) {
+    const department = await this.departmentRepo.findById(id)
 
-      if (!department) {
-        throw NotFoundDepartmentException
-      }
-
-      return department
-    } catch (error) {
+    if (!department) {
       throw NotFoundDepartmentException
     }
+
+    return department
+  }
+
+  async getMyDepartment(userId: string): Promise<DepartmentDetailResType> {
+    const user = await this.sharedUserRepo.findUniqueIncludeProfile(userId)
+
+    if (!user || user.deletedAt || user.status === UserStatus.DISABLED) {
+      throw NotFoundDepartmentException
+    }
+
+    // 1) Ưu tiên department gán trực tiếp cho user
+    const departmentIdFromUser = user.department?.id
+    if (departmentIdFromUser) {
+      const department = await this.departmentRepo.findById(departmentIdFromUser)
+      if (department) {
+        return department
+      }
+    }
+
+    throw NotFoundDepartmentException
   }
 
   async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
@@ -196,7 +209,7 @@ export class DepartmentService {
       })
 
       return {
-        message: 'Disable successfully'
+        message: DepartmentMes.DELETE_SUCCESS
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
@@ -225,7 +238,7 @@ export class DepartmentService {
       await this.departmentRepo.enable({ id, enabledById })
 
       return {
-        message: 'Enable department successfully'
+        message: DepartmentMes.ENABLE_SUCCESS
       }
     } catch (error) {
       if (isNotFoundPrismaError(error)) {
@@ -264,7 +277,7 @@ export class DepartmentService {
 
     if (!user) throw DepartmentHeadUserNotFoundException
     if (user.role.name !== RoleName.DEPARTMENT_HEAD) throw DepartmentHeadMustHaveRoleException
-    if (user.role.isActive === false) throw DepartmentHeadRoleInactiveException
+    if (user.role.isActive === false || user.deletedAt) throw DepartmentHeadRoleInactiveException
 
     // 1) Kiểm tra membership hiện tại (departmentId trên User)
     // - Nếu user đã thuộc department khác (không phải targetDepartmentId) → reject

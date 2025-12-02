@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Put } from '@nestjs/common'
+import { Body, Controller, Get, Put, UploadedFile, UseInterceptors } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { ZodSerializerDto } from 'nestjs-zod'
 import { ResetPasswordBodyDTO, UpdateProfileBodyDTO, UpdateSignatureBodyDTO } from '~/routes/profile/profile.dto'
+import { ProfileMes } from '~/routes/profile/profile.message'
 import { ProfileService } from '~/routes/profile/profile.service'
 import { GetUserResDTO, UpdateUserResDTO } from '~/routes/user/user.dto'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
@@ -14,26 +16,37 @@ export class ProfileController {
   @ZodSerializerDto(GetUserResDTO)
   async getProfile(@ActiveUser('userId') userId: string) {
     const profile = await this.profileService.getProfile(userId)
-    return { data: profile }
+    return {
+      message: ProfileMes.DETAIL_SUCCESS,
+      data: profile
+    }
   }
 
   @Put()
+  @UseInterceptors(FileInterceptor('avatar'))
   @ZodSerializerDto(UpdateUserResDTO)
-  async updateProfile(@Body() body: UpdateProfileBodyDTO, @ActiveUser('userId') userId: string) {
-    const updated = await this.profileService.updateProfile({
+  async updateAvatar(
+    @UploadedFile() avatarFile: Express.Multer.File | undefined,
+    @Body() body: UpdateProfileBodyDTO,
+    @ActiveUser('userId') userId: string
+  ) {
+    const updated = await this.profileService.updateAvatar({
       userId,
-      body
+      avatarFile,
+      avatarUrl: body?.avatarUrl
     })
-    return { data: updated }
+    return {
+      message: ProfileMes.UPDATE_SUCCESS,
+      data: updated
+    }
   }
 
   @Put('reset-password')
   @ZodSerializerDto(MessageResDTO)
   async resetPassword(@Body() body: ResetPasswordBodyDTO, @ActiveUser('userId') userId: string) {
-    const { oldPassword, newPassword } = body
     const result = await this.profileService.resetPassword({
       userId,
-      body: { oldPassword, newPassword }
+      body
     })
     return result
   }

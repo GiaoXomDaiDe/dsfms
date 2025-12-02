@@ -1,16 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put } from '@nestjs/common'
 import { ZodSerializerDto } from 'nestjs-zod'
 import {
   CreateDepartmentBodyDTO,
   CreateDepartmentResDTO,
-  GetDepartmentDetailQueryDTO,
   GetDepartmentDetailResDTO,
   GetDepartmentHeadsResDTO,
   GetDepartmentParamsDTO,
-  GetDepartmentsQueryDTO,
   GetDepartmentsResDTO,
-  UpdateDepartmentBodyDTO
+  GetMyDepartmentResDTO,
+  UpdateDepartmentBodyDTO,
+  UpdateDepartmentResDTO
 } from '~/routes/department/department.dto'
+import { DepartmentMes } from '~/routes/department/department.message'
 import { DepartmentService } from '~/routes/department/department.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
@@ -22,47 +23,63 @@ export class DepartmentController {
 
   @Get()
   @ZodSerializerDto(GetDepartmentsResDTO)
-  list(@Query() query: GetDepartmentsQueryDTO, @ActiveRolePermissions('name') roleName: string) {
-    return this.departmentService.list({
-      includeDeleted: query.includeDeleted,
-      userRole: roleName
-    })
+  async list() {
+    const departments = await this.departmentService.list()
+    return {
+      message: DepartmentMes.LIST_SUCCESS,
+      data: departments
+    }
+  }
+
+  @Get('me')
+  @ZodSerializerDto(GetMyDepartmentResDTO)
+  async getMyDepartment(@ActiveUser('userId') userId: string) {
+    const department = await this.departmentService.getMyDepartment(userId)
+    return {
+      message: DepartmentMes.MY_DEPARTMENT_SUCCESS,
+      data: department
+    }
   }
 
   @Get(':departmentId')
   @ZodSerializerDto(GetDepartmentDetailResDTO)
-  findById(
-    @Param() params: GetDepartmentParamsDTO,
-    @Query() query: GetDepartmentDetailQueryDTO,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
-    return this.departmentService.findById(params.departmentId, {
-      includeDeleted: query.includeDeleted,
-      userRole: roleName
-    })
+  async findById(@Param() params: GetDepartmentParamsDTO) {
+    const department = await this.departmentService.findById(params.departmentId)
+    return {
+      message: DepartmentMes.DETAIL_SUCCESS,
+      data: department
+    }
   }
 
   @Post()
   @ZodSerializerDto(CreateDepartmentResDTO)
-  create(@Body() body: CreateDepartmentBodyDTO, @ActiveUser('userId') userId: string) {
-    return this.departmentService.create({
+  async create(@Body() body: CreateDepartmentBodyDTO, @ActiveUser('userId') userId: string) {
+    const department = await this.departmentService.create({
       data: body,
       createdById: userId
     })
+    return {
+      message: DepartmentMes.CREATE_SUCCESS,
+      data: department
+    }
   }
 
   @Put(':departmentId')
-  @ZodSerializerDto(CreateDepartmentResDTO)
-  update(
+  @ZodSerializerDto(UpdateDepartmentResDTO)
+  async update(
     @Body() body: UpdateDepartmentBodyDTO,
     @Param() params: GetDepartmentParamsDTO,
     @ActiveUser('userId') userId: string
   ) {
-    return this.departmentService.update({
+    const department = await this.departmentService.update({
       data: body,
       id: params.departmentId,
       updatedById: userId
     })
+    return {
+      message: DepartmentMes.UPDATE_SUCCESS,
+      data: department
+    }
   }
 
   @Delete(':departmentId')
@@ -90,7 +107,11 @@ export class DepartmentController {
 
   @Get('helpers/department-heads')
   @ZodSerializerDto(GetDepartmentHeadsResDTO)
-  getDepartmentHeads() {
-    return this.departmentService.getDepartmentHeads()
+  async getDepartmentHeads() {
+    const heads = await this.departmentService.getDepartmentHeads()
+    return {
+      message: DepartmentMes.HEADS_SUCCESS,
+      data: heads
+    }
   }
 }

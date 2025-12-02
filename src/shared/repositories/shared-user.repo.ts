@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import type { Prisma } from '@prisma/client'
-import {
-  CreateTraineeProfileType,
-  CreateTrainerProfileType,
-  UpdateTraineeProfileType,
-  UpdateTrainerProfileType
-} from '~/routes/profile/profile.model'
+
 import { UserNotFoundException } from '~/routes/user/user.error'
 import {
   GetUserResType,
@@ -20,6 +15,12 @@ import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import type { DepartmentSummaryType } from '~/shared/models/shared-department.model'
+import {
+  CreateTraineeProfileType,
+  CreateTrainerProfileType,
+  UpdateTraineeProfileType,
+  UpdateTrainerProfileType
+} from '~/shared/models/shared-profile.model'
 import type { RoleSummaryType } from '~/shared/models/shared-role.model'
 import { UserType } from '~/shared/models/shared-user.model'
 import {

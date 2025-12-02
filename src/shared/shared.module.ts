@@ -6,7 +6,6 @@ import { APIKeyGuard } from '~/shared/guards/api-key.guard'
 import { AuthenticationGuard } from '~/shared/guards/authentication.guard'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
-import { SharedFilterService } from '~/shared/repositories/shared-filter.service'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
@@ -22,7 +21,6 @@ import { TokenService } from '~/shared/services/token.service'
 const sharedServices = [
   PrismaService,
   HashingService,
-  SharedFilterService,
   SharedUserRepository,
   SharedRoleRepository,
   SharedDepartmentRepository,

@@ -9,48 +9,24 @@ import {
 } from '~/routes/department/department.model'
 import { RoleName } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { SharedFilterService } from '~/shared/repositories/shared-filter.service'
+import {
+  departmentWithHeadBasicInclude,
+  departmentWithHeadInclude
+} from '~/shared/prisma-presets/shared-department.prisma-presets'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 @SerializeAll(['getClient'])
 export class DepartmentRepository {
-  constructor(
-    private readonly prismaService: PrismaService,
-    private readonly sharedFilterService: SharedFilterService
-  ) {}
+  constructor(private readonly prismaService: PrismaService) {}
 
-  async list({ includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetDepartmentsResType> {
-    const whereClause = this.sharedFilterService.buildListFilters({ includeDeleted })
+  async list(): Promise<GetDepartmentsResType> {
+    const whereClause = {}
 
-    const [totalItems, departments] = await Promise.all([
-      this.prismaService.department.count({
-        where: whereClause
-      }),
-      this.prismaService.department.findMany({
-        where: whereClause,
-        include: {
-          headUser: {
-            select: {
-              id: true,
-              firstName: true,
-              middleName: true,
-              lastName: true,
-              email: true,
-              role: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      })
-    ])
+    const departments = await this.prismaService.department.findMany({
+      where: whereClause,
+      include: departmentWithHeadInclude
+    })
 
     const departmentsWithStats = await Promise.all(
       departments.map(async (department) => {
@@ -65,7 +41,7 @@ export class DepartmentRepository {
 
     return {
       departments: departmentsWithStats,
-      totalItems
+      totalItems: departmentsWithStats.length
     }
   }
 
@@ -77,23 +53,7 @@ export class DepartmentRepository {
 
     const department = await this.prismaService.department.findUnique({
       where: whereClause,
-      include: {
-        headUser: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            email: true,
-            role: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      }
+      include: departmentWithHeadInclude
     })
 
     if (!department) return null
@@ -188,16 +148,7 @@ export class DepartmentRepository {
         ...data,
         updatedById
       },
-      include: {
-        headUser: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      }
+      include: departmentWithHeadBasicInclude
     })
   }
 
