@@ -2394,19 +2394,23 @@ export class AssessmentRepo {
       }
     }
 
+    // Check if assessment form allows updates (business rule)
+    const allowedStatusesForUpdates = ['DRAFT', 'SIGNATURE_PENDING', 'READY_TO_SUBMIT', 'REJECTED']
+    const assessmentFormAllowsUpdates = allowedStatusesForUpdates.includes(assessmentSection.assessmentForm.status)
+
     // Determine if current user can update this section
-    // canUpdated: false by default, true if section was assessed by current user AND user can assess this section type
+    // canUpdated: false by default, true if section was assessed by current user AND user can assess this section type AND assessment form allows updates
     // DEPARTMENT_HEAD always has canUpdated = false
     let canUpdated = false
-    if (userMainRole !== 'DEPARTMENT HEAD') {
+    if (userMainRole !== 'DEPARTMENT HEAD' && assessmentFormAllowsUpdates) {
       canUpdated = canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
     }
 
     // Determine if current user can save this section  
-    // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type
+    // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type AND assessment form allows updates
     // DEPARTMENT_HEAD always has canSave = false
     let canSave = false
-    if (userMainRole !== 'DEPARTMENT HEAD') {
+    if (userMainRole !== 'DEPARTMENT HEAD' && assessmentFormAllowsUpdates) {
       canSave = canAssessSection && assessmentSection.assessedById === null
     }
 
@@ -2589,6 +2593,12 @@ export class AssessmentRepo {
 
       if (!assessment) {
         throw new Error('Assessment not found')
+      }
+
+      // Check if assessment status allows trainee lock toggle (only ON_GOING and DRAFT)
+      const allowedStatuses = [AssessmentStatus.ON_GOING, AssessmentStatus.DRAFT] as const
+      if (!allowedStatuses.includes(assessment.status as any)) {
+        throw new Error('Can only toggle trainee lock when assessment status is ON_GOING or DRAFT')
       }
 
       // Check if today is the occurrence date
