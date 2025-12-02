@@ -54,6 +54,7 @@ export class ReportsController {
   }
 
   @Put(':reportId/cancel')
+  @ZodSerializerDto(CancelReportResDTO)
   async cancelReport(
     @Param() params: CancelReportParamsDTO,
     @ActiveUser('userId') userId: string
@@ -62,6 +63,7 @@ export class ReportsController {
   }
 
   @Put(':reportId/acknowledge')
+  @ZodSerializerDto(AcknowledgeReportResDTO)
   async acknowledgeReport(
     @Param() params: AcknowledgeReportParamsDTO,
     @ActiveUser('userId') userId: string
@@ -71,6 +73,7 @@ export class ReportsController {
   }
 
   @Put(':reportId/respond')
+  @ZodSerializerDto(RespondReportResDTO)
   async respondToReport(
     @Param() params: RespondReportParamsDTO,
     @Body() body: RespondReportBodyDTO,

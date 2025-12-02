@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import {
   CreatePermissionBodyType,
-  PermissionModuleType,
+  GetPermissionsResType,
   PermissionType,
   UpdatePermissionBodyType
 } from '~/routes/permission/permission.model'
@@ -12,51 +12,12 @@ import { PrismaService } from '~/shared/services/prisma.service'
 @SerializeAll()
 export class PermissionRepo {
   constructor(private readonly prisma: PrismaService) {}
-  async list(options: { excludeModules?: string[] } = {}) {
-    const { excludeModules = [] } = options
-
+  async list(): Promise<GetPermissionsResType> {
     const permissions = await this.prisma.endpointPermission.findMany()
 
-    const excludedModuleNames = new Set(
-      excludeModules
-        .filter((moduleName) => typeof moduleName === 'string')
-        .filter((moduleName) => moduleName.length > 0)
-    )
-
-    const grouped = permissions.reduce<Array<PermissionModuleType>>((acc, permission) => {
-      const rawModuleName = permission.viewModule ?? 'Uncategorized'
-      const moduleName = rawModuleName.trim().length > 0 ? rawModuleName : 'Uncategorized'
-
-      if (excludedModuleNames.has(moduleName)) return acc
-
-      const rawPermissionName = permission.viewName ?? 'Uncategorized'
-      const permissionName = rawPermissionName.trim().length > 0 ? rawPermissionName : 'Uncategorized'
-
-      let moduleEntry = acc.find((entry) => entry.module.name === moduleName)
-      if (!moduleEntry) {
-        moduleEntry = {
-          module: {
-            name: moduleName,
-            listPermissions: []
-          }
-        }
-        acc.push(moduleEntry)
-      }
-
-      moduleEntry.module.listPermissions.push({
-        id: permission.id,
-        name: permissionName
-      })
-
-      return acc
-    }, [])
-    grouped.sort((a, b) => a.module.name.localeCompare(b.module.name))
-
-    const totalItems = grouped.reduce((sum, item) => sum + item.module.listPermissions.length, 0)
-
     return {
-      modules: grouped,
-      totalItems
+      permissions,
+      totalItems: permissions.length
     }
   }
 

@@ -50,7 +50,6 @@ import {
 } from '~/shared/helper'
 import { RoleType } from '~/shared/models/shared-role.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
-import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
@@ -84,7 +83,6 @@ export class UserService {
     private readonly userRepo: UserRepository,
     private readonly sharedUserRepo: SharedUserRepository,
     private readonly sharedRoleRepo: SharedRoleRepository,
-    private readonly sharedDepartmentRepo: SharedDepartmentRepository,
     private readonly sharedCourseRepo: SharedCourseRepository,
     private readonly sharedSubjectRepo: SharedSubjectRepository
   ) {}

@@ -28,15 +28,17 @@ export const CreatePermissionGroupBodySchema = PermissionGroupSchema.pick({
 })
 
 export const UpdatePermissionGroupBodySchema = CreatePermissionGroupBodySchema.partial()
+
 export const PermissionGroupParamsSchema = z.object({
   permissionGroupId: z.string()
 })
 
-const PermissionGroupResponseWrapper = z.object({
+const PermissionGroupResponseWrapperSchema = z.object({
   message: z.string(),
   data: PermissionGroupSchema
 })
-export const PermissionGroupResSchema = PermissionGroupResponseWrapper
+
+export const PermissionGroupResSchema = PermissionGroupResponseWrapperSchema
 
 export const PermissionGroupDetailResSchema = z.object({
   message: z.string(),
@@ -51,18 +53,23 @@ export const PermissionGroupListResSchema = z.object({
 export const AssignPermissionGroupPermissionsBodySchema = z.object({
   permissionIds: z.array(z.string()).default([])
 })
+
 export const AssignPermissionGroupPermissionsResSchema = PermissionGroupDetailResSchema
 
 export type PermissionGroupType = SharedPermissionGroupType
 export type PermissionGroupPermissionType = SharedPermissionGroupPermissionType
 export type PermissionGroupDetailType = z.infer<typeof PermissionGroupDetailSchema>
+
 export type CreatePermissionGroupBodyType = z.infer<typeof CreatePermissionGroupBodySchema>
 export type UpdatePermissionGroupBodyType = z.infer<typeof UpdatePermissionGroupBodySchema>
 export type PermissionGroupParamsType = z.infer<typeof PermissionGroupParamsSchema>
+
 export type PermissionGroupResType = z.infer<typeof PermissionGroupResSchema>
 export type PermissionGroupDetailResType = z.infer<typeof PermissionGroupDetailResSchema>
+
 export type PermissionGroupCollectionType = SharedPermissionGroupCollectionType
 export type PermissionGroupCollectionItemType = SharedPermissionGroupCollectionItemType
 export type PermissionGroupListResType = z.infer<typeof PermissionGroupListResSchema>
+
 export type AssignPermissionGroupPermissionsBodyType = z.infer<typeof AssignPermissionGroupPermissionsBodySchema>
 export type AssignPermissionGroupPermissionsResType = z.infer<typeof AssignPermissionGroupPermissionsResSchema>
