@@ -147,6 +147,7 @@ const main = async () => {
           where: { id: department.headUserId },
           select: {
             firstName: true,
+            middleName: true,
             lastName: true,
             email: true,
             eid: true

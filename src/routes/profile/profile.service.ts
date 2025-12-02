@@ -72,6 +72,7 @@ export class ProfileService {
         { id: userId },
         {
           updatedById: userId,
+
           userData: {
             avatarUrl: resolvedAvatarUrl
           },

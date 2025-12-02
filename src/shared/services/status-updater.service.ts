@@ -13,8 +13,6 @@ dayjs.extend(timezone)
 
 const APP_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
-const TEST_ASSESSMENT_ID = '2d3c695e-9b52-4585-b159-871d4e9d3437'
-
 @Injectable()
 export class StatusUpdaterService {
   private readonly logger = new Logger(StatusUpdaterService.name)
@@ -47,7 +45,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'assessment-schedule-keeper',
     timeZone: APP_TIMEZONE
   })
@@ -92,7 +90,8 @@ export class StatusUpdaterService {
         endDate: { gte: today }
       },
       data: {
-        status: CourseStatus.ON_GOING
+        status: CourseStatus.ON_GOING,
+        updatedAt: new Date()
       }
     })
 
@@ -104,7 +103,8 @@ export class StatusUpdaterService {
         endDate: { lt: today }
       },
       data: {
-        status: CourseStatus.COMPLETED
+        status: CourseStatus.COMPLETED,
+        updatedAt: new Date()
       }
     })
 
@@ -124,7 +124,8 @@ export class StatusUpdaterService {
         endDate: { gte: today }
       },
       data: {
-        status: SubjectStatus.ON_GOING
+        status: SubjectStatus.ON_GOING,
+        updatedAt: new Date()
       }
     })
 
@@ -136,7 +137,8 @@ export class StatusUpdaterService {
         endDate: { lt: today }
       },
       data: {
-        status: SubjectStatus.COMPLETED
+        status: SubjectStatus.COMPLETED,
+        updatedAt: new Date()
       }
     })
 
@@ -154,7 +156,8 @@ export class StatusUpdaterService {
         }
       },
       data: {
-        status: SubjectEnrollmentStatus.ON_GOING
+        status: SubjectEnrollmentStatus.ON_GOING,
+        updatedAt: new Date()
       }
     })
 
@@ -170,7 +173,8 @@ export class StatusUpdaterService {
         }
       },
       data: {
-        status: SubjectEnrollmentStatus.FINISHED
+        status: SubjectEnrollmentStatus.FINISHED,
+        updatedAt: new Date()
       }
     })
 
@@ -178,31 +182,20 @@ export class StatusUpdaterService {
       `Enrollment statuses updated: ${ongoingResult.count} → ON_GOING, ${finishedResult.count} → FINISHED`
     )
   }
-  private getTodayDateString(): string {
-    return dayjs().tz(APP_TIMEZONE).format('YYYY-MM-DD')
-  }
   private async activateAssessmentsForToday() {
     const today = this.getTodayDate()
-    this.logToday('cancelExpiredAssessments', today)
-
-    if (TEST_ASSESSMENT_ID) {
-      const current = await this.prisma.assessmentForm.findUnique({
-        where: { id: TEST_ASSESSMENT_ID }
-      })
-      this.logger.log(`[activate] current=${JSON.stringify(current)}`)
-    }
+    this.logToday('activateAssessmentsForToday', today)
 
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         status: AssessmentStatus.NOT_STARTED,
-        // TODO: bỏ id filter này khi xong test
-        ...(TEST_ASSESSMENT_ID && { id: TEST_ASSESSMENT_ID }),
         occuranceDate: {
           equals: today // DATE 'YYYY-MM-DD'
         }
       },
       data: {
-        status: AssessmentStatus.ON_GOING
+        status: AssessmentStatus.ON_GOING,
+        updatedAt: new Date()
       }
     })
 
@@ -214,30 +207,18 @@ export class StatusUpdaterService {
     const today = this.getTodayDate()
     this.logToday('cancelExpiredAssessments', today)
 
-    // DEBUG record test
-    if (TEST_ASSESSMENT_ID) {
-      const current = await this.prisma.assessmentForm.findUnique({
-        where: { id: TEST_ASSESSMENT_ID }
-      })
-      this.logger.log(
-        `[cancel] current=${JSON.stringify(current)}, cancellableStatuses=${JSON.stringify(
-          StatusUpdaterService.cancellableAssessmentStatuses
-        )}`
-      )
-    }
-
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
         occuranceDate: {
           lt: today // mọi ngày < hôm nay
         },
-        ...(TEST_ASSESSMENT_ID && { id: TEST_ASSESSMENT_ID }),
         status: {
           in: StatusUpdaterService.cancellableAssessmentStatuses
         }
       },
       data: {
-        status: AssessmentStatus.CANCELLED
+        status: AssessmentStatus.CANCELLED,
+        updatedAt: new Date()
       }
     })
 
@@ -306,7 +287,8 @@ export class StatusUpdaterService {
         }
       },
       data: {
-        status: AssessmentStatus.CANCELLED
+        status: AssessmentStatus.CANCELLED,
+        updatedAt: new Date()
       }
     })
 

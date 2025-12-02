@@ -95,7 +95,8 @@ export class UserRepository {
       const newUser = await tx.user.create({
         data: {
           ...userData,
-          createdById
+          createdById,
+          createdAt: new Date()
         },
         include: userRoleDepartmentNameInclude
       })
@@ -109,7 +110,8 @@ export class UserRepository {
             certificationNumber: trainerProfile.certificationNumber,
             yearsOfExp: Number(trainerProfile.yearsOfExp),
             bio: trainerProfile.bio,
-            createdById
+            createdById,
+            createdAt: new Date()
           }
         })
       } else if (roleName === RoleName.TRAINEE && traineeProfile) {
@@ -121,7 +123,8 @@ export class UserRepository {
             trainingBatch: traineeProfile.trainingBatch,
             passportNo: traineeProfile.passportNo,
             nation: traineeProfile.nation ?? null,
-            createdById
+            createdById,
+            createdAt: new Date()
           }
         })
       }
@@ -216,6 +219,7 @@ export class UserRepository {
             const usersToCreate = validUsersInChunk.map(({ userData }) => ({
               ...userData,
               createdById,
+              createdAt: new Date(),
               trainerProfile: undefined,
               traineeProfile: undefined,
               roleName: undefined
@@ -239,7 +243,8 @@ export class UserRepository {
                   certificationNumber: userData.trainerProfile.certificationNumber,
                   yearsOfExp: Number(userData.trainerProfile.yearsOfExp),
                   bio: userData.trainerProfile.bio,
-                  createdById
+                  createdById,
+                  createdAt: new Date()
                 })
               }
 
@@ -253,7 +258,8 @@ export class UserRepository {
                   trainingBatch: userData.traineeProfile.trainingBatch,
                   passportNo: userData.traineeProfile.passportNo || null,
                   nation: userData.traineeProfile.nation || null,
-                  createdById
+                  createdById,
+                  createdAt: new Date()
                 })
               }
             })
@@ -370,7 +376,8 @@ export class UserRepository {
           where: { id },
           data: {
             ...userData,
-            updatedById
+            updatedById,
+            updatedAt: new Date()
           }
         })
       }
@@ -383,7 +390,13 @@ export class UserRepository {
             userId: id,
             ...trainerProfile
           },
-          update: trainerProfile
+          update: {
+            ...trainerProfile,
+            updatedAt: new Date(),
+            updatedById,
+            createdById: updatedById,
+            createdAt: new Date()
+          }
         })
       } else if (roleName === RoleName.TRAINEE && traineeProfile) {
         await tx.traineeProfile.upsert({
@@ -392,7 +405,13 @@ export class UserRepository {
             userId: id,
             ...traineeProfile
           },
-          update: traineeProfile
+          update: {
+            ...traineeProfile,
+            updatedAt: new Date(),
+            updatedById,
+            createdById: updatedById,
+            createdAt: new Date()
+          }
         })
       }
 
@@ -461,7 +480,7 @@ export class UserRepository {
           })
 
           return tx.user.update({
-            where: { id, deletedAt: null },
+            where: { id, deletedAt: null, status: UserStatus.ACTIVE },
             data: {
               status: UserStatus.DISABLED,
               deletedAt: new Date(),
@@ -486,7 +505,8 @@ export class UserRepository {
           status: UserStatus.ACTIVE,
           deletedAt: null,
           deletedById: null,
-          updatedById: enabledById
+          updatedById: enabledById,
+          updatedAt: new Date()
         }
       })
       // Kích hoạt lại các profile tương ứng
@@ -495,7 +515,8 @@ export class UserRepository {
         data: {
           deletedAt: null,
           deletedById: null,
-          updatedById: enabledById
+          updatedById: enabledById,
+          updatedAt: new Date()
         }
       })
       await tx.traineeProfile.updateMany({
@@ -503,7 +524,8 @@ export class UserRepository {
         data: {
           deletedAt: null,
           deletedById: null,
-          updatedById: enabledById
+          updatedById: enabledById,
+          updatedAt: new Date()
         }
       })
 

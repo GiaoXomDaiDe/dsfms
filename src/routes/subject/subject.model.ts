@@ -116,6 +116,7 @@ export const AvailableTrainerSchema = UserSchema.pick({
   id: true,
   eid: true,
   firstName: true,
+  middleName: true,
   lastName: true,
   email: true,
   departmentId: true
