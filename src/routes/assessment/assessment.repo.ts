@@ -445,12 +445,13 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get template with its sections and fields
+   * Get template with its sections and fields - only PUBLISHED templates can be used for assessments
    */
   async getTemplateWithStructure(templateId: string) {
     return await this.prisma.templateForm.findUnique({
       where: {
-        id: templateId
+        id: templateId,
+        status: 'PUBLISHED' // Only PUBLISHED templates can be used to create assessments
       },
       include: {
         department: {
@@ -2288,7 +2289,7 @@ export class AssessmentRepo {
         
         return true
       })
-      .map((templateField) => {
+      .map((templateField, index) => {
         const existingValue = assessmentValueMap.get(templateField.id)
 
         // Check if this is a system field and auto-populate if no value exists
@@ -2320,7 +2321,7 @@ export class AssessmentRepo {
             fieldType: templateField.fieldType,
             roleRequired: templateField.roleRequired,
             options: templateField.options,
-            displayOrder: templateField.displayOrder,
+            displayOrder: index + 1, // Reassign sequential display order after filtering
             parentId: templateField.parentId
           },
           assessmentValue: {

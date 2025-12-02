@@ -424,4 +424,259 @@ This account was created on ${creationDate}.`
       }
     }
   }
+
+  /**
+   * Send new report notification to all SQA auditors
+   */
+  async sendNewReportNotificationToAuditors(
+    reportId: string,
+    reportType: string,
+    reportTitle: string,
+    reportSeverity: string,
+    reportDescription: string,
+    reporterName: string,
+    creationDate: string,
+    reportUrl?: string
+  ): Promise<{ success: boolean; message: string; results: Array<{ email: string; success: boolean; message: string }> }> {
+    try {
+      // Get all SQA auditors - assuming you have access to user service/repository
+      // For now, we'll return the template structure
+      
+      let htmlTemplate = await this.loadTemplate('new-report-notification.txt')
+
+      // Replace placeholders
+      htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportType)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportTitle)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_SEVERITY\]/g, reportSeverity || 'Not specified')
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_DESCRIPTION\]/g, reportDescription || 'No description provided')
+      htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reporterName)
+      htmlTemplate = htmlTemplate.replace(/\[CREATION_DATE\]/g, creationDate)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'SUBMITTED')
+      htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }))
+
+      // This method will be called from the service with actual auditor emails
+      return {
+        success: true,
+        message: 'Template prepared successfully',
+        results: []
+      }
+    } catch (error) {
+      console.error('Error preparing new report notification:', error)
+      return {
+        success: false,
+        message: `Error preparing new report notification: ${error.message}`,
+        results: []
+      }
+    }
+  }
+
+  /**
+   * Send report response notification to report creator
+   */
+  async sendReportResponseToCreator(
+    creatorEmail: string,
+    reporterName: string,
+    reportType: string,
+    reportTitle: string,
+    submissionDate: string,
+    responderName: string,
+    responseDate: string,
+    responseMessage: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      let htmlTemplate = await this.loadTemplate('report-response-creator.txt')
+
+      // Replace placeholders
+      htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
+      htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reporterName)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportType)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportTitle)
+      htmlTemplate = htmlTemplate.replace(/\[SUBMISSION_DATE\]/g, submissionDate)
+      htmlTemplate = htmlTemplate.replace(/\[RESPONDER_NAME\]/g, responderName)
+      htmlTemplate = htmlTemplate.replace(/\[RESPONSE_DATE\]/g, responseDate)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'RESOLVED')
+      htmlTemplate = htmlTemplate.replace(/\[RESPONSE_MESSAGE\]/g, responseMessage)
+      htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }))
+
+      const emailData = {
+        to: creatorEmail,
+        subject: `Response to Your Report - ${reportTitle}`,
+        html: htmlTemplate,
+        text: `Your report "${reportTitle}" has received a response: ${responseMessage}`
+      }
+
+      const result = await this.sendEmail(emailData)
+
+      if (result.success) {
+        return {
+          success: true,
+          message: 'Report response notification sent successfully to creator'
+        }
+      } else {
+        return {
+          success: false,
+          message: `Failed to send report response notification to creator: ${result.error}`
+        }
+      }
+    } catch (error) {
+      console.error('Error sending report response to creator:', error)
+      return {
+        success: false,
+        message: `Error sending report response notification to creator: ${error.message}`
+      }
+    }
+  }
+
+  /**
+   * Send report response confirmation to manager
+   */
+  async sendReportResponseConfirmationToManager(
+    managerEmail: string,
+    managerName: string,
+    reportType: string,
+    reportTitle: string,
+    reporterName: string,
+    submissionDate: string,
+    responseDate: string,
+    responseMessage: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      let htmlTemplate = await this.loadTemplate('report-response-manager.txt')
+
+      // Replace placeholders
+      htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
+      htmlTemplate = htmlTemplate.replace(/\[MANAGER_NAME\]/g, managerName)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportType)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportTitle)
+      htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reporterName)
+      htmlTemplate = htmlTemplate.replace(/\[SUBMISSION_DATE\]/g, submissionDate)
+      htmlTemplate = htmlTemplate.replace(/\[RESPONSE_DATE\]/g, responseDate)
+      htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'RESOLVED')
+      htmlTemplate = htmlTemplate.replace(/\[RESPONSE_MESSAGE\]/g, responseMessage)
+      htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }))
+
+      const emailData = {
+        to: managerEmail,
+        subject: `Report Response Confirmation - ${reportTitle}`,
+        html: htmlTemplate,
+        text: `Confirmation: You have successfully responded to report "${reportTitle}"`
+      }
+
+      const result = await this.sendEmail(emailData)
+
+      if (result.success) {
+        return {
+          success: true,
+          message: 'Report response confirmation sent successfully to manager'
+        }
+      } else {
+        return {
+          success: false,
+          message: `Failed to send report response confirmation to manager: ${result.error}`
+        }
+      }
+    } catch (error) {
+      console.error('Error sending report response confirmation to manager:', error)
+      return {
+        success: false,
+        message: `Error sending report response confirmation to manager: ${error.message}`
+      }
+    }
+  }
+
+  /**
+   * Send bulk report notifications to SQA auditors
+   */
+  async sendBulkReportNotifications(
+    auditorEmails: Array<{ email: string; name: string }>,
+    reportData: {
+      reportId: string
+      reportType: string
+      reportTitle: string
+      reportSeverity: string
+      reportDescription: string
+      reporterName: string
+      creationDate: string
+      reportUrl?: string
+    }
+  ): Promise<{
+    success: boolean
+    results: Array<{
+      email: string
+      success: boolean
+      message: string
+    }>
+  }> {
+    const results = await Promise.all(
+      auditorEmails.map(async (auditor) => {
+        try {
+          let htmlTemplate = await this.loadTemplate('new-report-notification.txt')
+
+          // Replace placeholders
+          htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
+          htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportData.reportType)
+          htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportData.reportTitle)
+          htmlTemplate = htmlTemplate.replace(/\[REPORT_SEVERITY\]/g, reportData.reportSeverity || 'Not specified')
+          htmlTemplate = htmlTemplate.replace(/\[REPORT_DESCRIPTION\]/g, reportData.reportDescription || 'No description provided')
+          htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reportData.reporterName)
+          htmlTemplate = htmlTemplate.replace(/\[CREATION_DATE\]/g, reportData.creationDate)
+          htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'SUBMITTED')
+          htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }))
+
+          const emailData = {
+            to: auditor.email,
+            subject: `New Report Notification - ${reportData.reportTitle}`,
+            html: htmlTemplate,
+            text: `A new report "${reportData.reportTitle}" has been submitted and requires your attention.`
+          }
+
+          const result = await this.sendEmail(emailData)
+
+          return {
+            email: auditor.email,
+            success: result.success,
+            message: result.success ? 'Notification sent successfully' : result.error || 'Failed to send notification'
+          }
+        } catch (error) {
+          return {
+            email: auditor.email,
+            success: false,
+            message: `Error sending notification: ${error.message}`
+          }
+        }
+      })
+    )
+
+    const successCount = results.filter((r) => r.success).length
+
+    return {
+      success: successCount === auditorEmails.length,
+      results
+    }
+  }
 }

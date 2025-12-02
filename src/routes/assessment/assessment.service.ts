@@ -53,6 +53,7 @@ import {
 import {
   TemplateNotFoundException,
   TemplateNotActiveException,
+  TemplateNotPublishedException,
   TemplateDepartmentMismatchException,
   SubjectNotFoundException,
   CourseNotFoundException,
@@ -95,10 +96,10 @@ export class AssessmentService {
     currentUser: { userId: string; roleName: string; departmentId?: string }
   ): Promise<CreateAssessmentResType> {
     try {
-      // Step 1: Validate template exists and is active
+      // Step 1: Validate template exists and is PUBLISHED
       const template = await this.assessmentRepo.getTemplateWithStructure(data.templateId)
       if (!template) {
-        throw TemplateNotFoundException
+        throw TemplateNotPublishedException
       }
 
       // Step 2: Validate subject or course
@@ -289,10 +290,10 @@ export class AssessmentService {
     currentUser: { userId: string; roleName: string; departmentId?: string }
   ): Promise<CreateBulkAssessmentResType> {
     try {
-      // Step 1: Validate template exists and is active
+      // Step 1: Validate template exists and is PUBLISHED
       const template = await this.assessmentRepo.getTemplateWithStructure(data.templateId)
       if (!template) {
-        throw TemplateNotFoundException
+        throw TemplateNotPublishedException
       }
 
       // Step 2: Validate subject or course and get enrolled trainees
