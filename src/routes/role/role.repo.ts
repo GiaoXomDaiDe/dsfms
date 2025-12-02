@@ -62,7 +62,8 @@ export class RoleRepo {
         permissions: {
           connect: permissionIds.map((id) => ({ id }))
         },
-        createdById
+        createdById,
+        createdAt: new Date()
       },
       include: roleDetailInclude
     })
@@ -131,7 +132,8 @@ export class RoleRepo {
         name: data.name,
         description: data.description,
         permissions: permissionsUpdate,
-        updatedById
+        updatedById,
+        updatedAt: new Date()
       },
       include: roleDetailInclude
     })
@@ -179,7 +181,8 @@ export class RoleRepo {
         deletedAt: null,
         deletedById: null,
         isActive: true,
-        updatedById: enabledById
+        updatedById: enabledById,
+        updatedAt: new Date()
       }
     })
   }

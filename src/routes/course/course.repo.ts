@@ -133,6 +133,7 @@ export class CourseRepository {
             id: true,
             eid: true,
             firstName: true,
+            middleName: true,
             lastName: true,
             email: true
           }
@@ -683,6 +684,7 @@ export class CourseRepository {
         id: string
         eid: string
         firstName: string
+        middleName: string | null
         lastName: string
         email: string
       } | null
@@ -703,6 +705,7 @@ export class CourseRepository {
           id: trainee.id,
           eid: trainee.eid,
           firstName: trainee.firstName,
+          middleName: trainee.middleName,
           lastName: trainee.lastName,
           email: trainee.email,
           enrollmentCount: 0,

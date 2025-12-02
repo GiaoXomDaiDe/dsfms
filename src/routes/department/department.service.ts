@@ -11,8 +11,7 @@ import {
   DepartmentHeadRoleInactiveException,
   DepartmentHeadUserNotFoundException,
   DepartmentNameAlreadyExistsException,
-  NotFoundDepartmentException,
-  OnlyAdministratorCanEnableDepartmentException
+  NotFoundDepartmentException
 } from '~/routes/department/department.error'
 import { DepartmentMes } from '~/routes/department/department.message'
 import {
@@ -73,9 +72,6 @@ export class DepartmentService {
 
       if (data.headUserId) {
         validatedHead = await this.validateDepartmentHead(data.headUserId)
-        if (validatedHead.departmentId) {
-          throw DepartmentHeadBelongsToAnotherDepartmentException
-        }
       }
       try {
         const department = await this.departmentRepo.create(
@@ -181,7 +177,16 @@ export class DepartmentService {
 
   async delete({ id, deletedById }: { id: string; deletedById: string }) {
     try {
-      const [activeCourseCount, activeSubjectCount] = await Promise.all([
+      const [department, activeCourseCount, activeSubjectCount] = await Promise.all([
+        this.prismaService.department.findUnique({
+          where: {
+            id,
+            deletedAt: null
+          },
+          select: {
+            headUserId: true
+          }
+        }),
         this.prismaService.course.count({
           where: {
             departmentId: id,
@@ -199,6 +204,10 @@ export class DepartmentService {
         })
       ])
 
+      if (!department) {
+        throw NotFoundDepartmentException
+      }
+
       if (activeCourseCount > 0 || activeSubjectCount > 0) {
         throw DepartmentHasActiveCoursesException
       }
@@ -207,6 +216,25 @@ export class DepartmentService {
         id,
         deletedById
       })
+
+      if (department.headUserId) {
+        await Promise.all([
+          this.prismaService.user.update({
+            where: { id: department.headUserId },
+            data: {
+              departmentId: null,
+              updatedById: deletedById
+            }
+          }),
+          this.prismaService.department.update({
+            where: { id },
+            data: {
+              headUserId: null,
+              updatedById: deletedById
+            }
+          })
+        ])
+      }
 
       return {
         message: DepartmentMes.DELETE_SUCCESS
@@ -220,18 +248,14 @@ export class DepartmentService {
     }
   }
 
-  async enable({ id, enabledById, enablerRole }: { id: string; enabledById: string; enablerRole: string }) {
-    if (enablerRole !== RoleName.ADMINISTRATOR) {
-      throw OnlyAdministratorCanEnableDepartmentException
-    }
-
+  async enable({ id, enabledById }: { id: string; enabledById: string }) {
     try {
-      const department = await this.departmentRepo.findById(id, { includeDeleted: true })
+      const department = await this.departmentRepo.findById(id)
       if (!department) {
         throw NotFoundDepartmentException
       }
 
-      if (!department.deletedAt) {
+      if (!department.deletedAt || department.isActive) {
         throw DepartmentAlreadyActiveException
       }
 
@@ -271,7 +295,19 @@ export class DepartmentService {
 
     throw DepartmentAlreadyExistsException
   }
-
+  /**
+   * Kiểm tra một user có hợp lệ để làm head của department hay không.
+   *
+   * - `headUserId`: user muốn gán làm head.
+   * - `targetDepartmentId` (optional): id department đang update; dùng để cho phép giữ nguyên head hiện tại.
+   *
+   * Ném exception nếu:
+   * - User không tồn tại / không có role DEPARTMENT_HEAD / role không active hoặc user bị xoá mềm.
+   * - User đang thuộc một department khác với `targetDepartmentId`.
+   * - User đang là head của một department khác (không phải `targetDepartmentId`).
+   *
+   * Trả về id user và departmentId hiện tại (nếu có) để caller quyết định có cần cập nhật lại departmentId cho user hay không.
+   */
   private async validateDepartmentHead(headUserId: string, targetDepartmentId?: string) {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile(headUserId)
 
@@ -281,7 +317,7 @@ export class DepartmentService {
 
     // 1) Kiểm tra membership hiện tại (departmentId trên User)
     // - Nếu user đã thuộc department khác (không phải targetDepartmentId) → reject
-    if (user.department?.id && user.department.id !== targetDepartmentId) {
+    if (targetDepartmentId && user.department?.id && user.department.id !== targetDepartmentId) {
       throw DepartmentHeadBelongsToAnotherDepartmentException
     }
 

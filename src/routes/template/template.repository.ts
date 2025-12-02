@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '~/shared/services/prisma.service'
-import { CreateTemplateFormDto, CreateTemplateVersionDto } from './template.dto'
+import { CreateTemplateFormDto } from './template.dto'
 import {
-  TemplateNotFoundError,
+  InvalidDraftTemplateStatusError,
   InvalidTemplateStatusForUpdateError,
   TemplateInUseCannotUpdateError,
-  InvalidDraftTemplateStatusError
+  TemplateNotFoundError
 } from './template.error'
 
 @Injectable()
@@ -332,6 +332,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         },
@@ -339,6 +340,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         },
@@ -398,6 +400,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         },
@@ -437,6 +440,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         },
@@ -476,6 +480,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         },
@@ -616,6 +621,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         },
@@ -623,6 +629,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         }
@@ -716,6 +723,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true
           }
         }
@@ -905,6 +913,7 @@ export class TemplateRepository {
           select: {
             id: true,
             firstName: true,
+            middleName: true,
             lastName: true,
             email: true
           }
@@ -928,6 +937,7 @@ export class TemplateRepository {
       select: {
         id: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true
       }
@@ -1136,6 +1146,7 @@ export class TemplateRepository {
               select: {
                 id: true,
                 firstName: true,
+                middleName: true,
                 lastName: true
               }
             },
@@ -1370,6 +1381,7 @@ export class TemplateRepository {
               select: {
                 id: true,
                 firstName: true,
+                middleName: true,
                 lastName: true
               }
             },

@@ -39,6 +39,7 @@ export class ReportsRepository {
   private readonly userSummarySelect = {
     id: true,
     firstName: true,
+    middleName: true,
     lastName: true,
     email: true,
     role: { select: { name: true } }
@@ -115,6 +116,7 @@ export class ReportsRepository {
       data: {
         requestType: data.requestType as ReportTypeValue,
         createdById,
+        createdAt: new Date(),
         isAnonymous: data.isAnonymous ?? false,
         status: ReportStatus.SUBMITTED,
         severity: (data.severity as ReportSeverityValue) ?? null,
@@ -136,7 +138,8 @@ export class ReportsRepository {
       },
       data: {
         status: ReportStatus.CANCELLED,
-        updatedById
+        updatedById,
+        updatedAt: new Date()
       },
       include: this.reportInclude
     })
@@ -153,7 +156,8 @@ export class ReportsRepository {
       data: {
         status: ReportStatus.ACKNOWLEDGED,
         managedById,
-        updatedById: managedById
+        updatedById: managedById,
+        updatedAt: new Date()
       },
       include: this.reportInclude
     })
@@ -179,7 +183,8 @@ export class ReportsRepository {
         status: ReportStatus.RESOLVED,
         response: data.response,
         managedById,
-        updatedById: managedById
+        updatedById: managedById,
+        updatedAt: new Date()
       },
       include: this.reportInclude
     })

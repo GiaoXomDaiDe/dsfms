@@ -71,6 +71,7 @@ const traineeSelect = {
   id: true,
   eid: true,
   firstName: true,
+  middleName: true,
   lastName: true,
   email: true,
   department: {
@@ -440,6 +441,7 @@ export class SubjectRepository {
               id: true,
               eid: true,
               firstName: true,
+              middleName: true,
               lastName: true,
               email: true,
               department: {
@@ -533,6 +535,7 @@ export class SubjectRepository {
               id: true,
               eid: true,
               firstName: true,
+              middleName: true,
               lastName: true,
               email: true,
               department: {
@@ -956,6 +959,7 @@ export class SubjectRepository {
             id: true,
             eid: true,
             firstName: true,
+            middleName: true,
             lastName: true,
             email: true,
             department: {
@@ -1595,6 +1599,7 @@ export class SubjectRepository {
         id: true,
         eid: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         department: {

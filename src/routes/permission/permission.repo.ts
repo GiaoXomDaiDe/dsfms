@@ -39,7 +39,8 @@ export class PermissionRepo {
     return await this.prisma.endpointPermission.create({
       data: {
         ...data,
-        createdById
+        createdById,
+        createdAt: new Date()
       }
     })
   }
@@ -53,7 +54,8 @@ export class PermissionRepo {
       },
       data: {
         ...data,
-        updatedById
+        updatedById,
+        updatedAt: new Date()
       }
     })
   }
@@ -99,7 +101,8 @@ export class PermissionRepo {
         deletedAt: null,
         deletedById: null,
         isActive: true,
-        updatedById: enabledById
+        updatedById: enabledById,
+        updatedAt: new Date()
       }
     })
   }

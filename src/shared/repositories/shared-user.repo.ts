@@ -41,7 +41,7 @@ type UserWithRoleAndDepartment = Omit<UserType, 'passwordHash' | 'roleId' | 'dep
   department: DepartmentSummaryType | null
 }
 
-type TrainerSummary = Pick<UserType, 'id' | 'eid' | 'firstName' | 'lastName' | 'email' | 'departmentId'>
+type TrainerSummary = Pick<UserType, 'id' | 'eid' | 'firstName' | 'lastName' | 'email' | 'departmentId' | 'middleName'>
 
 type TraineeIdLookup = Pick<UserType, 'id' | 'eid'>
 
@@ -147,6 +147,7 @@ export class SharedUserRepository {
         id: true,
         eid: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         departmentId: true
@@ -167,6 +168,7 @@ export class SharedUserRepository {
         id: true,
         eid: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         departmentId: true
@@ -224,6 +226,7 @@ export class SharedUserRepository {
         id: true,
         eid: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         deletedAt: true,
@@ -244,6 +247,7 @@ export class SharedUserRepository {
         id: true,
         eid: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         department: {
@@ -304,7 +308,8 @@ export class SharedUserRepository {
         data: {
           ...userData,
           eid: newEid,
-          updatedById
+          updatedById,
+          updatedAt: new Date()
         }
       })
       if (!updatedUser) {
@@ -500,11 +505,14 @@ export class SharedUserRepository {
           ...(trainerProfile as CreateTrainerProfileType),
           createdById: updatedById,
           updatedById,
+          updatedAt: new Date(),
+          createdAt: new Date(),
           deletedAt: null
         },
         update: {
           ...trainerProfile,
           updatedById,
+          updatedAt: new Date(),
           deletedAt: null
         }
       })
@@ -513,7 +521,7 @@ export class SharedUserRepository {
 
     await tx.trainerProfile.updateMany({
       where: { userId },
-      data: { deletedAt: null, updatedById }
+      data: { deletedAt: null, updatedById, updatedAt: new Date() }
     })
   }
 
@@ -537,11 +545,14 @@ export class SharedUserRepository {
           ...(traineeProfile as CreateTraineeProfileType),
           createdById: updatedById,
           updatedById,
+          createdAt: new Date(),
+          updatedAt: new Date(),
           deletedAt: null
         },
         update: {
           ...traineeProfile,
           updatedById,
+          updatedAt: new Date(),
           deletedAt: null
         }
       })
@@ -550,7 +561,7 @@ export class SharedUserRepository {
 
     await tx.traineeProfile.updateMany({
       where: { userId },
-      data: { deletedAt: null, updatedById }
+      data: { deletedAt: null, updatedById, updatedAt: new Date() }
     })
   }
 
@@ -561,7 +572,7 @@ export class SharedUserRepository {
   ): Promise<void> {
     await tx.trainerProfile.updateMany({
       where: { userId, deletedAt: null },
-      data: { deletedAt: new Date(), updatedById }
+      data: { deletedAt: new Date(), deletedById: updatedById }
     })
   }
 
@@ -572,7 +583,7 @@ export class SharedUserRepository {
   ): Promise<void> {
     await tx.traineeProfile.updateMany({
       where: { userId, deletedAt: null },
-      data: { deletedAt: new Date(), updatedById }
+      data: { deletedAt: new Date(), deletedById: updatedById }
     })
   }
 

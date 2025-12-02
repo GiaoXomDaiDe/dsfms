@@ -104,6 +104,7 @@ export const CourseTraineeInfoSchema = UserSchema.pick({
   id: true,
   eid: true,
   firstName: true,
+  middleName: true,
   lastName: true,
   email: true
 }).extend({

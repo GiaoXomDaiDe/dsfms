@@ -13,7 +13,6 @@ import {
 } from '~/routes/department/department.dto'
 import { DepartmentMes } from '~/routes/department/department.message'
 import { DepartmentService } from '~/routes/department/department.service'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
@@ -93,15 +92,10 @@ export class DepartmentController {
 
   @Patch(':departmentId/enable')
   @ZodSerializerDto(MessageResDTO)
-  enable(
-    @Param() params: GetDepartmentParamsDTO,
-    @ActiveUser('userId') userId: string,
-    @ActiveRolePermissions('name') roleName: string
-  ) {
+  enable(@Param() params: GetDepartmentParamsDTO, @ActiveUser('userId') userId: string) {
     return this.departmentService.enable({
       id: params.departmentId,
-      enabledById: userId,
-      enablerRole: roleName
+      enabledById: userId
     })
   }
 

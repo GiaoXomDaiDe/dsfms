@@ -19,8 +19,8 @@ import {
 } from '~/routes/reports/reports.model'
 import { ReportsRepository } from '~/routes/reports/reports.repo'
 import { ReportStatus } from '~/shared/constants/report.constant'
-import { PrismaService } from '~/shared/services/prisma.service'
 import { RoleName } from '~/shared/constants/role.constant'
+import { PrismaService } from '~/shared/services/prisma.service'
 
 @Injectable()
 export class ReportsService {
@@ -61,8 +61,8 @@ export class ReportsService {
           reportTitle: report.title || 'Untitled Report',
           reportSeverity: report.severity || 'Not specified',
           reportDescription: report.description || 'No description provided',
-          reporterName: report.isAnonymous 
-            ? 'Anonymous User' 
+          reporterName: report.isAnonymous
+            ? 'Anonymous User'
             : `${report.createdBy?.firstName} ${report.createdBy?.lastName}`,
           creationDate: report.createdAt.toLocaleDateString('en-US', {
             year: 'numeric',
@@ -74,7 +74,7 @@ export class ReportsService {
         }
 
         const emailResult = await this.emailService.sendBulkReportNotifications(auditors, reportData)
-        
+
         if (!emailResult.success) {
           console.error('Failed to send some report notifications:', emailResult.results)
         }
@@ -139,6 +139,7 @@ export class ReportsService {
       where: { id: managedById },
       select: {
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true
       }
@@ -189,8 +190,8 @@ export class ReportsService {
           `${manager.firstName} ${manager.lastName}`,
           updatedReport.requestType,
           updatedReport.title || 'Untitled Report',
-          updatedReport.isAnonymous 
-            ? 'Anonymous User' 
+          updatedReport.isAnonymous
+            ? 'Anonymous User'
             : `${updatedReport.createdBy?.lastName} ${updatedReport.createdBy?.firstName}`,
           submissionDate,
           responseDate,
@@ -225,11 +226,12 @@ export class ReportsService {
         select: {
           email: true,
           firstName: true,
+          middleName: true,
           lastName: true
         }
       })
 
-      return auditors.map(auditor => ({
+      return auditors.map((auditor) => ({
         email: auditor.email,
         name: `${auditor.firstName} ${auditor.lastName}`
       }))

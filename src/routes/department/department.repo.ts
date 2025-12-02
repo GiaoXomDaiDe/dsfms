@@ -7,7 +7,7 @@ import {
   GetDepartmentsResType,
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
-import { RoleName } from '~/shared/constants/auth.constant'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import {
   departmentWithHeadBasicInclude,
@@ -45,14 +45,9 @@ export class DepartmentRepository {
     }
   }
 
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<DepartmentDetailResType | null> {
-    const whereClause = includeDeleted ? { id } : { id, deletedAt: null }
-
+  async findById(id: string): Promise<DepartmentDetailResType | null> {
     const department = await this.prismaService.department.findUnique({
-      where: whereClause,
+      where: { id },
       include: departmentWithHeadInclude
     })
 
@@ -82,7 +77,10 @@ export class DepartmentRepository {
           select: {
             subjects: {
               where: {
-                deletedAt: null
+                deletedAt: null,
+                status: {
+                  notIn: ['ARCHIVED']
+                }
               }
             }
           }
@@ -123,7 +121,8 @@ export class DepartmentRepository {
     return client.department.create({
       data: {
         ...data,
-        createdById
+        createdById,
+        createdAt: new Date()
       }
     })
   }
@@ -146,7 +145,8 @@ export class DepartmentRepository {
       where: { id },
       data: {
         ...data,
-        updatedById
+        updatedById,
+        updatedAt: new Date()
       },
       include: departmentWithHeadBasicInclude
     })
@@ -171,7 +171,8 @@ export class DepartmentRepository {
       : this.prismaService.department.update({
           where: {
             id,
-            deletedAt: null
+            deletedAt: null,
+            isActive: true
           },
           data: {
             deletedAt: new Date(),
@@ -184,14 +185,14 @@ export class DepartmentRepository {
   async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<DepartmentType> {
     return this.prismaService.department.update({
       where: {
-        id,
-        deletedAt: { not: null }
+        id
       },
       data: {
         deletedAt: null,
         deletedById: null,
         isActive: true,
-        updatedById: enabledById
+        updatedById: enabledById,
+        updatedAt: new Date()
       }
     })
   }
@@ -201,34 +202,30 @@ export class DepartmentRepository {
       role: {
         name: RoleName.DEPARTMENT_HEAD
       },
+      status: UserStatus.ACTIVE,
       deletedAt: null,
       departmentId: null
     }
 
-    const [totalItems, users] = await Promise.all([
-      this.prismaService.user.count({
-        where: baseWhere
-      }),
-      this.prismaService.user.findMany({
-        where: baseWhere,
-        select: {
-          id: true,
-          eid: true,
-          firstName: true,
-          middleName: true,
-          lastName: true,
-          email: true
-        },
-        orderBy: {
-          eid: 'asc'
-        }
-      })
-    ])
+    const users = await this.prismaService.user.findMany({
+      where: baseWhere,
+      select: {
+        id: true,
+        eid: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        email: true
+      },
+      orderBy: {
+        eid: 'asc'
+      }
+    })
 
     return {
       users,
-      totalItems,
-      infoMessage: totalItems === 0 ? 'No department heads available currently.' : undefined
+      totalItems: users.length,
+      infoMessage: users.length === 0 ? 'No department heads available currently.' : undefined
     }
   }
 
