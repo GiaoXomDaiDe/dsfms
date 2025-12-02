@@ -19,7 +19,13 @@ import {
   UpdateAssessmentEventBodyType,
   UpdateAssessmentEventParamsType,
   UpdateAssessmentEventResType,
-  AssessmentEventStatus
+  AssessmentEventStatus,
+  GetEventSubjectAssessmentsBodyType,
+  GetEventSubjectAssessmentsQueryType,
+  GetEventSubjectAssessmentsResType,
+  GetEventCourseAssessmentsBodyType,
+  GetEventCourseAssessmentsQueryType,
+  GetEventCourseAssessmentsResType
 } from './assessment.model'
 import {
   AssessmentSectionNotFoundError,
@@ -3791,5 +3797,376 @@ export class AssessmentRepo {
       where: { id: assessmentId },
       data: { pdfUrl: pdfUrl }
     })
+  }
+
+  /**
+   * Get assessments for a specific event in a subject
+   * Combines logic from getAssessmentEvents to validate event existence with getSubjectAssessments response format
+   */
+  async getEventSubjectAssessments(
+    subjectId: string,
+    templateId: string,
+    occuranceDate: Date,
+    name: string,
+    userId: string,
+    userRole: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: AssessmentStatus,
+    search?: string
+  ): Promise<GetEventSubjectAssessmentsResType> {
+    try {
+      // First validate that this event exists in the subject
+      const eventExists = await this.prisma.assessmentForm.findFirst({
+        where: {
+          subjectId: subjectId,
+          templateId: templateId,
+          occuranceDate: occuranceDate,
+          name: name
+        },
+        include: {
+          subject: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              course: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!eventExists || !eventExists.subject) {
+        throw new Error('Event not found in subject')
+      }
+
+      // Get entity info for response
+      const entityInfo = {
+        id: eventExists.subject.id,
+        name: eventExists.subject.name,
+        code: eventExists.subject.code,
+        type: 'subject' as const
+      }
+
+      // Now get all assessments for this specific event using the same logic as getSubjectAssessments
+      // but with additional filters for the event
+      let whereConditions: any = {
+        subjectId: subjectId,
+        templateId: templateId,
+        occuranceDate: occuranceDate,
+        name: name
+      }
+
+      // Add status filter if provided
+      if (status) {
+        whereConditions.status = status
+      }
+
+      // Add search filter if provided
+      if (search && search.trim()) {
+        whereConditions.OR = [
+          {
+            trainee: {
+              OR: [
+                { firstName: { contains: search.trim(), mode: 'insensitive' } },
+                { lastName: { contains: search.trim(), mode: 'insensitive' } },
+                { eid: { contains: search.trim(), mode: 'insensitive' } },
+                { email: { contains: search.trim(), mode: 'insensitive' } }
+              ]
+            }
+          },
+          {
+            name: { contains: search.trim(), mode: 'insensitive' }
+          }
+        ]
+      }
+
+      // Role-based access control (same as getSubjectAssessments)
+      if (userRole === 'TRAINER') {
+        // Check if trainer is assigned to this subject
+        const trainerAssignment = await this.prisma.subjectInstructor.findFirst({
+          where: {
+            subjectId: subjectId,
+            trainerUserId: userId
+          }
+        })
+
+        if (!trainerAssignment) {
+          throw new Error('Trainer is not assigned to this subject')
+        }
+      } else if (userRole === 'TRAINEE') {
+        // Trainee can only see their own assessments
+        whereConditions.traineeId = userId
+      } else if (userRole === 'DEPARTMENT_HEAD') {
+        // Department head can see assessments in their department
+        // Add department validation if needed
+      }
+
+      // Get total count for pagination
+      const totalItems = await this.prisma.assessmentForm.count({
+        where: whereConditions
+      })
+
+      // Calculate pagination
+      const totalPages = Math.ceil(totalItems / limit)
+      const offset = (page - 1) * limit
+
+      // Get assessments with pagination
+      const assessments = await this.prisma.assessmentForm.findMany({
+        where: whereConditions,
+        include: {
+          trainee: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              lastName: true,
+              email: true
+            }
+          },
+          template: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: [
+          { occuranceDate: 'desc' },
+          { createdAt: 'desc' }
+        ],
+        skip: offset,
+        take: limit
+      })
+
+      // Transform assessments to match TrainerAssessmentListItemSchema
+      const transformedAssessments = assessments.map(assessment => ({
+        id: assessment.id,
+        name: assessment.name,
+        subjectId: assessment.subjectId,
+        courseId: assessment.courseId,
+        occuranceDate: assessment.occuranceDate,
+        status: assessment.status,
+        createdAt: assessment.createdAt,
+        updatedAt: assessment.updatedAt,
+        resultScore: assessment.resultScore,
+        resultText: assessment.resultText,
+        pdfUrl: assessment.pdfUrl,
+        comment: assessment.comment,
+        isTraineeLocked: assessment.isTraineeLocked,
+        trainee: {
+          id: assessment.trainee.id,
+          eid: assessment.trainee.eid,
+          fullName: `${assessment.trainee.firstName} ${assessment.trainee.lastName}`.trim(),
+          email: assessment.trainee.email
+        }
+      }))
+
+      return {
+        assessments: transformedAssessments,
+        totalItems,
+        page,
+        limit,
+        totalPages,
+        eventInfo: {
+          name: name,
+          occuranceDate: occuranceDate,
+          templateId: templateId,
+          entityInfo: entityInfo
+        }
+      }
+
+    } catch (error) {
+      console.error('Get event subject assessments failed:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get assessments for a specific event in a course
+   * Combines logic from getAssessmentEvents to validate event existence with getCourseAssessments response format
+   */
+  async getEventCourseAssessments(
+    courseId: string,
+    templateId: string,
+    occuranceDate: Date,
+    name: string,
+    userId: string,
+    userRole: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: AssessmentStatus,
+    search?: string
+  ): Promise<GetEventCourseAssessmentsResType> {
+    try {
+      // First validate that this event exists in the course
+      const eventExists = await this.prisma.assessmentForm.findFirst({
+        where: {
+          courseId: courseId,
+          templateId: templateId,
+          occuranceDate: occuranceDate,
+          name: name
+        },
+        include: {
+          course: {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          }
+        }
+      })
+
+      if (!eventExists || !eventExists.course) {
+        throw new Error('Event not found in course')
+      }
+
+      // Get entity info for response
+      const entityInfo = {
+        id: eventExists.course.id,
+        name: eventExists.course.name,
+        code: eventExists.course.code,
+        type: 'course' as const
+      }
+
+      // Now get all assessments for this specific event using the same logic as getCourseAssessments
+      // but with additional filters for the event
+      let whereConditions: any = {
+        courseId: courseId,
+        templateId: templateId,
+        occuranceDate: occuranceDate,
+        name: name
+      }
+
+      // Add status filter if provided
+      if (status) {
+        whereConditions.status = status
+      }
+
+      // Add search filter if provided
+      if (search && search.trim()) {
+        whereConditions.OR = [
+          {
+            trainee: {
+              OR: [
+                { firstName: { contains: search.trim(), mode: 'insensitive' } },
+                { lastName: { contains: search.trim(), mode: 'insensitive' } },
+                { eid: { contains: search.trim(), mode: 'insensitive' } },
+                { email: { contains: search.trim(), mode: 'insensitive' } }
+              ]
+            }
+          },
+          {
+            name: { contains: search.trim(), mode: 'insensitive' }
+          }
+        ]
+      }
+
+      // Role-based access control (same as getCourseAssessments)
+      if (userRole === 'TRAINER') {
+        // Check if trainer is assigned to this course
+        const trainerAssignment = await this.prisma.courseInstructor.findFirst({
+          where: {
+            courseId: courseId,
+            trainerUserId: userId
+          }
+        })
+
+        if (!trainerAssignment) {
+          throw new Error('Trainer is not assigned to this course')
+        }
+      } else if (userRole === 'TRAINEE') {
+        // Trainee can only see their own assessments
+        whereConditions.traineeId = userId
+      } else if (userRole === 'DEPARTMENT_HEAD') {
+        // Department head can see assessments in their department
+        // Add department validation if needed
+      }
+
+      // Get total count for pagination
+      const totalItems = await this.prisma.assessmentForm.count({
+        where: whereConditions
+      })
+
+      // Calculate pagination
+      const totalPages = Math.ceil(totalItems / limit)
+      const offset = (page - 1) * limit
+
+      // Get assessments with pagination
+      const assessments = await this.prisma.assessmentForm.findMany({
+        where: whereConditions,
+        include: {
+          trainee: {
+            select: {
+              id: true,
+              eid: true,
+              firstName: true,
+              lastName: true,
+              email: true
+            }
+          },
+          template: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: [
+          { occuranceDate: 'desc' },
+          { createdAt: 'desc' }
+        ],
+        skip: offset,
+        take: limit
+      })
+
+      // Transform assessments to match TrainerAssessmentListItemSchema
+      const transformedAssessments = assessments.map(assessment => ({
+        id: assessment.id,
+        name: assessment.name,
+        subjectId: assessment.subjectId,
+        courseId: assessment.courseId,
+        occuranceDate: assessment.occuranceDate,
+        status: assessment.status,
+        createdAt: assessment.createdAt,
+        updatedAt: assessment.updatedAt,
+        resultScore: assessment.resultScore,
+        resultText: assessment.resultText,
+        pdfUrl: assessment.pdfUrl,
+        comment: assessment.comment,
+        isTraineeLocked: assessment.isTraineeLocked,
+        trainee: {
+          id: assessment.trainee.id,
+          eid: assessment.trainee.eid,
+          fullName: `${assessment.trainee.firstName} ${assessment.trainee.lastName}`.trim(),
+          email: assessment.trainee.email
+        }
+      }))
+
+      return {
+        assessments: transformedAssessments,
+        totalItems,
+        page,
+        limit,
+        totalPages,
+        eventInfo: {
+          name: name,
+          occuranceDate: occuranceDate,
+          templateId: templateId,
+          entityInfo: entityInfo
+        }
+      }
+
+    } catch (error) {
+      console.error('Get event course assessments failed:', error)
+      throw error
+    }
   }
 }

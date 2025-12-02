@@ -42,7 +42,13 @@ import {
   GetUserAssessmentEventsResSchema,
   UpdateAssessmentEventBodySchema,
   UpdateAssessmentEventParamsSchema,
-  UpdateAssessmentEventResSchema
+  UpdateAssessmentEventResSchema,
+  GetEventSubjectAssessmentsBodySchema,
+  GetEventSubjectAssessmentsQuerySchema,
+  GetEventSubjectAssessmentsResSchema,
+  GetEventCourseAssessmentsBodySchema,
+  GetEventCourseAssessmentsQuerySchema,
+  GetEventCourseAssessmentsResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -144,6 +150,20 @@ export class UpdateAssessmentEventBodyDTO extends createZodDto(UpdateAssessmentE
 export class UpdateAssessmentEventParamsDTO extends createZodDto(UpdateAssessmentEventParamsSchema) {}
 
 export class UpdateAssessmentEventResDTO extends createZodDto(UpdateAssessmentEventResSchema) {}
+
+// ===== EVENT ASSESSMENTS DTOs =====
+
+export class GetEventSubjectAssessmentsBodyDTO extends createZodDto(GetEventSubjectAssessmentsBodySchema) {}
+
+export class GetEventSubjectAssessmentsQueryDTO extends createZodDto(GetEventSubjectAssessmentsQuerySchema) {}
+
+export class GetEventSubjectAssessmentsResDTO extends createZodDto(GetEventSubjectAssessmentsResSchema) {}
+
+export class GetEventCourseAssessmentsBodyDTO extends createZodDto(GetEventCourseAssessmentsBodySchema) {}
+
+export class GetEventCourseAssessmentsQueryDTO extends createZodDto(GetEventCourseAssessmentsQuerySchema) {}
+
+export class GetEventCourseAssessmentsResDTO extends createZodDto(GetEventCourseAssessmentsResSchema) {}
 
 // ===== DOCX TEMPLATE RENDERING DTOs =====
 

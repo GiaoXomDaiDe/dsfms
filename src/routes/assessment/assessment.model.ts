@@ -821,6 +821,94 @@ export type UpdateAssessmentEventBodyType = z.infer<typeof UpdateAssessmentEvent
 export type UpdateAssessmentEventParamsType = z.infer<typeof UpdateAssessmentEventParamsSchema>
 export type UpdateAssessmentEventResType = z.infer<typeof UpdateAssessmentEventResSchema>
 
+// ===== EVENT ASSESSMENTS SCHEMAS =====
+
+// Query schemas for event-based assessments
+export const GetEventSubjectAssessmentsBodySchema = z
+  .object({
+    subjectId: z.string().uuid('Subject ID must be a valid UUID'),
+    templateId: z.string().uuid('Template ID must be a valid UUID'),
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
+    name: z.string().max(255, 'Event name must not exceed 255 characters')
+  })
+  .strict()
+
+export const GetEventSubjectAssessmentsQuerySchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(10),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    search: z.string().max(255).optional()
+  })
+  .strict()
+
+export type GetEventSubjectAssessmentsBodyType = z.infer<typeof GetEventSubjectAssessmentsBodySchema>
+export type GetEventSubjectAssessmentsQueryType = z.infer<typeof GetEventSubjectAssessmentsQuerySchema>
+
+export const GetEventCourseAssessmentsBodySchema = z
+  .object({
+    courseId: z.string().uuid('Course ID must be a valid UUID'),
+    templateId: z.string().uuid('Template ID must be a valid UUID'),
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
+    name: z.string().max(255, 'Event name must not exceed 255 characters')
+  })
+  .strict()
+
+export const GetEventCourseAssessmentsQuerySchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(10),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    search: z.string().max(255).optional()
+  })
+  .strict()
+
+export type GetEventCourseAssessmentsBodyType = z.infer<typeof GetEventCourseAssessmentsBodySchema>
+export type GetEventCourseAssessmentsQueryType = z.infer<typeof GetEventCourseAssessmentsQuerySchema>
+
+// Response schemas for event-based assessments (reuse existing TrainerAssessmentListItemSchema)
+export const GetEventSubjectAssessmentsResSchema = z.object({
+  assessments: z.array(TrainerAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  eventInfo: z.object({
+    name: z.string(),
+    occuranceDate: z.coerce.date(),
+    templateId: z.string().uuid(),
+    entityInfo: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string(),
+      type: z.literal('subject')
+    })
+  })
+})
+
+export type GetEventSubjectAssessmentsResType = z.infer<typeof GetEventSubjectAssessmentsResSchema>
+
+export const GetEventCourseAssessmentsResSchema = z.object({
+  assessments: z.array(TrainerAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number(),
+  eventInfo: z.object({
+    name: z.string(),
+    occuranceDate: z.coerce.date(),
+    templateId: z.string().uuid(),
+    entityInfo: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      code: z.string(),
+      type: z.literal('course')
+    })
+  })
+})
+
+export type GetEventCourseAssessmentsResType = z.infer<typeof GetEventCourseAssessmentsResSchema>
+
 // ===== DOCX TEMPLATE RENDERING SCHEMAS =====
 
 export const RenderDocxTemplateBodySchema = z.object({
