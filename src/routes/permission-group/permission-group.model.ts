@@ -1,12 +1,20 @@
 import z from 'zod'
 import {
+  PermissionGroupCollectionSchema,
   PermissionGroupPermissionSchema,
   PermissionGroupSchema,
+  type PermissionGroupCollectionItemType as SharedPermissionGroupCollectionItemType,
+  type PermissionGroupCollectionType as SharedPermissionGroupCollectionType,
   type PermissionGroupPermissionType as SharedPermissionGroupPermissionType,
   type PermissionGroupType as SharedPermissionGroupType
 } from '~/shared/models/shared-permission-group.model'
 
-export { PermissionGroupPermissionSchema, PermissionGroupSchema } from '~/shared/models/shared-permission-group.model'
+export {
+  PermissionGroupCollectionItemSchema,
+  PermissionGroupCollectionSchema,
+  PermissionGroupPermissionSchema,
+  PermissionGroupSchema
+} from '~/shared/models/shared-permission-group.model'
 
 export const PermissionGroupDetailSchema = PermissionGroupSchema.extend({
   permissionCount: z.number().int(),
@@ -20,29 +28,21 @@ export const CreatePermissionGroupBodySchema = PermissionGroupSchema.pick({
 })
 
 export const UpdatePermissionGroupBodySchema = CreatePermissionGroupBodySchema.partial()
+
 export const PermissionGroupParamsSchema = z.object({
   permissionGroupId: z.string()
 })
 
-const PermissionGroupResponseWrapper = z.object({
+const PermissionGroupResponseWrapperSchema = z.object({
   message: z.string(),
   data: PermissionGroupSchema
 })
-export const PermissionGroupResSchema = PermissionGroupResponseWrapper
+
+export const PermissionGroupResSchema = PermissionGroupResponseWrapperSchema
 
 export const PermissionGroupDetailResSchema = z.object({
   message: z.string(),
   data: PermissionGroupDetailSchema
-})
-
-export const PermissionGroupCollectionItemSchema = z.object({
-  code: z.string(),
-  name: z.string()
-})
-
-export const PermissionGroupCollectionSchema = z.object({
-  featureGroup: z.string(),
-  permissions: PermissionGroupCollectionItemSchema.array()
 })
 
 export const PermissionGroupListResSchema = z.object({
@@ -53,18 +53,23 @@ export const PermissionGroupListResSchema = z.object({
 export const AssignPermissionGroupPermissionsBodySchema = z.object({
   permissionIds: z.array(z.string()).default([])
 })
+
 export const AssignPermissionGroupPermissionsResSchema = PermissionGroupDetailResSchema
 
 export type PermissionGroupType = SharedPermissionGroupType
 export type PermissionGroupPermissionType = SharedPermissionGroupPermissionType
 export type PermissionGroupDetailType = z.infer<typeof PermissionGroupDetailSchema>
+
 export type CreatePermissionGroupBodyType = z.infer<typeof CreatePermissionGroupBodySchema>
 export type UpdatePermissionGroupBodyType = z.infer<typeof UpdatePermissionGroupBodySchema>
 export type PermissionGroupParamsType = z.infer<typeof PermissionGroupParamsSchema>
+
 export type PermissionGroupResType = z.infer<typeof PermissionGroupResSchema>
 export type PermissionGroupDetailResType = z.infer<typeof PermissionGroupDetailResSchema>
-export type PermissionGroupCollectionType = z.infer<typeof PermissionGroupCollectionSchema>
-export type PermissionGroupCollectionItemType = z.infer<typeof PermissionGroupCollectionItemSchema>
+
+export type PermissionGroupCollectionType = SharedPermissionGroupCollectionType
+export type PermissionGroupCollectionItemType = SharedPermissionGroupCollectionItemType
 export type PermissionGroupListResType = z.infer<typeof PermissionGroupListResSchema>
+
 export type AssignPermissionGroupPermissionsBodyType = z.infer<typeof AssignPermissionGroupPermissionsBodySchema>
 export type AssignPermissionGroupPermissionsResType = z.infer<typeof AssignPermissionGroupPermissionsResSchema>

@@ -18,40 +18,44 @@ export type PermissionGroupDisplayWithCount = PermissionGroupDisplay & {
   permissionCount: number
 }
 
-export const mapPermissionGroups = <T extends PermissionGroupDisplayRecord>(
-  permissionGroups: T[]
-): PermissionGroupDisplay[] => {
-  const grouped = groupBy(permissionGroups, 'groupName')
+export const mapPermissionGroups = <T extends PermissionGroupDisplayRecord>(items: T[]): PermissionGroupDisplay[] => {
+  // Group theo groupName
+  const groupsByName = groupBy(items, 'groupName')
 
-  const getCodeValue = (code: string) => {
+  const parseOrderFromCode = (code: string): number => {
     const numeric = parseInt(code.replace(/\D/g, ''), 10)
     return Number.isNaN(numeric) ? Number.MAX_SAFE_INTEGER : numeric
   }
 
-  return Object.entries(grouped)
-    .map(([groupName, permissions]) => {
-      const sortedPermissions = permissions
-        .map((permission) => ({
-          code: permission.permissionGroupCode,
-          name: permission.name
-        }))
-        .sort((a, b) => getCodeValue(a.code) - getCodeValue(b.code))
+  const groupsWithOrder = Object.entries(groupsByName).map(([groupName, records]) => {
+    // Chuẩn hóa và sort permission trong group
+    const permissions = records
+      .map((record) => ({
+        code: record.permissionGroupCode,
+        name: record.name
+      }))
+      .sort((a, b) => parseOrderFromCode(a.code) - parseOrderFromCode(b.code))
 
-      const order = sortedPermissions.length > 0 ? getCodeValue(sortedPermissions[0].code) : Number.MAX_SAFE_INTEGER
+    // Thứ tự của group = thứ tự nhỏ nhất trong các code của group
+    const order = permissions.length > 0 ? parseOrderFromCode(permissions[0].code) : Number.MAX_SAFE_INTEGER
 
-      return {
-        featureGroup: groupName,
-        permissions: sortedPermissions,
-        order
-      }
-    })
+    return {
+      featureGroup: groupName,
+      permissions,
+      order
+    }
+  })
+
+  const sortedGroups = groupsWithOrder
     .sort((a, b) => {
       if (a.order !== b.order) {
         return a.order - b.order
       }
       return a.featureGroup.localeCompare(b.featureGroup)
     })
-    .map(({ order, ...group }) => group)
+    .map(({ order, ...rest }) => rest)
+
+  return sortedGroups
 }
 
 export const mapPermissionGroupsWithCounts = <T extends PermissionGroupDisplayRecord>(

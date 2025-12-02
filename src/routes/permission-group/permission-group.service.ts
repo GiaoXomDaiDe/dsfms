@@ -44,21 +44,24 @@ export class PermissionGroupService {
     return mapPermissionGroups(permissionGroups)
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<PermissionGroupDetailType> {
     return this.getDetailedGroup(id)
   }
 
-  async update(id: string, data: UpdatePermissionGroupBodyType) {
+  async update(id: string, data: UpdatePermissionGroupBodyType): Promise<void> {
     await this.ensureExists(id)
     await this.permissionGroupRepo.update(id, data)
   }
 
-  async remove(id: string) {
+  async remove(id: string): Promise<void> {
     await this.ensureExists(id)
     await this.permissionGroupRepo.delete(id)
   }
 
-  async assignPermissions(permissionGroupId: string, dto: AssignPermissionGroupPermissionsBodyType) {
+  async assignPermissions(
+    permissionGroupId: string,
+    dto: AssignPermissionGroupPermissionsBodyType
+  ): Promise<PermissionGroupDetailType> {
     await this.ensureExists(permissionGroupId)
 
     const permissionIds = Array.from(new Set(dto.permissionIds ?? []))
@@ -72,10 +75,14 @@ export class PermissionGroupService {
     return this.getDetailedGroup(permissionGroupId)
   }
 
+  private buildNotFoundError(id: string) {
+    return new NotFoundException(`PermissionGroup ${id} not found`)
+  }
+
   private async ensureExists(id: string): Promise<PermissionGroupType> {
     const group = await this.permissionGroupRepo.findById(id)
     if (!group) {
-      throw new NotFoundException(`PermissionGroup ${id} not found`)
+      throw this.buildNotFoundError(id)
     }
     return group
   }
@@ -83,7 +90,7 @@ export class PermissionGroupService {
   private async getDetailedGroup(id: string): Promise<PermissionGroupDetailType> {
     const group = await this.permissionGroupRepo.findDetailById(id)
     if (!group) {
-      throw new NotFoundException(`PermissionGroup ${id} not found`)
+      throw this.buildNotFoundError(id)
     }
 
     return this.mapGroupDetail(group as PermissionGroupWithEndpoints)

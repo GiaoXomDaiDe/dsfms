@@ -18,10 +18,8 @@ import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/h
 export class PermissionService {
   constructor(private readonly permissionRepo: PermissionRepo) {}
 
-  async list({ excludeModules = [] }: { excludeModules?: string[] } = {}): Promise<GetPermissionsResType> {
-    return await this.permissionRepo.list({
-      excludeModules
-    })
+  async list(): Promise<GetPermissionsResType> {
+    return await this.permissionRepo.list()
   }
 
   async findById(id: string): Promise<GetPermissionDetailResType> {

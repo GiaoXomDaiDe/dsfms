@@ -10,10 +10,6 @@ import {
 import { PermissionMes } from '~/routes/permission/permission.message'
 import { PermissionService } from '~/routes/permission/permission.service'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
-import {
-  ExcludePermissionModules,
-  ExcludedPermissionModules
-} from '~/shared/decorators/exclude-permission-modules.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
 @Controller('permissions')
@@ -21,12 +17,9 @@ export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
 
   @Get()
-  @ExcludePermissionModules('Authentication Management', 'System Services', 'Permission Management')
   @ZodSerializerDto(GetPermissionsResDTO)
-  async list(@ExcludedPermissionModules() excludedModules: string[]) {
-    const result = await this.permissionService.list({
-      excludeModules: excludedModules
-    })
+  async list() {
+    const result = await this.permissionService.list()
 
     return {
       message: PermissionMes.LIST_SUCCESS,

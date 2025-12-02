@@ -18,9 +18,7 @@ import {
   RespondReportResType
 } from '~/routes/reports/reports.model'
 import { ReportsRepository } from '~/routes/reports/reports.repo'
-import { RequestStatus } from '~/shared/constants/report.constant'
-import { RoleName } from '~/shared/constants/auth.constant'
-import { PrismaService } from '~/shared/services/prisma.service'
+import { ReportStatus } from '~/shared/constants/report.constant'
 
 @Injectable()
 export class ReportsService {
@@ -100,7 +98,7 @@ export class ReportsService {
     }
 
     // Chỉ có thể cancel report đang không được acknowledge hoặc resolved
-    if (existingReport.status !== RequestStatus.SUBMITTED) {
+    if (existingReport.status !== ReportStatus.SUBMITTED) {
       throw CanOnlyCancelSubmittedReportException
     }
 
@@ -115,7 +113,7 @@ export class ReportsService {
     }
 
     // Chỉ có thể acknowledge report đang ở trạng thái SUBMITTED
-    if (existingReport.status !== RequestStatus.SUBMITTED) {
+    if (existingReport.status !== ReportStatus.SUBMITTED) {
       throw CanOnlyAcknowledgeSubmittedReportException
     }
 
@@ -130,7 +128,7 @@ export class ReportsService {
     }
 
     // Chỉ có thể respond report đang ở trạng thái ACKNOWLEDGED
-    if (existingReport.status !== RequestStatus.ACKNOWLEDGED) {
+    if (existingReport.status !== ReportStatus.ACKNOWLEDGED) {
       throw CanOnlyRespondAcknowledgedReportException
     }
 

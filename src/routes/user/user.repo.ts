@@ -24,7 +24,7 @@ import {
   userRoleDepartmentNameInclude,
   userRoleDepartmentProfileInclude,
   userRoleNameInclude
-} from '~/shared/prisma-presets/user.prisma-presets'
+} from '~/shared/prisma-presets/shared-user.prisma-presets'
 import { PrismaService } from '~/shared/services/prisma.service'
 
 const mapToUserProfileWithoutTeaching = (user: UserWithProfileRelationType): UserProfileWithoutTeachingType => {
