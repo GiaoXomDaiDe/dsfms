@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaService } from '~/shared/services/prisma.service'
 import * as statusConst from '~/shared/constants/auth.constant'
+import { PrismaService } from '~/shared/services/prisma.service'
 
 export interface UserWithRelations {
   id: string
@@ -29,7 +29,10 @@ export class AuthRepo {
     return this.prismaService.user.findFirst({
       where: {
         email: email,
-        deletedAt: null
+        deletedAt: null,
+        status: {
+          not: statusConst.UserStatus.DISABLED
+        }
       },
       include: {
         role: {

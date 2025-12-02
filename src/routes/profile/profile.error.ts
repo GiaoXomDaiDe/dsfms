@@ -45,8 +45,21 @@ export const OldPasswordIncorrectException = new BadRequestException('Old passwo
 export const UserNotFoundException = new BadRequestException('User not found')
 
 /**
- * Lỗi đổi mật khẩu thành công
+ * Lỗi khi không thể truy cập thông tin hồ sơ (có thể do user đã bị xoá hoặc không tồn tại)
  */
-export const PasswordResetSuccessException = {
-  message: 'Password changed successfully'
-}
+export const ProfileNotAccessibleException = new BadRequestException('Profile is unavailable')
+
+/**
+ * Lỗi khi không cung cấp avatar url hoặc file
+ */
+export const AvatarSourceMissingException = new BadRequestException('Avatar file or URL is required')
+
+/**
+ * Lỗi khi file avatar không phải là định dạng ảnh
+ */
+export const AvatarInvalidFormatException = new BadRequestException('Avatar must be an image file')
+
+/**
+ * Lỗi khi upload avatar lên S3 thất bại
+ */
+export const AvatarUploadFailedException = new BadRequestException('Unable to upload avatar image')

@@ -1,12 +1,5 @@
 import z from 'zod'
-import {
-  CreateTraineeProfileSchema,
-  CreateTraineeProfileType,
-  CreateTrainerProfileSchema,
-  CreateTrainerProfileType,
-  TraineeProfileSchema,
-  TrainerProfileSchema
-} from '~/routes/profile/profile.model'
+
 import {
   AtLeastOneUserRequiredMessage,
   DuplicateEmailInBatchMessage,
@@ -15,6 +8,14 @@ import {
 import { validateRoleProfile } from '~/shared/helper'
 import { TeachingCourseSchema } from '~/shared/models/shared-course.model'
 import { departmentSummarySchema } from '~/shared/models/shared-department.model'
+import {
+  CreateTraineeProfileSchema,
+  CreateTraineeProfileType,
+  CreateTrainerProfileSchema,
+  CreateTrainerProfileType,
+  TraineeProfileSchema,
+  TrainerProfileSchema
+} from '~/shared/models/shared-profile.model'
 import { roleIdNameSchema, roleSummarySchema } from '~/shared/models/shared-role.model'
 import { TeachingSubjectSchema } from '~/shared/models/shared-subject.model'
 import { UserListItemSchema, UserSchema } from '~/shared/models/shared-user.model'

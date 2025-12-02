@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common'
-import { ZodSerializerDto, ZodValidationPipe } from 'nestjs-zod'
+import { ZodSerializerDto } from 'nestjs-zod'
 import {
   AcknowledgeReportParamsDTO,
   AcknowledgeReportResDTO,
   CancelReportParamsDTO,
   CancelReportResDTO,
+  CreateReportBodyDTO,
   CreateReportResDTO,
   GetMyReportsResDTO,
   GetReportResDTO,
@@ -14,8 +15,6 @@ import {
   RespondReportParamsDTO,
   RespondReportResDTO
 } from '~/routes/reports/reports.dto'
-import type { CreateReportBodyType } from '~/routes/reports/reports.model'
-import { CreateReportBodySchema } from '~/routes/reports/reports.model'
 import { ReportsService } from '~/routes/reports/reports.service'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 
@@ -47,7 +46,7 @@ export class ReportsController {
   @Post()
   @ZodSerializerDto(CreateReportResDTO)
   async createReport(
-    @Body(new ZodValidationPipe(CreateReportBodySchema)) body: CreateReportBodyType,
+    @Body() body: CreateReportBodyDTO,
     @ActiveUser('userId') userId: string
   ): Promise<CreateReportResDTO> {
     return this.reportsService.createReport(body, userId)

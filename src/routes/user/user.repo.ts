@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common'
-import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/routes/profile/profile.model'
 import {
   BulkDuplicateDataFoundMessage,
   BulkEmailAlreadyExistsMessage,
@@ -18,6 +17,7 @@ import {
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { CreateTraineeProfileType, CreateTrainerProfileType } from '~/shared/models/shared-profile.model'
 import { UserType } from '~/shared/models/shared-user.model'
 import {
   userRoleDepartmentInclude,
