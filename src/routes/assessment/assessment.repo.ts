@@ -867,11 +867,11 @@ export class AssessmentRepo {
    */
   async checkAssessmentAccess(assessmentId: string, userId: string, userRole: string): Promise<boolean> {
     // Debug logging
-    console.log('=== checkAssessmentAccess START ===', {
-      assessmentId,
-      userId,
-      userRole
-    })
+    // console.log('=== checkAssessmentAccess START ===', {
+    //   assessmentId,
+    //   userId,
+    //   userRole
+    // })
 
     const assessment = await this.prisma.assessmentForm.findUnique({
       where: { id: assessmentId },
@@ -911,21 +911,21 @@ export class AssessmentRepo {
     })
 
     if (!assessment) {
-      console.log('Assessment not found:', assessmentId)
+      // console.log('Assessment not found:', assessmentId)
       return false
     }
 
-    console.log('Assessment found:', {
-      traineeId: assessment.traineeId,
-      createdById: assessment.createdById,
-      subjectId: assessment.subjectId,
-      courseId: assessment.courseId,
-      templateDeptId: assessment.template.department?.id
-    })
+    // console.log('Assessment found:', {
+    //   traineeId: assessment.traineeId,
+    //   createdById: assessment.createdById,
+    //   subjectId: assessment.subjectId,
+    //   courseId: assessment.courseId,
+    //   templateDeptId: assessment.template.department?.id
+    // })
 
     // Trainee can access their own assessments
     if (userRole === 'TRAINEE' && assessment.traineeId === userId) {
-      console.log('TRAINEE access granted')
+      // console.log('TRAINEE access granted')
       return true
     }
 
@@ -960,19 +960,19 @@ export class AssessmentRepo {
       })
 
       // Debug logging (remove in production)
-      console.log('DEPARTMENT_HEAD Access Check:', {
-        userId,
-        userDepartmentId: userDept?.departmentId,
-        templateDepartmentId: assessment.template.department?.id,
-        assessmentId,
-        hasUserDept: !!userDept?.departmentId,
-        hasTemplateDept: !!assessment.template.department?.id
-      })
+      // console.log('DEPARTMENT_HEAD Access Check:', {
+      //   userId,
+      //   userDepartmentId: userDept?.departmentId,
+      //   templateDepartmentId: assessment.template.department?.id,
+      //   assessmentId,
+      //   hasUserDept: !!userDept?.departmentId,
+      //   hasTemplateDept: !!assessment.template.department?.id
+      // })
 
       return userDept?.departmentId === assessment.template.department?.id
     }
 
-    console.log('=== checkAssessmentAccess END: Access DENIED ===')
+    // console.log('=== checkAssessmentAccess END: Access DENIED ===')
     return false
   }
 
@@ -2476,21 +2476,6 @@ export class AssessmentRepo {
             include: {
               sections: {
                 include: {
-                  templateSection: {
-                    select: {
-                      editBy: true,
-                      fields: {
-                        select: {
-                          fieldType: true,
-                          roleRequired: true
-                        }
-                      }
-                    }
-                  }
-                },
-                select: {
-                  id: true,
-                  status: true,
                   templateSection: {
                     select: {
                       editBy: true,
