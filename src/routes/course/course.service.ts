@@ -84,26 +84,6 @@ export class CourseService {
     }
   }
 
-  async getCourseTrainees({
-    params,
-    query
-  }: {
-    params: GetCourseParamsType
-    query: GetCourseTraineesQueryType
-  }): Promise<GetCourseTraineesResType> {
-    const { courseId } = params
-
-    const course = await this.courseRepo.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    return await this.courseRepo.getCourseTrainees({
-      courseId,
-      batchCode: query.batchCode
-    })
-  }
-
   async update({
     id,
     data,
@@ -196,6 +176,26 @@ export class CourseService {
     await this.courseRepo.archive({ id, deletedById, status: courseStatus })
 
     return { message: 'Course archived successfully' }
+  }
+
+  async getCourseTrainees({
+    params,
+    query
+  }: {
+    params: GetCourseParamsType
+    query: GetCourseTraineesQueryType
+  }): Promise<GetCourseTraineesResType> {
+    const { courseId } = params
+
+    const course = await this.courseRepo.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    return await this.courseRepo.getCourseTrainees({
+      courseId,
+      batchCode: query.batchCode
+    })
   }
 
   async cancelCourseEnrollments({
