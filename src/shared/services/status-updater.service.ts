@@ -27,7 +27,7 @@ export class StatusUpdaterService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+  @Cron(CronExpression.EVERY_10_MINUTES, {
     name: 'update-academic-statuses',
     timeZone: APP_TIMEZONE
   })
