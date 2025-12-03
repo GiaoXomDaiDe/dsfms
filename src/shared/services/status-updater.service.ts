@@ -212,26 +212,22 @@ export class StatusUpdaterService {
   }
   private async activateAssessmentsForToday() {
     const todayStr = this.getTodayDateString()
-
     this.logger.log(`[activateAssessmentsForToday] today (VN, string) = ${todayStr}`)
 
-    const candidates = await this.prisma.assessmentForm.findMany({
-      where: {
-        status: AssessmentStatus.NOT_STARTED,
-        occuranceDate: todayStr // so sánh trực tiếp với DATE 'YYYY-MM-DD'
-      },
-      select: {
-        id: true,
-        name: true,
-        occuranceDate: true,
-        status: true
-      }
-    })
+    // Lấy những form NOT_STARTED có occuranceDate = today (DATE so sánh thuần)
+    const raw = await this.prisma.$queryRaw<Array<{ id: string; name: string; occuranceDate: Date; status: string }>>(
+      Prisma.sql`
+      SELECT "id", "name", "occuranceDate", "status"
+      FROM "Assessment_Form"
+      WHERE "status" = ${AssessmentStatus.NOT_STARTED}::"AssessmentStatus"
+        AND "occuranceDate" = ${todayStr}::date
+    `
+    )
 
     this.logger.debug(
       `[activateAssessmentsForToday] candidates (NOT_STARTED & occuranceDate = ${todayStr}): ` +
         JSON.stringify(
-          candidates.map((c) => ({
+          raw.map((c) => ({
             id: c.id,
             name: c.name,
             occuranceDate: dayjs(c.occuranceDate).format('YYYY-MM-DD'),
@@ -242,10 +238,16 @@ export class StatusUpdaterService {
         )
     )
 
+    const ids = raw.map((r) => r.id)
+    if (!ids.length) {
+      this.logger.log('activateAssessmentsForToday updated=0')
+      return 0
+    }
+
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
-        status: AssessmentStatus.NOT_STARTED,
-        occuranceDate: todayStr
+        id: { in: ids },
+        status: AssessmentStatus.NOT_STARTED
       },
       data: {
         status: AssessmentStatus.ON_GOING,
@@ -259,30 +261,27 @@ export class StatusUpdaterService {
 
   private async cancelExpiredAssessments() {
     const todayStr = this.getTodayDateString()
-
     this.logger.log(`[cancelExpiredAssessments] today (VN, string) = ${todayStr}`)
 
-    const candidates = await this.prisma.assessmentForm.findMany({
-      where: {
-        occuranceDate: {
-          lt: todayStr // mọi ngày < 'YYYY-MM-DD' hôm nay
-        },
-        status: {
-          in: StatusUpdaterService.cancellableAssessmentStatuses
-        }
-      },
-      select: {
-        id: true,
-        name: true,
-        occuranceDate: true,
-        status: true
-      }
-    })
+    const cancellableStatuses = StatusUpdaterService.cancellableAssessmentStatuses
+    const cancellableStatusesSql = Prisma.join(
+      cancellableStatuses.map((status) => Prisma.sql`${status}::"AssessmentStatus"`)
+    )
+
+    // Lấy những form có occuranceDate < today và status thuộc nhóm cancellable
+    const raw = await this.prisma.$queryRaw<Array<{ id: string; name: string; occuranceDate: Date; status: string }>>(
+      Prisma.sql`
+      SELECT "id", "name", "occuranceDate", "status"
+      FROM "Assessment_Form"
+      WHERE "occuranceDate" < ${todayStr}::date
+        AND "status" IN (${cancellableStatusesSql})
+    `
+    )
 
     this.logger.debug(
       `[cancelExpiredAssessments] candidates (occuranceDate < ${todayStr} & cancellable): ` +
         JSON.stringify(
-          candidates.map((c) => ({
+          raw.map((c) => ({
             id: c.id,
             name: c.name,
             occuranceDate: dayjs(c.occuranceDate).format('YYYY-MM-DD'),
@@ -293,11 +292,15 @@ export class StatusUpdaterService {
         )
     )
 
+    const ids = raw.map((r) => r.id)
+    if (!ids.length) {
+      this.logger.log('cancelExpiredAssessments updated=0')
+      return 0
+    }
+
     const { count } = await this.prisma.assessmentForm.updateMany({
       where: {
-        occuranceDate: {
-          lt: todayStr
-        },
+        id: { in: ids },
         status: {
           in: StatusUpdaterService.cancellableAssessmentStatuses
         }
