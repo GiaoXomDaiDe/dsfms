@@ -259,7 +259,7 @@ export class AssessmentRepo {
         // Get trainee EID and format assessment name with dash separator
         const traineeEid = traineeEidMap.get(traineeId)
         const assessmentName = `${assessmentData.name} - ${traineeEid}`
-        console.log(`Creating assessment for trainee ${traineeId}, EID: ${traineeEid}, formatted name: "${assessmentName}"`)
+        // console.log(`Creating assessment for trainee ${traineeId}, EID: ${traineeEid}, formatted name: "${assessmentName}"`)
         
         // Create the main assessment form
         const assessmentForm = await tx.assessmentForm.create({
