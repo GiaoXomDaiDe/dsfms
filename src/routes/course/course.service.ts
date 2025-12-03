@@ -20,7 +20,6 @@ import {
   CourseTrainerAlreadyAssignedException,
   CourseTrainerAssignmentNotFoundException,
   DepartmentNotFoundException,
-  OnlyAcademicDepartmentCanCreateCourseException,
   OnlyAcademicDepartmentCanDeleteCourseException,
   OnlyAcademicDepartmentCanUpdateCourseException
 } from './course.error'
@@ -63,22 +62,14 @@ export class CourseService {
 
   async create({
     data,
-    createdById,
-    createdByRoleName
+    createdById
   }: {
     data: CreateCourseBodyType
     createdById: string
-    createdByRoleName: string
   }): Promise<CreateCourseResType> {
-    if (createdByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanCreateCourseException
-    }
+    const isActiveDept = await this.sharedDepartmentRepo.exists(data.departmentId)
 
-    const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
-      includeDeleted: false
-    })
-
-    if (!department) {
+    if (!isActiveDept) {
       throw DepartmentNotFoundException
     }
 
@@ -134,9 +125,7 @@ export class CourseService {
     }
 
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
-      const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
-        includeDeleted: false
-      })
+      const department = await this.sharedDepartmentRepo.findActiveDepartmentById(data.departmentId)
 
       if (!department) {
         throw DepartmentNotFoundException

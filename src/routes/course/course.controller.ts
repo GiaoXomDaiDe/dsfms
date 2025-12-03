@@ -56,15 +56,10 @@ export class CourseController {
 
   @Post()
   @ZodSerializerDto(CreateCourseResDto)
-  async create(
-    @Body() body: CreateCourseBodyDto,
-    @ActiveRolePermissions('name') roleName: string,
-    @ActiveUser('userId') userId: string
-  ) {
+  async create(@Body() body: CreateCourseBodyDto, @ActiveUser('userId') userId: string) {
     return await this.courseService.create({
       data: body,
-      createdById: userId,
-      createdByRoleName: roleName
+      createdById: userId
     })
   }
 

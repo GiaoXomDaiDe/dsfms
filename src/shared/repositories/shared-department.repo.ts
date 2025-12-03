@@ -7,34 +7,18 @@ import { PrismaService } from '~/shared/services/prisma.service'
 export class SharedDepartmentRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
-  /**
-   * Check if a department exists by ID
-   * @param departmentId - Department ID to check
-   * @param includeDeleted - Whether to include soft deleted departments
-   * @returns Promise<boolean> - True if department exists
-   */
-  async exists(departmentId: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<boolean> {
-    const whereClause = includeDeleted ? { id: departmentId } : { id: departmentId, deletedAt: null }
-
+  async exists(departmentId: string): Promise<boolean> {
     const department = await this.prismaService.department.findUnique({
-      where: whereClause,
+      where: { id: departmentId, deletedAt: null, isActive: true },
       select: { id: true }
     })
 
     return !!department
   }
 
-  /**
-   * Find a department by ID
-   * @param departmentId - Department ID
-   * @param includeDeleted - Whether to include soft deleted departments
-   * @returns Promise<Department | null>
-   */
-  async findDepartmentById(departmentId: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}) {
-    const whereClause = includeDeleted ? { id: departmentId } : { id: departmentId, deletedAt: null, isActive: true }
-
+  async findActiveDepartmentById(departmentId: string) {
     return this.prismaService.department.findUnique({
-      where: whereClause,
+      where: { id: departmentId, deletedAt: null, isActive: true },
       select: {
         id: true,
         name: true,

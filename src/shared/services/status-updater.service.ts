@@ -82,6 +82,43 @@ export class StatusUpdaterService {
     const today = this.getTodayDate()
     this.logToday('updateCourseStatuses', today)
 
+    // DEBUG: log today dạng date-only
+    this.logger.debug(
+      `[updateCourseStatuses] today (VN, date only) = ${dayjs(today).tz(APP_TIMEZONE).format('YYYY-MM-DD')}`
+    )
+
+    // DEBUG: các course PLANNED sẽ trở thành ON_GOING hôm nay
+    const plannedToOngoing = await this.prisma.course.findMany({
+      where: {
+        status: CourseStatus.PLANNED,
+        deletedAt: null,
+        startDate: { lte: today },
+        endDate: { gte: today }
+      },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        status: true
+      }
+    })
+
+    this.logger.debug(
+      `[updateCourseStatuses] candidates PLANNED → ON_GOING: ` +
+        JSON.stringify(
+          plannedToOngoing.map((c) => ({
+            id: c.id,
+            name: c.name,
+            startDate: dayjs(c.startDate).format('YYYY-MM-DD'),
+            endDate: dayjs(c.endDate).format('YYYY-MM-DD'),
+            status: c.status
+          })),
+          null,
+          2
+        )
+    )
+
     // PLANNED → ON_GOING (startDate <= today <= endDate)
     const ongoingResult = await this.prisma.course.updateMany({
       where: {
@@ -95,6 +132,37 @@ export class StatusUpdaterService {
         updatedAt: new Date()
       }
     })
+
+    // DEBUG: các course PLANNED/ON_GOING sẽ bị COMPLETED hôm nay (hết hạn)
+    const toCompleted = await this.prisma.course.findMany({
+      where: {
+        status: { in: [CourseStatus.PLANNED, CourseStatus.ON_GOING] },
+        deletedAt: null,
+        endDate: { lt: today }
+      },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        status: true
+      }
+    })
+
+    this.logger.debug(
+      `[updateCourseStatuses] candidates PLANNED/ON_GOING → COMPLETED: ` +
+        JSON.stringify(
+          toCompleted.map((c) => ({
+            id: c.id,
+            name: c.name,
+            startDate: dayjs(c.startDate).format('YYYY-MM-DD'),
+            endDate: dayjs(c.endDate).format('YYYY-MM-DD'),
+            status: c.status
+          })),
+          null,
+          2
+        )
+    )
 
     // PLANNED or ON_GOING → COMPLETED (today > endDate)
     const completedResult = await this.prisma.course.updateMany({
@@ -116,6 +184,42 @@ export class StatusUpdaterService {
     const today = this.getTodayDate()
     this.logToday('updateSubjectStatuses', today)
 
+    this.logger.debug(
+      `[updateSubjectStatuses] today (VN, date only) = ${dayjs(today).tz(APP_TIMEZONE).format('YYYY-MM-DD')}`
+    )
+
+    // DEBUG: Subject PLANNED → ON_GOING hôm nay
+    const plannedToOngoing = await this.prisma.subject.findMany({
+      where: {
+        status: SubjectStatus.PLANNED,
+        deletedAt: null,
+        startDate: { lte: today },
+        endDate: { gte: today }
+      },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        status: true
+      }
+    })
+
+    this.logger.debug(
+      `[updateSubjectStatuses] candidates PLANNED → ON_GOING: ` +
+        JSON.stringify(
+          plannedToOngoing.map((s) => ({
+            id: s.id,
+            name: s.name,
+            startDate: dayjs(s.startDate).format('YYYY-MM-DD'),
+            endDate: dayjs(s.endDate).format('YYYY-MM-DD'),
+            status: s.status
+          })),
+          null,
+          2
+        )
+    )
+
     // PLANNED → ON_GOING
     const ongoingResult = await this.prisma.subject.updateMany({
       where: {
@@ -129,6 +233,37 @@ export class StatusUpdaterService {
         updatedAt: new Date()
       }
     })
+
+    // DEBUG: Subject PLANNED/ON_GOING → COMPLETED
+    const toCompleted = await this.prisma.subject.findMany({
+      where: {
+        status: { in: [SubjectStatus.PLANNED, SubjectStatus.ON_GOING] },
+        deletedAt: null,
+        endDate: { lt: today }
+      },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        status: true
+      }
+    })
+
+    this.logger.debug(
+      `[updateSubjectStatuses] candidates PLANNED/ON_GOING → COMPLETED: ` +
+        JSON.stringify(
+          toCompleted.map((s) => ({
+            id: s.id,
+            name: s.name,
+            startDate: dayjs(s.startDate).format('YYYY-MM-DD'),
+            endDate: dayjs(s.endDate).format('YYYY-MM-DD'),
+            status: s.status
+          })),
+          null,
+          2
+        )
+    )
 
     // PLANNED or ON_GOING → COMPLETED
     const completedResult = await this.prisma.subject.updateMany({
@@ -147,6 +282,43 @@ export class StatusUpdaterService {
   }
 
   private async updateEnrollmentStatuses() {
+    // DEBUG: Enrollment ENROLLED → ON_GOING (subject ON_GOING)
+    const toOngoing = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        status: SubjectEnrollmentStatus.ENROLLED,
+        subject: {
+          status: SubjectStatus.ON_GOING,
+          deletedAt: null
+        }
+      },
+      select: {
+        traineeUserId: true,
+        subjectId: true,
+        status: true,
+        subject: {
+          select: {
+            name: true,
+            status: true
+          }
+        }
+      }
+    })
+
+    this.logger.debug(
+      `[updateEnrollmentStatuses] candidates ENROLLED → ON_GOING: ` +
+        JSON.stringify(
+          toOngoing.map((e) => ({
+            traineeUserId: e.traineeUserId,
+            subjectId: e.subjectId,
+            enrollmentStatus: e.status,
+            subjectName: e.subject?.name,
+            subjectStatus: e.subject?.status
+          })),
+          null,
+          2
+        )
+    )
+
     // 1. Cập nhật Enrollment sang ON_GOING khi Subject = ON_GOING
     const ongoingResult = await this.prisma.subjectEnrollment.updateMany({
       where: {
@@ -161,6 +333,45 @@ export class StatusUpdaterService {
         updatedAt: new Date()
       }
     })
+
+    // DEBUG: Enrollment ENROLLED/ON_GOING → FINISHED (subject COMPLETED)
+    const toFinished = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        status: {
+          in: [SubjectEnrollmentStatus.ENROLLED, SubjectEnrollmentStatus.ON_GOING]
+        },
+        subject: {
+          status: SubjectStatus.COMPLETED,
+          deletedAt: null
+        }
+      },
+      select: {
+        traineeUserId: true,
+        subjectId: true,
+        status: true,
+        subject: {
+          select: {
+            name: true,
+            status: true
+          }
+        }
+      }
+    })
+
+    this.logger.debug(
+      `[updateEnrollmentStatuses] candidates ENROLLED/ON_GOING → FINISHED: ` +
+        JSON.stringify(
+          toFinished.map((e) => ({
+            traineeUserId: e.traineeUserId,
+            subjectId: e.subjectId,
+            enrollmentStatus: e.status,
+            subjectName: e.subject?.name,
+            subjectStatus: e.subject?.status
+          })),
+          null,
+          2
+        )
+    )
 
     // 2. Cập nhật Enrollment sang FINISHED khi Subject = COMPLETED
     const finishedResult = await this.prisma.subjectEnrollment.updateMany({
