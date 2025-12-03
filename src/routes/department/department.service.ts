@@ -17,6 +17,9 @@ import { DepartmentMes } from '~/routes/department/department.message'
 import {
   CreateDepartmentBodyType,
   DepartmentDetailResType,
+  DepartmentType,
+  GetDepartmentHeadsResType,
+  GetDepartmentsResType,
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
 import { DepartmentRepository } from '~/routes/department/department.repo'
@@ -33,11 +36,11 @@ export class DepartmentService {
     private readonly sharedUserRepo: SharedUserRepository
   ) {}
 
-  async list() {
+  async list(): Promise<GetDepartmentsResType> {
     return await this.departmentRepo.list()
   }
 
-  async findById(id: string) {
+  async findById(id: string): Promise<DepartmentDetailResType> {
     const department = await this.departmentRepo.findById(id)
 
     if (!department) {
@@ -66,7 +69,13 @@ export class DepartmentService {
     throw NotFoundDepartmentException
   }
 
-  async create({ data, createdById }: { data: CreateDepartmentBodyType; createdById: string }) {
+  async create({
+    data,
+    createdById
+  }: {
+    data: CreateDepartmentBodyType
+    createdById: string
+  }): Promise<DepartmentType> {
     return await this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
       let validatedHead: { id: string; departmentId: string | null } | null = null
 
@@ -103,7 +112,15 @@ export class DepartmentService {
     })
   }
 
-  async update({ id, data, updatedById }: { id: string; data: UpdateDepartmentBodyType; updatedById: string }) {
+  async update({
+    id,
+    data,
+    updatedById
+  }: {
+    id: string
+    data: UpdateDepartmentBodyType
+    updatedById: string
+  }): Promise<DepartmentType> {
     try {
       return await this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
         const existingDepartment = await tx.department.findUnique({
@@ -175,7 +192,7 @@ export class DepartmentService {
     }
   }
 
-  async delete({ id, deletedById }: { id: string; deletedById: string }) {
+  async delete({ id, deletedById }: { id: string; deletedById: string }): Promise<{ message: string }> {
     try {
       const [department, activeCourseCount, activeSubjectCount] = await Promise.all([
         this.prismaService.department.findUnique({
@@ -248,7 +265,7 @@ export class DepartmentService {
     }
   }
 
-  async enable({ id, enabledById }: { id: string; enabledById: string }) {
+  async enable({ id, enabledById }: { id: string; enabledById: string }): Promise<{ message: string }> {
     try {
       const department = await this.departmentRepo.findById(id)
       if (!department) {
@@ -273,7 +290,7 @@ export class DepartmentService {
     }
   }
 
-  getDepartmentHeads() {
+  getDepartmentHeads(): Promise<GetDepartmentHeadsResType> {
     return this.departmentRepo.getDepartmentHeads()
   }
 
@@ -308,7 +325,10 @@ export class DepartmentService {
    *
    * Trả về id user và departmentId hiện tại (nếu có) để caller quyết định có cần cập nhật lại departmentId cho user hay không.
    */
-  private async validateDepartmentHead(headUserId: string, targetDepartmentId?: string) {
+  private async validateDepartmentHead(
+    headUserId: string,
+    targetDepartmentId?: string
+  ): Promise<{ id: string; departmentId: string | null }> {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile(headUserId)
 
     if (!user) throw DepartmentHeadUserNotFoundException

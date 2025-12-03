@@ -31,7 +31,6 @@ import {
   CreateCourseResType,
   GetCourseParamsType,
   GetCourseResType,
-  GetCoursesQueryType,
   GetCoursesResType,
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
@@ -50,17 +49,12 @@ export class CourseService {
     private readonly subjectService: SubjectService
   ) {}
 
-  async list({
-    includeDeleted = false,
-    activeUserRoleName
-  }: GetCoursesQueryType & { activeUserRoleName?: string } = {}): Promise<GetCoursesResType> {
-    return await this.courseRepo.list({
-      includeDeleted: activeUserRoleName === RoleName.ACADEMIC_DEPARTMENT ? includeDeleted : false
-    })
+  async list(): Promise<GetCoursesResType> {
+    return await this.courseRepo.list()
   }
 
-  async findById(id: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetCourseResType> {
-    const course = await this.courseRepo.findById(id, { includeDeleted })
+  async findById(id: string): Promise<GetCourseResType> {
+    const course = await this.courseRepo.findById(id)
     if (!course) {
       throw CourseNotFoundException
     }

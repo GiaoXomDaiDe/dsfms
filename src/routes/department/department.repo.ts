@@ -4,6 +4,7 @@ import {
   CreateDepartmentBodyType,
   DepartmentDetailResType,
   DepartmentType,
+  GetDepartmentHeadsResType,
   GetDepartmentsResType,
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
@@ -138,7 +139,7 @@ export class DepartmentRepository {
       updatedById: string
     },
     tx?: Prisma.TransactionClient
-  ) {
+  ): Promise<DepartmentType> {
     const client = this.getClient(tx)
 
     return client.department.update({
@@ -197,7 +198,7 @@ export class DepartmentRepository {
     })
   }
 
-  async getDepartmentHeads() {
+  async getDepartmentHeads(): Promise<GetDepartmentHeadsResType> {
     const baseWhere = {
       role: {
         name: RoleName.DEPARTMENT_HEAD

@@ -9,7 +9,6 @@ import {
   CreateCourseResDto,
   GetCourseParamsDto,
   GetCourseResDto,
-  GetCoursesQueryDto,
   GetCoursesResDto,
   GetCourseTraineesQueryDto,
   GetCourseTraineesResDto,
@@ -37,19 +36,14 @@ export class CourseController {
 
   @Get()
   @ZodSerializerDto(GetCoursesResDto)
-  async list(@Query() { includeDeleted }: GetCoursesQueryDto, @ActiveRolePermissions('name') roleName: string) {
-    return await this.courseService.list({
-      includeDeleted,
-      activeUserRoleName: roleName
-    })
+  async list() {
+    return await this.courseService.list()
   }
 
   @Get(':courseId')
   @ZodSerializerDto(GetCourseResDto)
-  async getCourseById(@Param() params: GetCourseParamsDto, @Query() { includeDeleted }: GetCoursesQueryDto) {
-    return await this.courseService.findById(params.courseId, {
-      includeDeleted
-    })
+  async findById(@Param() params: GetCourseParamsDto) {
+    return await this.courseService.findById(params.courseId)
   }
 
   @Get(':courseId/enrollments/batches')

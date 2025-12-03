@@ -45,7 +45,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+  @Cron(CronExpression.EVERY_MINUTE, {
     name: 'assessment-schedule-keeper',
     timeZone: APP_TIMEZONE
   })
@@ -60,7 +60,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+  @Cron(CronExpression.EVERY_MINUTE, {
     name: 'assessment-cancel-on-enrollment',
     timeZone: APP_TIMEZONE
   })
@@ -228,6 +228,10 @@ export class StatusUpdaterService {
 
   private async cancelAssessmentsForCancelledEnrollments() {
     const cancellableStatuses = StatusUpdaterService.cancellableAssessmentStatuses
+    const cancellableStatusesSql = Prisma.join(
+      cancellableStatuses.map((status) => Prisma.sql`${status}::"AssessmentStatus"`)
+    )
+    const cancelledEnrollmentStatusSql = Prisma.sql`${SubjectEnrollmentStatus.CANCELLED}::"SubjectEnrollmentStatus"`
 
     const subjectAssessmentIds = await this.prisma.$queryRaw<Array<{ id: string }>>(
       Prisma.sql`
@@ -237,8 +241,8 @@ export class StatusUpdaterService {
           ON se."subjectId" = af."subjectId"
           AND se."traineeUserId" = af."traineeId"
         WHERE af."subjectId" IS NOT NULL
-          AND af."status" IN (${Prisma.join(cancellableStatuses)})
-          AND se."status" = ${SubjectEnrollmentStatus.CANCELLED}
+          AND af."status" IN (${cancellableStatusesSql})
+          AND se."status" = ${cancelledEnrollmentStatusSql}
       `
     )
 
@@ -249,14 +253,14 @@ export class StatusUpdaterService {
         SELECT af."id"
         FROM "Assessment_Form" af
         WHERE af."courseId" IS NOT NULL
-          AND af."status" IN (${Prisma.join(cancellableStatuses)})
+          AND af."status" IN (${cancellableStatusesSql})
           AND EXISTS (
             SELECT 1
             FROM "Subject_Enrollment" se
             JOIN "Subject" s ON s."id" = se."subjectId"
             WHERE se."traineeUserId" = af."traineeId"
               AND s."courseId" = af."courseId"
-              AND se."status" = ${SubjectEnrollmentStatus.CANCELLED}
+              AND se."status" = ${cancelledEnrollmentStatusSql}
           )
           AND NOT EXISTS (
             SELECT 1
@@ -264,7 +268,7 @@ export class StatusUpdaterService {
             JOIN "Subject" s ON s."id" = se."subjectId"
             WHERE se."traineeUserId" = af."traineeId"
               AND s."courseId" = af."courseId"
-              AND se."status" <> ${SubjectEnrollmentStatus.CANCELLED}
+              AND se."status" <> ${cancelledEnrollmentStatusSql}
           )
       `
     )
