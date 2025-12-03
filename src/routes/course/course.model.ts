@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GetTraineeEnrollmentsQuerySchema, GetTraineeEnrollmentsResSchema } from '~/routes/subject/subject.model'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
 import { CourseSchema } from '~/shared/models/shared-course.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
@@ -114,6 +115,14 @@ export const GetCourseTraineesResSchema = z.object({
   totalItems: z.number().int()
 })
 
+export const GetCourseTraineeEnrollmentsQuerySchema = GetTraineeEnrollmentsQuerySchema
+
+export const GetCourseTraineeEnrollmentsResSchema = z.object({
+  courseId: z.uuid(),
+  trainees: z.array(GetTraineeEnrollmentsResSchema),
+  totalTrainees: z.number().int()
+})
+
 export const CancelCourseEnrollmentsBodySchema = z.object({
   batchCode: z.string().min(1)
 })
@@ -138,11 +147,11 @@ export const AssignCourseTrainerResSchema = z.object({
   role: z.enum(SubjectInstructorRole)
 })
 
-export const UpdateCourseTrainerAssignmentBodySchema = z.object({
+export const UpdateCourseTrainerRoleBodySchema = z.object({
   roleInSubject: z.enum(SubjectInstructorRole)
 })
 
-export const UpdateCourseTrainerAssignmentResSchema = AssignCourseTrainerResSchema
+export const UpdateCourseTrainerRoleResSchema = AssignCourseTrainerResSchema
 
 export type CourseType = z.infer<typeof CourseSchema>
 export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
@@ -156,7 +165,9 @@ export type GetCourseParamsType = z.infer<typeof GetCourseParamsSchema>
 export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
 export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
 export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
+export type GetCourseTraineeEnrollmentsQueryType = z.infer<typeof GetCourseTraineeEnrollmentsQuerySchema>
+export type GetCourseTraineeEnrollmentsResType = z.infer<typeof GetCourseTraineeEnrollmentsResSchema>
 export type AssignCourseTrainerBodyType = z.infer<typeof AssignCourseTrainerBodySchema>
 export type AssignCourseTrainerResType = z.infer<typeof AssignCourseTrainerResSchema>
-export type UpdateCourseTrainerAssignmentBodyType = z.infer<typeof UpdateCourseTrainerAssignmentBodySchema>
-export type UpdateCourseTrainerAssignmentResType = z.infer<typeof UpdateCourseTrainerAssignmentResSchema>
+export type UpdateCourseTrainerRoleBodyType = z.infer<typeof UpdateCourseTrainerRoleBodySchema>
+export type UpdateCourseTrainerRoleResType = z.infer<typeof UpdateCourseTrainerRoleResSchema>

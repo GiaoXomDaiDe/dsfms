@@ -53,6 +53,14 @@ export const CourseCannotBeArchivedFromCurrentStatusException = new BadRequestEx
   'Course can only be archived when status is PLANNED or ON_GOING'
 )
 
+export const CourseCannotAssignTrainerFromCurrentStatusException = new BadRequestException(
+  'Trainer can only be assigned when course status is PLANNED or ON_GOING'
+)
+
+export const CourseCannotUpdateTrainerRoleFromCurrentStatusException = new BadRequestException(
+  'Trainer role can only be updated when course status is PLANNED or ON_GOING'
+)
+
 export const CourseDateRangeViolationException = (
   violations: Array<{
     subjectId: string
