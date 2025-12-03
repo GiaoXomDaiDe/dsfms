@@ -828,8 +828,7 @@ export const GetEventSubjectAssessmentsBodySchema = z
   .object({
     subjectId: z.string().uuid('Subject ID must be a valid UUID'),
     templateId: z.string().uuid('Template ID must be a valid UUID'),
-    occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
-    name: z.string().max(255, 'Event name must not exceed 255 characters')
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date')
   })
   .strict()
 
@@ -849,8 +848,7 @@ export const GetEventCourseAssessmentsBodySchema = z
   .object({
     courseId: z.string().uuid('Course ID must be a valid UUID'),
     templateId: z.string().uuid('Template ID must be a valid UUID'),
-    occuranceDate: z.coerce.date('Occurrence date must be a valid date'),
-    name: z.string().max(255, 'Event name must not exceed 255 characters')
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date')
   })
   .strict()
 

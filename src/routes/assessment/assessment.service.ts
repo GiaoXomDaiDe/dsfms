@@ -482,11 +482,13 @@ export class AssessmentService {
         traineeIds: finalTraineeIds
       }
 
+      // console.log('Service: About to call createAssessments with bulkData:', bulkData)
       const createdAssessments = await this.assessmentRepo.createAssessments(
         bulkData,
         templateSections,
         currentUser.userId
       )
+      // console.log('Service: Created assessments count:', createdAssessments?.length)
 
       if (!createdAssessments || createdAssessments.length === 0) {
         throw AssessmentFormCreationFailedException
@@ -2558,7 +2560,6 @@ export class AssessmentService {
         body.subjectId,
         body.templateId,
         body.occuranceDate,
-        body.name,
         currentUser.userId,
         currentUser.roleName,
         query.page,
@@ -2605,7 +2606,6 @@ export class AssessmentService {
         body.courseId,
         body.templateId,
         body.occuranceDate,
-        body.name,
         currentUser.userId,
         currentUser.roleName,
         query.page,

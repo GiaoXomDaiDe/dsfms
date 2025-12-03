@@ -216,6 +216,7 @@ export class AssessmentRepo {
     }>,
     createdById: string
   ): Promise<AssessmentFormResType[]> {
+    console.log(`Starting createAssessments with data:`, { name: assessmentData.name, traineeIds: assessmentData.traineeIds })
     return await this.prisma.$transaction(async (tx) => {
       const createdAssessments: AssessmentFormResType[] = []
 
@@ -241,12 +242,30 @@ export class AssessmentRepo {
       // Past dates are prevented at service layer validation
       const initialStatus = occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
 
+      // Get trainee EIDs for name formatting
+      const trainees = await tx.user.findMany({
+        where: {
+          id: { in: assessmentData.traineeIds }
+        },
+        select: {
+          id: true,
+          eid: true
+        }
+      })
+
+      const traineeEidMap = new Map(trainees.map(t => [t.id, t.eid]))
+
       for (const traineeId of assessmentData.traineeIds) {
+        // Get trainee EID and format assessment name with dash separator
+        const traineeEid = traineeEidMap.get(traineeId)
+        const assessmentName = `${assessmentData.name} - ${traineeEid}`
+        // console.log(`Creating assessment for trainee ${traineeId}, EID: ${traineeEid}, formatted name: "${assessmentName}"`)
+        
         // Create the main assessment form
         const assessmentForm = await tx.assessmentForm.create({
           data: {
             templateId: assessmentData.templateId,
-            name: assessmentData.name,
+            name: assessmentName,
             subjectId: assessmentData.subjectId || null,
             courseId: courseId || null,
             occuranceDate: assessmentData.occuranceDate,
@@ -3122,7 +3141,7 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get assessment events - grouped assessment forms by name, subject/course, and occurrence date
+   * Get assessment events - grouped assessment forms by subject/course, occurrence date, and template (excluding name due to EID suffix)
    */
   async getAssessmentEvents(
     page: number = 1,
@@ -3161,6 +3180,7 @@ export class AssessmentRepo {
     }
 
     if (search) {
+      // Search by extracting base name (removing EID pattern) from assessment names
       whereConditions.name = {
         contains: search,
         mode: 'insensitive'
@@ -3168,8 +3188,9 @@ export class AssessmentRepo {
     }
 
     // Get ALL grouped assessment forms first (without pagination to properly calculate status)
+    // Exclude 'name' from groupBy since each assessment now has unique name with trainee EID
     const allEvents = await this.prisma.assessmentForm.groupBy({
-      by: ['name', 'subjectId', 'courseId', 'occuranceDate', 'templateId'],
+      by: ['subjectId', 'courseId', 'occuranceDate', 'templateId'],
       where: whereConditions,
       _count: {
         id: true
@@ -3222,17 +3243,21 @@ export class AssessmentRepo {
         // Calculate status based on all assessments in the event
         let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
 
-        // Get all assessments for this event
+        // Get all assessments for this event (exclude name since each has unique EID suffix)
         const allAssessments = await this.prisma.assessmentForm.findMany({
           where: {
-            name: event.name,
             subjectId: event.subjectId,
             courseId: event.courseId,
             occuranceDate: event.occuranceDate,
             templateId: event.templateId
           },
-          select: { status: true }
+          select: { status: true, name: true }
         })
+
+        // Extract base name from first assessment (get part before dash)
+        const baseName = allAssessments.length > 0 
+          ? allAssessments[0].name.split(' - ')[0] 
+          : 'Unknown Event'
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3254,7 +3279,7 @@ export class AssessmentRepo {
         }
 
         return {
-          name: event.name,
+          name: baseName,
           subjectId: event.subjectId,
           courseId: event.courseId,
           occuranceDate: event.occuranceDate,
@@ -3444,8 +3469,9 @@ export class AssessmentRepo {
     }
 
     // Get ALL grouped assessment forms first (without pagination to properly calculate status)
+    // Exclude 'name' from groupBy since each assessment now has unique name with trainee EID
     const allEvents = await this.prisma.assessmentForm.groupBy({
-      by: ['name', 'subjectId', 'courseId', 'occuranceDate', 'templateId'],
+      by: ['subjectId', 'courseId', 'occuranceDate', 'templateId'],
       where: whereConditions,
       _count: {
         id: true
@@ -3498,17 +3524,21 @@ export class AssessmentRepo {
         // Calculate status based on all assessments in the event
         let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
 
-        // Get all assessments for this event
+        // Get all assessments for this event (exclude name since each has unique EID suffix)
         const allAssessments = await this.prisma.assessmentForm.findMany({
           where: {
-            name: event.name,
             subjectId: event.subjectId,
             courseId: event.courseId,
             occuranceDate: event.occuranceDate,
             templateId: event.templateId
           },
-          select: { status: true }
+          select: { status: true, name: true }
         })
+
+        // Extract base name from first assessment (get part before dash)
+        const baseName = allAssessments.length > 0 
+          ? allAssessments[0].name.split(' - ')[0] 
+          : 'Unknown Event'
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3530,7 +3560,7 @@ export class AssessmentRepo {
         }
 
         return {
-          name: event.name,
+          name: baseName,
           subjectId: event.subjectId,
           courseId: event.courseId,
           occuranceDate: event.occuranceDate,
@@ -3633,7 +3663,6 @@ export class AssessmentRepo {
     // Update all matching assessment forms
     const result = await this.prisma.assessmentForm.updateMany({
       where: {
-        name: currentName,
         ...(subjectId ? { subjectId } : { courseId }),
         occuranceDate: currentOccuranceDate,
         templateId: templateId,
@@ -3683,7 +3712,6 @@ export class AssessmentRepo {
 
     const result = await this.prisma.assessmentForm.updateMany({
       where: {
-        name,
         ...(subjectId ? { subjectId } : { courseId }),
         occuranceDate,
         templateId,
@@ -3817,7 +3845,6 @@ export class AssessmentRepo {
     subjectId: string,
     templateId: string,
     occuranceDate: Date,
-    name: string,
     userId: string,
     userRole: string,
     page: number = 1,
@@ -3826,13 +3853,12 @@ export class AssessmentRepo {
     search?: string
   ): Promise<GetEventSubjectAssessmentsResType> {
     try {
-      // First validate that this event exists in the subject
+      // First validate that this event exists in the subject (exclude name since each has unique EID)
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           subjectId: subjectId,
           templateId: templateId,
-          occuranceDate: occuranceDate,
-          name: name
+          occuranceDate: occuranceDate
         },
         include: {
           subject: {
@@ -3865,12 +3891,11 @@ export class AssessmentRepo {
       }
 
       // Now get all assessments for this specific event using the same logic as getSubjectAssessments
-      // but with additional filters for the event
+      // but with additional filters for the event (exclude name since each has unique EID)
       let whereConditions: any = {
         subjectId: subjectId,
         templateId: templateId,
-        occuranceDate: occuranceDate,
-        name: name
+        occuranceDate: occuranceDate
       }
 
       // Add status filter if provided
@@ -3978,6 +4003,9 @@ export class AssessmentRepo {
         }
       }))
 
+      // Extract event name from first assessment (all assessments in same event have same base name before dash)
+      const eventName = assessments.length > 0 ? assessments[0].name.split(' - ')[0] : 'Unknown Event'
+
       return {
         assessments: transformedAssessments,
         totalItems,
@@ -3985,7 +4013,7 @@ export class AssessmentRepo {
         limit,
         totalPages,
         eventInfo: {
-          name: name,
+          name: eventName,
           occuranceDate: occuranceDate,
           templateId: templateId,
           entityInfo: entityInfo
@@ -4006,7 +4034,6 @@ export class AssessmentRepo {
     courseId: string,
     templateId: string,
     occuranceDate: Date,
-    name: string,
     userId: string,
     userRole: string,
     page: number = 1,
@@ -4015,13 +4042,12 @@ export class AssessmentRepo {
     search?: string
   ): Promise<GetEventCourseAssessmentsResType> {
     try {
-      // First validate that this event exists in the course
+      // First validate that this event exists in the course (exclude name since each has unique EID)
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           courseId: courseId,
           templateId: templateId,
-          occuranceDate: occuranceDate,
-          name: name
+          occuranceDate: occuranceDate
         },
         include: {
           course: {
@@ -4047,12 +4073,11 @@ export class AssessmentRepo {
       }
 
       // Now get all assessments for this specific event using the same logic as getCourseAssessments
-      // but with additional filters for the event
+      // but with additional filters for the event (exclude name since each has unique EID)
       let whereConditions: any = {
         courseId: courseId,
         templateId: templateId,
-        occuranceDate: occuranceDate,
-        name: name
+        occuranceDate: occuranceDate
       }
 
       // Add status filter if provided
@@ -4160,6 +4185,9 @@ export class AssessmentRepo {
         }
       }))
 
+      // Extract event name from first assessment (all assessments in same event have same base name before dash)
+      const eventName = assessments.length > 0 ? assessments[0].name.split(' - ')[0] : 'Unknown Event'
+
       return {
         assessments: transformedAssessments,
         totalItems,
@@ -4167,7 +4195,7 @@ export class AssessmentRepo {
         limit,
         totalPages,
         eventInfo: {
-          name: name,
+          name: eventName,
           occuranceDate: occuranceDate,
           templateId: templateId,
           entityInfo: entityInfo
