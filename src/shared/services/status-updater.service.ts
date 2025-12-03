@@ -45,39 +45,12 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'assessment-schedule-keeper',
     timeZone: APP_TIMEZONE
   })
   async handleAssessmentSchedule() {
     this.logger.log('Starting assessment schedule cron...')
-
-    // DEBUG: in nhanh toàn bộ assessmentForm (id, name, date, status)
-    const all = await this.prisma.assessmentForm.findMany({
-      select: {
-        id: true,
-        name: true,
-        occuranceDate: true,
-        status: true
-      },
-      orderBy: {
-        occuranceDate: 'asc'
-      }
-    })
-
-    this.logger.debug(
-      '[handleAssessmentSchedule] All AssessmentForms snapshot:\n' +
-        JSON.stringify(
-          all.map((a) => ({
-            id: a.id,
-            name: a.name,
-            occuranceDate: dayjs(a.occuranceDate).format('YYYY-MM-DD'),
-            status: a.status
-          })),
-          null,
-          2
-        )
-    )
 
     try {
       const started = await this.activateAssessmentsForToday()
@@ -88,7 +61,7 @@ export class StatusUpdaterService {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'assessment-cancel-on-enrollment',
     timeZone: APP_TIMEZONE
   })
