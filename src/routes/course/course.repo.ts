@@ -90,56 +90,6 @@ export class CourseRepository {
     }
   }
 
-  async getCourseTrainees({
-    courseId,
-    batchCode
-  }: {
-    courseId: string
-    batchCode?: string
-  }): Promise<GetCourseTraineesResType> {
-    const subjectIdsList = await this.sharedSubjectRepo.findIds({
-      courseId,
-      deletedAt: null
-    })
-
-    if (subjectIdsList.length === 0) {
-      return {
-        trainees: [],
-        totalItems: 0
-      }
-    }
-
-    const enrollments = await this.sharedSubjectEnrollmentRepo.findMany({
-      where: {
-        subjectId: {
-          in: subjectIdsList
-        },
-        ...(batchCode ? { batchCode } : {})
-      },
-      select: {
-        traineeUserId: true,
-        batchCode: true,
-        trainee: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      }
-    })
-
-    const trainees = this.aggregateCourseTrainees(enrollments)
-
-    return {
-      trainees,
-      totalItems: trainees.length
-    }
-  }
-
   async findById(id: string): Promise<GetCourseResType | null> {
     const whereClause = {
       id,
@@ -276,6 +226,56 @@ export class CourseRepository {
       trainerCount: trainerIds.size,
       instructors,
       subjects
+    }
+  }
+
+  async getCourseTrainees({
+    courseId,
+    batchCode
+  }: {
+    courseId: string
+    batchCode?: string
+  }): Promise<GetCourseTraineesResType> {
+    const subjectIdsList = await this.sharedSubjectRepo.findIds({
+      courseId,
+      deletedAt: null
+    })
+
+    if (subjectIdsList.length === 0) {
+      return {
+        trainees: [],
+        totalItems: 0
+      }
+    }
+
+    const enrollments = await this.sharedSubjectEnrollmentRepo.findMany({
+      where: {
+        subjectId: {
+          in: subjectIdsList
+        },
+        ...(batchCode ? { batchCode } : {})
+      },
+      select: {
+        traineeUserId: true,
+        batchCode: true,
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    })
+
+    const trainees = this.aggregateCourseTrainees(enrollments)
+
+    return {
+      trainees,
+      totalItems: trainees.length
     }
   }
 
