@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
-import { IncludeDeletedQuerySchema } from '~/shared/models/query.model'
 import { CourseSchema } from '~/shared/models/shared-course.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
 import { SubjectSchema } from '~/shared/models/shared-subject.model'
@@ -20,8 +19,6 @@ const CourseExaminerTrainerSchema = UserSchema.pick({
 const CourseInstructorSchema = CourseExaminerTrainerSchema.extend({
   roleInCourse: z.array(z.enum(SubjectInstructorRole)).default([])
 })
-
-export const GetCoursesQuerySchema = IncludeDeletedQuerySchema.strict()
 
 export const GetCourseParamsSchema = z.object({
   courseId: z.uuid()
@@ -156,7 +153,6 @@ export type UpdateCourseBodyType = z.infer<typeof UpdateCourseBodySchema>
 export type UpdateCourseResType = z.infer<typeof UpdateCourseResSchema>
 export type CourseTrainerParamsType = z.infer<typeof CourseTrainerParamsSchema>
 export type GetCourseParamsType = z.infer<typeof GetCourseParamsSchema>
-export type GetCoursesQueryType = z.infer<typeof GetCoursesQuerySchema>
 export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
 export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
 export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>

@@ -20,7 +20,6 @@ import {
   CreateCourseBodyType,
   CreateCourseResType,
   GetCourseResType,
-  GetCoursesQueryType,
   GetCoursesResType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
@@ -52,41 +51,33 @@ export class CourseRepository {
     private readonly sharedSubjectEnrollmentRepo: SharedSubjectEnrollmentRepository
   ) {}
 
-  async list({ includeDeleted = false }: GetCoursesQueryType): Promise<GetCoursesResType> {
-    const whereClause = includeDeleted
-      ? {}
-      : {
-          status: {
-            not: CourseStatus.ARCHIVED
-          },
-          deletedAt: null
-        }
-
-    const [totalItems, courses] = await Promise.all([
-      this.prismaService.course.count({ where: whereClause }),
-      this.prismaService.course.findMany({
-        where: whereClause,
-        include: {
-          department: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-              description: true
-            }
-          },
-          _count: {
-            select: {
-              subjects: {
-                where: {
-                  deletedAt: null
-                }
+  async list(): Promise<GetCoursesResType> {
+    const courses = await this.prismaService.course.findMany({
+      where: {
+        status: { not: CourseStatus.ARCHIVED },
+        deletedAt: null
+      },
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true
+          }
+        },
+        _count: {
+          select: {
+            subjects: {
+              where: {
+                deletedAt: null,
+                status: { not: SubjectStatus.ARCHIVED }
               }
             }
           }
         }
-      })
-    ])
+      }
+    })
 
     const formattedCourses = courses.map(({ _count, ...course }) => ({
       ...course,
@@ -95,73 +86,18 @@ export class CourseRepository {
 
     return {
       courses: formattedCourses,
-      totalItems
+      totalItems: courses.length
     }
   }
 
-  async getCourseTrainees({
-    courseId,
-    batchCode
-  }: {
-    courseId: string
-    batchCode?: string
-  }): Promise<GetCourseTraineesResType> {
-    const subjectIdsList = await this.sharedSubjectRepo.findIds({
-      courseId,
-      deletedAt: null
-    })
-
-    if (subjectIdsList.length === 0) {
-      return {
-        trainees: [],
-        totalItems: 0
-      }
-    }
-
-    const enrollments = await this.sharedSubjectEnrollmentRepo.findMany({
-      where: {
-        subjectId: {
-          in: subjectIdsList
-        },
-        ...(batchCode ? { batchCode } : {})
+  async findById(id: string): Promise<GetCourseResType | null> {
+    const whereClause = {
+      id,
+      status: {
+        not: CourseStatus.ARCHIVED
       },
-      select: {
-        traineeUserId: true,
-        batchCode: true,
-        trainee: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      }
-    })
-
-    const trainees = this.aggregateCourseTrainees(enrollments)
-
-    return {
-      trainees,
-      totalItems: trainees.length
+      deletedAt: null
     }
-  }
-
-  async findById(
-    id: string,
-    { includeDeleted = false }: { includeDeleted?: boolean } = {}
-  ): Promise<GetCourseResType | null> {
-    const whereClause = includeDeleted
-      ? { id }
-      : {
-          id,
-          status: {
-            not: CourseStatus.ARCHIVED
-          },
-          deletedAt: null
-        }
     const course = await this.prismaService.course.findFirst({
       where: whereClause,
       include: {
@@ -175,14 +111,20 @@ export class CourseRepository {
         },
         subjects: {
           where: {
-            deletedAt: null
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
           }
         },
         _count: {
           select: {
             subjects: {
               where: {
-                deletedAt: null
+                deletedAt: null,
+                status: {
+                  not: SubjectStatus.ARCHIVED
+                }
               }
             }
           }
@@ -284,6 +226,56 @@ export class CourseRepository {
       trainerCount: trainerIds.size,
       instructors,
       subjects
+    }
+  }
+
+  async getCourseTrainees({
+    courseId,
+    batchCode
+  }: {
+    courseId: string
+    batchCode?: string
+  }): Promise<GetCourseTraineesResType> {
+    const subjectIdsList = await this.sharedSubjectRepo.findIds({
+      courseId,
+      deletedAt: null
+    })
+
+    if (subjectIdsList.length === 0) {
+      return {
+        trainees: [],
+        totalItems: 0
+      }
+    }
+
+    const enrollments = await this.sharedSubjectEnrollmentRepo.findMany({
+      where: {
+        subjectId: {
+          in: subjectIdsList
+        },
+        ...(batchCode ? { batchCode } : {})
+      },
+      select: {
+        traineeUserId: true,
+        batchCode: true,
+        trainee: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      }
+    })
+
+    const trainees = this.aggregateCourseTrainees(enrollments)
+
+    return {
+      trainees,
+      totalItems: trainees.length
     }
   }
 

@@ -20,7 +20,6 @@ import {
   CourseTrainerAlreadyAssignedException,
   CourseTrainerAssignmentNotFoundException,
   DepartmentNotFoundException,
-  OnlyAcademicDepartmentCanCreateCourseException,
   OnlyAcademicDepartmentCanDeleteCourseException,
   OnlyAcademicDepartmentCanUpdateCourseException
 } from './course.error'
@@ -31,7 +30,6 @@ import {
   CreateCourseResType,
   GetCourseParamsType,
   GetCourseResType,
-  GetCoursesQueryType,
   GetCoursesResType,
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
@@ -50,17 +48,12 @@ export class CourseService {
     private readonly subjectService: SubjectService
   ) {}
 
-  async list({
-    includeDeleted = false,
-    activeUserRoleName
-  }: GetCoursesQueryType & { activeUserRoleName?: string } = {}): Promise<GetCoursesResType> {
-    return await this.courseRepo.list({
-      includeDeleted: activeUserRoleName === RoleName.ACADEMIC_DEPARTMENT ? includeDeleted : false
-    })
+  async list(): Promise<GetCoursesResType> {
+    return await this.courseRepo.list()
   }
 
-  async findById(id: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<GetCourseResType> {
-    const course = await this.courseRepo.findById(id, { includeDeleted })
+  async findById(id: string): Promise<GetCourseResType> {
+    const course = await this.courseRepo.findById(id)
     if (!course) {
       throw CourseNotFoundException
     }
@@ -69,22 +62,14 @@ export class CourseService {
 
   async create({
     data,
-    createdById,
-    createdByRoleName
+    createdById
   }: {
     data: CreateCourseBodyType
     createdById: string
-    createdByRoleName: string
   }): Promise<CreateCourseResType> {
-    if (createdByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanCreateCourseException
-    }
+    const isActiveDept = await this.sharedDepartmentRepo.exists(data.departmentId)
 
-    const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
-      includeDeleted: false
-    })
-
-    if (!department) {
+    if (!isActiveDept) {
       throw DepartmentNotFoundException
     }
 
@@ -97,26 +82,6 @@ export class CourseService {
 
       throw error
     }
-  }
-
-  async getCourseTrainees({
-    params,
-    query
-  }: {
-    params: GetCourseParamsType
-    query: GetCourseTraineesQueryType
-  }): Promise<GetCourseTraineesResType> {
-    const { courseId } = params
-
-    const course = await this.courseRepo.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    return await this.courseRepo.getCourseTrainees({
-      courseId,
-      batchCode: query.batchCode
-    })
   }
 
   async update({
@@ -140,9 +105,7 @@ export class CourseService {
     }
 
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
-      const department = await this.sharedDepartmentRepo.findDepartmentById(data.departmentId, {
-        includeDeleted: false
-      })
+      const department = await this.sharedDepartmentRepo.findActiveDepartmentById(data.departmentId)
 
       if (!department) {
         throw DepartmentNotFoundException
@@ -213,6 +176,26 @@ export class CourseService {
     await this.courseRepo.archive({ id, deletedById, status: courseStatus })
 
     return { message: 'Course archived successfully' }
+  }
+
+  async getCourseTrainees({
+    params,
+    query
+  }: {
+    params: GetCourseParamsType
+    query: GetCourseTraineesQueryType
+  }): Promise<GetCourseTraineesResType> {
+    const { courseId } = params
+
+    const course = await this.courseRepo.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    return await this.courseRepo.getCourseTrainees({
+      courseId,
+      batchCode: query.batchCode
+    })
   }
 
   async cancelCourseEnrollments({

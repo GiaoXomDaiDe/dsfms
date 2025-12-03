@@ -8,7 +8,6 @@ import {
   CreateCourseResSchema,
   GetCourseParamsSchema,
   GetCourseResSchema,
-  GetCoursesQuerySchema,
   GetCoursesResSchema,
   GetCourseTraineesQuerySchema,
   GetCourseTraineesResSchema,
@@ -18,7 +17,6 @@ import {
   UpdateCourseTrainerAssignmentResSchema
 } from '~/routes/course/course.model'
 
-export class GetCoursesQueryDto extends createZodDto(GetCoursesQuerySchema) {}
 export class GetCourseParamsDto extends createZodDto(GetCourseParamsSchema) {}
 export class GetCoursesResDto extends createZodDto(GetCoursesResSchema) {}
 export class GetCourseResDto extends createZodDto(GetCourseResSchema) {}

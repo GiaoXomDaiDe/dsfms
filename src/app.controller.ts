@@ -18,22 +18,4 @@ export class AppController {
       message: 'DSFMS API is running successfully!'
     }
   }
-
-  @Get()
-  @IsPublic()
-  getRoot() {
-    return {
-      message: 'Welcome to DSFMS API',
-      status: 'running',
-      timestamp: new Date().toISOString(),
-      endpoints: {
-        health: '/health',
-        docs: '/api',
-        auth: '/auth',
-        users: '/users',
-        roles: '/roles',
-        departments: '/departments'
-      }
-    }
-  }
 }

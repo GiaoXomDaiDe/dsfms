@@ -13,7 +13,6 @@ import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { IncludeDeletedQueryType } from '~/shared/models/query.model'
 import type { DepartmentSummaryType } from '~/shared/models/shared-department.model'
 import {
   CreateTraineeProfileType,
@@ -81,10 +80,7 @@ export class SharedUserRepository {
     private readonly eidService: EidService
   ) {}
 
-  findUnique(
-    where: WhereUniqueUserType,
-    { includeDeleted = false }: IncludeDeletedQueryType = {}
-  ): Promise<UserType | null> {
+  findUnique(where: WhereUniqueUserType, { includeDeleted = false } = {}): Promise<UserType | null> {
     return this.prismaService.user.findFirst({
       where: {
         ...where,
@@ -94,7 +90,7 @@ export class SharedUserRepository {
   }
   async findFirstWithRoleAndDepartment(
     where: Prisma.UserWhereInput,
-    { includeDeleted = false }: IncludeDeletedQueryType = {}
+    { includeDeleted = false } = {}
   ): Promise<UserWithRoleAndDepartment | null> {
     return this.prismaService.user.findFirst({
       where: {
