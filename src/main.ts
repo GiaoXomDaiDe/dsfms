@@ -8,6 +8,5 @@ async function bootstrap() {
   })
   app.enableCors()
   await app.listen(envConfig.PORT ?? 4000)
-  console.log('Runtime DATABASE_URL =', process.env.DATABASE_URL)
 }
 bootstrap()

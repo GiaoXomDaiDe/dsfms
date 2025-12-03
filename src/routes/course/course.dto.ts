@@ -9,12 +9,14 @@ import {
   GetCourseParamsSchema,
   GetCourseResSchema,
   GetCoursesResSchema,
+  GetCourseTraineeEnrollmentsQuerySchema,
+  GetCourseTraineeEnrollmentsResSchema,
   GetCourseTraineesQuerySchema,
   GetCourseTraineesResSchema,
   UpdateCourseBodySchema,
   UpdateCourseResSchema,
-  UpdateCourseTrainerAssignmentBodySchema,
-  UpdateCourseTrainerAssignmentResSchema
+  UpdateCourseTrainerRoleBodySchema,
+  UpdateCourseTrainerRoleResSchema
 } from '~/routes/course/course.model'
 
 export class GetCourseParamsDto extends createZodDto(GetCourseParamsSchema) {}
@@ -26,9 +28,11 @@ export class UpdateCourseBodyDto extends createZodDto(UpdateCourseBodySchema) {}
 export class UpdateCourseResDto extends createZodDto(UpdateCourseResSchema) {}
 export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQuerySchema) {}
 export class GetCourseTraineesResDto extends createZodDto(GetCourseTraineesResSchema) {}
+export class GetCourseTraineeEnrollmentsQueryDto extends createZodDto(GetCourseTraineeEnrollmentsQuerySchema) {}
+export class GetCourseTraineeEnrollmentsResDto extends createZodDto(GetCourseTraineeEnrollmentsResSchema) {}
 export class CancelCourseEnrollmentsBodyDto extends createZodDto(CancelCourseEnrollmentsBodySchema) {}
 export class CourseTrainerParamsDto extends createZodDto(CourseTrainerParamsSchema) {}
 export class AssignCourseTrainerBodyDto extends createZodDto(AssignCourseTrainerBodySchema) {}
 export class AssignCourseTrainerResDto extends createZodDto(AssignCourseTrainerResSchema) {}
-export class UpdateCourseTrainerAssignmentBodyDto extends createZodDto(UpdateCourseTrainerAssignmentBodySchema) {}
-export class UpdateCourseTrainerAssignmentResDto extends createZodDto(UpdateCourseTrainerAssignmentResSchema) {}
+export class UpdateCourseTrainerRoleBodyDto extends createZodDto(UpdateCourseTrainerRoleBodySchema) {}
+export class UpdateCourseTrainerRoleResDto extends createZodDto(UpdateCourseTrainerRoleResSchema) {}

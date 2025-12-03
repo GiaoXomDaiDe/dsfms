@@ -1,27 +1,25 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import {
   GetCourseEnrollmentBatchesResType,
   GetTraineeEnrollmentsQueryType,
   GetTraineeEnrollmentsResType,
   RemoveCourseEnrollmentsByBatchResType
 } from '~/routes/subject/subject.model'
-import { RoleName } from '~/shared/constants/auth.constant'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SubjectService } from '../subject/subject.service'
 import {
-  CourseAlreadyArchivedException,
+  CourseCannotAssignTrainerFromCurrentStatusException,
   CourseCannotBeArchivedFromCurrentStatusException,
+  CourseCannotUpdateTrainerRoleFromCurrentStatusException,
   CourseCodeAlreadyExistsException,
   CourseDateRangeViolationException,
   CourseNotFoundException,
   CourseTrainerAlreadyAssignedException,
   CourseTrainerAssignmentNotFoundException,
-  DepartmentNotFoundException,
-  OnlyAcademicDepartmentCanDeleteCourseException,
-  OnlyAcademicDepartmentCanUpdateCourseException
+  DepartmentNotFoundException
 } from './course.error'
 import {
   AssignCourseTrainerBodyType,
@@ -31,12 +29,14 @@ import {
   GetCourseParamsType,
   GetCourseResType,
   GetCoursesResType,
+  GetCourseTraineeEnrollmentsQueryType,
+  GetCourseTraineeEnrollmentsResType,
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
   UpdateCourseResType,
-  UpdateCourseTrainerAssignmentBodyType,
-  UpdateCourseTrainerAssignmentResType
+  UpdateCourseTrainerRoleBodyType,
+  UpdateCourseTrainerRoleResType
 } from './course.model'
 import { CourseRepository } from './course.repo'
 
@@ -87,35 +87,34 @@ export class CourseService {
   async update({
     id,
     data,
-    updatedById,
-    updatedByRoleName
+    updatedById
   }: {
     id: string
     data: UpdateCourseBodyType
     updatedById: string
-    updatedByRoleName: string
   }): Promise<UpdateCourseResType> {
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
       throw CourseNotFoundException
     }
-
-    if (updatedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanUpdateCourseException
-    }
-
+    // 1) Nếu đổi department → validate department mới
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
-      const department = await this.sharedDepartmentRepo.findActiveDepartmentById(data.departmentId)
+      const isActiveDept = await this.sharedDepartmentRepo.exists(data.departmentId)
 
-      if (!department) {
+      if (!isActiveDept) {
         throw DepartmentNotFoundException
       }
     }
 
-    if (existingCourse.subjects && existingCourse.subjects.length > 0) {
-      const newCourseStart = data.startDate ?? existingCourse.startDate
-      const newCourseEnd = data.endDate ?? existingCourse.endDate
+    // 2) Tính khoảng ngày mới của course (kết hợp dữ liệu cũ + dữ liệu mới)
+    const newCourseStart = data.startDate ?? existingCourse.startDate
+    const newCourseEnd = data.endDate ?? existingCourse.endDate
 
+    if (newCourseStart && newCourseEnd && newCourseStart > newCourseEnd) {
+      throw new BadRequestException('End date must be after start date')
+    }
+
+    if (existingCourse.subjects && existingCourse.subjects.length > 0) {
       const violations = existingCourse.subjects.filter((subject) => {
         const outsideStartDate = newCourseStart && subject.startDate < newCourseStart
         const outsideEndDate = newCourseEnd && subject.endDate > newCourseEnd
@@ -145,29 +144,13 @@ export class CourseService {
     }
   }
 
-  async archive({
-    id,
-    deletedById,
-    deletedByRoleName
-  }: {
-    id: string
-    deletedById: string
-    deletedByRoleName: string
-  }): Promise<MessageResType> {
+  async archive({ id, deletedById }: { id: string; deletedById: string }): Promise<MessageResType> {
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
       throw CourseNotFoundException
     }
 
-    if (deletedByRoleName !== RoleName.ACADEMIC_DEPARTMENT) {
-      throw OnlyAcademicDepartmentCanDeleteCourseException
-    }
-
-    const courseStatus = existingCourse.status as string
-
-    if (courseStatus === CourseStatus.ARCHIVED) {
-      throw CourseAlreadyArchivedException
-    }
+    const courseStatus = existingCourse.status
 
     if (courseStatus !== CourseStatus.PLANNED && courseStatus !== CourseStatus.ON_GOING) {
       throw CourseCannotBeArchivedFromCurrentStatusException
@@ -176,6 +159,77 @@ export class CourseService {
     await this.courseRepo.archive({ id, deletedById, status: courseStatus })
 
     return { message: 'Course archived successfully' }
+  }
+
+  async assignTrainerToCourse({
+    courseId,
+    data
+  }: {
+    courseId: string
+    data: AssignCourseTrainerBodyType
+  }): Promise<AssignCourseTrainerResType> {
+    const course = await this.courseRepo.findById(courseId)
+
+    if (!course) {
+      throw CourseNotFoundException
+    }
+    if (course.status !== CourseStatus.PLANNED && course.status !== CourseStatus.ON_GOING) {
+      throw CourseCannotAssignTrainerFromCurrentStatusException
+    }
+
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: data.trainerUserId
+    })
+
+    if (exists) {
+      throw CourseTrainerAlreadyAssignedException
+    }
+
+    try {
+      return await this.courseRepo.assignTrainerToCourse({
+        courseId,
+        trainerUserId: data.trainerUserId,
+        roleInSubject: data.roleInSubject
+      })
+    } catch (error) {
+      if (isUniqueConstraintPrismaError(error)) {
+        throw CourseTrainerAlreadyAssignedException
+      }
+
+      throw error
+    }
+  }
+
+  async updateCourseTrainerRole({
+    courseId,
+    trainerId,
+    data
+  }: {
+    courseId: string
+    trainerId: string
+    data: UpdateCourseTrainerRoleBodyType
+  }): Promise<UpdateCourseTrainerRoleResType> {
+    const course = await this.courseRepo.findById(courseId)
+    if (!course) throw CourseNotFoundException
+
+    if (course.status !== CourseStatus.PLANNED && course.status !== CourseStatus.ON_GOING) {
+      throw CourseCannotUpdateTrainerRoleFromCurrentStatusException
+    }
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw CourseTrainerAssignmentNotFoundException
+    }
+
+    return await this.courseRepo.updateCourseTrainerRole({
+      courseId,
+      trainerUserId: trainerId,
+      newRoleInSubject: data.roleInSubject
+    })
   }
 
   async getCourseTrainees({
@@ -195,6 +249,49 @@ export class CourseService {
     return await this.courseRepo.getCourseTrainees({
       courseId,
       batchCode: query.batchCode
+    })
+  }
+
+  async removeTrainerFromCourse({
+    courseId,
+    trainerId
+  }: {
+    courseId: string
+    trainerId: string
+  }): Promise<MessageResType> {
+    const exists = await this.courseRepo.isTrainerAssignedToCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    if (!exists) {
+      throw CourseTrainerAssignmentNotFoundException
+    }
+
+    await this.courseRepo.removeTrainerFromCourse({
+      courseId,
+      trainerUserId: trainerId
+    })
+
+    return { message: 'Trainer removed successfully' }
+  }
+
+  async getCourseTraineeEnrollments({
+    courseId,
+    query
+  }: {
+    courseId: string
+    query: GetCourseTraineeEnrollmentsQueryType
+  }): Promise<GetCourseTraineeEnrollmentsResType> {
+    const course = await this.courseRepo.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    return await this.courseRepo.getCourseTraineeEnrollments({
+      courseId,
+      batchCode: query.batchCode,
+      status: query.status
     })
   }
 
@@ -222,92 +319,6 @@ export class CourseService {
         notCancelledCount: result.notCancelledCount
       }
     }
-  }
-
-  async assignTrainerToCourse({
-    courseId,
-    data
-  }: {
-    courseId: string
-    data: AssignCourseTrainerBodyType
-  }): Promise<AssignCourseTrainerResType> {
-    const course = await this.courseRepo.findById(courseId)
-
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    const exists = await this.courseRepo.isTrainerAssignedToCourse({
-      courseId,
-      trainerUserId: data.trainerUserId
-    })
-
-    if (exists) {
-      throw CourseTrainerAlreadyAssignedException
-    }
-
-    try {
-      return await this.courseRepo.assignTrainerToCourse({
-        courseId,
-        trainerUserId: data.trainerUserId,
-        roleInSubject: data.roleInSubject
-      })
-    } catch (error) {
-      if (isUniqueConstraintPrismaError(error)) {
-        throw CourseTrainerAlreadyAssignedException
-      }
-
-      throw error
-    }
-  }
-
-  async updateCourseTrainerAssignment({
-    courseId,
-    trainerId,
-    data
-  }: {
-    courseId: string
-    trainerId: string
-    data: UpdateCourseTrainerAssignmentBodyType
-  }): Promise<UpdateCourseTrainerAssignmentResType> {
-    const exists = await this.courseRepo.isTrainerAssignedToCourse({
-      courseId,
-      trainerUserId: trainerId
-    })
-
-    if (!exists) {
-      throw CourseTrainerAssignmentNotFoundException
-    }
-
-    return await this.courseRepo.updateCourseTrainerAssignment({
-      courseId,
-      trainerUserId: trainerId,
-      newRoleInSubject: data.roleInSubject
-    })
-  }
-
-  async removeTrainerFromCourse({
-    courseId,
-    trainerId
-  }: {
-    courseId: string
-    trainerId: string
-  }): Promise<MessageResType> {
-    const exists = await this.courseRepo.isTrainerAssignedToCourse({
-      courseId,
-      trainerUserId: trainerId
-    })
-
-    if (!exists) {
-      throw CourseTrainerAssignmentNotFoundException
-    }
-
-    await this.courseRepo.removeTrainerFromCourse({
-      courseId,
-      trainerUserId: trainerId
-    })
-
-    return { message: 'Trainer removed successfully' }
   }
 
   async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {

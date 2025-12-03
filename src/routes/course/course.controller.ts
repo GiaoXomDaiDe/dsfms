@@ -10,12 +10,14 @@ import {
   GetCourseParamsDto,
   GetCourseResDto,
   GetCoursesResDto,
+  GetCourseTraineeEnrollmentsQueryDto,
+  GetCourseTraineeEnrollmentsResDto,
   GetCourseTraineesQueryDto,
   GetCourseTraineesResDto,
   UpdateCourseBodyDto,
   UpdateCourseResDto,
-  UpdateCourseTrainerAssignmentBodyDto,
-  UpdateCourseTrainerAssignmentResDto
+  UpdateCourseTrainerRoleBodyDto,
+  UpdateCourseTrainerRoleResDto
 } from '~/routes/course/course.dto'
 import { CourseService } from '~/routes/course/course.service'
 import {
@@ -26,7 +28,6 @@ import {
   GetTraineeEnrollmentsResDto,
   RemoveCourseEnrollmentsByBatchResDto
 } from '~/routes/subject/subject.dto'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
@@ -46,14 +47,6 @@ export class CourseController {
     return await this.courseService.findById(params.courseId)
   }
 
-  @Get(':courseId/enrollments/batches')
-  @ZodSerializerDto(GetCourseEnrollmentBatchesResDto)
-  async getCourseEnrollmentBatches(@Param() params: GetCourseParamsDto) {
-    return await this.courseService.getCourseEnrollmentBatches({
-      courseId: params.courseId
-    })
-  }
-
   @Post()
   @ZodSerializerDto(CreateCourseResDto)
   async create(@Body() body: CreateCourseBodyDto, @ActiveUser('userId') userId: string) {
@@ -68,31 +61,25 @@ export class CourseController {
   async update(
     @Param() params: GetCourseParamsDto,
     @Body() updateCourseDto: UpdateCourseBodyDto,
-    @ActiveRolePermissions('name') roleName: string,
     @ActiveUser('userId') userId: string
   ) {
     return await this.courseService.update({
       id: params.courseId,
       data: updateCourseDto,
-      updatedById: userId,
-      updatedByRoleName: roleName
+      updatedById: userId
     })
   }
 
   @Delete(':courseId/archive')
   @ZodSerializerDto(MessageResDTO)
-  async archiveCourse(
-    @Param() params: GetCourseParamsDto,
-    @ActiveRolePermissions('name') roleName: string,
-    @ActiveUser('userId') userId: string
-  ) {
+  async archive(@Param() params: GetCourseParamsDto, @ActiveUser('userId') userId: string) {
     return await this.courseService.archive({
       id: params.courseId,
-      deletedById: userId,
-      deletedByRoleName: roleName
+      deletedById: userId
     })
   }
 
+  //Assign Trainers
   @Post(':courseId/trainers')
   @ZodSerializerDto(AssignCourseTrainerResDto)
   async assignTrainer(@Param() params: GetCourseParamsDto, @Body() body: AssignCourseTrainerBodyDto) {
@@ -103,12 +90,9 @@ export class CourseController {
   }
 
   @Put(':courseId/trainers/:trainerId')
-  @ZodSerializerDto(UpdateCourseTrainerAssignmentResDto)
-  async updateTrainerAssignment(
-    @Param() params: CourseTrainerParamsDto,
-    @Body() body: UpdateCourseTrainerAssignmentBodyDto
-  ) {
-    return await this.courseService.updateCourseTrainerAssignment({
+  @ZodSerializerDto(UpdateCourseTrainerRoleResDto)
+  async updateTrainerRole(@Param() params: CourseTrainerParamsDto, @Body() body: UpdateCourseTrainerRoleBodyDto) {
+    return await this.courseService.updateCourseTrainerRole({
       courseId: params.courseId,
       trainerId: params.trainerId,
       data: body
@@ -124,11 +108,43 @@ export class CourseController {
     })
   }
 
+  //Enroll Trainees
+  //Active trainee bên subject
+
+  @Get(':courseId/enrollments/batches')
+  @ZodSerializerDto(GetCourseEnrollmentBatchesResDto)
+  async getCourseEnrollmentBatches(@Param() params: GetCourseParamsDto) {
+    return await this.courseService.getCourseEnrollmentBatches({
+      courseId: params.courseId
+    })
+  }
+
   @Get(':courseId/trainees')
   @ZodSerializerDto(GetCourseTraineesResDto)
   async getCourseTrainees(@Param() params: GetCourseParamsDto, @Query() query: GetCourseTraineesQueryDto) {
     return await this.courseService.getCourseTrainees({
       params,
+      query
+    })
+  }
+
+  @Get(':courseId/trainees/enrollments')
+  @ZodSerializerDto(GetCourseTraineeEnrollmentsResDto)
+  async getCourseTraineeEnrollments(
+    @Param() params: GetCourseParamsDto,
+    @Query() query: GetCourseTraineeEnrollmentsQueryDto
+  ) {
+    return await this.courseService.getCourseTraineeEnrollments({
+      courseId: params.courseId,
+      query
+    })
+  }
+
+  @Get('trainees/:traineeId/enrollments')
+  @ZodSerializerDto(GetTraineeEnrollmentsResDto)
+  async getTraineeEnrollments(@Param('traineeId') traineeId: string, @Query() query: GetTraineeEnrollmentsQueryDto) {
+    return await this.courseService.getTraineeEnrollments({
+      traineeId,
       query
     })
   }
@@ -153,15 +169,6 @@ export class CourseController {
     return await this.courseService.removeCourseEnrollmentsByBatch({
       courseId: params.courseId,
       batchCode: params.batchCode
-    })
-  }
-
-  @Get('trainees/:traineeId/enrollments')
-  @ZodSerializerDto(GetTraineeEnrollmentsResDto)
-  async getTraineeEnrollments(@Param('traineeId') traineeId: string, @Query() query: GetTraineeEnrollmentsQueryDto) {
-    return await this.courseService.getTraineeEnrollments({
-      traineeId,
-      query
     })
   }
 }
