@@ -9,21 +9,21 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #f4f4f4; /* Giữ nền ngoài xám nhạt để nổi bật phần nội dung */
             margin: 0;
             padding: 20px;
         }
         .container {
             max-width: 600px;
             margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             overflow: hidden;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background-color: #1B3C53; /* ĐỔI MÀU: Nền Header */
+            color: #ffffff; /* Chữ trắng trên nền tối */
             padding: 30px;
             text-align: center;
         }
@@ -31,115 +31,94 @@
             max-width: 150px;
             height: auto;
             margin-bottom: 15px;
+            /* Nếu logo màu đen, bạn có thể cần filter để nó sáng lên, hoặc dùng logo âm bản */
+            /* filter: brightness(0) invert(1); */ 
         }
         .header h1 {
             margin: 0;
-            font-size: 28px;
-            font-weight: 300;
+            font-size: 24px;
+            font-weight: 600;
+            color: #ffffff;
         }
         .content {
             padding: 40px 30px;
         }
         .welcome-message {
-            font-size: 18px;
-            color: #2c3e50;
+            font-size: 16px;
+            color: #333;
             margin-bottom: 25px;
         }
+        /* Box thông tin tài khoản */
         .credentials-box {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 10px;
+            background-color: #f9f9f9; 
+            border: 1px solid #1B3C53; /* ĐỔI MÀU: Viền box */
+            border-radius: 4px;
             padding: 25px;
             margin: 25px 0;
-            border-left: 4px solid #667eea;
         }
         .credentials-box h2 {
-            color: #2c3e50;
+            color: #1B3C53; /* ĐỔI MÀU: Tiêu đề box */
             margin-top: 0;
             margin-bottom: 20px;
-            font-size: 20px;
+            font-size: 18px;
+            border-bottom: 1px solid #1B3C53; /* ĐỔI MÀU: Gạch chân tiêu đề */
+            padding-bottom: 10px;
         }
         .credential-item {
-            margin-bottom: 15px;
-            padding: 10px;
-            background: white;
-            border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            font-size: 15px;
         }
         .credential-label {
-            font-weight: bold;
-            color: #555;
+            font-weight: 600;
+            color: #1B3C53; /* ĐỔI MÀU: Label */
             display: inline-block;
-            min-width: 100px;
+            min-width: 140px;
         }
         .credential-value {
-            color: #2c3e50;
-            font-family: 'Courier New', monospace;
-            background: #f8f9fa;
+            color: #333;
+            font-family: Consolas, 'Courier New', monospace;
+            background: #fff;
             padding: 2px 6px;
+            border: 1px solid #ccc;
             border-radius: 3px;
-            font-weight: bold;
         }
+        /* Box cảnh báo */
         .warning-box {
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-            border: 1px solid #ffeaa7;
-            border-radius: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-left: 4px solid #1B3C53; /* ĐỔI MÀU: Viền trái nhấn mạnh */
             padding: 20px;
             margin: 25px 0;
-            border-left: 4px solid #f39c12;
-        }
-        .warning-box .warning-icon {
-            color: #f39c12;
-            font-size: 24px;
-            margin-right: 10px;
         }
         .warning-box h3 {
-            color: #856404;
+            color: #1B3C53; /* ĐỔI MÀU */
             margin-top: 0;
             margin-bottom: 10px;
-            display: flex;
-            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
         }
         .warning-box p {
-            color: #856404;
-            margin-bottom: 10px;
-        }
-        .next-steps {
-            background: linear-gradient(135deg, #d4edda 0%, #a3d5a3 100%);
-            border-radius: 10px;
-            padding: 25px;
-            margin: 25px 0;
-            border-left: 4px solid #28a745;
-        }
-        .next-steps h3 {
-            color: #155724;
-            margin-top: 0;
-            margin-bottom: 15px;
-        }
-        .next-steps ul {
-            color: #155724;
-            padding-left: 20px;
-        }
-        .next-steps li {
+            color: #555;
             margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .system-info {
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            margin-top: 30px;
+            font-size: 13px;
+            color: #777;
         }
         .footer {
-            background: #f8f9fa;
-            color: #6c757d;
+            background-color: #1B3C53; /* ĐỔI MÀU: Nền Footer */
+            color: #ffffff; /* Chữ trắng */
             text-align: center;
             padding: 20px;
-            font-size: 14px;
-            border-top: 1px solid #dee2e6;
+            font-size: 12px;
         }
         .footer p {
             margin: 5px 0;
-        }
-        .system-info {
-            background: #e9ecef;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 20px 0;
-            font-size: 14px;
-            color: #495057;
+            opacity: 0.9;
         }
     </style>
 </head>
@@ -157,7 +136,7 @@
             </div>
 
             <div class="credentials-box">
-                <h2>🔐 Your Login Credentials</h2>
+                <h2>Login Credentials</h2>
                 <div class="credential-item">
                     <span class="credential-label">Email:</span>
                     <span class="credential-value">[USER_EMAIL]</span>
@@ -177,15 +156,11 @@
             </div>
 
             <div class="warning-box">
-                <h3>
-                    <span class="warning-icon">⚠️</span>
-                    Important Security Notice
-                </h3>
-                <p><strong>Please keep your login credentials secure and confidential.</strong></p>
-                <p>• Do not share your password with anyone</p>
-                <p>• Change your password immediately after your first login</p>
-                <p>• Use a strong, unique password that you haven't used elsewhere</p>
-                <p>• Log out completely when finished using the system</p>
+                <h3>Important Security Notice</h3>
+                <p>Please keep your login credentials secure and confidential.</p>
+                <p>&bull; Do not share your password with anyone.</p>
+                <p>&bull; Change your password immediately after your first login.</p>
+                <p>&bull; Log out completely when finished using the system.</p>
             </div>
 
             <div class="system-info">
@@ -198,7 +173,7 @@
         <div class="footer">
             <p><strong>DSFMS</strong></p>
             <p>This is an automated message. Please do not reply to this email.</p>
-            <p>© 2025 DSFMS System. All rights reserved.</p>
+            <p>&copy; 2025 DSFMS. All rights reserved.</p>
         </div>
     </div>
 </body>
