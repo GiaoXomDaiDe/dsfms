@@ -38,8 +38,8 @@ export const ChangePasswordBodySchema = UserSchema.pick({
   passwordHash: true
 })
   .extend({
-    newPassword: z.string().min(6).max(100),
-    confirmNewPassword: z.string().min(6).max(100)
+    newPassword: z.string().min(1).max(100),
+    confirmNewPassword: z.string().min(1).max(100)
   })
   .strict()
   .superRefine(({ confirmNewPassword, newPassword }, ctx) => {
@@ -54,9 +54,9 @@ export const ChangePasswordBodySchema = UserSchema.pick({
 
 export const ResetPasswordBodySchema = z
   .object({
-    oldPassword: z.string().min(6).max(100),
-    newPassword: z.string().min(6).max(100),
-    confirmNewPassword: z.string().min(6).max(100)
+    oldPassword: z.string().min(1).max(100),
+    newPassword: z.string().min(1).max(100),
+    confirmNewPassword: z.string().min(1).max(100)
   })
   .strict()
   .superRefine(({ confirmNewPassword, newPassword }, ctx) => {
@@ -75,7 +75,7 @@ export const ResetPasswordBodySchema = z
 
 export const UpdateSignatureBodySchema = z
   .object({
-    signatureImageUrl: z.string().url('Signature image URL must be a valid URL')
+    signatureImageUrl: z.url('Signature image URL must be a valid URL')
   })
   .strict()
 
