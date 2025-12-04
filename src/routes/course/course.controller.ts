@@ -16,6 +16,7 @@ import {
   UpdateCourseTrainerRoleBodyDto,
   UpdateCourseTrainerRoleResDto
 } from '~/routes/course/course.dto'
+import { CourseMes } from '~/routes/course/course.message'
 import { CourseService } from '~/routes/course/course.service'
 import {
   CourseBatchParamsDto,
@@ -33,22 +34,34 @@ export class CourseController {
   @Get()
   @ZodSerializerDto(GetCoursesResDto)
   async list() {
-    return await this.courseService.list()
+    const data = await this.courseService.list()
+    return {
+      message: CourseMes.LIST_SUCCESS,
+      data
+    }
   }
 
   @Get(':courseId')
   @ZodSerializerDto(GetCourseResDto)
   async findById(@Param() params: GetCourseParamsDto) {
-    return await this.courseService.findById(params.courseId)
+    const data = await this.courseService.findById(params.courseId)
+    return {
+      message: CourseMes.DETAIL_SUCCESS,
+      data
+    }
   }
 
   @Post()
   @ZodSerializerDto(CreateCourseResDto)
   async create(@Body() body: CreateCourseBodyDto, @ActiveUser('userId') userId: string) {
-    return await this.courseService.create({
+    const data = await this.courseService.create({
       data: body,
       createdById: userId
     })
+    return {
+      message: CourseMes.CREATE_SUCCESS,
+      data
+    }
   }
 
   @Put(':courseId')
@@ -58,11 +71,15 @@ export class CourseController {
     @Body() updateCourseDto: UpdateCourseBodyDto,
     @ActiveUser('userId') userId: string
   ) {
-    return await this.courseService.update({
+    const data = await this.courseService.update({
       id: params.courseId,
       data: updateCourseDto,
       updatedById: userId
     })
+    return {
+      message: CourseMes.UPDATE_SUCCESS,
+      data
+    }
   }
 
   @Delete(':courseId/archive')
@@ -78,20 +95,28 @@ export class CourseController {
   @Post(':courseId/trainers')
   @ZodSerializerDto(AssignCourseTrainerResDto)
   async assignTrainer(@Param() params: GetCourseParamsDto, @Body() body: AssignCourseTrainerBodyDto) {
-    return await this.courseService.assignTrainerToCourse({
+    const data = await this.courseService.assignTrainerToCourse({
       courseId: params.courseId,
       data: body
     })
+    return {
+      message: CourseMes.ASSIGN_TRAINER_SUCCESS,
+      data
+    }
   }
 
   @Put(':courseId/trainers/:trainerId')
   @ZodSerializerDto(UpdateCourseTrainerRoleResDto)
   async updateTrainerRole(@Param() params: CourseTrainerParamsDto, @Body() body: UpdateCourseTrainerRoleBodyDto) {
-    return await this.courseService.updateCourseTrainerRole({
+    const data = await this.courseService.updateCourseTrainerRole({
       courseId: params.courseId,
       trainerId: params.trainerId,
       data: body
     })
+    return {
+      message: CourseMes.UPDATE_TRAINER_ROLE_SUCCESS,
+      data
+    }
   }
 
   @Delete(':courseId/trainers/:trainerId')
@@ -110,10 +135,14 @@ export class CourseController {
   @Get(':courseId/trainees')
   @ZodSerializerDto(GetCourseTraineesResDto)
   async getTraineesInCourse(@Param() params: GetCourseParamsDto, @Query() query: GetCourseTraineesQueryDto) {
-    return await this.courseService.getTraineesInCourse({
+    const data = await this.courseService.getTraineesInCourse({
       params,
       query
     })
+    return {
+      message: CourseMes.TRAINEES_SUCCESS,
+      data
+    }
   }
 
   @Get(':courseId/trainees/:traineeId/enrollments')
@@ -123,19 +152,27 @@ export class CourseController {
     @Param('traineeId') traineeId: string,
     @Query() query: GetTraineeEnrollmentsQueryDto
   ) {
-    return await this.courseService.getTraineeEnrollments({
+    const data = await this.courseService.getTraineeEnrollments({
       courseId: params.courseId,
       traineeId,
       query
     })
+    return {
+      message: CourseMes.TRAINEE_ENROLLMENTS_SUCCESS,
+      data
+    }
   }
 
   @Delete(':courseId/enrollments/batches/:batchCode')
   @ZodSerializerDto(RemoveCourseEnrollmentsByBatchResDto)
   async removeCourseEnrollmentsByBatch(@Param() params: CourseBatchParamsDto) {
-    return await this.courseService.removeCourseEnrollmentsByBatch({
+    const data = await this.courseService.removeCourseEnrollmentsByBatch({
       courseId: params.courseId,
       batchCode: params.batchCode
     })
+    return {
+      message: CourseMes.REMOVE_COURSE_ENROLLMENTS_BY_BATCH_SUCCESS,
+      data
+    }
   }
 }

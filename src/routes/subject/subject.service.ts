@@ -28,6 +28,7 @@ import {
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
 } from './subject.error'
+import { SubjectMes } from './subject.message'
 import {
   AssignTraineesBodyType,
   AssignTraineesResType,
@@ -296,7 +297,7 @@ export class SubjectService {
       status: subjectStatus
     })
 
-    return { message: 'Archived subject successfully' }
+    return { message: SubjectMes.ARCHIVE_SUCCESS }
   }
 
   async assignTrainer({
@@ -371,7 +372,7 @@ export class SubjectService {
       trainerUserId: trainerId
     })
 
-    return { message: 'Trainer removed successfully' }
+    return { message: SubjectMes.REMOVE_TRAINER_SUCCESS }
   }
 
   async lookupTrainees({ data }: { data: LookupTraineesBodyType }): Promise<LookupTraineesResType> {
@@ -553,7 +554,7 @@ export class SubjectService {
       throw CannotCancelSubjectEnrollmentException
     }
 
-    return { message: 'Enrollment cancelled successfully' }
+    return { message: SubjectMes.CANCEL_ENROLLMENT_SUCCESS }
   }
 
   async removeCourseEnrollmentsForTrainee({

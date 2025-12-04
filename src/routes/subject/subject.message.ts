@@ -1,0 +1,21 @@
+export const SubjectMes = {
+  LIST_SUCCESS: 'Subjects fetched successfully',
+  DETAIL_SUCCESS: 'Subject detail fetched successfully',
+  CREATE_SUCCESS: 'Subject created successfully',
+  BULK_CREATE_SUCCESS: 'Subjects created in bulk successfully',
+  UPDATE_SUCCESS: 'Subject updated successfully',
+  ARCHIVE_SUCCESS: 'Subject archived successfully',
+  ACTIVE_TRAINERS_SUCCESS: 'Active trainers fetched successfully',
+  ACTIVE_TRAINEES_SUCCESS: 'Active trainees fetched successfully',
+  ASSIGN_TRAINER_SUCCESS: 'Trainer assigned to subject successfully',
+  UPDATE_TRAINER_ASSIGNMENT_SUCCESS: 'Subject trainer assignment updated successfully',
+  REMOVE_TRAINER_SUCCESS: 'Trainer removed from subject successfully',
+  REMOVE_ENROLLMENTS_SUCCESS: 'Subject enrollments removed successfully',
+  LOOKUP_TRAINEES_SUCCESS: 'Trainees lookup completed successfully',
+  TRAINEE_ENROLLMENTS_SUCCESS: 'Trainee enrollments fetched successfully',
+  TRAINEE_COURSE_SUBJECTS_SUCCESS: 'Trainee course subjects fetched successfully',
+  REMOVE_COURSE_TRAINEE_ENROLLMENTS_SUCCESS: 'Course enrollments removed for trainee successfully',
+  ASSIGN_TRAINEES_SUCCESS: 'Trainees assigned to subject successfully',
+  CANCEL_ENROLLMENT_SUCCESS: 'Subject enrollment cancelled successfully',
+  REMOVE_COURSE_ENROLLMENTS_BY_BATCH_SUCCESS: 'Course enrollments removed by batch successfully'
+} as const

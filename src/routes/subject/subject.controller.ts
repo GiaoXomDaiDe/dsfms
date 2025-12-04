@@ -9,6 +9,7 @@ import {
   BulkCreateSubjectsResDto,
   CancelSubjectEnrollmentBodyDto,
   CreateSubjectBodyDto,
+  CreateSubjectResDto,
   GetActiveTraineesResDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
@@ -24,17 +25,18 @@ import {
   RemoveEnrollmentsBodyDto,
   RemoveEnrollmentsResDto,
   SubjectIdParamsDto,
-  SubjectSchemaDto,
   SubjectTraineeParamsDto,
   SubjectTrainerParamsDto,
   TraineeIdParamsDto,
   UpdateSubjectBodyDto,
+  UpdateSubjectResDto,
   UpdateTrainerAssignmentBodyDto,
   UpdateTrainerAssignmentResDto
 } from '~/routes/subject/subject.dto'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
+import { SubjectMes } from './subject.message'
 import { SubjectService } from './subject.service'
 
 @Controller('subjects')
@@ -44,57 +46,85 @@ export class SubjectController {
   @Get()
   @ZodSerializerDto(GetSubjectsResDto)
   async list(@Query() query: GetSubjectsQueryDto) {
-    return await this.subjectService.list(query)
+    const data = await this.subjectService.list(query)
+    return {
+      message: SubjectMes.LIST_SUCCESS,
+      data
+    }
   }
 
   @Get(':subjectId')
   @ZodSerializerDto(GetSubjectDetailResDto)
   async findByIds(@Param() { subjectId }: SubjectIdParamsDto) {
-    return await this.subjectService.findById(subjectId)
+    const data = await this.subjectService.findById(subjectId)
+    return {
+      message: SubjectMes.DETAIL_SUCCESS,
+      data
+    }
   }
 
   @Get('courses/active-trainers')
   @ZodSerializerDto(GetAvailableTrainersResDto)
   async getActiveTrainers() {
-    return await this.subjectService.getActiveTrainers()
+    const data = await this.subjectService.getActiveTrainers()
+    return {
+      message: SubjectMes.ACTIVE_TRAINERS_SUCCESS,
+      data
+    }
   }
 
   @Get('active-trainees')
   @ZodSerializerDto(GetActiveTraineesResDto)
   async getActiveTrainees() {
-    return await this.subjectService.getActiveTrainees()
+    const data = await this.subjectService.getActiveTrainees()
+    return {
+      message: SubjectMes.ACTIVE_TRAINEES_SUCCESS,
+      data
+    }
   }
 
   @Post()
-  @ZodSerializerDto(SubjectSchemaDto)
+  @ZodSerializerDto(CreateSubjectResDto)
   async create(@Body() createSubjectDto: CreateSubjectBodyDto, @ActiveUser('userId') userId: string) {
-    return await this.subjectService.create({
+    const data = await this.subjectService.create({
       data: createSubjectDto,
       createdById: userId
     })
+    return {
+      message: SubjectMes.CREATE_SUCCESS,
+      data
+    }
   }
 
   @Post('bulk')
   @ZodSerializerDto(BulkCreateSubjectsResDto)
   async bulkCreate(@Body() bulkCreateDto: BulkCreateSubjectsBodyDto, @ActiveUser('userId') userId: string) {
-    return await this.subjectService.bulkCreate({
+    const data = await this.subjectService.bulkCreate({
       data: bulkCreateDto,
       createdById: userId
     })
+    return {
+      message: SubjectMes.BULK_CREATE_SUCCESS,
+      data
+    }
   }
 
   @Put(':subjectId')
-  @ZodSerializerDto(GetSubjectDetailResDto)
+  @ZodSerializerDto(UpdateSubjectResDto)
   async update(
     @Param() { subjectId }: SubjectIdParamsDto,
     @Body() updateSubjectDto: UpdateSubjectBodyDto,
     @ActiveUser('userId') userId: string
   ) {
-    return await this.subjectService.update({
+    const data = await this.subjectService.update({
       id: subjectId,
       data: updateSubjectDto,
       updatedById: userId
     })
+    return {
+      message: SubjectMes.UPDATE_SUCCESS,
+      data
+    }
   }
 
   @Delete(':subjectId/archive')
@@ -109,10 +139,14 @@ export class SubjectController {
   @Post(':subjectId/trainers')
   @ZodSerializerDto(AssignTrainerResDto)
   async assignTrainer(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: AssignTrainerBodyDto) {
-    return await this.subjectService.assignTrainer({
+    const data = await this.subjectService.assignTrainer({
       subjectId,
       data: body
     })
+    return {
+      message: SubjectMes.ASSIGN_TRAINER_SUCCESS,
+      data
+    }
   }
 
   //Cập nhật role của trainer trong subject (chỉ role, không đổi trainer hay subject)
@@ -123,11 +157,15 @@ export class SubjectController {
     @Param() { subjectId, trainerId }: SubjectTrainerParamsDto,
     @Body() body: UpdateTrainerAssignmentBodyDto
   ) {
-    return await this.subjectService.updateTrainerAssignment({
+    const data = await this.subjectService.updateTrainerAssignment({
       currentSubjectId: subjectId,
       currentTrainerId: trainerId,
       data: body
     })
+    return {
+      message: SubjectMes.UPDATE_TRAINER_ASSIGNMENT_SUCCESS,
+      data
+    }
   }
 
   @Delete(':subjectId/trainers/:trainerId')
@@ -142,10 +180,14 @@ export class SubjectController {
   @Delete(':subjectId/enrollments')
   @ZodSerializerDto(RemoveEnrollmentsResDto)
   async removeEnrollments(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: RemoveEnrollmentsBodyDto) {
-    return await this.subjectService.removeEnrollments({
+    const data = await this.subjectService.removeEnrollments({
       subjectId,
       data: body
     })
+    return {
+      message: SubjectMes.REMOVE_ENROLLMENTS_SUCCESS,
+      data
+    }
   }
 
   @Get('trainees/:traineeId/enrollments')
@@ -154,10 +196,14 @@ export class SubjectController {
     @Param('traineeId') { traineeId }: TraineeIdParamsDto,
     @Query() query: GetTraineeEnrollmentsQueryDto
   ) {
-    return await this.subjectService.getTraineeEnrollments({
+    const data = await this.subjectService.getTraineeEnrollments({
       traineeId,
       query
     })
+    return {
+      message: SubjectMes.TRAINEE_ENROLLMENTS_SUCCESS,
+      data
+    }
   }
 
   // API phục vụ dashboard trainee: gom các môn (PLANNED, ENROLLED) theo course cha để hiển thị lịch học
@@ -165,32 +211,48 @@ export class SubjectController {
   @IsPublic()
   @ZodSerializerDto(GetTraineeCourseSubjectsResDto)
   async getTraineeCourseSubjects(@Param() { traineeId }: TraineeIdParamsDto) {
-    return await this.subjectService.getTraineeCourseSubjects(traineeId)
+    const data = await this.subjectService.getTraineeCourseSubjects(traineeId)
+    return {
+      message: SubjectMes.TRAINEE_COURSE_SUBJECTS_SUCCESS,
+      data
+    }
   }
 
   @Post('trainees/lookup')
   @ZodSerializerDto(LookupTraineesResDto)
   async lookupTrainees(@Body() body: LookupTraineesBodyDto) {
-    return await this.subjectService.lookupTrainees({
+    const data = await this.subjectService.lookupTrainees({
       data: body
     })
+    return {
+      message: SubjectMes.LOOKUP_TRAINEES_SUCCESS,
+      data
+    }
   }
 
   @Delete('courses/trainees/enrollments')
   @ZodSerializerDto(RemoveCourseTraineeEnrollmentsResDto)
   async removeCourseEnrollmentsForTrainee(@Body() body: RemoveCourseTraineeEnrollmentsBodyDto) {
-    return await this.subjectService.removeCourseEnrollmentsForTrainee({
+    const data = await this.subjectService.removeCourseEnrollmentsForTrainee({
       data: body
     })
+    return {
+      message: SubjectMes.REMOVE_COURSE_TRAINEE_ENROLLMENTS_SUCCESS,
+      data
+    }
   }
 
   @Post(':subjectId/assign-trainees')
   @ZodSerializerDto(AssignTraineesResDto)
   async assignTrainees(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: AssignTraineesBodyDto) {
-    return await this.subjectService.assignTraineesToSubject({
+    const data = await this.subjectService.assignTraineesToSubject({
       subjectId,
       data: body
     })
+    return {
+      message: SubjectMes.ASSIGN_TRAINEES_SUCCESS,
+      data
+    }
   }
 
   @Delete(':subjectId/trainees/:traineeId')
