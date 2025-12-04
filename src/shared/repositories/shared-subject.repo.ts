@@ -10,9 +10,12 @@ import { PrismaService } from '~/shared/services/prisma.service'
 export class SharedSubjectRepository {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async findIds(where: Prisma.SubjectWhereInput): Promise<string[]> {
+  async findIds(courseId: string, { includeDeleted = false }: { includeDeleted?: boolean } = {}): Promise<string[]> {
     const subjectIds = await this.prismaService.subject.findMany({
-      where,
+      where: {
+        courseId,
+        ...(includeDeleted ? {} : { deletedAt: null, status: { not: SubjectStatus.ARCHIVED } })
+      },
       select: { id: true }
     })
 

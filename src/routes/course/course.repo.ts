@@ -1,42 +1,35 @@
 import { Injectable } from '@nestjs/common'
-import { SubjectEnrollmentStatus, SubjectStatus } from '@prisma/client'
-import { TrainerNotFoundException } from '~/routes/subject/subject.error'
-import {
-  GetTraineeEnrollmentsResType,
-  TraineeEnrollmentRecordType,
-  TraineeEnrollmentUserType
-} from '~/routes/subject/subject.model'
-import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
-import { CourseStatus } from '~/shared/constants/course.constant'
-import {
-  SubjectEnrollmentStatusValue,
-  SubjectInstructorRoleValue,
-  SubjectMethodValue,
-  SubjectStatusValue,
-  SubjectTypeValue
-} from '~/shared/constants/subject.constant'
-import { SerializeAll } from '~/shared/decorators/serialize.decorator'
-import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
-import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
-import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CannotArchiveCourseWithActiveSubjectsException,
   CannotArchiveCourseWithNonCancelledEnrollmentsException
-} from './course.error'
+} from '~/routes/course/course.error'
 import {
   AssignCourseTrainerResType,
   CourseTraineeInfoType,
-  CourseType,
   CreateCourseBodyType,
   CreateCourseResType,
   GetCourseResType,
   GetCoursesResType,
-  GetCourseTraineeEnrollmentsResType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
   UpdateCourseResType,
   UpdateCourseTrainerRoleResType
-} from './course.model'
+} from '~/routes/course/course.model'
+import { TrainerNotFoundException } from '~/routes/subject/subject.error'
+import { SubjectEnrollmentTraineeSnapshotType } from '~/routes/subject/subject.model'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { CourseStatus } from '~/shared/constants/course.constant'
+import { SubjectEnrollmentStatus, SubjectInstructorRoleValue, SubjectStatus } from '~/shared/constants/subject.constant'
+import { SerializeAll } from '~/shared/decorators/serialize.decorator'
+import { CourseType } from '~/shared/models/shared-course.model'
+import {
+  courseDepartmentSummarySelect,
+  courseInstructorSummaryInclude,
+  courseTrainerSummarySelect
+} from '~/shared/prisma-presets/shared-course.prisma-presets'
+import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
+import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
+import { PrismaService } from '~/shared/services/prisma.service'
 
 type TrainerInfo = {
   id: string
@@ -54,7 +47,7 @@ type CourseInstructorSummary = TrainerInfo & {
 }
 
 @Injectable()
-@SerializeAll(['aggregateCourseTrainees'])
+@SerializeAll(['aggregateeTraineesInCourse'])
 export class CourseRepository {
   constructor(
     private readonly prismaService: PrismaService,
@@ -70,12 +63,7 @@ export class CourseRepository {
       },
       include: {
         department: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            description: true
-          }
+          select: courseDepartmentSummarySelect
         },
         _count: {
           select: {
@@ -102,23 +90,17 @@ export class CourseRepository {
   }
 
   async findById(id: string): Promise<GetCourseResType | null> {
-    const whereClause = {
-      id,
-      status: {
-        not: CourseStatus.ARCHIVED
-      },
-      deletedAt: null
-    }
     const course = await this.prismaService.course.findFirst({
-      where: whereClause,
+      where: {
+        id,
+        status: {
+          not: CourseStatus.ARCHIVED
+        },
+        deletedAt: null
+      },
       include: {
         department: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            description: true
-          }
+          select: courseDepartmentSummarySelect
         },
         subjects: {
           where: {
@@ -173,16 +155,7 @@ export class CourseRepository {
           courseId: true,
           roleInAssessment: true,
           trainer: {
-            select: {
-              id: true,
-              eid: true,
-              firstName: true,
-              middleName: true,
-              lastName: true,
-              email: true,
-              phoneNumber: true,
-              status: true
-            }
+            select: courseTrainerSummarySelect
           }
         }
       })
@@ -240,181 +213,6 @@ export class CourseRepository {
     }
   }
 
-  async getCourseTrainees({
-    courseId,
-    batchCode
-  }: {
-    courseId: string
-    batchCode?: string
-  }): Promise<GetCourseTraineesResType> {
-    const subjectIdsList = await this.sharedSubjectRepo.findIds({
-      courseId,
-      deletedAt: null
-    })
-
-    if (subjectIdsList.length === 0) {
-      return {
-        trainees: [],
-        totalItems: 0
-      }
-    }
-
-    const enrollments = await this.sharedSubjectEnrollmentRepo.findMany({
-      where: {
-        subjectId: {
-          in: subjectIdsList
-        },
-        ...(batchCode ? { batchCode } : {})
-      },
-      select: {
-        traineeUserId: true,
-        batchCode: true,
-        trainee: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      }
-    })
-
-    const trainees = this.aggregateCourseTrainees(enrollments)
-
-    return {
-      trainees,
-      totalItems: trainees.length
-    }
-  }
-
-  async getCourseTraineeEnrollments({
-    courseId,
-    batchCode,
-    status
-  }: {
-    courseId: string
-    batchCode?: string
-    status?: SubjectEnrollmentStatusValue
-  }): Promise<GetCourseTraineeEnrollmentsResType> {
-    const enrollments = await this.prismaService.subjectEnrollment.findMany({
-      where: {
-        subject: {
-          courseId,
-          deletedAt: null
-        },
-        ...(batchCode ? { batchCode } : {}),
-        ...(status ? { status } : {})
-      },
-      include: {
-        trainee: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            email: true,
-            department: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        },
-        subject: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            status: true,
-            type: true,
-            method: true,
-            startDate: true,
-            endDate: true,
-            course: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: [{ traineeUserId: 'asc' }, { enrollmentDate: 'desc' }]
-    })
-
-    type TraineeEnrollmentGroup = {
-      trainee: TraineeEnrollmentUserType
-      enrollments: TraineeEnrollmentRecordType[]
-    }
-
-    const grouped = new Map<string, TraineeEnrollmentGroup>()
-
-    for (const enrollment of enrollments) {
-      const trainee = enrollment.trainee
-      const subject = enrollment.subject
-
-      if (!trainee || !subject) {
-        continue
-      }
-
-      if (!grouped.has(enrollment.traineeUserId)) {
-        const fullName = [trainee.firstName ?? '', trainee.lastName ?? ''].filter(Boolean).join(' ').trim()
-        grouped.set(enrollment.traineeUserId, {
-          trainee: {
-            userId: trainee.id,
-            eid: trainee.eid,
-            fullName: fullName || trainee.eid,
-            email: trainee.email,
-            department: trainee.department ? { id: trainee.department.id, name: trainee.department.name } : null
-          },
-          enrollments: []
-        })
-      }
-
-      const group = grouped.get(enrollment.traineeUserId)
-      if (!group) {
-        continue
-      }
-
-      group.enrollments.push({
-        subject: {
-          id: subject.id,
-          code: subject.code,
-          name: subject.name,
-          status: subject.status as SubjectStatusValue,
-          type: subject.type as SubjectTypeValue,
-          method: subject.method as SubjectMethodValue,
-          startDate: subject.startDate ? subject.startDate.toISOString() : null,
-          endDate: subject.endDate ? subject.endDate.toISOString() : null,
-          course: subject.course ? { id: subject.course.id, name: subject.course.name } : null
-        },
-        enrollment: {
-          batchCode: enrollment.batchCode,
-          status: enrollment.status as SubjectEnrollmentStatusValue,
-          enrollmentDate: enrollment.enrollmentDate,
-          updatedAt: enrollment.updatedAt
-        }
-      })
-    }
-
-    const trainees: GetTraineeEnrollmentsResType[] = Array.from(grouped.values()).map(({ trainee, enrollments }) => ({
-      trainee,
-      enrollments,
-      totalCount: enrollments.length
-    }))
-
-    return {
-      courseId,
-      trainees,
-      totalTrainees: trainees.length
-    }
-  }
-
   async create({
     data,
     createdById
@@ -430,12 +228,7 @@ export class CourseRepository {
       },
       include: {
         department: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            description: true
-          }
+          select: courseDepartmentSummarySelect
         }
       },
       omit: {
@@ -462,12 +255,7 @@ export class CourseRepository {
       },
       include: {
         department: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            description: true
-          }
+          select: courseDepartmentSummarySelect
         }
       },
       omit: {
@@ -623,30 +411,7 @@ export class CourseRepository {
           courseId,
           roleInAssessment: roleInSubject
         },
-        include: {
-          trainer: {
-            select: {
-              id: true,
-              eid: true,
-              firstName: true,
-              middleName: true,
-              lastName: true,
-              email: true,
-              phoneNumber: true,
-              status: true
-            }
-          },
-          course: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              status: true,
-              startDate: true,
-              endDate: true
-            }
-          }
-        }
+        include: courseInstructorSummaryInclude
       })
 
       return {
@@ -676,30 +441,7 @@ export class CourseRepository {
       data: {
         roleInAssessment: newRoleInSubject
       },
-      include: {
-        trainer: {
-          select: {
-            id: true,
-            eid: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            email: true,
-            phoneNumber: true,
-            status: true
-          }
-        },
-        course: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            status: true,
-            startDate: true,
-            endDate: true
-          }
-        }
-      }
+      include: courseInstructorSummaryInclude
     })
 
     return {
@@ -726,43 +468,32 @@ export class CourseRepository {
     })
   }
 
-  async cancelCourseEnrollments({
+  async getTraineesInCourse({
     courseId,
-    traineeUserId,
     batchCode
   }: {
     courseId: string
-    traineeUserId: string
-    batchCode: string
-  }): Promise<{ cancelledCount: number; notCancelledCount: number }> {
-    const subjectIdsList = await this.sharedSubjectRepo.findIds({ courseId, deletedAt: null })
+    batchCode?: string
+  }): Promise<GetCourseTraineesResType> {
+    const subjectIds = await this.sharedSubjectRepo.findIds(courseId)
 
-    if (subjectIdsList.length === 0) {
-      return { cancelledCount: 0, notCancelledCount: 0 }
-    }
-
-    const cancellationFilter = {
-      traineeUserId,
-      subjectId: { in: subjectIdsList },
-      batchCode,
-      status: SubjectEnrollmentStatus.ENROLLED
-    }
-
-    const cancelledCount = await this.sharedSubjectEnrollmentRepo.updateMany({
-      where: cancellationFilter,
-      data: {
-        status: SubjectEnrollmentStatus.CANCELLED
+    if (subjectIds.length === 0) {
+      return {
+        trainees: [],
+        totalItems: 0
       }
+    }
+
+    const enrollments = await this.sharedSubjectEnrollmentRepo.findTraineesBySubjectIds(subjectIds, {
+      batchCode
     })
 
-    const notCancelledCount = await this.sharedSubjectEnrollmentRepo.count({
-      traineeUserId,
-      subjectId: { in: subjectIdsList },
-      batchCode,
-      status: { not: SubjectEnrollmentStatus.ENROLLED }
-    })
+    const trainees = this.aggregateeTraineesInCourse(enrollments)
 
-    return { cancelledCount, notCancelledCount }
+    return {
+      trainees,
+      totalItems: trainees.length
+    }
   }
 
   async isTrainerAssignedToCourse({
@@ -784,21 +515,8 @@ export class CourseRepository {
     return !!assignment
   }
 
-  private aggregateCourseTrainees(
-    enrollments: Array<{
-      traineeUserId: string
-      batchCode: string | null
-      trainee: {
-        id: string
-        eid: string
-        firstName: string
-        middleName: string | null
-        lastName: string
-        email: string
-      } | null
-    }>
-  ): CourseTraineeInfoType[] {
-    type TraineeAccumulator = Omit<CourseTraineeInfoType, 'batches'> & { batches: Set<string> }
+  private aggregateeTraineesInCourse(enrollments: SubjectEnrollmentTraineeSnapshotType[]): CourseTraineeInfoType[] {
+    type TraineeAccumulator = Omit<CourseTraineeInfoType, 'subjectCount'> & { subjectIds: Set<string> }
 
     const traineeMap = new Map<string, TraineeAccumulator>()
 
@@ -808,33 +526,26 @@ export class CourseRepository {
         continue
       }
 
-      if (!traineeMap.has(enrollment.traineeUserId)) {
-        traineeMap.set(enrollment.traineeUserId, {
+      let acc = traineeMap.get(enrollment.traineeUserId)
+      if (!acc) {
+        acc = {
           id: trainee.id,
           eid: trainee.eid,
           firstName: trainee.firstName,
           middleName: trainee.middleName,
           lastName: trainee.lastName,
           email: trainee.email,
-          enrollmentCount: 0,
-          batches: new Set<string>()
-        })
-      }
-      const current = traineeMap.get(enrollment.traineeUserId)
-      if (!current) {
-        continue
+          subjectIds: new Set<string>()
+        }
+        traineeMap.set(enrollment.traineeUserId, acc)
       }
 
-      current.enrollmentCount += 1
-
-      if (enrollment.batchCode) {
-        current.batches.add(enrollment.batchCode)
-      }
+      acc.subjectIds.add(enrollment.subjectId)
     }
 
-    return Array.from(traineeMap.values()).map(({ batches, ...info }) => ({
+    return Array.from(traineeMap.values()).map(({ subjectIds, ...info }) => ({
       ...info,
-      batches: Array.from(batches)
+      subjectCount: subjectIds.size
     }))
   }
 }

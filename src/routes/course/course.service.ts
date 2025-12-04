@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import {
-  GetCourseEnrollmentBatchesResType,
   GetTraineeEnrollmentsQueryType,
   GetTraineeEnrollmentsResType,
   RemoveCourseEnrollmentsByBatchResType
@@ -8,6 +7,7 @@ import {
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
+import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedDepartmentRepository } from '~/shared/repositories/shared-department.repo'
 import { SubjectService } from '../subject/subject.service'
 import {
@@ -29,8 +29,6 @@ import {
   GetCourseParamsType,
   GetCourseResType,
   GetCoursesResType,
-  GetCourseTraineeEnrollmentsQueryType,
-  GetCourseTraineeEnrollmentsResType,
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
@@ -44,6 +42,7 @@ import { CourseRepository } from './course.repo'
 export class CourseService {
   constructor(
     private readonly courseRepo: CourseRepository,
+    private readonly sharedCourseRepo: SharedCourseRepository,
     private readonly sharedDepartmentRepo: SharedDepartmentRepository,
     private readonly subjectService: SubjectService
   ) {}
@@ -232,7 +231,7 @@ export class CourseService {
     })
   }
 
-  async getCourseTrainees({
+  async getTraineesInCourse({
     params,
     query
   }: {
@@ -241,12 +240,12 @@ export class CourseService {
   }): Promise<GetCourseTraineesResType> {
     const { courseId } = params
 
-    const course = await this.courseRepo.findById(courseId)
-    if (!course) {
+    const exists = await this.sharedCourseRepo.exists(courseId)
+    if (!exists) {
       throw CourseNotFoundException
     }
 
-    return await this.courseRepo.getCourseTrainees({
+    return await this.courseRepo.getTraineesInCourse({
       courseId,
       batchCode: query.batchCode
     })
@@ -276,55 +275,6 @@ export class CourseService {
     return { message: 'Trainer removed successfully' }
   }
 
-  async getCourseTraineeEnrollments({
-    courseId,
-    query
-  }: {
-    courseId: string
-    query: GetCourseTraineeEnrollmentsQueryType
-  }): Promise<GetCourseTraineeEnrollmentsResType> {
-    const course = await this.courseRepo.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    return await this.courseRepo.getCourseTraineeEnrollments({
-      courseId,
-      batchCode: query.batchCode,
-      status: query.status
-    })
-  }
-
-  async cancelCourseEnrollments({
-    params,
-    traineeId,
-    data
-  }: {
-    params: GetCourseParamsType
-    traineeId: string
-    data: any
-  }): Promise<any> {
-    const { courseId } = params
-
-    const result = await this.courseRepo.cancelCourseEnrollments({
-      courseId,
-      traineeUserId: traineeId,
-      batchCode: data.batchCode
-    })
-
-    return {
-      message: `Cancelled ${result.cancelledCount} enrollments. ${result.notCancelledCount} could not be cancelled (already in progress or finished).`,
-      data: {
-        cancelledCount: result.cancelledCount,
-        notCancelledCount: result.notCancelledCount
-      }
-    }
-  }
-
-  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
-    return await this.subjectService.getCourseEnrollmentBatches({ courseId })
-  }
-
   async removeCourseEnrollmentsByBatch({
     courseId,
     batchCode
@@ -339,15 +289,23 @@ export class CourseService {
   }
 
   async getTraineeEnrollments({
+    courseId,
     traineeId,
     query
   }: {
+    courseId: string
     traineeId: string
     query: GetTraineeEnrollmentsQueryType
   }): Promise<GetTraineeEnrollmentsResType> {
+    const courseExists = await this.sharedCourseRepo.exists(courseId)
+    if (!courseExists) {
+      throw CourseNotFoundException
+    }
+
     return await this.subjectService.getTraineeEnrollments({
       traineeId,
-      query
+      query,
+      courseId
     })
   }
 }

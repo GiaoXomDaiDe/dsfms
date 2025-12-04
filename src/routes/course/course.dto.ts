@@ -2,7 +2,6 @@ import { createZodDto } from 'nestjs-zod'
 import {
   AssignCourseTrainerBodySchema,
   AssignCourseTrainerResSchema,
-  CancelCourseEnrollmentsBodySchema,
   CourseTrainerParamsSchema,
   CreateCourseBodySchema,
   CreateCourseResSchema,
@@ -30,7 +29,6 @@ export class GetCourseTraineesQueryDto extends createZodDto(GetCourseTraineesQue
 export class GetCourseTraineesResDto extends createZodDto(GetCourseTraineesResSchema) {}
 export class GetCourseTraineeEnrollmentsQueryDto extends createZodDto(GetCourseTraineeEnrollmentsQuerySchema) {}
 export class GetCourseTraineeEnrollmentsResDto extends createZodDto(GetCourseTraineeEnrollmentsResSchema) {}
-export class CancelCourseEnrollmentsBodyDto extends createZodDto(CancelCourseEnrollmentsBodySchema) {}
 export class CourseTrainerParamsDto extends createZodDto(CourseTrainerParamsSchema) {}
 export class AssignCourseTrainerBodyDto extends createZodDto(AssignCourseTrainerBodySchema) {}
 export class AssignCourseTrainerResDto extends createZodDto(AssignCourseTrainerResSchema) {}

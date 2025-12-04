@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import { GetTraineeEnrollmentsQuerySchema, GetTraineeEnrollmentsResSchema } from '~/routes/subject/subject.model'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
-import { CourseSchema } from '~/shared/models/shared-course.model'
+import { CourseIdParamsSchema, CourseIdParamsType, CourseSchema } from '~/shared/models/shared-course.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
 import { SubjectSchema } from '~/shared/models/shared-subject.model'
 import { UserSchema } from '~/shared/models/shared-user.model'
 
+// Core trainer representations ---------------------------------------------
 const CourseExaminerTrainerSchema = UserSchema.pick({
   id: true,
   eid: true,
@@ -21,14 +22,14 @@ const CourseInstructorSchema = CourseExaminerTrainerSchema.extend({
   roleInCourse: z.array(z.enum(SubjectInstructorRole)).default([])
 })
 
-export const GetCourseParamsSchema = z.object({
-  courseId: z.uuid()
-})
+// Parameter schemas ---------------------------------------------------------
+export const GetCourseParamsSchema = CourseIdParamsSchema
 
 export const CourseTrainerParamsSchema = GetCourseParamsSchema.extend({
   trainerId: z.uuid()
 })
 
+// Course listing & detail ---------------------------------------------------
 export const GetCoursesResSchema = z.object({
   courses: z.array(
     CourseSchema.extend({
@@ -94,6 +95,7 @@ export const UpdateCourseBodySchema = CreateCourseBodySchema.partial()
 
 export const UpdateCourseResSchema = CreateCourseResSchema
 
+// Trainee aggregates --------------------------------------------------------
 export const GetCourseTraineesQuerySchema = z.object({
   batchCode: z.string().optional()
 })
@@ -106,8 +108,7 @@ export const CourseTraineeInfoSchema = UserSchema.pick({
   lastName: true,
   email: true
 }).extend({
-  enrollmentCount: z.number().int(),
-  batches: z.array(z.string())
+  subjectCount: z.number().int()
 })
 
 export const GetCourseTraineesResSchema = z.object({
@@ -123,10 +124,7 @@ export const GetCourseTraineeEnrollmentsResSchema = z.object({
   totalTrainees: z.number().int()
 })
 
-export const CancelCourseEnrollmentsBodySchema = z.object({
-  batchCode: z.string().min(1)
-})
-
+// Trainer assignment --------------------------------------------------------
 const CourseTrainerCourseSchema = CourseSchema.pick({
   id: true,
   code: true,
@@ -161,7 +159,7 @@ export type CreateCourseResType = z.infer<typeof CreateCourseResSchema>
 export type UpdateCourseBodyType = z.infer<typeof UpdateCourseBodySchema>
 export type UpdateCourseResType = z.infer<typeof UpdateCourseResSchema>
 export type CourseTrainerParamsType = z.infer<typeof CourseTrainerParamsSchema>
-export type GetCourseParamsType = z.infer<typeof GetCourseParamsSchema>
+export type GetCourseParamsType = CourseIdParamsType
 export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySchema>
 export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
 export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
