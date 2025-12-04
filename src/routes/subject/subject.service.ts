@@ -180,7 +180,7 @@ export class SubjectService {
         createdSubjects.push(createdSubject)
       } catch (error) {
         const errorMessage =
-          error instanceof Error ? error.message : BulkSubjectCreationFailedException(i, 'Unknown error')
+          error instanceof Error ? error.message : BulkSubjectCreationFailedException(i, 'Unknown error').message
 
         failedSubjects.push({
           subject,

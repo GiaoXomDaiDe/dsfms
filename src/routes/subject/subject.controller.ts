@@ -53,22 +53,22 @@ export class SubjectController {
     }
   }
 
-  @Get(':subjectId')
-  @ZodSerializerDto(GetSubjectDetailResDto)
-  async findByIds(@Param() { subjectId }: SubjectIdParamsDto) {
-    const data = await this.subjectService.findById(subjectId)
-    return {
-      message: SubjectMes.DETAIL_SUCCESS,
-      data
-    }
-  }
-
   @Get('courses/active-trainers')
   @ZodSerializerDto(GetAvailableTrainersResDto)
   async getActiveTrainers() {
     const data = await this.subjectService.getActiveTrainers()
     return {
       message: SubjectMes.ACTIVE_TRAINERS_SUCCESS,
+      data
+    }
+  }
+
+  @Get(':subjectId')
+  @ZodSerializerDto(GetSubjectDetailResDto)
+  async findByIds(@Param() { subjectId }: SubjectIdParamsDto) {
+    const data = await this.subjectService.findById(subjectId)
+    return {
+      message: SubjectMes.DETAIL_SUCCESS,
       data
     }
   }
