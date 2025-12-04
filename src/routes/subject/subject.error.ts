@@ -105,6 +105,15 @@ export const SubjectAlreadyArchivedException = new BadRequestException('Subject 
 export const SubjectCannotBeArchivedFromCurrentStatusException = new BadRequestException(
   'Subject can only be archived when status is PLANNED or ON_GOING'
 )
+export const SubjectCannotAssignTrainerFromCurrentStatusException = new BadRequestException(
+  'Subject can only assign trainers when status is PLANNED or ON_GOING'
+)
+export const SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException = new BadRequestException(
+  'Subject can only update trainer assignments when status is PLANNED or ON_GOING'
+)
+export const SubjectCannotRemoveTrainerFromCurrentStatusException = new BadRequestException(
+  'Subject can only remove trainers when status is PLANNED or ON_GOING'
+)
 export const SubjectEnrollmentWindowClosedException = (startDate: Date | string) =>
   new BadRequestException(`Cannot enroll trainees after subject start date ${new Date(startDate).toISOString()}`)
 

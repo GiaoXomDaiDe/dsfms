@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { round } from 'lodash'
-import { SubjectInstructorRoleValue, SubjectStatus } from '~/shared/constants/subject.constant'
+import { SubjectInstructorRoleValue, SubjectStatus, SubjectStatusValue } from '~/shared/constants/subject.constant'
 import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
   isForeignKeyConstraintPrismaError,
@@ -21,13 +21,17 @@ import {
   DuplicateTraineeEnrollmentException,
   InvalidTraineeSubmissionException,
   SubjectAlreadyArchivedException,
+  SubjectCannotAssignTrainerFromCurrentStatusException,
   SubjectCannotBeArchivedFromCurrentStatusException,
+  SubjectCannotRemoveTrainerFromCurrentStatusException,
+  SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
   SubjectDatesOutsideCourseRangeException,
   SubjectEnrollmentWindowClosedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
 } from './subject.error'
+import { SubjectMes } from './subject.message'
 import {
   AssignTraineesBodyType,
   AssignTraineesResType,
@@ -296,7 +300,7 @@ export class SubjectService {
       status: subjectStatus
     })
 
-    return { message: 'Archived subject successfully' }
+    return { message: SubjectMes.ARCHIVE_SUCCESS }
   }
 
   async assignTrainer({
@@ -309,6 +313,10 @@ export class SubjectService {
     const subject = await this.sharedSubjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
+    }
+
+    if (!this.isTrainerMutationAllowed(subject.status as SubjectStatusValue)) {
+      throw SubjectCannotAssignTrainerFromCurrentStatusException
     }
 
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
@@ -338,6 +346,15 @@ export class SubjectService {
     currentTrainerId: string
     data: { roleInSubject: SubjectInstructorRoleValue }
   }): Promise<UpdateTrainerAssignmentResType> {
+    const subject = await this.sharedSubjectRepo.findById(currentSubjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    if (!this.isTrainerMutationAllowed(subject.status as SubjectStatusValue)) {
+      throw SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException
+    }
+
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId: currentSubjectId,
       trainerUserId: currentTrainerId
@@ -357,6 +374,15 @@ export class SubjectService {
   }
 
   async removeTrainer({ subjectId, trainerId }: { subjectId: string; trainerId: string }): Promise<MessageResType> {
+    const subject = await this.sharedSubjectRepo.findById(subjectId)
+    if (!subject) {
+      throw SubjectNotFoundException
+    }
+
+    if (!this.isTrainerMutationAllowed(subject.status as SubjectStatusValue)) {
+      throw SubjectCannotRemoveTrainerFromCurrentStatusException
+    }
+
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId,
       trainerUserId: trainerId
@@ -371,7 +397,7 @@ export class SubjectService {
       trainerUserId: trainerId
     })
 
-    return { message: 'Trainer removed successfully' }
+    return { message: SubjectMes.REMOVE_TRAINER_SUCCESS }
   }
 
   async lookupTrainees({ data }: { data: LookupTraineesBodyType }): Promise<LookupTraineesResType> {
@@ -553,7 +579,7 @@ export class SubjectService {
       throw CannotCancelSubjectEnrollmentException
     }
 
-    return { message: 'Enrollment cancelled successfully' }
+    return { message: SubjectMes.CANCEL_ENROLLMENT_SUCCESS }
   }
 
   async removeCourseEnrollmentsForTrainee({
@@ -613,5 +639,9 @@ export class SubjectService {
     const diffInMs = end.getTime() - start.getTime()
     const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
     return round(diffInDays / 30, 2)
+  }
+
+  private isTrainerMutationAllowed(status: SubjectStatusValue): boolean {
+    return status === SubjectStatus.PLANNED || status === SubjectStatus.ON_GOING
   }
 }
