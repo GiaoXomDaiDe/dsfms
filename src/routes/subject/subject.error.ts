@@ -130,13 +130,13 @@ export const CannotHardDeleteSubjectWithInstructorsException = new BadRequestExc
 
 // Bulk Operation Errors
 export const BulkSubjectCodeAlreadyExistsAtIndexException = (index: number, code: string) =>
-  `Subject code '${code}' at index ${index} already exists in this course`
+  new BadRequestException(`Subject code '${code}' at index ${index} already exists in this course`)
 
 export const BulkInvalidDateRangeAtIndexException = (index: number) =>
-  `Invalid date range at index ${index}: end date must be after start date`
+  new BadRequestException(`Invalid date range at index ${index}: end date must be after start date`)
 
 export const BulkSubjectCreationFailedException = (index: number, error: string) =>
-  `Failed to create subject at index ${index}: ${error}`
+  new BadRequestException(`Failed to create subject at index ${index}: ${error}`)
 
 // Default Error Messages
 export const DefaultSubjectValidationException = new BadRequestException('Subject validation failed')
