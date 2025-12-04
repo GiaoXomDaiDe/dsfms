@@ -151,14 +151,16 @@ export class SharedUserRepository {
     }) as Promise<TrainerSummary[]>
   }
 
-  async findActiveTrainers({ excludeUserIds = [] }: { excludeUserIds?: string[] } = {}): Promise<TrainerSummary[]> {
+  async findActiveTrainers(): Promise<TrainerSummary[]> {
     return this.prismaService.user.findMany({
       where: {
         deletedAt: null,
+        status: {
+          not: UserStatus.DISABLED
+        },
         role: {
           name: RoleName.TRAINER
-        },
-        ...(excludeUserIds.length > 0 ? { id: { notIn: excludeUserIds } } : {})
+        }
       },
       select: {
         id: true,
@@ -169,7 +171,7 @@ export class SharedUserRepository {
         email: true,
         departmentId: true
       }
-    }) as Promise<TrainerSummary[]>
+    })
   }
 
   async findActiveTraineesByEids(eids: string[]): Promise<TraineeIdLookup[]> {

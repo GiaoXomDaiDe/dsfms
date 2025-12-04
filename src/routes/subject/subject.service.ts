@@ -1,6 +1,5 @@
-import { ForbiddenException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { round } from 'lodash'
-import { RoleName } from '~/shared/constants/auth.constant'
 import { SubjectInstructorRoleValue, SubjectStatus } from '~/shared/constants/subject.constant'
 import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
@@ -9,7 +8,6 @@ import {
   isUniqueConstraintPrismaError
 } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
-import { CourseIdParamsType } from '~/shared/models/shared-course.model'
 import { SubjectIdParamsType, SubjectType } from '~/shared/models/shared-subject.model'
 import { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
@@ -41,12 +39,7 @@ import {
   CreateSubjectBodyType,
   GetActiveTraineesResType,
   GetAvailableTrainersResType,
-  GetCourseEnrollmentBatchesResType,
-  GetEnrollmentsQueryType,
-  GetEnrollmentsResType,
   GetSubjectDetailResType,
-  GetSubjectEnrollmentsQueryType,
-  GetSubjectEnrollmentsResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetTraineeCourseSubjectsResType,
@@ -72,19 +65,14 @@ export class SubjectService {
     private readonly sharedCourseRepo: SharedCourseRepository
   ) {}
 
-  async list(query: GetSubjectsQueryType, userRoleName: string): Promise<GetSubjectsResType> {
-    const includeDeleted = userRoleName === RoleName.ACADEMIC_DEPARTMENT
-
+  async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
     return await this.subjectRepo.list({
-      ...query,
-      includeDeleted
+      ...query
     })
   }
 
-  async findById(subjectId: SubjectIdParamsType, { roleName }: { roleName: string }): Promise<GetSubjectDetailResType> {
-    const includeDeleted = roleName === RoleName.ACADEMIC_DEPARTMENT
-
-    const subject = await this.subjectRepo.findById(subjectId, { includeDeleted })
+  async findById(subjectId: SubjectIdParamsType): Promise<GetSubjectDetailResType> {
+    const subject = await this.subjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
     }
@@ -92,19 +80,14 @@ export class SubjectService {
     return subject
   }
 
-  async getAvailableTrainers(courseId: CourseIdParamsType): Promise<GetAvailableTrainersResType> {
-    const trainers = await this.subjectRepo.getAvailableTrainers(courseId)
+  async getActiveTrainers(): Promise<GetAvailableTrainersResType> {
+    const trainers = await this.subjectRepo.findActiveTrainers()
 
     return trainers
   }
 
   async getActiveTrainees(): Promise<GetActiveTraineesResType> {
     return await this.subjectRepo.findActiveTrainees()
-  }
-
-  async getAllEnrollments(query: GetEnrollmentsQueryType, roleName: string): Promise<GetEnrollmentsResType> {
-    this.ensureEnrollmentAccess(roleName)
-    return await this.subjectRepo.getAllEnrollments(query)
   }
 
   async create({
@@ -272,7 +255,7 @@ export class SubjectService {
       }
 
       const updatedSubject = await this.subjectRepo.update({ id, data: updatedData, updatedById })
-      const result = await this.subjectRepo.findById(updatedSubject.id, { includeDeleted: true })
+      const result = await this.subjectRepo.findById(updatedSubject.id)
       if (!result) {
         throw SubjectNotFoundException
       }
@@ -465,17 +448,20 @@ export class SubjectService {
 
   async getTraineeEnrollments({
     traineeId,
-    query
+    query,
+    courseId
   }: {
     traineeId: string
     query: GetTraineeEnrollmentsQueryType
+    courseId?: string
   }): Promise<GetTraineeEnrollmentsResType> {
     const { batchCode, status } = query
 
     const result = await this.subjectRepo.getTraineeEnrollments({
       traineeUserId: traineeId,
       batchCode,
-      status
+      status,
+      courseId
     })
 
     return {
@@ -489,30 +475,6 @@ export class SubjectService {
     return await this.subjectRepo.getTraineeCoursesWithSubjects({
       traineeUserId: traineeId
     })
-  }
-
-  async getSubjectEnrollments(
-    subjectId: string,
-    query: GetSubjectEnrollmentsQueryType
-  ): Promise<GetSubjectEnrollmentsResType> {
-    return await this.subjectRepo.getSubjectEnrollments({
-      subjectId,
-      ...query
-    })
-  }
-
-  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
-    const course = await this.sharedCourseRepo.findById(courseId)
-    if (!course) {
-      throw CourseNotFoundException
-    }
-
-    const batches = await this.subjectRepo.getCourseEnrollmentBatches(courseId)
-
-    return {
-      courseId,
-      batches
-    }
   }
 
   async removeEnrollments({
@@ -548,8 +510,8 @@ export class SubjectService {
     courseId: string
     batchCode: string
   }): Promise<RemoveCourseEnrollmentsByBatchResType> {
-    const course = await this.sharedCourseRepo.findById(courseId)
-    if (!course) {
+    const exists = await this.sharedCourseRepo.exists(courseId)
+    if (!exists) {
       throw CourseNotFoundException
     }
 
@@ -651,12 +613,5 @@ export class SubjectService {
     const diffInMs = end.getTime() - start.getTime()
     const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
     return round(diffInDays / 30, 2)
-  }
-
-  private ensureEnrollmentAccess(roleName: string) {
-    const allowedRoles = new Set<string>([RoleName.ACADEMIC_DEPARTMENT, RoleName.ADMINISTRATOR])
-    if (!allowedRoles.has(roleName)) {
-      throw new ForbiddenException('Insufficient permission to view enrollments')
-    }
   }
 }

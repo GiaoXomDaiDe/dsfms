@@ -70,3 +70,80 @@ export const userRoleDepartmentProfileInclude = {
   trainerProfile: true,
   traineeProfile: true
 } satisfies Prisma.UserInclude
+
+export const userTrainerContactSelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true,
+  phoneNumber: true,
+  status: true
+} satisfies Prisma.UserSelect
+
+export const userTrainerWithDepartmentSelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true,
+  phoneNumber: true,
+  status: true,
+  department: {
+    select: departmentIdNameSelect
+  }
+} satisfies Prisma.UserSelect
+
+export const userTrainerDirectorySelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true,
+  phoneNumber: true,
+  status: true,
+  departmentId: true
+} satisfies Prisma.UserSelect
+
+export const userTraineeBasicStatusSelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  status: true
+} satisfies Prisma.UserSelect
+
+export const userTraineeWithDepartmentSelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true,
+  status: true,
+  department: {
+    select: departmentIdNameSelect
+  }
+} satisfies Prisma.UserSelect
+
+export const userTraineeDirectorySelect = {
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true,
+  avatarUrl: true,
+  departmentId: true,
+  department: {
+    select: departmentIdNameSelect
+  }
+} satisfies Prisma.UserSelect
+
+export const userEidOnlySelect = {
+  eid: true
+} satisfies Prisma.UserSelect

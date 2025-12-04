@@ -53,4 +53,4 @@ export const CourseIdParamsSchema = z.object({
 
 export type CourseType = z.infer<typeof CourseSchema>
 export type TeachingCourseType = z.infer<typeof TeachingCourseSchema>
-export type CourseIdParamsType = string
+export type CourseIdParamsType = z.infer<typeof CourseIdParamsSchema>

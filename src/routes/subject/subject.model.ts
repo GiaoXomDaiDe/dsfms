@@ -59,30 +59,6 @@ export const SubjectDetailEnrollmentsByBatchSchema = z.object({
   trainees: z.array(SubjectDetailTraineeSchema)
 })
 
-const StatusCountSchema = z.object({
-  ENROLLED: z.number().int().default(0),
-  ON_GOING: z.number().int().default(0),
-  CANCELLED: z.number().int().default(0),
-  FINISHED: z.number().int().default(0)
-})
-
-export const CourseEnrollmentBatchSubjectSchema = z.object({
-  subjectId: z.uuid(),
-  subjectCode: z.string(),
-  subjectName: z.string(),
-  totalTrainees: z.number().int(),
-  activeTrainees: z.number().int(),
-  statusCounts: StatusCountSchema
-})
-
-export const CourseEnrollmentBatchSummarySchema = z.object({
-  batchCode: z.string(),
-  totalTrainees: z.number().int(),
-  activeTrainees: z.number().int(),
-  statusCounts: StatusCountSchema,
-  subjects: z.array(CourseEnrollmentBatchSubjectSchema)
-})
-
 // Schema cho course trong subject detail
 export const SubjectDetailCourseSchema = z
   .object({
@@ -107,11 +83,6 @@ export const GetSubjectDetailResSchema = SubjectSchema.omit({
   enrollmentsByBatch: z.array(SubjectDetailEnrollmentsByBatchSchema).default([])
 })
 
-export const GetCourseEnrollmentBatchesResSchema = z.object({
-  courseId: z.uuid(),
-  batches: z.array(CourseEnrollmentBatchSummarySchema)
-})
-
 export const AvailableTrainerSchema = UserSchema.pick({
   id: true,
   eid: true,
@@ -120,8 +91,6 @@ export const AvailableTrainerSchema = UserSchema.pick({
   lastName: true,
   email: true,
   departmentId: true
-}).extend({
-  belongsToDepartment: z.boolean()
 })
 
 export const GetAvailableTrainersResSchema = z.object({
@@ -375,7 +344,6 @@ export type GetSubjectEnrollmentsQueryType = z.infer<typeof GetSubjectEnrollment
 export type SubjectEnrollmentSummaryType = z.infer<typeof SubjectEnrollmentSummarySchema>
 export type SubjectEnrollmentListItemType = z.infer<typeof SubjectEnrollmentListItemSchema>
 export type GetSubjectEnrollmentsResType = z.infer<typeof GetSubjectEnrollmentsResSchema>
-export type GetCourseEnrollmentBatchesResType = z.infer<typeof GetCourseEnrollmentBatchesResSchema>
 export type RemoveCourseEnrollmentsByBatchResType = z.infer<typeof RemoveCourseEnrollmentsByBatchResSchema>
 export type RemoveCourseTraineeEnrollmentsBodyType = z.infer<typeof RemoveCourseTraineeEnrollmentsBodySchema>
 export type RemoveCourseTraineeEnrollmentsResType = z.infer<typeof RemoveCourseTraineeEnrollmentsResSchema>
@@ -385,7 +353,6 @@ export type SubjectDetailInstructorType = z.infer<typeof SubjectDetailInstructor
 export type SubjectDetailTraineeType = z.infer<typeof SubjectDetailTraineeSchema>
 export type SubjectDetailEnrollmentsByBatchType = z.infer<typeof SubjectDetailEnrollmentsByBatchSchema>
 export type SubjectDetailCourseType = z.infer<typeof SubjectDetailCourseSchema>
-export type CourseEnrollmentBatchSummaryType = z.infer<typeof CourseEnrollmentBatchSummarySchema>
 
 // Remove Enrollments Body Schema
 export const RemoveEnrollmentsBodySchema = z.object({
@@ -532,15 +499,23 @@ export const GetSubjectEnrollmentsResSchema = z.object({
 
 // Get Course Trainees Schema
 
-// Cancel Course Enrollments Schema
-
-export const CancelCourseEnrollmentsResSchema = z.object({
-  message: z.string(),
-  data: z.object({
-    cancelledCount: z.number().int(),
-    notCancelledCount: z.number().int()
-  })
+const SubjectEnrollmentTraineeSnapshotUserSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true
 })
+
+export const SubjectEnrollmentTraineeSnapshotSchema = z.object({
+  subjectId: z.uuid(),
+  traineeUserId: z.uuid(),
+  batchCode: z.string().nullable(),
+  trainee: SubjectEnrollmentTraineeSnapshotUserSchema.nullable()
+})
+
+export type SubjectEnrollmentTraineeSnapshotType = z.infer<typeof SubjectEnrollmentTraineeSnapshotSchema>
 
 // Get Trainee Enrollments Schema
 export const GetTraineeEnrollmentsQuerySchema = z.object({

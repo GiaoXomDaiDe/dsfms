@@ -32,11 +32,9 @@ import {
   UpdateTrainerAssignmentBodyDto,
   UpdateTrainerAssignmentResDto
 } from '~/routes/subject/subject.dto'
-import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { IsPublic } from '~/shared/decorators/auth.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
-import { CourseIdParamsDto } from '~/shared/dtos/shared-course.dto'
 import { SubjectService } from './subject.service'
 
 @Controller('subjects')
@@ -45,26 +43,26 @@ export class SubjectController {
 
   @Get()
   @ZodSerializerDto(GetSubjectsResDto)
-  async list(@Query() query: GetSubjectsQueryDto, @ActiveRolePermissions('name') roleName: string) {
-    return await this.subjectService.list(query, roleName)
+  async list(@Query() query: GetSubjectsQueryDto) {
+    return await this.subjectService.list(query)
+  }
+
+  @Get(':subjectId')
+  @ZodSerializerDto(GetSubjectDetailResDto)
+  async findByIds(@Param() { subjectId }: SubjectIdParamsDto) {
+    return await this.subjectService.findById(subjectId)
+  }
+
+  @Get('courses/active-trainers')
+  @ZodSerializerDto(GetAvailableTrainersResDto)
+  async getActiveTrainers() {
+    return await this.subjectService.getActiveTrainers()
   }
 
   @Get('active-trainees')
   @ZodSerializerDto(GetActiveTraineesResDto)
   async getActiveTrainees() {
     return await this.subjectService.getActiveTrainees()
-  }
-
-  @Get(':subjectId')
-  @ZodSerializerDto(GetSubjectDetailResDto)
-  async findByIds(@Param() { subjectId }: SubjectIdParamsDto, @ActiveRolePermissions('name') roleName: string) {
-    return await this.subjectService.findById(subjectId, { roleName })
-  }
-
-  @Get('courses/:courseId/available-trainers')
-  @ZodSerializerDto(GetAvailableTrainersResDto)
-  async getAvailableTrainers(@Param() { courseId }: CourseIdParamsDto) {
-    return await this.subjectService.getAvailableTrainers(courseId)
   }
 
   @Post()

@@ -6,13 +6,11 @@ import {
   AssignTrainerResSchema,
   BulkCreateSubjectsBodySchema,
   BulkCreateSubjectsResSchema,
-  CancelCourseEnrollmentsResSchema,
   CancelSubjectEnrollmentBodySchema,
   CourseBatchParamsSchema,
   CreateSubjectBodySchema,
   GetActiveTraineesResSchema,
   GetAvailableTrainersResSchema,
-  GetCourseEnrollmentBatchesResSchema,
   GetEnrollmentsQuerySchema,
   GetEnrollmentsResSchema,
   GetSubjectDetailResSchema,
@@ -64,14 +62,12 @@ export class CancelSubjectEnrollmentBodyDto extends createZodDto(CancelSubjectEn
 export class GetEnrollmentsQueryDto extends createZodDto(GetEnrollmentsQuerySchema) {}
 export class GetEnrollmentsResDto extends createZodDto(GetEnrollmentsResSchema) {}
 
-export class CancelCourseEnrollmentsResDto extends createZodDto(CancelCourseEnrollmentsResSchema) {}
 export class GetTraineeEnrollmentsQueryDto extends createZodDto(GetTraineeEnrollmentsQuerySchema) {}
 export class GetTraineeEnrollmentsResDto extends createZodDto(GetTraineeEnrollmentsResSchema) {}
 export class GetTraineeCourseSubjectsResDto extends createZodDto(GetTraineeCourseSubjectsResSchema) {}
 export class RemoveEnrollmentsBodyDto extends createZodDto(RemoveEnrollmentsBodySchema) {}
 export class BulkCreateSubjectsResDto extends createZodDto(BulkCreateSubjectsResSchema) {}
 export class RemoveEnrollmentsResDto extends createZodDto(RemoveEnrollmentsResSchema) {}
-export class GetCourseEnrollmentBatchesResDto extends createZodDto(GetCourseEnrollmentBatchesResSchema) {}
 export class CourseBatchParamsDto extends createZodDto(CourseBatchParamsSchema) {}
 export class RemoveCourseEnrollmentsByBatchResDto extends createZodDto(RemoveCourseEnrollmentsByBatchResSchema) {}
 export class RemoveCourseTraineeEnrollmentsBodyDto extends createZodDto(RemoveCourseTraineeEnrollmentsBodySchema) {}
