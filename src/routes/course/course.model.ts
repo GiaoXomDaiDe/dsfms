@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { GetTraineeEnrollmentsQuerySchema, GetTraineeEnrollmentsResSchema } from '~/routes/subject/subject.model'
+import {
+  GetTraineeEnrollmentsQuerySchema,
+  TraineeEnrollmentRecordSchema,
+  TraineeEnrollmentSubjectSchema,
+  TraineeEnrollmentUserSchema
+} from '~/routes/subject/subject.model'
 import { SubjectInstructorRole } from '~/shared/constants/subject.constant'
 import { CourseIdParamsSchema, CourseIdParamsType, CourseSchema } from '~/shared/models/shared-course.model'
 import { DepartmentSchema } from '~/shared/models/shared-department.model'
@@ -118,10 +123,16 @@ export const GetCourseTraineesResSchema = z.object({
 
 export const GetCourseTraineeEnrollmentsQuerySchema = GetTraineeEnrollmentsQuerySchema
 
+const CourseTraineeSubjectEnrollmentSchema = z.object({
+  subject: TraineeEnrollmentSubjectSchema,
+  enrollment: TraineeEnrollmentRecordSchema.shape.enrollment
+})
+
 export const GetCourseTraineeEnrollmentsResSchema = z.object({
   courseId: z.uuid(),
-  trainees: z.array(GetTraineeEnrollmentsResSchema),
-  totalTrainees: z.number().int()
+  trainee: TraineeEnrollmentUserSchema,
+  subjects: z.array(CourseTraineeSubjectEnrollmentSchema),
+  totalSubjects: z.number().int()
 })
 
 // Trainer assignment --------------------------------------------------------
@@ -164,6 +175,7 @@ export type GetCourseTraineesQueryType = z.infer<typeof GetCourseTraineesQuerySc
 export type CourseTraineeInfoType = z.infer<typeof CourseTraineeInfoSchema>
 export type GetCourseTraineesResType = z.infer<typeof GetCourseTraineesResSchema>
 export type GetCourseTraineeEnrollmentsQueryType = z.infer<typeof GetCourseTraineeEnrollmentsQuerySchema>
+export type CourseTraineeSubjectEnrollmentType = z.infer<typeof CourseTraineeSubjectEnrollmentSchema>
 export type GetCourseTraineeEnrollmentsResType = z.infer<typeof GetCourseTraineeEnrollmentsResSchema>
 export type AssignCourseTrainerBodyType = z.infer<typeof AssignCourseTrainerBodySchema>
 export type AssignCourseTrainerResType = z.infer<typeof AssignCourseTrainerResSchema>

@@ -1,9 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import {
-  GetTraineeEnrollmentsQueryType,
-  GetTraineeEnrollmentsResType,
-  RemoveCourseEnrollmentsByBatchResType
-} from '~/routes/subject/subject.model'
+import { RemoveCourseEnrollmentsByBatchResType, TraineeEnrollmentRecordType } from '~/routes/subject/subject.model'
 import { CourseStatus } from '~/shared/constants/course.constant'
 import { isUniqueConstraintPrismaError } from '~/shared/helper'
 import { MessageResType } from '~/shared/models/response.model'
@@ -29,6 +25,8 @@ import {
   GetCourseParamsType,
   GetCourseResType,
   GetCoursesResType,
+  GetCourseTraineeEnrollmentsQueryType,
+  GetCourseTraineeEnrollmentsResType,
   GetCourseTraineesQueryType,
   GetCourseTraineesResType,
   UpdateCourseBodyType,
@@ -295,17 +293,44 @@ export class CourseService {
   }: {
     courseId: string
     traineeId: string
-    query: GetTraineeEnrollmentsQueryType
-  }): Promise<GetTraineeEnrollmentsResType> {
+    query: GetCourseTraineeEnrollmentsQueryType
+  }): Promise<GetCourseTraineeEnrollmentsResType> {
     const courseExists = await this.sharedCourseRepo.exists(courseId)
     if (!courseExists) {
       throw CourseNotFoundException
     }
 
-    return await this.subjectService.getTraineeEnrollments({
+    const result = await this.subjectService.getTraineeEnrollments({
       traineeId,
       query,
       courseId
     })
+
+    const subjectMap = new Map<
+      string,
+      {
+        subject: TraineeEnrollmentRecordType['subject']
+        enrollment: TraineeEnrollmentRecordType['enrollment']
+      }
+    >()
+
+    result.enrollments.forEach((record) => {
+      const subjectId = record.subject.id
+      if (!subjectMap.has(subjectId)) {
+        subjectMap.set(subjectId, {
+          subject: record.subject,
+          enrollment: record.enrollment
+        })
+      }
+    })
+
+    const subjects = Array.from(subjectMap.values())
+
+    return {
+      courseId,
+      trainee: result.trainee,
+      subjects,
+      totalSubjects: subjects.length
+    }
   }
 }

@@ -9,6 +9,8 @@ import {
   GetCourseParamsDto,
   GetCourseResDto,
   GetCoursesResDto,
+  GetCourseTraineeEnrollmentsQueryDto,
+  GetCourseTraineeEnrollmentsResDto,
   GetCourseTraineesQueryDto,
   GetCourseTraineesResDto,
   UpdateCourseBodyDto,
@@ -18,12 +20,7 @@ import {
 } from '~/routes/course/course.dto'
 import { CourseMes } from '~/routes/course/course.message'
 import { CourseService } from '~/routes/course/course.service'
-import {
-  CourseBatchParamsDto,
-  GetTraineeEnrollmentsQueryDto,
-  GetTraineeEnrollmentsResDto,
-  RemoveCourseEnrollmentsByBatchResDto
-} from '~/routes/subject/subject.dto'
+import { CourseBatchParamsDto, RemoveCourseEnrollmentsByBatchResDto } from '~/routes/subject/subject.dto'
 import { ActiveUser } from '~/shared/decorators/active-user.decorator'
 import { MessageResDTO } from '~/shared/dtos/response.dto'
 
@@ -146,11 +143,11 @@ export class CourseController {
   }
 
   @Get(':courseId/trainees/:traineeId/enrollments')
-  @ZodSerializerDto(GetTraineeEnrollmentsResDto)
+  @ZodSerializerDto(GetCourseTraineeEnrollmentsResDto)
   async getTraineeEnrollments(
     @Param() params: GetCourseParamsDto,
     @Param('traineeId') traineeId: string,
-    @Query() query: GetTraineeEnrollmentsQueryDto
+    @Query() query: GetCourseTraineeEnrollmentsQueryDto
   ) {
     const data = await this.courseService.getTraineeEnrollments({
       courseId: params.courseId,
