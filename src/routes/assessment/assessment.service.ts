@@ -1671,19 +1671,39 @@ export class AssessmentService {
    */
   private async processAssessmentResult(assessmentId: string, assessmentForm: any): Promise<void> {
     try {
+      console.log(`=== Processing Assessment Result for ${assessmentId} ===`)
+      console.log(`AssessmentForm IDs - subjectId: ${assessmentForm.subjectId}, courseId: ${assessmentForm.courseId}`)
+      
       // Get all assessment values with field types
       const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
 
       // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT fields
       const finalScoreNumValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_NUM')
       const finalScoreTextValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_TEXT')
+      
+      console.log(`FINAL_SCORE_NUM value: ${finalScoreNumValue?.answerValue || 'null'}`)
+      console.log(`FINAL_SCORE_TEXT value: ${finalScoreTextValue?.answerValue || 'null'}`)
 
-      // Get pass score from subject or course
+      // Get pass score from subject or course - fetch directly from database to ensure we have the latest data
       let passScore: number | null = null
-      if (assessmentForm.subjectId && assessmentForm.subject?.passScore !== null) {
-        passScore = assessmentForm.subject.passScore
-      } else if (assessmentForm.courseId && assessmentForm.course?.passScore !== null) {
-        passScore = assessmentForm.course.passScore
+      
+      // Priority: Subject first (if subjectId exists, ignore courseId)
+      if (assessmentForm.subjectId) {
+        const subject = await this.assessmentRepo.prismaClient.subject.findUnique({
+          where: { id: assessmentForm.subjectId },
+          select: { passScore: true }
+        })
+        passScore = subject?.passScore || null
+        console.log(`Assessment ${assessmentId} - Subject passScore: ${passScore}`)
+      } 
+      // Only check course if no subject
+      else if (assessmentForm.courseId) {
+        const course = await this.assessmentRepo.prismaClient.course.findUnique({
+          where: { id: assessmentForm.courseId },
+          select: { passScore: true }
+        })
+        passScore = course?.passScore || null
+        console.log(`Assessment ${assessmentId} - Course passScore: ${passScore}`)
       }
 
       let resultScore: number | null = null
@@ -1697,6 +1717,11 @@ export class AssessmentService {
         // Determine PASS/FAIL based on pass score
         const isPassed = scoreValue >= passScore
         resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
+
+        console.log(`Assessment ${assessmentId} - Case 1: Both fields exist`)
+        console.log(`- Score: ${scoreValue}, PassScore: ${passScore}`)
+        console.log(`- Calculation: ${scoreValue} >= ${passScore} = ${isPassed}`)
+        console.log(`- Result: ${resultText}`)
 
         // Update FINAL_SCORE_TEXT field with PASS/FAIL
         await this.assessmentRepo.prismaClient.assessmentValue.update({
@@ -1734,9 +1759,10 @@ export class AssessmentService {
         const isPassed = scoreValue >= passScore
         resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
 
-        console.log(
-          `Assessment ${assessmentId} has only FINAL_SCORE_NUM field - score: ${scoreValue}, result: ${resultText}`
-        )
+        console.log(`Assessment ${assessmentId} - Case 3: Only FINAL_SCORE_NUM field`)
+        console.log(`- Score: ${scoreValue}, PassScore: ${passScore}`)
+        console.log(`- Calculation: ${scoreValue} >= ${passScore} = ${isPassed}`)
+        console.log(`- Result: ${resultText}`)
       }
       // Case 4: Only FINAL_SCORE_NUM exists BUT no passScore is defined
       else if (finalScoreNumValue && !finalScoreTextValue && passScore === null) {
