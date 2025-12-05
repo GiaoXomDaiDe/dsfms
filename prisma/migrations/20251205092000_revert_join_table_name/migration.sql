@@ -1,0 +1,2 @@
+-- No-op placeholder. The join table was already renamed back earlier; this migration
+-- is retained for sequence consistency without executing SQL.

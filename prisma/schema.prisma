@@ -127,7 +127,7 @@ model EndpointPermission {
   roles       Role[]       @relation("EndpointPermissionToRole")
   permissionGroupLinks PermissionGroupToEndpointPermission[]
 
-  @@map("EndpointPermission")
+  @@map("Endpoint_Permission")
 }
 
 model PermissionGroup {
@@ -137,6 +137,8 @@ model PermissionGroup {
   permissionGroupCode String                      @unique
 
   permissions PermissionGroupToEndpointPermission[]
+
+  @@map("Permission_Group")
 }
 
 model PermissionGroupToEndpointPermission {
@@ -147,6 +149,7 @@ model PermissionGroupToEndpointPermission {
   endpointPermission EndpointPermission @relation(fields: [endpointPermissionId], references: [id])
 
   @@id([permissionGroupId, endpointPermissionId])
+  @@map("Permission_Group_To_Endpoint_Permission")
 }
 
 model TrainerProfile {
