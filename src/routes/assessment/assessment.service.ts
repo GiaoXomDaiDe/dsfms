@@ -1671,19 +1671,39 @@ export class AssessmentService {
    */
   private async processAssessmentResult(assessmentId: string, assessmentForm: any): Promise<void> {
     try {
+      console.log(`=== Processing Assessment Result for ${assessmentId} ===`)
+      console.log(`AssessmentForm IDs - subjectId: ${assessmentForm.subjectId}, courseId: ${assessmentForm.courseId}`)
+      
       // Get all assessment values with field types
       const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
 
       // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT fields
       const finalScoreNumValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_NUM')
       const finalScoreTextValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_TEXT')
+      
+      console.log(`FINAL_SCORE_NUM value: ${finalScoreNumValue?.answerValue || 'null'}`)
+      console.log(`FINAL_SCORE_TEXT value: ${finalScoreTextValue?.answerValue || 'null'}`)
 
-      // Get pass score from subject or course
+      // Get pass score from subject or course - fetch directly from database to ensure we have the latest data
       let passScore: number | null = null
-      if (assessmentForm.subjectId && assessmentForm.subject?.passScore !== null) {
-        passScore = assessmentForm.subject.passScore
-      } else if (assessmentForm.courseId && assessmentForm.course?.passScore !== null) {
-        passScore = assessmentForm.course.passScore
+      
+      // Priority: Subject first (if subjectId exists, ignore courseId)
+      if (assessmentForm.subjectId) {
+        const subject = await this.assessmentRepo.prismaClient.subject.findUnique({
+          where: { id: assessmentForm.subjectId },
+          select: { passScore: true }
+        })
+        passScore = subject?.passScore || null
+        // console.log(`Assessment ${assessmentId} - Subject passScore: ${passScore}`)
+      } 
+      // Only check course if no subject
+      else if (assessmentForm.courseId) {
+        const course = await this.assessmentRepo.prismaClient.course.findUnique({
+          where: { id: assessmentForm.courseId },
+          select: { passScore: true }
+        })
+        passScore = course?.passScore || null
+        // console.log(`Assessment ${assessmentId} - Course passScore: ${passScore}`)
       }
 
       let resultScore: number | null = null
@@ -1698,6 +1718,11 @@ export class AssessmentService {
         const isPassed = scoreValue >= passScore
         resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
 
+        // console.log(`Assessment ${assessmentId} - Case 1: Both fields exist`)
+        // console.log(`- Score: ${scoreValue}, PassScore: ${passScore}`)
+        // console.log(`- Calculation: ${scoreValue} >= ${passScore} = ${isPassed}`)
+        // console.log(`- Result: ${resultText}`)
+
         // Update FINAL_SCORE_TEXT field with PASS/FAIL
         await this.assessmentRepo.prismaClient.assessmentValue.update({
           where: { id: finalScoreTextValue.id },
@@ -1706,7 +1731,7 @@ export class AssessmentService {
           }
         })
 
-        console.log(`Updated FINAL_SCORE_TEXT field to: ${resultText} for assessment ${assessmentId}`)
+        // console.log(`Updated FINAL_SCORE_TEXT field to: ${resultText} for assessment ${assessmentId}`)
       }
       // Case 2: Only FINAL_SCORE_TEXT exists
       else if (finalScoreTextValue && !finalScoreNumValue) {
@@ -1723,7 +1748,7 @@ export class AssessmentService {
           resultText = AssessmentResult.NOT_APPLICABLE
         }
 
-        console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - resultText: ${resultText}`)
+        // console.log(`Assessment ${assessmentId} has only FINAL_SCORE_TEXT field - resultText: ${resultText}`)
       }
       // Case 3: Only FINAL_SCORE_NUM exists AND passScore is defined
       else if (finalScoreNumValue && !finalScoreTextValue && passScore !== null) {
@@ -1734,9 +1759,10 @@ export class AssessmentService {
         const isPassed = scoreValue >= passScore
         resultText = isPassed ? AssessmentResult.PASS : AssessmentResult.FAIL
 
-        console.log(
-          `Assessment ${assessmentId} has only FINAL_SCORE_NUM field - score: ${scoreValue}, result: ${resultText}`
-        )
+        // console.log(`Assessment ${assessmentId} - Case 3: Only FINAL_SCORE_NUM field`)
+        // console.log(`- Score: ${scoreValue}, PassScore: ${passScore}`)
+        // console.log(`- Calculation: ${scoreValue} >= ${passScore} = ${isPassed}`)
+        // console.log(`- Result: ${resultText}`)
       }
       // Case 4: Only FINAL_SCORE_NUM exists BUT no passScore is defined
       else if (finalScoreNumValue && !finalScoreTextValue && passScore === null) {
@@ -1745,9 +1771,9 @@ export class AssessmentService {
         // Since no passScore is defined, cannot determine PASS/FAIL
         resultText = AssessmentResult.NOT_APPLICABLE
 
-        console.log(
-          `Assessment ${assessmentId} has FINAL_SCORE_NUM but no passScore defined - score: ${scoreValue}, cannot calculate result`
-        )
+        // console.log(
+        //   `Assessment ${assessmentId} has FINAL_SCORE_NUM but no passScore defined - score: ${scoreValue}, cannot calculate result`
+        // )
       }
 
       // Prepare comment for cases where result cannot be calculated due to missing passScore
@@ -1766,7 +1792,7 @@ export class AssessmentService {
         }
       })
 
-      console.log(`Updated AssessmentForm ${assessmentId} - resultScore: ${resultScore}, resultText: ${resultText}`)
+      // console.log(`Updated AssessmentForm ${assessmentId} - resultScore: ${resultScore}, resultText: ${resultText}`)
     } catch (error) {
       console.error('Failed to process assessment result:', error)
       throw new BadRequestException('Failed to process assessment result')
@@ -2253,7 +2279,7 @@ export class AssessmentService {
 
       if (hasImages) {
         // Use image module for templates with images
-        console.log('Template contains images, using image module')
+        // console.log('Template contains images, using image module')
         
         // Configure image module options
         const imageOpts = {
@@ -2265,9 +2291,9 @@ export class AssessmentService {
             try {
               // Only process if the value looks like a URL
               if (typeof tagValue === 'string' && (tagValue.startsWith('http://') || tagValue.startsWith('https://'))) {
-                console.log(`Downloading image for tag ${tagName}: ${tagValue}`)
+                // console.log(`Downloading image for tag ${tagName}: ${tagValue}`)
                 const imageBuffer = await downloadImageFromUrl(tagValue)
-                console.log(`Successfully downloaded image for tag ${tagName}, size: ${imageBuffer.length} bytes`)
+                // console.log(`Successfully downloaded image for tag ${tagName}, size: ${imageBuffer.length} bytes`)
                 return imageBuffer
               }
               // If not a URL, return null (will be handled as regular text)
