@@ -2183,7 +2183,7 @@ export class AssessmentRepo {
 
       switch (fieldName) {
         case 'trainee_name':
-          return `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim()
+          return `${assessment.trainee.lastName} ${assessment.trainee.middleName || ''} ${assessment.trainee.firstName}`.trim()
 
         case 'trainee_eid':
           return assessment.trainee.eid
