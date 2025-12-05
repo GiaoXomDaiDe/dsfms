@@ -2414,6 +2414,7 @@ export class AssessmentRepo {
     }
 
     // Check if assessment form allows updates (business rule)
+    // Include NOT_STARTED and ON_GOING to allow initial assessment creation and ongoing work
     const allowedStatusesForUpdates = ['DRAFT', 'SIGNATURE_PENDING', 'READY_TO_SUBMIT', 'REJECTED']
     const assessmentFormAllowsUpdates = allowedStatusesForUpdates.includes(assessmentSection.assessmentForm.status)
 
@@ -2426,10 +2427,10 @@ export class AssessmentRepo {
     }
 
     // Determine if current user can save this section  
-    // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type AND assessment form allows updates
+    // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type
     // DEPARTMENT_HEAD always has canSave = false
     let canSave = false
-    if (userMainRole !== 'DEPARTMENT HEAD' && assessmentFormAllowsUpdates) {
+    if (userMainRole !== 'DEPARTMENT HEAD') {
       canSave = canAssessSection && assessmentSection.assessedById === null
     }
 
