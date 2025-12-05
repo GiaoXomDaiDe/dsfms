@@ -1009,7 +1009,7 @@ export class AssessmentRepo {
     userId: string,
     userRole: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 1000,
     status?: AssessmentStatus,
     search?: string
   ) {
@@ -1178,7 +1178,7 @@ export class AssessmentRepo {
     userId: string,
     userRole: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 1000,
     status?: AssessmentStatus,
     search?: string
   ) {
@@ -1344,7 +1344,7 @@ export class AssessmentRepo {
   async getDepartmentAssessments(
     departmentId: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 1000,
     status?: AssessmentStatus,
     templateId?: string,
     subjectId?: string,
@@ -3146,7 +3146,7 @@ export class AssessmentRepo {
    */
   async getAssessmentEvents(
     page: number = 1,
-    limit: number = 20,
+    limit: number = 1000,
     status?: z.infer<typeof AssessmentEventStatus>,
     subjectId?: string,
     courseId?: string,
@@ -3345,7 +3345,7 @@ export class AssessmentRepo {
     userId: string,
     userRole: string,
     page: number = 1,
-    limit: number = 20,
+    limit: number = 1000,
     courseId?: string,
     subjectId?: string,
     search?: string
@@ -3849,7 +3849,7 @@ export class AssessmentRepo {
     userId: string,
     userRole: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 1000,
     status?: AssessmentStatus,
     search?: string
   ): Promise<GetEventSubjectAssessmentsResType> {
@@ -4038,7 +4038,7 @@ export class AssessmentRepo {
     userId: string,
     userRole: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 1000,
     status?: AssessmentStatus,
     search?: string
   ): Promise<GetEventCourseAssessmentsResType> {
