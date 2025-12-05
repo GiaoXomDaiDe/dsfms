@@ -1,0 +1,2 @@
+-- No-op placeholder. Renames are handled in migration 20251205061451_data_test to
+-- keep the migration history consistent for new environments.
