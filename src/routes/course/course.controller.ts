@@ -6,6 +6,7 @@ import {
   CourseTrainerParamsDto,
   CreateCourseBodyDto,
   CreateCourseResDto,
+  GetCourseEnrollmentBatchesResDto,
   GetCourseParamsDto,
   GetCourseResDto,
   GetCoursesResDto,
@@ -127,6 +128,13 @@ export class CourseController {
 
   //Enroll Trainees
   //Active trainee bên subject
+  @Get(':courseId/enrollments/batches')
+  @ZodSerializerDto(GetCourseEnrollmentBatchesResDto)
+  async getCourseEnrollmentBatches(@Param() params: GetCourseParamsDto) {
+    return await this.courseService.getCourseEnrollmentBatches({
+      courseId: params.courseId
+    })
+  }
 
   //Lấy ra các trainees của 1 course
   @Get(':courseId/trainees')

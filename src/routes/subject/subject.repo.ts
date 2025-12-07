@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { CourseStatus, Prisma } from '@prisma/client'
 import { map } from 'lodash'
+import { CourseEnrollmentBatchSummaryType } from '~/routes/course/course.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import {
   SubjectEnrollmentStatus,
@@ -1295,5 +1296,123 @@ export class SubjectRepository {
       current: distinctTrainees.length,
       max: course?.maxNumTrainee || null
     }
+  }
+
+  async getCourseEnrollmentBatches(courseId: string): Promise<CourseEnrollmentBatchSummaryType[]> {
+    const enrollments: Prisma.SubjectEnrollmentGetPayload<{
+      select: {
+        batchCode: true
+        status: true
+        subject: {
+          select: {
+            id: true
+            code: true
+            name: true
+          }
+        }
+      }
+    }>[] = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        subject: {
+          courseId,
+          deletedAt: null
+        }
+      },
+      select: {
+        batchCode: true,
+        status: true,
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        }
+      }
+    })
+
+    const createEmptyStatusCounts = () => ({
+      ENROLLED: 0,
+      ON_GOING: 0,
+      CANCELLED: 0,
+      FINISHED: 0
+    })
+
+    type StatusCounts = ReturnType<typeof createEmptyStatusCounts>
+
+    type BatchAccumulator = {
+      totalTrainees: number
+      statusCounts: StatusCounts
+      subjects: Map<
+        string,
+        {
+          subjectId: string
+          subjectCode: string
+          subjectName: string
+          totalTrainees: number
+          statusCounts: StatusCounts
+        }
+      >
+    }
+
+    const batchesMap = new Map<string, BatchAccumulator>()
+
+    enrollments.forEach((enrollment) => {
+      const batchCode = enrollment.batchCode
+      if (!batchCode) {
+        return
+      }
+
+      const summary = batchesMap.get(batchCode) ?? {
+        totalTrainees: 0,
+        statusCounts: createEmptyStatusCounts(),
+        subjects: new Map()
+      }
+
+      summary.totalTrainees += 1
+
+      const status = enrollment.status as SubjectEnrollmentStatusValue
+      if (status && summary.statusCounts[status] !== undefined) {
+        summary.statusCounts[status] += 1
+      }
+
+      const subject = enrollment.subject
+      if (subject) {
+        const subjectSummary = summary.subjects.get(subject.id) ?? {
+          subjectId: subject.id,
+          subjectCode: subject.code,
+          subjectName: subject.name,
+          totalTrainees: 0,
+          statusCounts: createEmptyStatusCounts()
+        }
+
+        subjectSummary.totalTrainees += 1
+
+        if (status && subjectSummary.statusCounts[status] !== undefined) {
+          subjectSummary.statusCounts[status] += 1
+        }
+
+        summary.subjects.set(subject.id, subjectSummary)
+      }
+
+      batchesMap.set(batchCode, summary)
+    })
+
+    const mapStatusCountsToActive = (counts: StatusCounts) => counts.ENROLLED + counts.ON_GOING
+
+    return Array.from(batchesMap.entries())
+      .sort(([batchA], [batchB]) => batchA.localeCompare(batchB))
+      .map(([batchCode, summary]) => ({
+        batchCode,
+        totalTrainees: summary.totalTrainees,
+        activeTrainees: mapStatusCountsToActive(summary.statusCounts),
+        statusCounts: { ...summary.statusCounts },
+        subjects: Array.from(summary.subjects.values())
+          .sort((subjectA, subjectB) => subjectA.subjectCode.localeCompare(subjectB.subjectCode))
+          .map((subjectSummary) => ({
+            ...subjectSummary,
+            activeTrainees: mapStatusCountsToActive(subjectSummary.statusCounts)
+          }))
+      }))
   }
 }

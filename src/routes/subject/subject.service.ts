@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { round } from 'lodash'
+import { GetCourseEnrollmentBatchesResType } from '~/routes/course/course.model'
 import { SubjectInstructorRoleValue, SubjectStatus, SubjectStatusValue } from '~/shared/constants/subject.constant'
 import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
@@ -302,6 +303,20 @@ export class SubjectService {
     })
 
     return { message: SubjectMes.ARCHIVE_SUCCESS }
+  }
+
+  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
+    const course = await this.sharedCourseRepo.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    const batches = await this.subjectRepo.getCourseEnrollmentBatches(courseId)
+
+    return {
+      courseId,
+      batches
+    }
   }
 
   async assignTrainer({
