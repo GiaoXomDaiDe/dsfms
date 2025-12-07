@@ -254,14 +254,41 @@ export class SubjectRepository {
     return { trainers, totalCount: trainers.length }
   }
 
-  async findActiveTrainees(): Promise<GetActiveTraineesResType> {
+  async findActiveTrainees({ subjectIds }: { subjectIds?: string[] }): Promise<GetActiveTraineesResType> {
+    let conflictingUserIds: string[] = []
+
+    if (subjectIds && subjectIds.length > 0) {
+      const blockingStatuses: SubjectEnrollmentStatusValue[] = [
+        SubjectEnrollmentStatus.ENROLLED,
+        SubjectEnrollmentStatus.ON_GOING
+      ]
+
+      const conflicts = await this.prisma.subjectEnrollment.findMany({
+        where: {
+          subjectId: { in: subjectIds },
+          status: { in: blockingStatuses }
+        },
+        select: {
+          traineeUserId: true
+        },
+        distinct: ['traineeUserId']
+      })
+
+      conflictingUserIds = conflicts.map((conflict) => conflict.traineeUserId).filter((id): id is string => Boolean(id))
+    }
+
     const trainees = await this.prisma.user.findMany({
       where: {
         deletedAt: null,
         status: UserStatus.ACTIVE,
         role: {
           name: RoleName.TRAINEE
-        }
+        },
+        ...(conflictingUserIds.length > 0 && {
+          id: {
+            notIn: conflictingUserIds
+          }
+        })
       },
       select: userTraineeDirectorySelect,
       orderBy: {
@@ -565,11 +592,13 @@ export class SubjectRepository {
   async assignTraineesToSubject({
     subjectId,
     traineeUserIds,
-    batchCode
+    batchCode,
+    blockingStatuses = [SubjectEnrollmentStatus.ENROLLED, SubjectEnrollmentStatus.ON_GOING]
   }: {
     subjectId: string
     traineeUserIds: string[]
     batchCode: string
+    blockingStatuses?: SubjectEnrollmentStatusValue[]
   }): Promise<AssignTraineesResult> {
     const requestedUsers = await this.sharedUserRepo.findUsersForAssignment(traineeUserIds)
 
@@ -619,6 +648,7 @@ export class SubjectRepository {
         traineeUserId: true,
         batchCode: true,
         enrollmentDate: true,
+        status: true,
         trainee: {
           select: userTraineeWithDepartmentSelect
         }
@@ -642,6 +672,26 @@ export class SubjectRepository {
       })
     }
 
+    const reactivatableEnrollments = existingEnrollments.filter(
+      (enrollment) => !blockingStatuses.includes(enrollment.status as SubjectEnrollmentStatusValue)
+    )
+
+    if (reactivatableEnrollments.length > 0) {
+      await this.prisma.subjectEnrollment.updateMany({
+        where: {
+          subjectId,
+          traineeUserId: {
+            in: reactivatableEnrollments.map((enrollment) => enrollment.traineeUserId)
+          }
+        },
+        data: {
+          status: SubjectEnrollmentStatus.ENROLLED,
+          batchCode,
+          enrollmentDate: new Date()
+        }
+      })
+    }
+
     const resolveUserPayload = (user: AssignmentUserSummary): TraineeAssignmentUserType => {
       const nameParts = [user.firstName ?? '', user.lastName ?? ''].filter((part) => part.trim().length > 0)
       const fullName = nameParts.join(' ').trim()
@@ -655,7 +705,7 @@ export class SubjectRepository {
       }
     }
 
-    const enrolled = newIds.map((id) => {
+    const enrolledNew = newIds.map((id) => {
       const user = requestedUserMap.get(id)
       if (!user) {
         throw TraineeResolutionFailureException(id)
@@ -663,7 +713,19 @@ export class SubjectRepository {
       return resolveUserPayload(user)
     })
 
-    const duplicates: TraineeAssignmentDuplicateType[] = existingEnrollments.map((enrollment) => {
+    const reactivated = reactivatableEnrollments.map((enrollment) => {
+      const fallbackUser = enrollment.trainee as AssignmentUserSummary
+      const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
+      return resolveUserPayload(user)
+    })
+
+    const enrolled = [...enrolledNew, ...reactivated]
+
+    const blockingEnrollments = existingEnrollments.filter((enrollment) =>
+      blockingStatuses.includes(enrollment.status as SubjectEnrollmentStatusValue)
+    )
+
+    const duplicates: TraineeAssignmentDuplicateType[] = blockingEnrollments.map((enrollment) => {
       const fallbackUser = enrollment.trainee as AssignmentUserSummary
       const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
 

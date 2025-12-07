@@ -10,6 +10,7 @@ import {
   CancelSubjectEnrollmentBodyDto,
   CreateSubjectBodyDto,
   CreateSubjectResDto,
+  GetActiveTraineesBodyDto,
   GetActiveTraineesResDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
@@ -63,10 +64,10 @@ export class SubjectController {
     }
   }
 
-  @Get('active-trainees')
+  @Post('active-trainees')
   @ZodSerializerDto(GetActiveTraineesResDto)
-  async getActiveTrainees() {
-    const data = await this.subjectService.getActiveTrainees()
+  async getActiveTrainees(@Body() body: GetActiveTraineesBodyDto) {
+    const data = await this.subjectService.getActiveTrainees(body)
     return {
       message: SubjectMes.ACTIVE_TRAINEES_SUCCESS,
       data

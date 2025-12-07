@@ -121,6 +121,10 @@ export const GetActiveTraineesResSchema = z.object({
   totalItems: z.number().int()
 })
 
+export const GetActiveTraineesBodySchema = z.object({
+  subjectIds: z.array(z.uuid()).max(50).optional()
+})
+
 const enrollmentSortFields = ['enrollmentDate', 'courseCode', 'subjectCode', 'traineeEid'] as const
 const sortOrderValues = ['asc', 'desc'] as const
 
@@ -347,6 +351,7 @@ export type GetSubjectEnrollmentsResType = z.infer<typeof GetSubjectEnrollmentsR
 export type RemoveCourseEnrollmentsByBatchResType = z.infer<typeof RemoveCourseEnrollmentsByBatchResSchema>
 export type RemoveCourseTraineeEnrollmentsBodyType = z.infer<typeof RemoveCourseTraineeEnrollmentsBodySchema>
 export type RemoveCourseTraineeEnrollmentsResType = z.infer<typeof RemoveCourseTraineeEnrollmentsResSchema>
+export type GetActiveTraineesBodyType = z.infer<typeof GetActiveTraineesBodySchema>
 
 // Export types cho các schema con
 export type SubjectDetailInstructorType = z.infer<typeof SubjectDetailInstructorSchema>
