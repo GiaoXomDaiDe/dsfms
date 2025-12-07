@@ -27,6 +27,7 @@ import {
   SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
   SubjectDatesOutsideCourseRangeException,
+  SubjectEnrollmentNotAllowedFromCurrentStatusException,
   SubjectEnrollmentWindowClosedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
@@ -421,6 +422,10 @@ export class SubjectService {
     const subject = await this.sharedSubjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
+    }
+
+    if (subject.status !== SubjectStatus.PLANNED) {
+      throw SubjectEnrollmentNotAllowedFromCurrentStatusException
     }
 
     if (subject.startDate) {
