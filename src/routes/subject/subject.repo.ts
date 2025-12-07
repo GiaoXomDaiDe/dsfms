@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { CourseStatus, Prisma } from '@prisma/client'
 import { map } from 'lodash'
+import { CourseEnrollmentBatchSummaryType } from '~/routes/course/course.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import {
   SubjectEnrollmentStatus,
@@ -253,14 +254,41 @@ export class SubjectRepository {
     return { trainers, totalCount: trainers.length }
   }
 
-  async findActiveTrainees(): Promise<GetActiveTraineesResType> {
+  async findActiveTrainees({ subjectIds }: { subjectIds?: string[] }): Promise<GetActiveTraineesResType> {
+    let conflictingUserIds: string[] = []
+
+    if (subjectIds && subjectIds.length > 0) {
+      const blockingStatuses: SubjectEnrollmentStatusValue[] = [
+        SubjectEnrollmentStatus.ENROLLED,
+        SubjectEnrollmentStatus.ON_GOING
+      ]
+
+      const conflicts = await this.prisma.subjectEnrollment.findMany({
+        where: {
+          subjectId: { in: subjectIds },
+          status: { in: blockingStatuses }
+        },
+        select: {
+          traineeUserId: true
+        },
+        distinct: ['traineeUserId']
+      })
+
+      conflictingUserIds = conflicts.map((conflict) => conflict.traineeUserId).filter((id): id is string => Boolean(id))
+    }
+
     const trainees = await this.prisma.user.findMany({
       where: {
         deletedAt: null,
         status: UserStatus.ACTIVE,
         role: {
           name: RoleName.TRAINEE
-        }
+        },
+        ...(conflictingUserIds.length > 0 && {
+          id: {
+            notIn: conflictingUserIds
+          }
+        })
       },
       select: userTraineeDirectorySelect,
       orderBy: {
@@ -564,11 +592,13 @@ export class SubjectRepository {
   async assignTraineesToSubject({
     subjectId,
     traineeUserIds,
-    batchCode
+    batchCode,
+    blockingStatuses = [SubjectEnrollmentStatus.ENROLLED, SubjectEnrollmentStatus.ON_GOING]
   }: {
     subjectId: string
     traineeUserIds: string[]
     batchCode: string
+    blockingStatuses?: SubjectEnrollmentStatusValue[]
   }): Promise<AssignTraineesResult> {
     const requestedUsers = await this.sharedUserRepo.findUsersForAssignment(traineeUserIds)
 
@@ -618,6 +648,7 @@ export class SubjectRepository {
         traineeUserId: true,
         batchCode: true,
         enrollmentDate: true,
+        status: true,
         trainee: {
           select: userTraineeWithDepartmentSelect
         }
@@ -641,6 +672,26 @@ export class SubjectRepository {
       })
     }
 
+    const reactivatableEnrollments = existingEnrollments.filter(
+      (enrollment) => !blockingStatuses.includes(enrollment.status as SubjectEnrollmentStatusValue)
+    )
+
+    if (reactivatableEnrollments.length > 0) {
+      await this.prisma.subjectEnrollment.updateMany({
+        where: {
+          subjectId,
+          traineeUserId: {
+            in: reactivatableEnrollments.map((enrollment) => enrollment.traineeUserId)
+          }
+        },
+        data: {
+          status: SubjectEnrollmentStatus.ENROLLED,
+          batchCode,
+          enrollmentDate: new Date()
+        }
+      })
+    }
+
     const resolveUserPayload = (user: AssignmentUserSummary): TraineeAssignmentUserType => {
       const nameParts = [user.firstName ?? '', user.lastName ?? ''].filter((part) => part.trim().length > 0)
       const fullName = nameParts.join(' ').trim()
@@ -654,7 +705,7 @@ export class SubjectRepository {
       }
     }
 
-    const enrolled = newIds.map((id) => {
+    const enrolledNew = newIds.map((id) => {
       const user = requestedUserMap.get(id)
       if (!user) {
         throw TraineeResolutionFailureException(id)
@@ -662,7 +713,19 @@ export class SubjectRepository {
       return resolveUserPayload(user)
     })
 
-    const duplicates: TraineeAssignmentDuplicateType[] = existingEnrollments.map((enrollment) => {
+    const reactivated = reactivatableEnrollments.map((enrollment) => {
+      const fallbackUser = enrollment.trainee as AssignmentUserSummary
+      const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
+      return resolveUserPayload(user)
+    })
+
+    const enrolled = [...enrolledNew, ...reactivated]
+
+    const blockingEnrollments = existingEnrollments.filter((enrollment) =>
+      blockingStatuses.includes(enrollment.status as SubjectEnrollmentStatusValue)
+    )
+
+    const duplicates: TraineeAssignmentDuplicateType[] = blockingEnrollments.map((enrollment) => {
       const fallbackUser = enrollment.trainee as AssignmentUserSummary
       const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
 
@@ -1295,5 +1358,123 @@ export class SubjectRepository {
       current: distinctTrainees.length,
       max: course?.maxNumTrainee || null
     }
+  }
+
+  async getCourseEnrollmentBatches(courseId: string): Promise<CourseEnrollmentBatchSummaryType[]> {
+    const enrollments: Prisma.SubjectEnrollmentGetPayload<{
+      select: {
+        batchCode: true
+        status: true
+        subject: {
+          select: {
+            id: true
+            code: true
+            name: true
+          }
+        }
+      }
+    }>[] = await this.prisma.subjectEnrollment.findMany({
+      where: {
+        subject: {
+          courseId,
+          deletedAt: null
+        }
+      },
+      select: {
+        batchCode: true,
+        status: true,
+        subject: {
+          select: {
+            id: true,
+            code: true,
+            name: true
+          }
+        }
+      }
+    })
+
+    const createEmptyStatusCounts = () => ({
+      ENROLLED: 0,
+      ON_GOING: 0,
+      CANCELLED: 0,
+      FINISHED: 0
+    })
+
+    type StatusCounts = ReturnType<typeof createEmptyStatusCounts>
+
+    type BatchAccumulator = {
+      totalTrainees: number
+      statusCounts: StatusCounts
+      subjects: Map<
+        string,
+        {
+          subjectId: string
+          subjectCode: string
+          subjectName: string
+          totalTrainees: number
+          statusCounts: StatusCounts
+        }
+      >
+    }
+
+    const batchesMap = new Map<string, BatchAccumulator>()
+
+    enrollments.forEach((enrollment) => {
+      const batchCode = enrollment.batchCode
+      if (!batchCode) {
+        return
+      }
+
+      const summary = batchesMap.get(batchCode) ?? {
+        totalTrainees: 0,
+        statusCounts: createEmptyStatusCounts(),
+        subjects: new Map()
+      }
+
+      summary.totalTrainees += 1
+
+      const status = enrollment.status as SubjectEnrollmentStatusValue
+      if (status && summary.statusCounts[status] !== undefined) {
+        summary.statusCounts[status] += 1
+      }
+
+      const subject = enrollment.subject
+      if (subject) {
+        const subjectSummary = summary.subjects.get(subject.id) ?? {
+          subjectId: subject.id,
+          subjectCode: subject.code,
+          subjectName: subject.name,
+          totalTrainees: 0,
+          statusCounts: createEmptyStatusCounts()
+        }
+
+        subjectSummary.totalTrainees += 1
+
+        if (status && subjectSummary.statusCounts[status] !== undefined) {
+          subjectSummary.statusCounts[status] += 1
+        }
+
+        summary.subjects.set(subject.id, subjectSummary)
+      }
+
+      batchesMap.set(batchCode, summary)
+    })
+
+    const mapStatusCountsToActive = (counts: StatusCounts) => counts.ENROLLED + counts.ON_GOING
+
+    return Array.from(batchesMap.entries())
+      .sort(([batchA], [batchB]) => batchA.localeCompare(batchB))
+      .map(([batchCode, summary]) => ({
+        batchCode,
+        totalTrainees: summary.totalTrainees,
+        activeTrainees: mapStatusCountsToActive(summary.statusCounts),
+        statusCounts: { ...summary.statusCounts },
+        subjects: Array.from(summary.subjects.values())
+          .sort((subjectA, subjectB) => subjectA.subjectCode.localeCompare(subjectB.subjectCode))
+          .map((subjectSummary) => ({
+            ...subjectSummary,
+            activeTrainees: mapStatusCountsToActive(subjectSummary.statusCounts)
+          }))
+      }))
   }
 }

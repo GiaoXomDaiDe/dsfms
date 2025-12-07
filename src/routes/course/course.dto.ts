@@ -6,6 +6,7 @@ import {
   CourseTrainerParamsSchema,
   CreateCourseBodySchema,
   CreateCourseResSchema,
+  GetCourseEnrollmentBatchesResSchema,
   GetCourseParamsSchema,
   GetCourseResSchema,
   GetCoursesResSchema,
@@ -48,3 +49,4 @@ export class UpdateCourseTrainerRoleResDto extends createResponseDto(
   UpdateCourseTrainerRoleResSchema,
   CourseMes.UPDATE_TRAINER_ROLE_SUCCESS
 ) {}
+export class GetCourseEnrollmentBatchesResDto extends createZodDto(GetCourseEnrollmentBatchesResSchema) {}

@@ -22,6 +22,7 @@ import {
   AssignCourseTrainerResType,
   CreateCourseBodyType,
   CreateCourseResType,
+  GetCourseEnrollmentBatchesResType,
   GetCourseParamsType,
   GetCourseResType,
   GetCoursesResType,
@@ -227,6 +228,10 @@ export class CourseService {
       trainerUserId: trainerId,
       newRoleInCourse: data.roleInCourse
     })
+  }
+
+  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
+    return await this.subjectService.getCourseEnrollmentBatches({ courseId })
   }
 
   async getTraineesInCourse({
