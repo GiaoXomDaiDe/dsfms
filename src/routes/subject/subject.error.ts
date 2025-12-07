@@ -114,6 +114,9 @@ export const SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException = ne
 export const SubjectCannotRemoveTrainerFromCurrentStatusException = new BadRequestException(
   'Subject can only remove trainers when status is PLANNED or ON_GOING'
 )
+export const SubjectEnrollmentNotAllowedFromCurrentStatusException = new BadRequestException(
+  'Subject can only enroll trainees when status is PLANNED'
+)
 export const SubjectEnrollmentWindowClosedException = (startDate: Date | string) =>
   new BadRequestException(`Cannot enroll trainees after subject start date ${new Date(startDate).toISOString()}`)
 

@@ -157,7 +157,7 @@ export const AssignCourseTrainerResSchema = z.object({
 })
 
 export const UpdateCourseTrainerRoleBodySchema = z.object({
-  roleInSubject: z.enum(SubjectInstructorRole)
+  roleInCourse: z.enum(SubjectInstructorRole)
 })
 
 export const UpdateCourseTrainerRoleResSchema = AssignCourseTrainerResSchema

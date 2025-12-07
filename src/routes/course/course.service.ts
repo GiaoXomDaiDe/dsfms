@@ -225,7 +225,7 @@ export class CourseService {
     return await this.courseRepo.updateCourseTrainerRole({
       courseId,
       trainerUserId: trainerId,
-      newRoleInSubject: data.roleInSubject
+      newRoleInCourse: data.roleInCourse
     })
   }
 
