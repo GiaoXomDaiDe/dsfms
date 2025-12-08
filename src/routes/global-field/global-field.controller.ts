@@ -106,49 +106,6 @@ export class GlobalFieldController {
   /**
    * PATCH /global-fields/:id
    * Update global field by ID with support for hierarchical children updates (PART and CHECK_BOX fields)
-   * 
-   * Examples:
-   * 
-   * 1. Simple field update:
-   * {
-   *   "label": "Updated Student Name",
-   *   "roleRequired": "TEACHER"
-   * }
-   * 
-   * 2. PART field with children updates:
-   * {
-   *   "label": "Updated Personal Information",
-   *   "children": [
-   *     {
-   *       "id": "existing-child-id",
-   *       "label": "Updated First Name"
-   *     },
-   *     {
-   *       "id": "child-to-delete-id",
-   *       "_delete": true
-   *     },
-   *     {
-   *       "label": "New Middle Name",
-   *       "fieldName": "middleName",
-   *       "tempId": "newChild1"
-   *     }
-   *   ]
-   * }
-   * 
-   * 3. CHECK_BOX field children management:
-   * {
-   *   "label": "Updated Skills Assessment",
-   *   "children": [
-   *     {
-   *       "id": "skill1-id",
-   *       "label": "Advanced Communication Skills"
-   *     },
-   *     {
-   *       "label": "Leadership Skills",
-   *       "fieldName": "leadershipSkills"
-   *     }
-   *   ]
-   * }
    */
   @Patch(':id')
   async updateGlobalField(
@@ -172,7 +129,14 @@ export class GlobalFieldController {
 
   /**
    * DELETE /global-fields/:id
-   * Delete global field by ID
+   * Delete global field by ID with automatic children deletion for PART/CHECK_BOX fields
+   * 
+   * Behavior:
+   * - Simple fields: Direct deletion
+   * - PART/CHECK_BOX fields with children: Cascading deletion (removes all children first, then parent)
+   * - Transaction-safe: All deletions are atomic
+   * 
+   * Response includes count of deleted children for hierarchical deletions
    */
   @Delete(':id')
   async deleteGlobalField(
