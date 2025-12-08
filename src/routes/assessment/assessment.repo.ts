@@ -3623,70 +3623,245 @@ export class AssessmentRepo {
       occuranceDate?: Date
     }
   ) {
-    // Validate that event exists and is in NOT_STARTED status
+    // Get current date (today)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const currentDateOnly = new Date(currentOccuranceDate)
+    currentDateOnly.setHours(0, 0, 0, 0)
+
+    // Find all existing assessments for this event
     const existingAssessments = await this.prisma.assessmentForm.findMany({
       where: {
         name: currentName,
         ...(subjectId ? { subjectId } : { courseId }),
         occuranceDate: currentOccuranceDate,
-        templateId: templateId,
-        status: AssessmentStatus.NOT_STARTED
+        templateId: templateId
+      },
+      select: {
+        id: true,
+        status: true,
+        traineeId: true
       }
     })
 
     if (existingAssessments.length === 0) {
-      throw new Error(
-        'No assessment forms found with NOT_STARTED status for this event, or occurrence date has already passed'
-      )
+      throw new Error('No assessment forms found for this event')
     }
 
-    // Check if occurrence date is in the future (for existing and new date)
-    const now = new Date()
-    now.setHours(0, 0, 0, 0) // Set to beginning of today
+    // If only updating name, allow update regardless of date/status
+    if (updates.name && !updates.occuranceDate) {
+      const result = await this.prisma.assessmentForm.updateMany({
+        where: {
+          name: currentName,
+          ...(subjectId ? { subjectId } : { courseId }),
+          occuranceDate: currentOccuranceDate,
+          templateId: templateId
+        },
+        data: { name: updates.name }
+      })
 
-    if (currentOccuranceDate <= now) {
-      throw new Error('Cannot update assessment event - occurrence date has already passed or is today')
-    }
-
-    if (updates.occuranceDate && updates.occuranceDate <= now) {
-      throw new Error('New occurrence date must be in the future')
-    }
-
-    // Build update data
-    const updateData: any = {}
-    if (updates.name) {
-      updateData.name = updates.name
-    }
-    if (updates.occuranceDate) {
-      updateData.occuranceDate = updates.occuranceDate
-    }
-
-    // Update all matching assessment forms
-    const result = await this.prisma.assessmentForm.updateMany({
-      where: {
-        ...(subjectId ? { subjectId } : { courseId }),
-        occuranceDate: currentOccuranceDate,
-        templateId: templateId,
-        status: AssessmentStatus.NOT_STARTED
-      },
-      data: updateData
-    })
-
-    return {
-      success: true,
-      message: `Successfully updated ${result.count} assessment form(s)`,
-      data: {
-        updatedCount: result.count,
-        eventInfo: {
-          name: updates.name || currentName,
-          subjectId: subjectId || null,
-          courseId: courseId || null,
-          occuranceDate: updates.occuranceDate || currentOccuranceDate,
-          templateId: templateId,
-          totalAssessmentForms: result.count
+      return {
+        success: true,
+        message: `Successfully updated name for ${result.count} assessment form(s)`,
+        data: {
+          updatedCount: result.count,
+          eventInfo: {
+            name: updates.name,
+            subjectId: subjectId || null,
+            courseId: courseId || null,
+            occuranceDate: currentOccuranceDate,
+            templateId: templateId,
+            totalAssessmentForms: result.count
+          }
         }
       }
     }
+
+    // If updating occurrence date, validate the new date
+    if (updates.occuranceDate) {
+      const newDateOnly = new Date(updates.occuranceDate)
+      newDateOnly.setHours(0, 0, 0, 0)
+
+      // Rule 1: Can only update to today or future date
+      if (newDateOnly < today) {
+        throw new Error('New occurrence date must be today or in the future')
+      }
+
+      // Rule 2: If updating from future date to today (NOT_STARTED to ON_GOING)
+      if (currentDateOnly > today && newDateOnly.getTime() === today.getTime()) {
+        // Check if there's already another assessment event on the same day for same template
+        const conflictingAssessment = await this.prisma.assessmentForm.findFirst({
+          where: {
+            ...(subjectId ? { subjectId } : { courseId }),
+            templateId: templateId,
+            occuranceDate: {
+              gte: today,
+              lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) // Next day
+            },
+            NOT: {
+              name: currentName,
+              occuranceDate: currentOccuranceDate
+            }
+          }
+        })
+
+        if (conflictingAssessment) {
+          throw new Error('Cannot update to today - there is already another assessment event using this template on the same date')
+        }
+
+        // Validate all assessments are in NOT_STARTED status
+        const nonNotStartedAssessments = existingAssessments.filter(
+          assessment => assessment.status !== AssessmentStatus.NOT_STARTED
+        )
+
+        if (nonNotStartedAssessments.length > 0) {
+          throw new Error('Cannot update to today - some assessments are not in NOT_STARTED status')
+        }
+
+        // Update occurrence date and change status to ON_GOING
+        const updateData: any = {
+          occuranceDate: updates.occuranceDate,
+          status: AssessmentStatus.ON_GOING
+        }
+        if (updates.name) {
+          updateData.name = updates.name
+        }
+
+        const result = await this.prisma.assessmentForm.updateMany({
+          where: {
+            name: currentName,
+            ...(subjectId ? { subjectId } : { courseId }),
+            occuranceDate: currentOccuranceDate,
+            templateId: templateId
+          },
+          data: updateData
+        })
+
+        return {
+          success: true,
+          message: `Successfully updated ${result.count} assessment form(s) and changed status to ON_GOING`,
+          data: {
+            updatedCount: result.count,
+            statusChanged: true,
+            newStatus: AssessmentStatus.ON_GOING,
+            eventInfo: {
+              name: updates.name || currentName,
+              subjectId: subjectId || null,
+              courseId: courseId || null,
+              occuranceDate: updates.occuranceDate,
+              templateId: templateId,
+              totalAssessmentForms: result.count
+            }
+          }
+        }
+      }
+
+      // Rule 3: If updating from today to future date
+      if (currentDateOnly.getTime() === today.getTime() && newDateOnly > today) {
+        // Check if all assessments are ON_GOING, NOT_STARTED, or other allowed statuses
+        const invalidStatusAssessments = existingAssessments.filter(
+          assessment => 
+            assessment.status !== AssessmentStatus.ON_GOING && 
+            assessment.status !== AssessmentStatus.NOT_STARTED
+        )
+
+        if (invalidStatusAssessments.length > 0) {
+          const invalidStatuses = [...new Set(invalidStatusAssessments.map(a => a.status))].join(', ')
+          throw new Error(
+            `Cannot update from today to future date - some assessments have status: ${invalidStatuses}. Only ON_GOING and NOT_STARTED assessments can be moved to future date.`
+          )
+        }
+
+        // Update occurrence date and change status to NOT_STARTED
+        const updateData: any = {
+          occuranceDate: updates.occuranceDate,
+          status: AssessmentStatus.NOT_STARTED
+        }
+        if (updates.name) {
+          updateData.name = updates.name
+        }
+
+        const result = await this.prisma.assessmentForm.updateMany({
+          where: {
+            name: currentName,
+            ...(subjectId ? { subjectId } : { courseId }),
+            occuranceDate: currentOccuranceDate,
+            templateId: templateId
+          },
+          data: updateData
+        })
+
+        return {
+          success: true,
+          message: `Successfully updated ${result.count} assessment form(s) and changed status to NOT_STARTED`,
+          data: {
+            updatedCount: result.count,
+            statusChanged: true,
+            newStatus: AssessmentStatus.NOT_STARTED,
+            eventInfo: {
+              name: updates.name || currentName,
+              subjectId: subjectId || null,
+              courseId: courseId || null,
+              occuranceDate: updates.occuranceDate,
+              templateId: templateId,
+              totalAssessmentForms: result.count
+            }
+          }
+        }
+      }
+
+      // For other date changes (future to future), only allow if all are NOT_STARTED
+      const nonNotStartedAssessments = existingAssessments.filter(
+        assessment => assessment.status !== AssessmentStatus.NOT_STARTED
+      )
+
+      if (nonNotStartedAssessments.length > 0) {
+        const invalidStatuses = [...new Set(nonNotStartedAssessments.map(a => a.status))].join(', ')
+        throw new Error(
+          `Cannot update occurrence date - some assessments have status: ${invalidStatuses}. Only NOT_STARTED assessments can have their occurrence date changed.`
+        )
+      }
+
+      // Standard date update for future dates
+      const updateData: any = {
+        occuranceDate: updates.occuranceDate
+      }
+      if (updates.name) {
+        updateData.name = updates.name
+      }
+
+      const result = await this.prisma.assessmentForm.updateMany({
+        where: {
+          name: currentName,
+          ...(subjectId ? { subjectId } : { courseId }),
+          occuranceDate: currentOccuranceDate,
+          templateId: templateId,
+          status: AssessmentStatus.NOT_STARTED
+        },
+        data: updateData
+      })
+
+      return {
+        success: true,
+        message: `Successfully updated ${result.count} assessment form(s)`,
+        data: {
+          updatedCount: result.count,
+          statusChanged: false,
+          eventInfo: {
+            name: updates.name || currentName,
+            subjectId: subjectId || null,
+            courseId: courseId || null,
+            occuranceDate: updates.occuranceDate,
+            templateId: templateId,
+            totalAssessmentForms: result.count
+          }
+        }
+      }
+    }
+
+    // Should not reach here, but fallback
+    throw new Error('Invalid update operation')
   }
 
   /**

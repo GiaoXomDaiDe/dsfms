@@ -1415,6 +1415,46 @@ export class AssessmentService {
           // Log PDF generation error but don't fail the approval
           console.error('Failed to generate PDF for approved assessment:', pdfError)
         }
+
+        // Send email notification for approved assessment
+        try {
+          // Get detailed assessment information for email
+          const detailedAssessment = await this.assessmentRepo.findById(assessmentId)
+          
+          if (detailedAssessment) {
+            // Format dates for email
+            const assessmentDate = new Date(detailedAssessment.occuranceDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
+            
+            const approvalDate = new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
+
+            // Get subject or course name
+            const subjectOrCourseName = detailedAssessment.subject?.name || 
+              detailedAssessment.course?.name || 'Assessment'
+
+            await this.nodemailerService.sendApprovedAssessmentEmail(
+              detailedAssessment.trainee.email,
+              `${detailedAssessment.trainee.firstName} ${detailedAssessment.trainee.lastName}`.trim(),
+              detailedAssessment.name,
+              subjectOrCourseName,
+              assessmentDate,
+              approvalDate,
+              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}`
+            )
+            
+            console.log(`Approval notification email sent successfully to ${detailedAssessment.trainee.email}`)
+          }
+        } catch (emailError) {
+          // Log email error but don't fail the main operation
+          console.error('Failed to send approval notification email:', emailError)
+        }
       }
 
       const actionMessage = body.action === 'APPROVED' ? 'approved' : 'rejected'
