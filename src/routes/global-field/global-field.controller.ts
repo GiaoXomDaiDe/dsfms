@@ -10,7 +10,7 @@ export class GlobalFieldController {
 
   /**
    * GET /global-fields
-   * Get all global fields
+   * Get all top-level global fields with their children (PART and CHECK_BOX fields show nested structure)
    */
   @Get()
   async getAllGlobalFields() {
@@ -28,7 +28,7 @@ export class GlobalFieldController {
 
   /**
    * GET /global-fields/detail
-   * Get all global fields with detail information
+   * Get all top-level global fields with complete hierarchical detail information
    */
   @Get('detail')
   async getAllGlobalFieldsDetail() {
@@ -46,7 +46,7 @@ export class GlobalFieldController {
 
   /**
    * GET /global-fields/:id
-   * Get global field by ID
+   * Get global field by ID with its children structure
    */
   @Get(':id')
   async getGlobalField(@Param('id') id: string) {
@@ -64,7 +64,7 @@ export class GlobalFieldController {
 
   /**
    * GET /global-fields/:id/detail
-   * Get global field by ID with detail information
+   * Get global field by ID with complete hierarchical detail information
    */
   @Get(':id/detail')
   async getGlobalFieldDetail(@Param('id') id: string) {
@@ -82,7 +82,7 @@ export class GlobalFieldController {
 
   /**
    * POST /global-fields
-   * Create new global field
+   * Create new global field with support for nested children (PART and CHECK_BOX fields)
    */
   @Post()
   async createGlobalField(
@@ -105,7 +105,50 @@ export class GlobalFieldController {
 
   /**
    * PATCH /global-fields/:id
-   * Update global field by ID
+   * Update global field by ID with support for hierarchical children updates (PART and CHECK_BOX fields)
+   * 
+   * Examples:
+   * 
+   * 1. Simple field update:
+   * {
+   *   "label": "Updated Student Name",
+   *   "roleRequired": "TEACHER"
+   * }
+   * 
+   * 2. PART field with children updates:
+   * {
+   *   "label": "Updated Personal Information",
+   *   "children": [
+   *     {
+   *       "id": "existing-child-id",
+   *       "label": "Updated First Name"
+   *     },
+   *     {
+   *       "id": "child-to-delete-id",
+   *       "_delete": true
+   *     },
+   *     {
+   *       "label": "New Middle Name",
+   *       "fieldName": "middleName",
+   *       "tempId": "newChild1"
+   *     }
+   *   ]
+   * }
+   * 
+   * 3. CHECK_BOX field children management:
+   * {
+   *   "label": "Updated Skills Assessment",
+   *   "children": [
+   *     {
+   *       "id": "skill1-id",
+   *       "label": "Advanced Communication Skills"
+   *     },
+   *     {
+   *       "label": "Leadership Skills",
+   *       "fieldName": "leadershipSkills"
+   *     }
+   *   ]
+   * }
    */
   @Patch(':id')
   async updateGlobalField(
