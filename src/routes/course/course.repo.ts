@@ -425,11 +425,11 @@ export class CourseRepository {
   async updateCourseTrainerRole({
     courseId,
     trainerUserId,
-    newRoleInSubject
+    newRoleInCourse
   }: {
     courseId: string
     trainerUserId: string
-    newRoleInSubject: SubjectInstructorRoleValue
+    newRoleInCourse: SubjectInstructorRoleValue
   }): Promise<UpdateCourseTrainerRoleResType> {
     const assignment = await this.prismaService.courseInstructor.update({
       where: {
@@ -439,7 +439,7 @@ export class CourseRepository {
         }
       },
       data: {
-        roleInAssessment: newRoleInSubject
+        roleInAssessment: newRoleInCourse
       },
       include: courseInstructorSummaryInclude
     })

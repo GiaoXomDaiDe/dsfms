@@ -10,6 +10,7 @@ import {
   CancelSubjectEnrollmentBodySchema,
   CourseBatchParamsSchema,
   CreateSubjectBodySchema,
+  GetActiveTraineesBodySchema,
   GetActiveTraineesResSchema,
   GetAvailableTrainersResSchema,
   GetEnrollmentsQuerySchema,
@@ -47,6 +48,7 @@ export class GetAvailableTrainersResDto extends createResponseDto(
   GetAvailableTrainersResSchema,
   SubjectMes.ACTIVE_TRAINERS_SUCCESS
 ) {}
+export class GetActiveTraineesBodyDto extends createZodDto(GetActiveTraineesBodySchema) {}
 export class GetActiveTraineesResDto extends createResponseDto(
   GetActiveTraineesResSchema,
   SubjectMes.ACTIVE_TRAINEES_SUCCESS

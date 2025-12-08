@@ -157,10 +157,39 @@ export const AssignCourseTrainerResSchema = z.object({
 })
 
 export const UpdateCourseTrainerRoleBodySchema = z.object({
-  roleInSubject: z.enum(SubjectInstructorRole)
+  roleInCourse: z.enum(SubjectInstructorRole)
 })
 
 export const UpdateCourseTrainerRoleResSchema = AssignCourseTrainerResSchema
+
+const StatusCountSchema = z.object({
+  ENROLLED: z.number().int().default(0),
+  ON_GOING: z.number().int().default(0),
+  CANCELLED: z.number().int().default(0),
+  FINISHED: z.number().int().default(0)
+})
+
+export const CourseEnrollmentBatchSubjectSchema = z.object({
+  subjectId: z.uuid(),
+  subjectCode: z.string(),
+  subjectName: z.string(),
+  totalTrainees: z.number().int(),
+  activeTrainees: z.number().int(),
+  statusCounts: StatusCountSchema
+})
+
+export const CourseEnrollmentBatchSummarySchema = z.object({
+  batchCode: z.string(),
+  totalTrainees: z.number().int(),
+  activeTrainees: z.number().int(),
+  statusCounts: StatusCountSchema,
+  subjects: z.array(CourseEnrollmentBatchSubjectSchema)
+})
+
+export const GetCourseEnrollmentBatchesResSchema = z.object({
+  courseId: z.uuid(),
+  batches: z.array(CourseEnrollmentBatchSummarySchema)
+})
 
 export type CourseType = z.infer<typeof CourseSchema>
 export type GetCoursesResType = z.infer<typeof GetCoursesResSchema>
@@ -181,3 +210,5 @@ export type AssignCourseTrainerBodyType = z.infer<typeof AssignCourseTrainerBody
 export type AssignCourseTrainerResType = z.infer<typeof AssignCourseTrainerResSchema>
 export type UpdateCourseTrainerRoleBodyType = z.infer<typeof UpdateCourseTrainerRoleBodySchema>
 export type UpdateCourseTrainerRoleResType = z.infer<typeof UpdateCourseTrainerRoleResSchema>
+export type GetCourseEnrollmentBatchesResType = z.infer<typeof GetCourseEnrollmentBatchesResSchema>
+export type CourseEnrollmentBatchSummaryType = z.infer<typeof CourseEnrollmentBatchSummarySchema>

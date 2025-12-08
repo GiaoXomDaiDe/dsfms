@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { round } from 'lodash'
-import { SubjectInstructorRoleValue, SubjectStatus, SubjectStatusValue } from '~/shared/constants/subject.constant'
+import { GetCourseEnrollmentBatchesResType } from '~/routes/course/course.model'
+import {
+  SubjectEnrollmentStatus,
+  SubjectEnrollmentStatusValue,
+  SubjectInstructorRoleValue,
+  SubjectStatus,
+  SubjectStatusValue
+} from '~/shared/constants/subject.constant'
 import { Serialize } from '~/shared/decorators/serialize.decorator'
 import {
   isForeignKeyConstraintPrismaError,
@@ -27,6 +34,7 @@ import {
   SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
   SubjectDatesOutsideCourseRangeException,
+  SubjectEnrollmentNotAllowedFromCurrentStatusException,
   SubjectEnrollmentWindowClosedException,
   SubjectNotFoundException,
   TrainerAssignmentNotFoundException
@@ -41,6 +49,7 @@ import {
   BulkCreateSubjectsResType,
   CancelSubjectEnrollmentBodyType,
   CreateSubjectBodyType,
+  GetActiveTraineesBodyType,
   GetActiveTraineesResType,
   GetAvailableTrainersResType,
   GetSubjectDetailResType,
@@ -69,6 +78,11 @@ export class SubjectService {
     private readonly sharedCourseRepo: SharedCourseRepository
   ) {}
 
+  private readonly defaultBlockingEnrollmentStatuses: SubjectEnrollmentStatusValue[] = [
+    SubjectEnrollmentStatus.ENROLLED,
+    SubjectEnrollmentStatus.ON_GOING
+  ]
+
   async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
     return await this.subjectRepo.list({
       ...query
@@ -90,8 +104,10 @@ export class SubjectService {
     return trainers
   }
 
-  async getActiveTrainees(): Promise<GetActiveTraineesResType> {
-    return await this.subjectRepo.findActiveTrainees()
+  async getActiveTrainees(body: GetActiveTraineesBodyType): Promise<GetActiveTraineesResType> {
+    return await this.subjectRepo.findActiveTrainees({
+      subjectIds: body.subjectIds
+    })
   }
 
   async create({
@@ -303,6 +319,20 @@ export class SubjectService {
     return { message: SubjectMes.ARCHIVE_SUCCESS }
   }
 
+  async getCourseEnrollmentBatches({ courseId }: { courseId: string }): Promise<GetCourseEnrollmentBatchesResType> {
+    const course = await this.sharedCourseRepo.findById(courseId)
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    const batches = await this.subjectRepo.getCourseEnrollmentBatches(courseId)
+
+    return {
+      courseId,
+      batches
+    }
+  }
+
   async assignTrainer({
     subjectId,
     data
@@ -423,6 +453,10 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
+    if (subject.status !== SubjectStatus.PLANNED) {
+      throw SubjectEnrollmentNotAllowedFromCurrentStatusException
+    }
+
     if (subject.startDate) {
       const now = new Date()
       const startDate = new Date(subject.startDate)
@@ -443,7 +477,8 @@ export class SubjectService {
     const result = await this.subjectRepo.assignTraineesToSubject({
       subjectId,
       traineeUserIds: data.traineeUserIds,
-      batchCode: data.batchCode
+      batchCode: data.batchCode,
+      blockingStatuses: this.defaultBlockingEnrollmentStatuses
     })
 
     if (result.duplicates.length > 0) {
