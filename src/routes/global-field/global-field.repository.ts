@@ -432,38 +432,55 @@ export class GlobalFieldRepository {
 
         // 2. Handle children updates if provided
         if (children && children.length > 0) {
-          // Get existing children
+          // COMPLETE REPLACEMENT STRATEGY:
+          // 1. Get all existing children
           const existingChildren = await tx.globalField.findMany({
             where: { parentId: id },
             select: { id: true, fieldName: true }
           })
 
-          // Create mapping for tempId to actual field for new children
+          // 2. Extract IDs of children that should be kept (those with id in request)
+          const childrenToKeep = new Set(
+            children
+              .filter(child => child.id && !child._delete)
+              .map(child => child.id)
+          )
+
+          // 3. Delete all existing children that are NOT in the keep list
+          for (const existingChild of existingChildren) {
+            if (!childrenToKeep.has(existingChild.id)) {
+              await tx.globalField.delete({
+                where: { id: existingChild.id }
+              })
+            }
+          }
+
+          // 4. Process the children in the request
           const tempIdToFieldMap = new Map<string, any>()
           tempIdToFieldMap.set(data.tempId || 'parent', updatedParent)
 
-          // Process children updates
           for (const childData of children) {
-            if (childData._delete && childData.id) {
-              // Delete existing child
-              await tx.globalField.delete({
-                where: { id: childData.id }
-              })
+            if (childData._delete) {
+              // Skip - already handled in deletion phase above
+              continue
             } else if (childData.id) {
-              // Update existing child
-              await tx.globalField.update({
-                where: { id: childData.id },
-                data: {
-                  label: childData.label,
-                  fieldName: childData.fieldName,
-                  roleRequired: childData.roleRequired,
-                  options: childData.options,
-                  updatedById
-                }
-              })
+              // Update existing child (if it still exists)
+              const childExists = childrenToKeep.has(childData.id)
+              if (childExists) {
+                await tx.globalField.update({
+                  where: { id: childData.id },
+                  data: {
+                    label: childData.label,
+                    fieldName: childData.fieldName,
+                    roleRequired: childData.roleRequired,
+                    options: childData.options,
+                    updatedById
+                  }
+                })
+              }
             } else if (childData.fieldName && childData.label) {
               // Create new child
-              // Check if child fieldName already exists
+              // Check if child fieldName already exists globally
               const existingChildField = await tx.globalField.findFirst({
                 where: { fieldName: childData.fieldName }
               })
@@ -489,6 +506,11 @@ export class GlobalFieldRepository {
               }
             }
           }
+        } else if (children && children.length === 0) {
+          // Empty children array means remove all existing children
+          await tx.globalField.deleteMany({
+            where: { parentId: id }
+          })
         }
 
         // 3. Return updated parent with current children
@@ -537,6 +559,52 @@ export class GlobalFieldRepository {
     return this.prismaService.globalField.delete({
       where: { id }
     })
+  }
+
+  async deleteWithChildren(id: string) {
+    return this.prismaService.$transaction(
+      async (tx) => {
+        // 1. Get field details to check structure
+        const field = await tx.globalField.findUnique({
+          where: { id },
+          include: {
+            children: {
+              select: {
+                id: true,
+                label: true,
+                fieldName: true
+              }
+            }
+          }
+        })
+
+        if (!field) {
+          throw new Error('Global field not found')
+        }
+
+        // 2. Delete all children first (CASCADE)
+        if (field.children && field.children.length > 0) {
+          await tx.globalField.deleteMany({
+            where: {
+              parentId: id
+            }
+          })
+        }
+
+        // 3. Delete the parent field
+        await tx.globalField.delete({
+          where: { id }
+        })
+
+        return {
+          deletedParent: field,
+          deletedChildrenCount: field.children?.length || 0
+        }
+      },
+      {
+        timeout: 30000
+      }
+    )
   }
 
   async findByFieldName(fieldName: string) {

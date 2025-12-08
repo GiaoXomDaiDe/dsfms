@@ -276,12 +276,19 @@ export class GlobalFieldService {
       throw new RequiredFieldMissingError('id')
     }
 
-    // Check if global field exists
-    const existingField = await this.globalFieldRepository.exists(id)
+    // Check if global field exists and get its details
+    const existingField = await this.globalFieldRepository.findByIdDetail(id)
     if (!existingField) {
       throw new GlobalFieldNotFoundError()
     }
 
-    return this.globalFieldRepository.delete(id)
+    // Check if field has children
+    if (existingField.children && existingField.children.length > 0) {
+      // Use cascading delete for parent fields with children
+      return this.globalFieldRepository.deleteWithChildren(id)
+    } else {
+      // Simple delete for fields without children
+      return this.globalFieldRepository.delete(id)
+    }
   }
 }
