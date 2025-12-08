@@ -316,6 +316,58 @@ This account was created on ${creationDate}.`
   }
 
   /**
+   * Send email notification for approved assessment (notification only, no scores)
+   */
+  async sendApprovedAssessmentEmail(
+    traineeEmail: string,
+    traineeName: string,
+    assessmentName: string,
+    subjectOrCourseName: string,
+    assessmentDate: string,
+    approvalDate: string,
+    assessmentUrl?: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // Read email template
+      let htmlTemplate = await this.loadTemplate('assessment-result-approved.txt')
+
+      // Replace placeholders in template
+      htmlTemplate = htmlTemplate.replace(/\[TRAINEE_NAME\]/g, traineeName)
+      htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_NAME\]/g, assessmentName)
+      htmlTemplate = htmlTemplate.replace(/\[SUBJECT_COURSE_NAME\]/g, subjectOrCourseName)
+      htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_DATE\]/g, assessmentDate)
+      htmlTemplate = htmlTemplate.replace(/\[APPROVAL_DATE\]/g, approvalDate)
+      htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_URL\]/g, assessmentUrl || '#')
+
+      const emailData = {
+        to: traineeEmail,
+        subject: `Assessment Approved - ${assessmentName}`,
+        html: htmlTemplate
+      }
+
+      const result = await this.sendEmail(emailData)
+
+      if (result.success) {
+        return {
+          success: true,
+          message: 'Assessment approval notification email sent successfully'
+        }
+      } else {
+        return {
+          success: false,
+          message: `Failed to send assessment approval notification email: ${result.error}`
+        }
+      }
+    } catch (error) {
+      console.error('Error sending approved assessment email:', error)
+      return {
+        success: false,
+        message: `Error sending assessment approval notification email: ${error.message}`
+      }
+    }
+  }
+
+  /**
    * Send email notification for approved template
    */
   async sendApprovedTemplateEmail(
