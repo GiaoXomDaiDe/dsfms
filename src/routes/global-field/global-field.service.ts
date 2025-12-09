@@ -125,11 +125,16 @@ export class GlobalFieldService {
     return this.globalFieldRepository.createFieldWithChildren(data, createdById)
   }
 
-  private validateFieldHierarchy(fields: any[]) {
-    const tempIds = new Set<string>()
+  private validateFieldHierarchy(fields: any[], allTempIds: Set<string> = new Set()) {
+    // First pass: collect all tempIds in the hierarchy
+    this.collectAllTempIds(fields, allTempIds)
     
+    // Second pass: validate relationships
+    this.validateHierarchyRelationships(fields, allTempIds)
+  }
+
+  private collectAllTempIds(fields: any[], tempIds: Set<string>) {
     for (const field of fields) {
-      // Check for duplicate tempIds
       if (field.tempId) {
         if (tempIds.has(field.tempId)) {
           throw new Error(`Duplicate tempId '${field.tempId}' found in field hierarchy`)
@@ -137,35 +142,28 @@ export class GlobalFieldService {
         tempIds.add(field.tempId)
       }
 
+      // Recursively collect from children
+      if (field.children && field.children.length > 0) {
+        this.collectAllTempIds(field.children, tempIds)
+      }
+    }
+  }
+
+  private validateHierarchyRelationships(fields: any[], allTempIds: Set<string>) {
+    for (const field of fields) {
       // Validate parent-child relationships
-      if (field.parentTempId && !tempIds.has(field.parentTempId)) {
-        // Check if parentTempId exists in the current level or children
-        const hasParentInHierarchy = this.findTempIdInHierarchy(fields, field.parentTempId)
-        if (!hasParentInHierarchy) {
-          throw new Error(`Parent field with tempId '${field.parentTempId}' not found for field '${field.fieldName}'`)
-        }
+      if (field.parentTempId && !allTempIds.has(field.parentTempId)) {
+        throw new Error(`Parent field with tempId '${field.parentTempId}' not found for field '${field.fieldName}'`)
       }
 
       // Recursively validate children
       if (field.children && field.children.length > 0) {
-        this.validateFieldHierarchy(field.children)
+        this.validateHierarchyRelationships(field.children, allTempIds)
       }
     }
   }
 
-  private findTempIdInHierarchy(fields: any[], targetTempId: string): boolean {
-    for (const field of fields) {
-      if (field.tempId === targetTempId) {
-        return true
-      }
-      if (field.children && field.children.length > 0) {
-        if (this.findTempIdInHierarchy(field.children, targetTempId)) {
-          return true
-        }
-      }
-    }
-    return false
-  }
+
 
   async update(id: string, data: UpdateGlobalFieldDto, updatedById?: string) {
     if (!id) {
