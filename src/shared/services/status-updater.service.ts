@@ -12,6 +12,7 @@ dayjs.extend(utc)
 dayjs.extend(timezone)
 
 const APP_TIMEZONE = 'Asia/Ho_Chi_Minh'
+const SAMPLE_IDS_LOG_LIMIT = 10
 
 @Injectable()
 export class StatusUpdaterService {
@@ -32,12 +33,14 @@ export class StatusUpdaterService {
     timeZone: APP_TIMEZONE
   })
   async handleStatusUpdate() {
+    const todayStr = this.getTodayDateString()
+    this.logToday('handleStatusUpdate', new Date(`${todayStr}T00:00:00`))
     this.logger.log('Starting automatic status update...')
 
     try {
-      await this.updateCourseStatuses()
-      await this.updateSubjectStatuses()
-      await this.updateEnrollmentStatuses()
+      await this.updateCourseStatuses(todayStr)
+      await this.updateSubjectStatuses(todayStr)
+      await this.updateEnrollmentStatuses(todayStr)
 
       this.logger.log('Automatic status update completed successfully')
     } catch (error) {
@@ -69,362 +72,297 @@ export class StatusUpdaterService {
     this.logger.log('Starting assessment cancellation cron for cancelled enrollments...')
     try {
       const { subjectCancelled, courseCancelled } = await this.cancelAssessmentsForCancelledEnrollments()
-      const cancellationSummary =
-        `Assessment cancellation cron finished: ${subjectCancelled} subject-level, ` +
-        `${courseCancelled} course-level → CANCELLED`
-      this.logger.log(cancellationSummary)
+      this.logger.log(
+        `Assessment cancellation cron finished: ${subjectCancelled} subject-level, ${courseCancelled} course-level → CANCELLED`
+      )
     } catch (error) {
       this.logger.error('Error during assessment cancellation cron', error)
     }
   }
 
-  private async updateCourseStatuses() {
-    const today = this.getTodayDate()
-    this.logToday('updateCourseStatuses', today)
+  private async updateCourseStatuses(todayStr: string) {
+    // PLANNED -> ON_GOING count
+    const plannedToOngoingCountRow = (await this.prisma.$queryRaw<Array<{ cnt: number }>>(
+      Prisma.sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM "Course"
+      WHERE "status" = ${CourseStatus.PLANNED}::"CourseStatus"
+        AND "deletedAt" IS NULL
+        AND "startDate" <= ${todayStr}::date
+        AND "endDate" >= ${todayStr}::date
+    `
+    )) as Array<{ cnt: number }>
+    const plannedToOngoingCount = plannedToOngoingCountRow[0]?.cnt ?? 0
 
-    // DEBUG: log today dạng date-only
-    this.logger.debug(
-      `[updateCourseStatuses] today (VN, date only) = ${dayjs(today).tz(APP_TIMEZONE).format('YYYY-MM-DD')}`
-    )
+    if (plannedToOngoingCount > 0) {
+      const sample = (await this.prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+        SELECT "id"
+        FROM "Course"
+        WHERE "status" = ${CourseStatus.PLANNED}::"CourseStatus"
+          AND "deletedAt" IS NULL
+          AND "startDate" <= ${todayStr}::date
+          AND "endDate" >= ${todayStr}::date
+        LIMIT ${SAMPLE_IDS_LOG_LIMIT}
+      `
+      )) as Array<{ id: string }>
 
-    // DEBUG: các course PLANNED sẽ trở thành ON_GOING hôm nay
-    const plannedToOngoing = await this.prisma.course.findMany({
-      where: {
-        status: CourseStatus.PLANNED,
-        deletedAt: null,
-        startDate: { lte: today },
-        endDate: { gte: today }
-      },
-      select: {
-        id: true,
-        name: true,
-        startDate: true,
-        endDate: true,
-        status: true
-      }
-    })
+      await this.prisma.$executeRaw(
+        Prisma.sql`
+        UPDATE "Course"
+        SET "status" = ${CourseStatus.ON_GOING}::"CourseStatus",
+            "updatedAt" = now()
+        WHERE "status" = ${CourseStatus.PLANNED}::"CourseStatus"
+          AND "deletedAt" IS NULL
+          AND "startDate" <= ${todayStr}::date
+          AND "endDate" >= ${todayStr}::date
+      `
+      )
 
-    this.logger.debug(
-      `[updateCourseStatuses] candidates PLANNED → ON_GOING: ` +
-        JSON.stringify(
-          plannedToOngoing.map((c) => ({
-            id: c.id,
-            name: c.name,
-            startDate: dayjs(c.startDate).format('YYYY-MM-DD'),
-            endDate: dayjs(c.endDate).format('YYYY-MM-DD'),
-            status: c.status
-          })),
-          null,
-          2
-        )
-    )
+      this.logger.log(`Course: ${plannedToOngoingCount} → ON_GOING; sample ids: ${sample.map((r) => r.id).join(', ')}`)
+    } else {
+      this.logger.log('Course: 0 → ON_GOING')
+    }
 
-    // PLANNED → ON_GOING (startDate <= today <= endDate)
-    const ongoingResult = await this.prisma.course.updateMany({
-      where: {
-        status: CourseStatus.PLANNED,
-        deletedAt: null,
-        startDate: { lte: today },
-        endDate: { gte: today }
-      },
-      data: {
-        status: CourseStatus.ON_GOING,
-        updatedAt: new Date()
-      }
-    })
+    // PLANNED|ON_GOING -> COMPLETED count
+    const toCompletedCountRow = (await this.prisma.$queryRaw<Array<{ cnt: number }>>(
+      Prisma.sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM "Course"
+      WHERE "status" IN (${CourseStatus.PLANNED}::"CourseStatus", ${CourseStatus.ON_GOING}::"CourseStatus")
+        AND "deletedAt" IS NULL
+        AND "endDate" < ${todayStr}::date
+    `
+    )) as Array<{ cnt: number }>
+    const toCompletedCount = toCompletedCountRow[0]?.cnt ?? 0
 
-    // DEBUG: các course PLANNED/ON_GOING sẽ bị COMPLETED hôm nay (hết hạn)
-    const toCompleted = await this.prisma.course.findMany({
-      where: {
-        status: { in: [CourseStatus.PLANNED, CourseStatus.ON_GOING] },
-        deletedAt: null,
-        endDate: { lt: today }
-      },
-      select: {
-        id: true,
-        name: true,
-        startDate: true,
-        endDate: true,
-        status: true
-      }
-    })
+    if (toCompletedCount > 0) {
+      const sampleCompleted = (await this.prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+        SELECT "id"
+        FROM "Course"
+        WHERE "status" IN (${CourseStatus.PLANNED}::"CourseStatus", ${CourseStatus.ON_GOING}::"CourseStatus")
+          AND "deletedAt" IS NULL
+          AND "endDate" < ${todayStr}::date
+        LIMIT ${SAMPLE_IDS_LOG_LIMIT}
+      `
+      )) as Array<{ id: string }>
 
-    this.logger.debug(
-      `[updateCourseStatuses] candidates PLANNED/ON_GOING → COMPLETED: ` +
-        JSON.stringify(
-          toCompleted.map((c) => ({
-            id: c.id,
-            name: c.name,
-            startDate: dayjs(c.startDate).format('YYYY-MM-DD'),
-            endDate: dayjs(c.endDate).format('YYYY-MM-DD'),
-            status: c.status
-          })),
-          null,
-          2
-        )
-    )
+      await this.prisma.$executeRaw(
+        Prisma.sql`
+        UPDATE "Course"
+        SET "status" = ${CourseStatus.COMPLETED}::"CourseStatus",
+            "updatedAt" = now()
+        WHERE "status" IN (${CourseStatus.PLANNED}::"CourseStatus", ${CourseStatus.ON_GOING}::"CourseStatus")
+          AND "deletedAt" IS NULL
+          AND "endDate" < ${todayStr}::date
+      `
+      )
 
-    // PLANNED or ON_GOING → COMPLETED (today > endDate)
-    const completedResult = await this.prisma.course.updateMany({
-      where: {
-        status: { in: [CourseStatus.PLANNED, CourseStatus.ON_GOING] },
-        deletedAt: null,
-        endDate: { lt: today }
-      },
-      data: {
-        status: CourseStatus.COMPLETED,
-        updatedAt: new Date()
-      }
-    })
-
-    this.logger.log(`Course statuses updated: ${ongoingResult.count} → ON_GOING, ${completedResult.count} → COMPLETED`)
+      this.logger.log(
+        `Course: ${toCompletedCount} → COMPLETED; sample ids: ${sampleCompleted.map((r) => r.id).join(', ')}`
+      )
+    } else {
+      this.logger.log('Course: 0 → COMPLETED')
+    }
   }
 
-  private async updateSubjectStatuses() {
-    const today = this.getTodayDate()
-    this.logToday('updateSubjectStatuses', today)
+  private async updateSubjectStatuses(todayStr: string) {
+    // PLANNED -> ON_GOING
+    const plannedToOngoingCountRow = (await this.prisma.$queryRaw<Array<{ cnt: number }>>(
+      Prisma.sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM "Subject"
+      WHERE "status" = ${SubjectStatus.PLANNED}::"SubjectStatus"
+        AND "deletedAt" IS NULL
+        AND "startDate" <= ${todayStr}::date
+        AND "endDate" >= ${todayStr}::date
+    `
+    )) as Array<{ cnt: number }>
+    const plannedToOngoingCount = plannedToOngoingCountRow[0]?.cnt ?? 0
 
-    this.logger.debug(
-      `[updateSubjectStatuses] today (VN, date only) = ${dayjs(today).tz(APP_TIMEZONE).format('YYYY-MM-DD')}`
-    )
+    if (plannedToOngoingCount > 0) {
+      const sample = (await this.prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+        SELECT "id"
+        FROM "Subject"
+        WHERE "status" = ${SubjectStatus.PLANNED}::"SubjectStatus"
+          AND "deletedAt" IS NULL
+          AND "startDate" <= ${todayStr}::date
+          AND "endDate" >= ${todayStr}::date
+        LIMIT ${SAMPLE_IDS_LOG_LIMIT}
+      `
+      )) as Array<{ id: string }>
 
-    // DEBUG: Subject PLANNED → ON_GOING hôm nay
-    const plannedToOngoing = await this.prisma.subject.findMany({
-      where: {
-        status: SubjectStatus.PLANNED,
-        deletedAt: null,
-        startDate: { lte: today },
-        endDate: { gte: today }
-      },
-      select: {
-        id: true,
-        name: true,
-        startDate: true,
-        endDate: true,
-        status: true
-      }
-    })
+      await this.prisma.$executeRaw(
+        Prisma.sql`
+        UPDATE "Subject"
+        SET "status" = ${SubjectStatus.ON_GOING}::"SubjectStatus",
+            "updatedAt" = now()
+        WHERE "status" = ${SubjectStatus.PLANNED}::"SubjectStatus"
+          AND "deletedAt" IS NULL
+          AND "startDate" <= ${todayStr}::date
+          AND "endDate" >= ${todayStr}::date
+      `
+      )
 
-    this.logger.debug(
-      `[updateSubjectStatuses] candidates PLANNED → ON_GOING: ` +
-        JSON.stringify(
-          plannedToOngoing.map((s) => ({
-            id: s.id,
-            name: s.name,
-            startDate: dayjs(s.startDate).format('YYYY-MM-DD'),
-            endDate: dayjs(s.endDate).format('YYYY-MM-DD'),
-            status: s.status
-          })),
-          null,
-          2
-        )
-    )
+      this.logger.log(`Subject: ${plannedToOngoingCount} → ON_GOING; sample ids: ${sample.map((r) => r.id).join(', ')}`)
+    } else {
+      this.logger.log('Subject: 0 → ON_GOING')
+    }
 
-    // PLANNED → ON_GOING
-    const ongoingResult = await this.prisma.subject.updateMany({
-      where: {
-        status: SubjectStatus.PLANNED,
-        deletedAt: null,
-        startDate: { lte: today },
-        endDate: { gte: today }
-      },
-      data: {
-        status: SubjectStatus.ON_GOING,
-        updatedAt: new Date()
-      }
-    })
+    // PLANNED|ON_GOING -> COMPLETED
+    const toCompletedCountRow = (await this.prisma.$queryRaw<Array<{ cnt: number }>>(
+      Prisma.sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM "Subject"
+      WHERE "status" IN (${SubjectStatus.PLANNED}::"SubjectStatus", ${SubjectStatus.ON_GOING}::"SubjectStatus")
+        AND "deletedAt" IS NULL
+        AND "endDate" < ${todayStr}::date
+    `
+    )) as Array<{ cnt: number }>
+    const toCompletedCount = toCompletedCountRow[0]?.cnt ?? 0
 
-    // DEBUG: Subject PLANNED/ON_GOING → COMPLETED
-    const toCompleted = await this.prisma.subject.findMany({
-      where: {
-        status: { in: [SubjectStatus.PLANNED, SubjectStatus.ON_GOING] },
-        deletedAt: null,
-        endDate: { lt: today }
-      },
-      select: {
-        id: true,
-        name: true,
-        startDate: true,
-        endDate: true,
-        status: true
-      }
-    })
+    if (toCompletedCount > 0) {
+      const sampleCompleted = (await this.prisma.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+        SELECT "id"
+        FROM "Subject"
+        WHERE "status" IN (${SubjectStatus.PLANNED}::"SubjectStatus", ${SubjectStatus.ON_GOING}::"SubjectStatus")
+          AND "deletedAt" IS NULL
+          AND "endDate" < ${todayStr}::date
+        LIMIT ${SAMPLE_IDS_LOG_LIMIT}
+      `
+      )) as Array<{ id: string }>
 
-    this.logger.debug(
-      `[updateSubjectStatuses] candidates PLANNED/ON_GOING → COMPLETED: ` +
-        JSON.stringify(
-          toCompleted.map((s) => ({
-            id: s.id,
-            name: s.name,
-            startDate: dayjs(s.startDate).format('YYYY-MM-DD'),
-            endDate: dayjs(s.endDate).format('YYYY-MM-DD'),
-            status: s.status
-          })),
-          null,
-          2
-        )
-    )
+      await this.prisma.$executeRaw(
+        Prisma.sql`
+        UPDATE "Subject"
+        SET "status" = ${SubjectStatus.COMPLETED}::"SubjectStatus",
+            "updatedAt" = now()
+        WHERE "status" IN (${SubjectStatus.PLANNED}::"SubjectStatus", ${SubjectStatus.ON_GOING}::"SubjectStatus")
+          AND "deletedAt" IS NULL
+          AND "endDate" < ${todayStr}::date
+      `
+      )
 
-    // PLANNED or ON_GOING → COMPLETED
-    const completedResult = await this.prisma.subject.updateMany({
-      where: {
-        status: { in: [SubjectStatus.PLANNED, SubjectStatus.ON_GOING] },
-        deletedAt: null,
-        endDate: { lt: today }
-      },
-      data: {
-        status: SubjectStatus.COMPLETED,
-        updatedAt: new Date()
-      }
-    })
-
-    this.logger.log(`Subject statuses updated: ${ongoingResult.count} → ON_GOING, ${completedResult.count} → COMPLETED`)
+      this.logger.log(
+        `Subject: ${toCompletedCount} → COMPLETED; sample ids: ${sampleCompleted.map((r) => r.id).join(', ')}`
+      )
+    } else {
+      this.logger.log('Subject: 0 → COMPLETED')
+    }
   }
 
-  private async updateEnrollmentStatuses() {
-    // DEBUG: Enrollment ENROLLED → ON_GOING (subject ON_GOING)
-    const toOngoing = await this.prisma.subjectEnrollment.findMany({
-      where: {
-        status: SubjectEnrollmentStatus.ENROLLED,
-        subject: {
-          status: SubjectStatus.ON_GOING,
-          deletedAt: null
-        }
-      },
-      select: {
-        traineeUserId: true,
-        subjectId: true,
-        status: true,
-        subject: {
-          select: {
-            name: true,
-            status: true
-          }
-        }
-      }
-    })
+  private async updateEnrollmentStatuses(todayStr: string) {
+    // ENROLLED -> ON_GOING (subject ON_GOING)
+    const toOngoingCountRow = (await this.prisma.$queryRaw<Array<{ cnt: number }>>(
+      Prisma.sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM "Subject_Enrollment" se
+      JOIN "Subject" s ON s."id" = se."subjectId"
+      WHERE se."status" = ${SubjectEnrollmentStatus.ENROLLED}::"SubjectEnrollmentStatus"
+        AND s."status" = ${SubjectStatus.ON_GOING}::"SubjectStatus"
+        AND s."deletedAt" IS NULL
+    `
+    )) as Array<{ cnt: number }>
+    const toOngoingCount = toOngoingCountRow[0]?.cnt ?? 0
 
-    this.logger.debug(
-      `[updateEnrollmentStatuses] candidates ENROLLED → ON_GOING: ` +
-        JSON.stringify(
-          toOngoing.map((e) => ({
-            traineeUserId: e.traineeUserId,
-            subjectId: e.subjectId,
-            enrollmentStatus: e.status,
-            subjectName: e.subject?.name,
-            subjectStatus: e.subject?.status
-          })),
-          null,
-          2
-        )
-    )
+    if (toOngoingCount > 0) {
+      const sample = (await this.prisma.$queryRaw<Array<{ subjectId: string }>>(
+        Prisma.sql`
+        SELECT se."subjectId"
+        FROM "Subject_Enrollment" se
+        JOIN "Subject" s ON s."id" = se."subjectId"
+        WHERE se."status" = ${SubjectEnrollmentStatus.ENROLLED}::"SubjectEnrollmentStatus"
+          AND s."status" = ${SubjectStatus.ON_GOING}::"SubjectStatus"
+          AND s."deletedAt" IS NULL
+        LIMIT ${SAMPLE_IDS_LOG_LIMIT}
+      `
+      )) as Array<{ subjectId: string }>
 
-    // 1. Cập nhật Enrollment sang ON_GOING khi Subject = ON_GOING
-    const ongoingResult = await this.prisma.subjectEnrollment.updateMany({
-      where: {
-        status: SubjectEnrollmentStatus.ENROLLED,
-        subject: {
-          status: SubjectStatus.ON_GOING,
-          deletedAt: null
-        }
-      },
-      data: {
-        status: SubjectEnrollmentStatus.ON_GOING,
-        updatedAt: new Date()
-      }
-    })
+      await this.prisma.$executeRaw(
+        Prisma.sql`
+        UPDATE "Subject_Enrollment" se
+        SET "status" = ${SubjectEnrollmentStatus.ON_GOING}::"SubjectEnrollmentStatus",
+            "updatedAt" = now()
+        FROM "Subject" s
+        WHERE se."subjectId" = s."id"
+          AND se."status" = ${SubjectEnrollmentStatus.ENROLLED}::"SubjectEnrollmentStatus"
+          AND s."status" = ${SubjectStatus.ON_GOING}::"SubjectStatus"
+          AND s."deletedAt" IS NULL
+      `
+      )
 
-    // DEBUG: Enrollment ENROLLED/ON_GOING → FINISHED (subject COMPLETED)
-    const toFinished = await this.prisma.subjectEnrollment.findMany({
-      where: {
-        status: {
-          in: [SubjectEnrollmentStatus.ENROLLED, SubjectEnrollmentStatus.ON_GOING]
-        },
-        subject: {
-          status: SubjectStatus.COMPLETED,
-          deletedAt: null
-        }
-      },
-      select: {
-        traineeUserId: true,
-        subjectId: true,
-        status: true,
-        subject: {
-          select: {
-            name: true,
-            status: true
-          }
-        }
-      }
-    })
+      this.logger.log(
+        `Enrollment: ${toOngoingCount} → ON_GOING; sample subjectIds: ${sample.map((r) => r.subjectId).join(', ')}`
+      )
+    } else {
+      this.logger.log('Enrollment: 0 → ON_GOING')
+    }
 
-    this.logger.debug(
-      `[updateEnrollmentStatuses] candidates ENROLLED/ON_GOING → FINISHED: ` +
-        JSON.stringify(
-          toFinished.map((e) => ({
-            traineeUserId: e.traineeUserId,
-            subjectId: e.subjectId,
-            enrollmentStatus: e.status,
-            subjectName: e.subject?.name,
-            subjectStatus: e.subject?.status
-          })),
-          null,
-          2
-        )
-    )
+    // ENROLLED|ON_GOING -> FINISHED (subject COMPLETED)
+    const toFinishedCountRow = (await this.prisma.$queryRaw<Array<{ cnt: number }>>(
+      Prisma.sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM "Subject_Enrollment" se
+      JOIN "Subject" s ON s."id" = se."subjectId"
+      WHERE se."status" IN (${SubjectEnrollmentStatus.ENROLLED}::"SubjectEnrollmentStatus", ${SubjectEnrollmentStatus.ON_GOING}::"SubjectEnrollmentStatus")
+        AND s."status" = ${SubjectStatus.COMPLETED}::"SubjectStatus"
+        AND s."deletedAt" IS NULL
+    `
+    )) as Array<{ cnt: number }>
+    const toFinishedCount = toFinishedCountRow[0]?.cnt ?? 0
 
-    // 2. Cập nhật Enrollment sang FINISHED khi Subject = COMPLETED
-    const finishedResult = await this.prisma.subjectEnrollment.updateMany({
-      where: {
-        status: {
-          in: [SubjectEnrollmentStatus.ENROLLED, SubjectEnrollmentStatus.ON_GOING]
-        },
-        subject: {
-          status: SubjectStatus.COMPLETED,
-          deletedAt: null
-        }
-      },
-      data: {
-        status: SubjectEnrollmentStatus.FINISHED,
-        updatedAt: new Date()
-      }
-    })
+    if (toFinishedCount > 0) {
+      const sampleFinished = (await this.prisma.$queryRaw<Array<{ subjectId: string }>>(
+        Prisma.sql`
+        SELECT se."subjectId"
+        FROM "Subject_Enrollment" se
+        JOIN "Subject" s ON s."id" = se."subjectId"
+        WHERE se."status" IN (${SubjectEnrollmentStatus.ENROLLED}::"SubjectEnrollmentStatus", ${SubjectEnrollmentStatus.ON_GOING}::"SubjectEnrollmentStatus")
+          AND s."status" = ${SubjectStatus.COMPLETED}::"SubjectStatus"
+          AND s."deletedAt" IS NULL
+        LIMIT ${SAMPLE_IDS_LOG_LIMIT}
+      `
+      )) as Array<{ subjectId: string }>
 
-    this.logger.log(
-      `Enrollment statuses updated: ${ongoingResult.count} → ON_GOING, ${finishedResult.count} → FINISHED`
-    )
+      await this.prisma.$executeRaw(
+        Prisma.sql`
+        UPDATE "Subject_Enrollment" se
+        SET "status" = ${SubjectEnrollmentStatus.FINISHED}::"SubjectEnrollmentStatus",
+            "updatedAt" = now()
+        FROM "Subject" s
+        WHERE se."subjectId" = s."id"
+          AND se."status" IN (${SubjectEnrollmentStatus.ENROLLED}::"SubjectEnrollmentStatus", ${SubjectEnrollmentStatus.ON_GOING}::"SubjectEnrollmentStatus")
+          AND s."status" = ${SubjectStatus.COMPLETED}::"SubjectStatus"
+          AND s."deletedAt" IS NULL
+      `
+      )
+
+      this.logger.log(
+        `Enrollment: ${toFinishedCount} → FINISHED; sample subjectIds: ${sampleFinished.map((r) => r.subjectId).join(', ')}`
+      )
+    } else {
+      this.logger.log('Enrollment: 0 → FINISHED')
+    }
   }
+
   private async activateAssessmentsForToday() {
     const todayStr = this.getTodayDateString()
-    this.logger.log(`[activateAssessmentsForToday] today (VN, string) = ${todayStr}`)
 
-    // Lấy những form NOT_STARTED có occuranceDate = today (DATE so sánh thuần)
-    const raw = await this.prisma.$queryRaw<Array<{ id: string; name: string; occuranceDate: Date; status: string }>>(
-      Prisma.sql`
-      SELECT "id", "name", "occuranceDate", "status"
+    // For DATE column occuranceDate - use date string comparison
+    const ids = (
+      await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
       FROM "Assessment_Form"
       WHERE "status" = ${AssessmentStatus.NOT_STARTED}::"AssessmentStatus"
         AND "occuranceDate" = ${todayStr}::date
-    `
-    )
+    `)
+    ).map((r) => r.id)
 
-    this.logger.debug(
-      `[activateAssessmentsForToday] candidates (NOT_STARTED & occuranceDate = ${todayStr}): ` +
-        JSON.stringify(
-          raw.map((c) => ({
-            id: c.id,
-            name: c.name,
-            occuranceDate: dayjs(c.occuranceDate).format('YYYY-MM-DD'),
-            status: c.status
-          })),
-          null,
-          2
-        )
-    )
-
-    const ids = raw.map((r) => r.id)
     if (!ids.length) {
-      this.logger.log('activateAssessmentsForToday updated=0')
+      this.logger.debug('activateAssessmentsForToday updated=0')
       return 0
     }
 
@@ -445,40 +383,23 @@ export class StatusUpdaterService {
 
   private async cancelExpiredAssessments() {
     const todayStr = this.getTodayDateString()
-    this.logger.log(`[cancelExpiredAssessments] today (VN, string) = ${todayStr}`)
 
     const cancellableStatuses = StatusUpdaterService.cancellableAssessmentStatuses
     const cancellableStatusesSql = Prisma.join(
       cancellableStatuses.map((status) => Prisma.sql`${status}::"AssessmentStatus"`)
     )
 
-    // Lấy những form có occuranceDate < today và status thuộc nhóm cancellable
-    const raw = await this.prisma.$queryRaw<Array<{ id: string; name: string; occuranceDate: Date; status: string }>>(
-      Prisma.sql`
-      SELECT "id", "name", "occuranceDate", "status"
+    const ids = (
+      await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
       FROM "Assessment_Form"
       WHERE "occuranceDate" < ${todayStr}::date
         AND "status" IN (${cancellableStatusesSql})
-    `
-    )
+    `)
+    ).map((r) => r.id)
 
-    this.logger.debug(
-      `[cancelExpiredAssessments] candidates (occuranceDate < ${todayStr} & cancellable): ` +
-        JSON.stringify(
-          raw.map((c) => ({
-            id: c.id,
-            name: c.name,
-            occuranceDate: dayjs(c.occuranceDate).format('YYYY-MM-DD'),
-            status: c.status
-          })),
-          null,
-          2
-        )
-    )
-
-    const ids = raw.map((r) => r.id)
     if (!ids.length) {
-      this.logger.log('cancelExpiredAssessments updated=0')
+      this.logger.debug('cancelExpiredAssessments updated=0')
       return 0
     }
 
@@ -519,7 +440,8 @@ export class StatusUpdaterService {
       `
     )
 
-    const subjectCancelled = await this.cancelAssessmentsByIds(subjectAssessmentIds.map((row) => row.id))
+    const subjectIds = subjectAssessmentIds.map((row) => row.id)
+    const subjectCancelled = await this.cancelAssessmentsByIds(subjectIds)
 
     const courseAssessmentIds = await this.prisma.$queryRaw<Array<{ id: string }>>(
       Prisma.sql`
@@ -546,7 +468,8 @@ export class StatusUpdaterService {
       `
     )
 
-    const courseCancelled = await this.cancelAssessmentsByIds(courseAssessmentIds.map((row) => row.id))
+    const courseIds = courseAssessmentIds.map((row) => row.id)
+    const courseCancelled = await this.cancelAssessmentsByIds(courseIds)
 
     return { subjectCancelled, courseCancelled }
   }
@@ -572,9 +495,6 @@ export class StatusUpdaterService {
     return count
   }
 
-  private getTodayDate(): Date {
-    return dayjs().tz(APP_TIMEZONE).startOf('day').toDate()
-  }
   private getTodayDateString(): string {
     return dayjs().tz(APP_TIMEZONE).format('YYYY-MM-DD')
   }
