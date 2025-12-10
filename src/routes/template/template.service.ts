@@ -1980,7 +1980,7 @@ export class TemplateService {
       if (error instanceof TemplateNotFoundError || error instanceof InvalidDraftTemplateStatusError) {
         throw error
       }
-      throw new TemplateCreationFailedError(error.message)
+      throw new Error(`Failed to delete template: ${error.message}`)
     }
   }
 }
