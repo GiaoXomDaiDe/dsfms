@@ -1375,8 +1375,11 @@ export class AssessmentService {
         try {
           // Get detailed assessment information for email
           const detailedAssessment = await this.assessmentRepo.getAssessmentWithDetails(assessmentId)
+          
+          // Get all trainers who assessed sections in this assessment
+          const trainerAssessors = await this.assessmentRepo.getTrainerAssessors(assessmentId)
 
-          if (detailedAssessment) {
+          if (detailedAssessment && trainerAssessors.length > 0) {
             // Format dates for email
             const submissionDate = detailedAssessment.submittedAt
               ? new Date(detailedAssessment.submittedAt).toLocaleDateString()
@@ -1389,22 +1392,33 @@ export class AssessmentService {
             // Get subject or course name
             const subjectOrCourseName = detailedAssessment.subject?.name || detailedAssessment.course?.name || 'N/A'
 
-            await this.nodemailerService.sendRejectedAssessmentEmail(
-              detailedAssessment.trainee.email,
-              `${detailedAssessment.trainee.firstName} ${detailedAssessment.trainee.lastName}`,
-              detailedAssessment.name,
-              subjectOrCourseName,
-              detailedAssessment.template.name,
-              submissionDate,
-              reviewerName,
-              reviewDate,
-              body.comment || 'No specific comment provided.',
-              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}` // sửa lại chỗ này khi có URL đúng
-            )
+            // Send rejection email to each trainer who assessed sections
+            for (const trainer of trainerAssessors) {
+              try {
+                await this.nodemailerService.sendRejectedAssessmentEmail(
+                  trainer.email,
+                  trainer.fullName,
+                  detailedAssessment.name,
+                  subjectOrCourseName,
+                  detailedAssessment.template.name,
+                  submissionDate,
+                  reviewerName,
+                  reviewDate,
+                  body.comment || 'No specific comment provided.',
+                  `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}` // sửa lại chỗ này khi có URL đúng
+                )
+                console.log(`Rejection notification sent to trainer: ${trainer.fullName} (${trainer.email})`)
+              } catch (individualEmailError) {
+                console.error(`Failed to send rejection email to trainer ${trainer.fullName}:`, individualEmailError)
+              }
+            }
+          } else if (detailedAssessment && trainerAssessors.length === 0) {
+            // Fallback: No trainers assessed sections, log this case
+            console.log(`Assessment ${assessmentId} rejected but no trainer assessors found. No rejection emails sent.`)
           }
         } catch (emailError) {
           // Log email error but don't fail the main operation
-          console.error('Failed to send rejection email:', emailError)
+          console.error('Failed to send rejection emails:', emailError)
         }
       }
 

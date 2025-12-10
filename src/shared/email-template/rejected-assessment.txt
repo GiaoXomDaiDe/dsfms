@@ -17,7 +17,7 @@
                 <h2 style="color: #e74c3c; margin: 0 0 20px; font-size: 24px; text-align: center;">Assessment Rejected</h2>
                 <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
                     Hello <strong>[TRAINEE_NAME]</strong>,<br><br>
-                    We regret to inform you that your assessment <strong>"[ASSESSMENT_NAME]"</strong> submitted on <strong>[SUBMISSION_DATE]</strong> has been rejected by your Department Head.
+                    We regret to inform you that the assessment <strong>"[ASSESSMENT_NAME]"</strong> you participated in, which was submitted on <strong>[SUBMISSION_DATE]</strong>, has been rejected by the Department Head.
                 </p>
                 
                 <div style="background-color: #fff5f5; border-left: 4px solid #e74c3c; padding: 15px; margin: 20px 0;">
@@ -41,11 +41,11 @@
 
                 <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 20px 0;">
                     <strong>Next Steps:</strong><br>
-                    Please review the comments above and make the necessary revisions to your assessment. You may resubmit your assessment after addressing the feedback provided.
+                    Please review the comments above and work with the trainee to make the necessary revisions to the assessment. You may resubmit the assessment after addressing the feedback provided.
                 </p>
 
                 <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0 0;">
-                    If you have any questions about this rejection or need clarification on the feedback, please contact your Department Head, report to your SQA support or the assessment department.
+                    If you have any questions about this rejection or need clarification on the feedback, please contact the Department Head directly or report to your SQA support.
                 </p>
                 
                 <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0 0;">

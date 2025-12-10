@@ -2810,10 +2810,11 @@ export class AssessmentRepo {
 
   /**
    * Confirm assessment participation - Save trainee signature and change status from SIGNATURE_PENDING to READY_TO_SUBMIT
+   * Also update section status to DRAFT and set assessedById for TRAINEE signature sections
    */
   async confirmAssessmentParticipation(assessmentId: string, traineeSignatureUrl: string, userId: string) {
     return await this.prisma.$transaction(async (tx) => {
-      // Find TRAINEE SIGNATURE_DRAW field in this assessment
+      // Get assessment form with all sections and their current status
       const assessmentForm = await tx.assessmentForm.findUnique({
         where: { id: assessmentId },
         include: {
@@ -2822,9 +2823,10 @@ export class AssessmentRepo {
               templateSection: {
                 include: {
                   fields: {
-                    where: {
-                      fieldType: 'SIGNATURE_DRAW',
-                      roleRequired: 'TRAINEE'
+                    select: {
+                      id: true,
+                      fieldType: true,
+                      roleRequired: true
                     }
                   }
                 }
@@ -2840,27 +2842,55 @@ export class AssessmentRepo {
       }
 
       let signatureSaved = false
+      let updatedSectionIds: string[] = []
 
-      // Find and update the TRAINEE SIGNATURE_DRAW field value
+      // Find and update the TRAINEE SIGNATURE_DRAW field value AND section status
       for (const section of assessmentForm.sections) {
-        for (const templateField of section.templateSection.fields) {
-          if (templateField.fieldType === 'SIGNATURE_DRAW' && templateField.roleRequired === 'TRAINEE') {
-            // Find the corresponding assessment value
-            const assessmentValue = section.values.find(value => value.templateFieldId === templateField.id)
-            
-            if (assessmentValue) {
-              // Update the signature URL
-              await tx.assessmentValue.update({
-                where: { id: assessmentValue.id },
-                data: { answerValue: traineeSignatureUrl }
-              })
-              signatureSaved = true
+        // Check if this is a TRAINEE section with SIGNATURE_DRAW field
+        const hasTraineeSignatureField = section.templateSection.fields.some(
+          field => field.fieldType === 'SIGNATURE_DRAW' && field.roleRequired === 'TRAINEE'
+        )
+
+        if (hasTraineeSignatureField) {
+          // Update signature value
+          for (const templateField of section.templateSection.fields) {
+            if (templateField.fieldType === 'SIGNATURE_DRAW' && templateField.roleRequired === 'TRAINEE') {
+              // Find the corresponding assessment value
+              const assessmentValue = section.values.find(value => value.templateFieldId === templateField.id)
+              
+              if (assessmentValue) {
+                // Update the signature URL
+                await tx.assessmentValue.update({
+                  where: { id: assessmentValue.id },
+                  data: { answerValue: traineeSignatureUrl }
+                })
+                signatureSaved = true
+              }
             }
           }
+
+          // Always update section to ensure it's marked as DRAFT with proper assessedById
+          // This handles both cases: 
+          // 1. Section with only signature (needs status update)
+          // 2. Section with other fields already filled (signature completion)
+          const needsUpdate = section.status !== AssessmentSectionStatus.DRAFT || section.assessedById !== userId
+          
+          if (needsUpdate) {
+            await tx.assessmentSection.update({
+              where: { id: section.id },
+              data: {
+                status: AssessmentSectionStatus.DRAFT,
+                assessedById: userId
+              }
+            })
+          }
+          
+          // Track this section as processed (regardless of whether DB update was needed)
+          updatedSectionIds.push(section.id)
         }
       }
 
-      // Update assessment form status
+      // Update assessment form status from SIGNATURE_PENDING to READY_TO_SUBMIT
       const updatedAssessment = await tx.assessmentForm.update({
         where: {
           id: assessmentId,
@@ -2874,7 +2904,8 @@ export class AssessmentRepo {
 
       return {
         ...updatedAssessment,
-        signatureSaved
+        signatureSaved,
+        updatedSectionIds
       }
     })
   }
@@ -2898,6 +2929,71 @@ export class AssessmentRepo {
 
     // Check if the assessment's template belongs to the user's department
     return assessment.template.departmentId === departmentId
+  }
+
+  /**
+   * Get all trainers who assessed sections in an assessment
+   * Returns trainers with their email information for rejection notifications
+   */
+  async getTrainerAssessors(assessmentId: string) {
+    // Get all assessment sections with their assessors and template section info
+    const assessmentSections = await this.prisma.assessmentSection.findMany({
+      where: {
+        assessmentFormId: assessmentId,
+        assessedById: { not: null }, // Only sections that have been assessed
+        templateSection: {
+          editBy: 'TRAINER' // Only TRAINER sections
+        }
+      },
+      include: {
+        assessedBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            middleName: true
+          }
+        },
+        templateSection: {
+          select: {
+            id: true,
+            editBy: true,
+            label: true
+          }
+        }
+      }
+    })
+
+    // Extract unique trainers (remove duplicates if a trainer assessed multiple sections)
+    const uniqueTrainers = assessmentSections
+      .filter(section => section.assessedBy) // Extra safety check
+      .reduce((trainers, section) => {
+        const trainer = section.assessedBy!
+        const existingTrainer = trainers.find(t => t.id === trainer.id)
+        
+        if (!existingTrainer) {
+          trainers.push({
+            id: trainer.id,
+            email: trainer.email,
+            firstName: trainer.firstName,
+            lastName: trainer.lastName,
+            middleName: trainer.middleName,
+            fullName: `${trainer.firstName} ${trainer.middleName || ''} ${trainer.lastName}`.trim()
+          })
+        }
+        
+        return trainers
+      }, [] as Array<{
+        id: string
+        email: string
+        firstName: string
+        lastName: string
+        middleName: string | null
+        fullName: string
+      }>)
+
+    return uniqueTrainers
   }
 
   /**
