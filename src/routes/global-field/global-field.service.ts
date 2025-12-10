@@ -70,6 +70,11 @@ export class GlobalFieldService {
       throw new RequiredFieldMissingError('fieldType')
     }
 
+    // PART và CHECK_BOX bắt buộc phải có children
+    if ((data.fieldType === 'PART' || data.fieldType === 'CHECK_BOX') && (!data.children || data.children.length === 0)) {
+      throw new Error(`${data.fieldType} field must have at least one child field.`)
+    }
+
     // Check if fieldName already exists
     const existingField = await this.globalFieldRepository.findByFieldName(data.fieldName)
     if (existingField) {
@@ -102,6 +107,11 @@ export class GlobalFieldService {
     // Validate that parent field type supports children
     if (data.fieldType !== 'PART' && data.fieldType !== 'CHECK_BOX') {
       throw new Error(`Field type '${data.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`)
+    }
+
+    // Bắt buộc phải có children cho PART và CHECK_BOX
+    if (!data.children || data.children.length === 0) {
+      throw new Error(`${data.fieldType} field must have at least one child field.`)
     }
 
     // Check if parent fieldName already exists
@@ -182,9 +192,18 @@ export class GlobalFieldService {
 
   private async updateSingleField(id: string, data: UpdateGlobalFieldDto, updatedById?: string) {
     // Check if global field exists
-    const existingField = await this.globalFieldRepository.exists(id)
+    const existingField = await this.globalFieldRepository.findByIdDetail(id)
     if (!existingField) {
       throw new GlobalFieldNotFoundError()
+    }
+
+    // Validate PART/CHECK_BOX fields must have children
+    const updatedFieldType = data.fieldType || existingField.fieldType
+    if (updatedFieldType === 'PART' || updatedFieldType === 'CHECK_BOX') {
+      // Check if removing all children from a PART/CHECK_BOX field
+      if (!data.children || data.children.length === 0) {
+        throw new Error(`${updatedFieldType} field must have at least one child field.`)
+      }
     }
 
     // Check if fieldName already exists (excluding current field)
@@ -226,6 +245,12 @@ export class GlobalFieldService {
     
     if (existingField.fieldType !== 'PART' && existingField.fieldType !== 'CHECK_BOX') {
       throw new Error(`Existing field type '${existingField.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`)
+    }
+
+    // Validate PART/CHECK_BOX fields must have children
+    if (!data.children || data.children.length === 0) {
+      const fieldType = data.fieldType || existingField.fieldType
+      throw new Error(`${fieldType} field must have at least one child field.`)
     }
 
     // Check if fieldName already exists (excluding current field)
