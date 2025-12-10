@@ -608,19 +608,6 @@ export class TemplateService {
               throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
             }
           }
-
-          // Check if PART field has at least one child field
-          if (field.fieldType === 'PART') {
-            const hasChildFields = section.fields.some(
-              (childField) =>
-                childField.parentTempId === field.tempId ||
-                childField.parentTempId === field.fieldName ||
-                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
-            )
-            if (!hasChildFields) {
-              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
-            }
-          }
         }
       }
 
@@ -1226,31 +1213,7 @@ export class TemplateService {
             }
           }
 
-          // Check if PART field has at least one child field
-          if (field.fieldType === 'PART') {
-            const hasChildFields = section.fields.some(
-              (childField) =>
-                childField.parentTempId === field.tempId ||
-                childField.parentTempId === field.fieldName ||
-                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
-            )
-            if (!hasChildFields) {
-              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
-            }
-          }
 
-          // Check if CHECK_BOX field has at least one child field
-          if (field.fieldType === 'CHECK_BOX') {
-            const hasChildFields = section.fields.some(
-              (childField) =>
-                childField.parentTempId === field.tempId ||
-                childField.parentTempId === field.fieldName ||
-                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
-            )
-            if (!hasChildFields) {
-              throw new CheckBoxFieldMissingChildrenError(field.fieldName, section.label)
-            }
-          }
         }
       }
 
@@ -1536,31 +1499,7 @@ export class TemplateService {
           }
         }
 
-        // Check if PART field has at least one child field
-        if (field.fieldType === 'PART') {
-          const hasChildFields = section.fields.some(
-            (childField) =>
-              childField.parentTempId === field.tempId ||
-              childField.parentTempId === field.fieldName ||
-              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
-          )
-          if (!hasChildFields) {
-            throw new PartFieldMissingChildrenError(field.fieldName, section.label)
-          }
-        }
 
-        // Check if CHECK_BOX field has at least one child field
-        if (field.fieldType === 'CHECK_BOX') {
-          const hasChildFields = section.fields.some(
-            (childField) =>
-              childField.parentTempId === field.tempId ||
-              childField.parentTempId === field.fieldName ||
-              (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
-          )
-          if (!hasChildFields) {
-            throw new CheckBoxFieldMissingChildrenError(field.fieldName, section.label)
-          }
-        }
       }
     }
 
@@ -1931,6 +1870,57 @@ export class TemplateService {
     // 7. FINAL_SCORE_TEXT validation - options are automatically set if needed
     // No validation needed here as options are handled in preprocessing
     // If both FINAL_SCORE_NUM and FINAL_SCORE_TEXT exist, options are optional for FINAL_SCORE_TEXT
+
+    // 8. Validate PART and CHECK_BOX fields have children (only for PENDING status)
+    for (const section of sections) {
+      for (const field of section.fields) {
+        if (field.fieldType === 'PART' || field.fieldType === 'CHECK_BOX') {
+          // Check if field has children property (nested structure)
+          if (field.children && Array.isArray(field.children)) {
+            if (field.children.length === 0) {
+              throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+            }
+
+            // Validate that all children are TEXT type
+            for (const child of field.children) {
+              if (child.fieldType !== 'TEXT') {
+                throw new Error(
+                  `Child field '${child.fieldName}' of ${field.fieldType} field '${field.fieldName}' must be TEXT type, but found ${child.fieldType}`
+                )
+              }
+            }
+
+            // Recursively validate nested children if any
+            const validateChildren = (children: any[], parentFieldName: string) => {
+              for (const child of children) {
+                if (child.fieldType === 'PART' || child.fieldType === 'CHECK_BOX') {
+                  if (!child.children || child.children.length === 0) {
+                    throw new PartFieldMissingChildrenError(child.fieldName, section.label)
+                  }
+                  validateChildren(child.children, child.fieldName)
+                }
+              }
+            }
+            validateChildren(field.children, field.fieldName)
+          } else {
+            // Check if field has children using parentTempId relationship (flat structure)
+            const hasChildFields = section.fields.some(
+              (childField: any) =>
+                childField.parentTempId === field.tempId ||
+                childField.parentTempId === field.fieldName ||
+                (childField.parentTempId && field.tempId && childField.parentTempId.includes(field.tempId))
+            )
+            if (!hasChildFields) {
+              if (field.fieldType === 'PART') {
+                throw new PartFieldMissingChildrenError(field.fieldName, section.label)
+              } else {
+                throw new Error(`CHECK_BOX field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -1990,7 +1980,7 @@ export class TemplateService {
       if (error instanceof TemplateNotFoundError || error instanceof InvalidDraftTemplateStatusError) {
         throw error
       }
-      throw new TemplateCreationFailedError(error.message)
+      throw new Error(`Failed to delete template: ${error.message}`)
     }
   }
 }
