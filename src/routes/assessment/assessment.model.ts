@@ -864,6 +864,48 @@ export const GetEventCourseAssessmentsQuerySchema = z
 export type GetEventCourseAssessmentsBodyType = z.infer<typeof GetEventCourseAssessmentsBodySchema>
 export type GetEventCourseAssessmentsQueryType = z.infer<typeof GetEventCourseAssessmentsQuerySchema>
 
+// ===== ARCHIVE ASSESSMENT EVENT SCHEMAS =====
+
+export const ArchiveAssessmentEventBodySchema = z.object({
+  subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
+  courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
+  templateId: z.string().uuid('Template ID must be a valid UUID'),
+  occuranceDate: z.coerce.date('Occurrence date must be a valid date')
+})
+  .strict()
+  .refine(
+    (data) => (data.subjectId && !data.courseId) || (!data.subjectId && data.courseId),
+    {
+      message: 'Either subjectId or courseId must be provided, but not both',
+      path: ['subjectId']
+    }
+  )
+
+export const ArchiveAssessmentEventResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    eventInfo: z.object({
+      name: z.string(),
+      subjectId: z.string().uuid().nullable(),
+      courseId: z.string().uuid().nullable(),
+      templateId: z.string().uuid(),
+      occuranceDate: z.coerce.date(),
+      entityInfo: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        code: z.string(),
+        type: z.enum(['subject', 'course'])
+      })
+    }),
+    archivedCount: z.number().int().min(0),
+    totalAssessments: z.number().int().min(0)
+  })
+})
+
+export type ArchiveAssessmentEventBodyType = z.infer<typeof ArchiveAssessmentEventBodySchema>
+export type ArchiveAssessmentEventResType = z.infer<typeof ArchiveAssessmentEventResSchema>
+
 // Response schemas for event-based assessments (reuse existing TrainerAssessmentListItemSchema)
 export const GetEventSubjectAssessmentsResSchema = z.object({
   assessments: z.array(TrainerAssessmentListItemSchema),
