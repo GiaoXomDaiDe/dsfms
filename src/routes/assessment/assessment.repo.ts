@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common'
 import { AssessmentResult, AssessmentSectionStatus, AssessmentStatus, Prisma, RoleInSubject } from '@prisma/client'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import { PrismaService } from '~/shared/services/prisma.service'
@@ -4380,6 +4380,171 @@ export class AssessmentRepo {
 
     } catch (error) {
       console.error('Get event course assessments failed:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Archive assessment event - Cancel all assessments in NOT_STARTED status for a specific event
+   * Events are identified by subjectId/courseId, templateId, and occuranceDate
+   */
+  async archiveAssessmentEvent(
+    subjectId: string | undefined,
+    courseId: string | undefined,
+    templateId: string,
+    occuranceDate: Date
+  ): Promise<{
+    success: boolean
+    message: string
+    data: {
+      eventInfo: {
+        name: string
+        subjectId: string | null
+        courseId: string | null
+        templateId: string
+        occuranceDate: Date
+        entityInfo: {
+          id: string
+          name: string
+          code: string
+          type: 'subject' | 'course'
+        }
+      }
+      archivedCount: number
+      totalAssessments: number
+    }
+  }> {
+    try {
+      // Validate that either subjectId or courseId is provided, but not both
+      if ((subjectId && courseId) || (!subjectId && !courseId)) {
+        throw new BadRequestException('Either subjectId or courseId must be provided, but not both')
+      }
+
+      // Build the filter for assessments
+      const baseFilter: any = {
+        templateId,
+        occuranceDate: {
+          gte: new Date(occuranceDate.getFullYear(), occuranceDate.getMonth(), occuranceDate.getDate()),
+          lt: new Date(occuranceDate.getFullYear(), occuranceDate.getMonth(), occuranceDate.getDate() + 1)
+        }
+      }
+
+      if (subjectId) {
+        baseFilter.subjectId = subjectId
+        baseFilter.courseId = null
+      } else {
+        baseFilter.courseId = courseId
+        baseFilter.subjectId = null
+      }
+
+      // Get all assessments for this event
+      const allAssessments = await this.prismaClient.assessmentForm.findMany({
+        where: baseFilter,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          subjectId: true,
+          courseId: true,
+          templateId: true,
+          occuranceDate: true,
+          subject: subjectId ? {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          } : false,
+          course: courseId ? {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          } : false,
+          template: {
+            select: {
+              name: true
+            }
+          }
+        }
+      })
+
+      if (allAssessments.length === 0) {
+        throw new NotFoundException('No assessments found for the specified event')
+      }
+
+      // Check if all assessments are in NOT_STARTED status
+      const notStartedAssessments = allAssessments.filter(a => a.status === AssessmentStatus.NOT_STARTED)
+      const otherStatusAssessments = allAssessments.filter(a => a.status !== AssessmentStatus.NOT_STARTED)
+
+      if (otherStatusAssessments.length > 0) {
+        throw new BadRequestException(
+          `Cannot archive event: ${otherStatusAssessments.length} assessment(s) are not in NOT_STARTED status. Only events with all assessments in NOT_STARTED status can be archived.`
+        )
+      }
+
+      // Update all NOT_STARTED assessments to CANCELLED
+      const updateResult = await this.prismaClient.assessmentForm.updateMany({
+        where: {
+          ...baseFilter,
+          status: AssessmentStatus.NOT_STARTED
+        },
+        data: {
+          status: AssessmentStatus.CANCELLED,
+          updatedAt: new Date()
+        }
+      })
+
+      // Prepare response data
+      const firstAssessment = allAssessments[0]
+      let entityInfo: {
+        id: string
+        name: string
+        code: string
+        type: 'subject' | 'course'
+      }
+
+      if (subjectId && firstAssessment.subject) {
+        entityInfo = {
+          id: firstAssessment.subject.id,
+          name: firstAssessment.subject.name,
+          code: firstAssessment.subject.code,
+          type: 'subject'
+        }
+      } else if (courseId && firstAssessment.course) {
+        entityInfo = {
+          id: firstAssessment.course.id,
+          name: firstAssessment.course.name,
+          code: firstAssessment.course.code,
+          type: 'course'
+        }
+      } else {
+        throw new NotFoundException('Associated subject or course not found')
+      }
+
+      // Generate event name from template name and date
+      const eventName = `${firstAssessment.template.name} - ${occuranceDate.toISOString().split('T')[0]}`
+
+      return {
+        success: true,
+        message: `Successfully archived assessment event. ${updateResult.count} assessments have been cancelled.`,
+        data: {
+          eventInfo: {
+            name: eventName,
+            subjectId: subjectId || null,
+            courseId: courseId || null,
+            templateId,
+            occuranceDate,
+            entityInfo
+          },
+          archivedCount: updateResult.count,
+          totalAssessments: allAssessments.length
+        }
+      }
+
+    } catch (error) {
+      console.error('Archive assessment event failed:', error)
       throw error
     }
   }

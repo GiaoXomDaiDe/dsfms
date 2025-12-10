@@ -54,7 +54,9 @@ import {
   GetEventSubjectAssessmentsResType,
   GetEventCourseAssessmentsBodyType,
   GetEventCourseAssessmentsQueryType,
-  GetEventCourseAssessmentsResType
+  GetEventCourseAssessmentsResType,
+  ArchiveAssessmentEventBodyType,
+  ArchiveAssessmentEventResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -2701,6 +2703,48 @@ export class AssessmentService {
       }
 
       throw new InternalServerErrorException('Failed to get event course assessments')
+    }
+  }
+
+  /**
+   * Archive assessment event by cancelling all assessments in NOT_STARTED status
+   * Events are identified by subjectId/courseId, templateId, and occuranceDate
+   */
+  async archiveAssessmentEvent(
+    body: ArchiveAssessmentEventBodyType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<ArchiveAssessmentEventResType> {
+    try {
+      const result = await this.assessmentRepo.archiveAssessmentEvent(
+        body.subjectId,
+        body.courseId,
+        body.templateId,
+        body.occuranceDate
+      )
+
+      return result
+    } catch (error: any) {
+      // Handle specific known errors
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error
+      }
+
+      // Handle custom repository errors
+      if (
+        error.message?.includes('Either subjectId or courseId must be provided') ||
+        error.message?.includes('No assessments found for the specified event') ||
+        error.message?.includes('Cannot archive event') ||
+        error.message?.includes('not in NOT_STARTED status')
+      ) {
+        throw new BadRequestException(error.message)
+      }
+
+      console.error('Archive assessment event failed:', error)
+      throw new InternalServerErrorException('Failed to archive assessment event')
     }
   }
 }

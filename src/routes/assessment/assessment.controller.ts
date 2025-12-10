@@ -43,7 +43,9 @@ import {
   GetEventSubjectAssessmentsResDTO,
   GetEventCourseAssessmentsBodyDTO,
   GetEventCourseAssessmentsQueryDTO,
-  GetEventCourseAssessmentsResDTO
+  GetEventCourseAssessmentsResDTO,
+  ArchiveAssessmentEventBodyDTO,
+  ArchiveAssessmentEventResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -250,6 +252,28 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.updateAssessmentEvent(params, body, userContext)
+  }
+
+  /**
+   * POST /assessments/events/archive
+   * Archive assessment event - Cancel all assessments in NOT_STARTED status for a specific event
+   * Events are identified by subjectId/courseId, templateId, and occuranceDate
+   */
+  @Post('events/archive')
+  @ZodSerializerDto(ArchiveAssessmentEventResDTO)
+  async archiveAssessmentEvent(
+    @Body() body: ArchiveAssessmentEventBodyDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.archiveAssessmentEvent(body, userContext)
   }
 
   /**

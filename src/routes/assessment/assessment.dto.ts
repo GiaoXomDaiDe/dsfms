@@ -48,7 +48,9 @@ import {
   GetEventSubjectAssessmentsResSchema,
   GetEventCourseAssessmentsBodySchema,
   GetEventCourseAssessmentsQuerySchema,
-  GetEventCourseAssessmentsResSchema
+  GetEventCourseAssessmentsResSchema,
+  ArchiveAssessmentEventBodySchema,
+  ArchiveAssessmentEventResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -165,6 +167,12 @@ export class GetEventCourseAssessmentsQueryDTO extends createZodDto(GetEventCour
 
 export class GetEventCourseAssessmentsResDTO extends createZodDto(GetEventCourseAssessmentsResSchema) {}
 
+// ===== ARCHIVE ASSESSMENT EVENT DTOs =====
+
+export class ArchiveAssessmentEventBodyDTO extends createZodDto(ArchiveAssessmentEventBodySchema) {}
+
+export class ArchiveAssessmentEventResDTO extends createZodDto(ArchiveAssessmentEventResSchema) {}
+
 // ===== DOCX TEMPLATE RENDERING DTOs =====
 
 export class RenderDocxTemplateBodyDTO extends createZodDto(RenderDocxTemplateBodySchema) {}
@@ -200,5 +208,7 @@ export type {
   GetUserAssessmentEventsQueryType,
   GetUserAssessmentEventsResType,
   RenderDocxTemplateBodyType,
-  RenderDocxTemplateResType
+  RenderDocxTemplateResType,
+  ArchiveAssessmentEventBodyType,
+  ArchiveAssessmentEventResType
 } from './assessment.model'
