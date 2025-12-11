@@ -828,11 +828,9 @@ export class TemplateRepository {
           createdSections.push(section)
         }
 
-        // 6. Create all fields
-        const allFieldsToCreate = []
-        const sectionFieldMapping = new Map<number, any[]>()
+        // 6. Create fields with proper parent-child relationships
+        const createdFieldsBySections = new Map<number, any[]>()
 
-        // Prepare all fields for batch creation
         for (let sectionIndex = 0; sectionIndex < templateData.sections.length; sectionIndex++) {
           const sectionData = templateData.sections[sectionIndex]
           const section = createdSections[sectionIndex]
@@ -840,45 +838,62 @@ export class TemplateRepository {
           // Validate field hierarchy before processing
           this.validateFieldHierarchy(sectionData.fields)
 
-          // Create fields for this section
-          const fieldsForSection = sectionData.fields.map((fieldData: any) => ({
-            sectionId: section.id,
-            label: fieldData.label,
-            fieldName: fieldData.fieldName,
-            fieldType: fieldData.fieldType,
-            roleRequired: fieldData.roleRequired,
-            options: fieldData.options,
-            displayOrder: fieldData.displayOrder,
-            parentId: null, // No hierarchy in current implementation
-            createdById: createdByUserId,
-            updatedById: createdByUserId // Set updated by for new version
-          }))
-
-          sectionFieldMapping.set(sectionIndex, fieldsForSection)
-          allFieldsToCreate.push(...fieldsForSection)
-        }
-
-        // Create all fields in batches
-        const batchSize = 20
-        const createdFieldsBySections = new Map<number, any[]>()
-
-        for (let sectionIndex = 0; sectionIndex < templateData.sections.length; sectionIndex++) {
-          const fieldsForSection = sectionFieldMapping.get(sectionIndex)
+          // Create mapping for tempId to actual field for this section
+          const tempIdToFieldMap = new Map<string, any>()
           const createdFieldsForSection = []
 
-          if (fieldsForSection) {
-            // Process fields for this section in batches
-            for (let i = 0; i < fieldsForSection.length; i += batchSize) {
-              const batch = fieldsForSection.slice(i, i + batchSize)
-
-              // Create batch of fields
-              for (const fieldData of batch) {
-                const field = await tx.templateField.create({
-                  data: fieldData
-                })
-                createdFieldsForSection.push(field)
+          // First pass: Create parent fields (those without parentTempId)
+          const parentFields = sectionData.fields.filter((field: any) => !field.parentTempId)
+          for (const fieldData of parentFields) {
+            const field = await tx.templateField.create({
+              data: {
+                sectionId: section.id,
+                label: fieldData.label,
+                fieldName: fieldData.fieldName,
+                fieldType: fieldData.fieldType,
+                roleRequired: fieldData.roleRequired,
+                options: fieldData.options,
+                displayOrder: fieldData.displayOrder,
+                parentId: null, // Parent fields have no parent
+                createdById: createdByUserId,
+                updatedById: createdByUserId // Set updated by for new version
               }
+            })
+            createdFieldsForSection.push(field)
+
+            // Map tempId to actual field for child field references
+            if (fieldData.tempId) {
+              tempIdToFieldMap.set(fieldData.tempId, field)
             }
+          }
+
+          // Second pass: Create child fields (those with parentTempId)
+          const childFields = sectionData.fields.filter((field: any) => field.parentTempId)
+          for (const fieldData of childFields) {
+            // Find the parent field using tempId mapping
+            const parentField = fieldData.parentTempId ? tempIdToFieldMap.get(fieldData.parentTempId) : null
+
+            if (fieldData.parentTempId && !parentField) {
+              throw new Error(
+                `Parent field with tempId '${fieldData.parentTempId}' not found for field '${fieldData.fieldName}'`
+              )
+            }
+
+            const field = await tx.templateField.create({
+              data: {
+                sectionId: section.id,
+                label: fieldData.label,
+                fieldName: fieldData.fieldName,
+                fieldType: fieldData.fieldType,
+                roleRequired: fieldData.roleRequired,
+                options: fieldData.options,
+                displayOrder: fieldData.displayOrder,
+                parentId: parentField ? parentField.id : null, // Link to parent field
+                createdById: createdByUserId,
+                updatedById: createdByUserId // Set updated by for new version
+              }
+            })
+            createdFieldsForSection.push(field)
           }
 
           createdFieldsBySections.set(sectionIndex, createdFieldsForSection)
