@@ -2205,16 +2205,16 @@ export class AssessmentService {
 
   /**
    * Parse assessment value based on field type and auto-detect data types
-   * IMPORTANT: If value is null/undefined, return null (preserve null values for JSON)
-   * This ensures null values appear as "fieldName": null in the final JSON
+   * IMPORTANT: If value is null/undefined, return empty string for template mapping
+   * This ensures null values appear as "fieldName": "" in the final JSON for docxtemplater
    */
   private parseAssessmentValue(value: string | null | undefined, fieldType?: string): any {
-    // CRITICAL: Preserve null values - if answerValue is null, return null
-    // This will result in "fieldName": null in the JSON output for docxtemplater
-    if (value === null || value === undefined) return null
+    // CRITICAL: Convert null/undefined values to empty strings for template mapping
+    // This will result in "fieldName": "" in the JSON output for docxtemplater
+    if (value === null || value === undefined) return ""
 
-    // If value is empty string, also return null
-    if (value === '') return null
+    // If value is empty string, keep it as empty string
+    if (value === '') return ""
 
     // Handle specific field types first - ONLY convert when field type is explicit
     if (fieldType === 'TOGGLE' || fieldType === 'SECTION_CONTROL_TOGGLE') {
@@ -2282,8 +2282,8 @@ export class AssessmentService {
       const result: any = {}
       
       for (const [key, value] of Object.entries(obj)) {
-        if (value === null) {
-          // Convert null to empty string in nested objects
+        if (value === null || value === undefined) {
+          // Convert null/undefined to empty string in nested objects
           result[key] = ""
         } else if (typeof value === 'object') {
           // Recurse for deeper nesting
@@ -2297,7 +2297,7 @@ export class AssessmentService {
       return result
     }
     
-    return obj === null ? "" : obj
+    return (obj === null || obj === undefined) ? "" : obj
   }
 
   /**

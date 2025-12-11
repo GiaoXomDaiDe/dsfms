@@ -27,7 +27,6 @@
                         <li><strong>Subject/Course:</strong> [SUBJECT_OR_COURSE_NAME]</li>
                         <li><strong>Template:</strong> [TEMPLATE_NAME]</li>
                         <li><strong>Submission Date:</strong> [SUBMISSION_DATE]</li>
-                        <li><strong>Reviewed By:</strong> [REVIEWER_NAME]</li>
                         <li><strong>Review Date:</strong> [REVIEW_DATE]</li>
                     </ul>
                 </div>
