@@ -585,19 +585,16 @@ export class AssessmentController {
   @Post('render-docx-template-with-images/download')
   @IsPublic()
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-  async renderDocxTemplateWithImagesForDownload(
-    @Body() body: RenderDocxTemplateBodyDTO,
-    @Res() res: Response
-  ) {
+  async renderDocxTemplateWithImagesForDownload(@Body() body: RenderDocxTemplateBodyDTO, @Res() res: Response) {
     const result = await this.assessmentService.renderDocxTemplateWithImagesForTesting(body)
-    
+
     // Convert base64 back to buffer
     const buffer = Buffer.from(result.data.buffer, 'base64')
-    
+
     // Set headers for file download
     res.setHeader('Content-Disposition', `attachment; filename="${result.data.filename}"`)
     res.setHeader('Content-Length', buffer.length)
-    
+
     // Send the buffer directly
     res.send(buffer)
   }

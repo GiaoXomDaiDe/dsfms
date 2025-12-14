@@ -489,11 +489,15 @@ This account was created on ${creationDate}.`
     reporterName: string,
     creationDate: string,
     reportUrl?: string
-  ): Promise<{ success: boolean; message: string; results: Array<{ email: string; success: boolean; message: string }> }> {
+  ): Promise<{
+    success: boolean
+    message: string
+    results: Array<{ email: string; success: boolean; message: string }>
+  }> {
     try {
       // Get all SQA auditors - assuming you have access to user service/repository
       // For now, we'll return the template structure
-      
+
       let htmlTemplate = await this.loadTemplate('new-report-notification.txt')
 
       // Replace placeholders
@@ -505,13 +509,16 @@ This account was created on ${creationDate}.`
       htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reporterName)
       htmlTemplate = htmlTemplate.replace(/\[CREATION_DATE\]/g, creationDate)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'SUBMITTED')
-      htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }))
+      htmlTemplate = htmlTemplate.replace(
+        /\[CURRENT_DATE\]/g,
+        new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      )
 
       // This method will be called from the service with actual auditor emails
       return {
@@ -555,13 +562,16 @@ This account was created on ${creationDate}.`
       htmlTemplate = htmlTemplate.replace(/\[RESPONSE_DATE\]/g, responseDate)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'RESOLVED')
       htmlTemplate = htmlTemplate.replace(/\[RESPONSE_MESSAGE\]/g, responseMessage)
-      htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }))
+      htmlTemplate = htmlTemplate.replace(
+        /\[CURRENT_DATE\]/g,
+        new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      )
 
       const emailData = {
         to: creatorEmail,
@@ -618,13 +628,16 @@ This account was created on ${creationDate}.`
       htmlTemplate = htmlTemplate.replace(/\[RESPONSE_DATE\]/g, responseDate)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'RESOLVED')
       htmlTemplate = htmlTemplate.replace(/\[RESPONSE_MESSAGE\]/g, responseMessage)
-      htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }))
+      htmlTemplate = htmlTemplate.replace(
+        /\[CURRENT_DATE\]/g,
+        new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      )
 
       const emailData = {
         to: managerEmail,
@@ -688,17 +701,23 @@ This account was created on ${creationDate}.`
           htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportData.reportType)
           htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportData.reportTitle)
           htmlTemplate = htmlTemplate.replace(/\[REPORT_SEVERITY\]/g, reportData.reportSeverity || 'Not specified')
-          htmlTemplate = htmlTemplate.replace(/\[REPORT_DESCRIPTION\]/g, reportData.reportDescription || 'No description provided')
+          htmlTemplate = htmlTemplate.replace(
+            /\[REPORT_DESCRIPTION\]/g,
+            reportData.reportDescription || 'No description provided'
+          )
           htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reportData.reporterName)
           htmlTemplate = htmlTemplate.replace(/\[CREATION_DATE\]/g, reportData.creationDate)
           htmlTemplate = htmlTemplate.replace(/\[REPORT_STATUS\]/g, 'SUBMITTED')
-          htmlTemplate = htmlTemplate.replace(/\[CURRENT_DATE\]/g, new Date().toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          }))
+          htmlTemplate = htmlTemplate.replace(
+            /\[CURRENT_DATE\]/g,
+            new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          )
 
           const emailData = {
             to: auditor.email,

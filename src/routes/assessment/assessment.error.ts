@@ -12,7 +12,9 @@ export const TemplateNotFoundException = new NotFoundException('Template not fou
 
 export const TemplateNotActiveException = new BadRequestException('Template is not active')
 
-export const TemplateNotPublishedException = new BadRequestException('Only PUBLISHED templates can be used to create assessments')
+export const TemplateNotPublishedException = new BadRequestException(
+  'Only PUBLISHED templates can be used to create assessments'
+)
 
 export const TemplateDepartmentMismatchException = new ForbiddenException(
   'Template does not belong to the same department as the subject/course'

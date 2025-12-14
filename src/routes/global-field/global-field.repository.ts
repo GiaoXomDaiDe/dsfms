@@ -356,23 +356,25 @@ export class GlobalFieldRepository {
 
   private flattenFieldHierarchy(fields: any[]): any[] {
     const flattened: any[] = []
-    
+
     // Process fields level by level to maintain proper parent-child order
     const queue = [...fields]
-    
+
     while (queue.length > 0) {
       const current = queue.shift()!
       flattened.push(current)
-      
+
       if (current.children && current.children.length > 0) {
         // Add children to queue for next level processing
-        queue.push(...current.children.map((child: any) => ({
-          ...child,
-          parentTempId: current.tempId || current.parentTempId
-        })))
+        queue.push(
+          ...current.children.map((child: any) => ({
+            ...child,
+            parentTempId: current.tempId || current.parentTempId
+          }))
+        )
       }
     }
-    
+
     return flattened
   }
 
@@ -441,9 +443,7 @@ export class GlobalFieldRepository {
 
           // 2. Extract IDs of children that should be kept (those with id in request)
           const childrenToKeep = new Set(
-            children
-              .filter(child => child.id && !child._delete)
-              .map(child => child.id)
+            children.filter((child) => child.id && !child._delete).map((child) => child.id)
           )
 
           // 3. Delete all existing children that are NOT in the keep list

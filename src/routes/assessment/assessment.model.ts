@@ -866,20 +866,18 @@ export type GetEventCourseAssessmentsQueryType = z.infer<typeof GetEventCourseAs
 
 // ===== ARCHIVE ASSESSMENT EVENT SCHEMAS =====
 
-export const ArchiveAssessmentEventBodySchema = z.object({
-  subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
-  courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
-  templateId: z.string().uuid('Template ID must be a valid UUID'),
-  occuranceDate: z.coerce.date('Occurrence date must be a valid date')
-})
+export const ArchiveAssessmentEventBodySchema = z
+  .object({
+    subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
+    courseId: z.string().uuid('Course ID must be a valid UUID').optional(),
+    templateId: z.string().uuid('Template ID must be a valid UUID'),
+    occuranceDate: z.coerce.date('Occurrence date must be a valid date')
+  })
   .strict()
-  .refine(
-    (data) => (data.subjectId && !data.courseId) || (!data.subjectId && data.courseId),
-    {
-      message: 'Either subjectId or courseId must be provided, but not both',
-      path: ['subjectId']
-    }
-  )
+  .refine((data) => (data.subjectId && !data.courseId) || (!data.subjectId && data.courseId), {
+    message: 'Either subjectId or courseId must be provided, but not both',
+    path: ['subjectId']
+  })
 
 export const ArchiveAssessmentEventResSchema = z.object({
   success: z.boolean(),

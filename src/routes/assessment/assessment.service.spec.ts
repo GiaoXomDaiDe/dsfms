@@ -72,8 +72,8 @@
 //         label: 'Test Section',
 //         displayOrder: 1,
 //         fields: [
-//           { 
-//             id: 'field-123', 
+//           {
+//             id: 'field-123',
 //             fieldType: 'TEXT',
 //             displayOrder: 1,
 //             label: 'Test Field',
@@ -209,7 +209,7 @@
 //     it('should successfully create assessments', async () => {
 //       // Mock template validation
 //       assessmentRepo.getTemplateWithStructure.mockResolvedValue(mockTemplate);
-      
+
 //       // Mock subject validation
 //       assessmentRepo.getSubjectWithDetails.mockResolvedValue({
 //         id: 'subject-123',
@@ -223,19 +223,19 @@
 
 //       // Mock trainee validation
 //       assessmentRepo.validateTrainees.mockResolvedValue([
-//         { 
-//           id: 'trainee-123', 
+//         {
+//           id: 'trainee-123',
 //           eid: 'EID123',
-//           firstName: 'John', 
+//           firstName: 'John',
 //           lastName: 'Doe',
 //           middleName: null,
 //           email: 'john@test.com',
 //           role: { name: 'TRAINEE' }
 //         },
-//         { 
-//           id: 'trainee-456', 
+//         {
+//           id: 'trainee-456',
 //           eid: 'EID456',
-//           firstName: 'Jane', 
+//           firstName: 'Jane',
 //           lastName: 'Smith',
 //           middleName: null,
 //           email: 'jane@test.com',
@@ -248,8 +248,8 @@
 
 //       // Mock assessment creation
 //       assessmentRepo.createAssessments.mockResolvedValue([
-//         { 
-//           id: 'assessment-123', 
+//         {
+//           id: 'assessment-123',
 //           templateId: 'template-123',
 //           name: 'Test Assessment',
 //           subjectId: 'subject-123',
@@ -279,8 +279,8 @@
 //           submittedBy: null,
 //           approvedBy: null
 //         },
-//         { 
-//           id: 'assessment-456', 
+//         {
+//           id: 'assessment-456',
 //           templateId: 'template-123',
 //           name: 'Test Assessment',
 //           subjectId: 'subject-123',
@@ -339,7 +339,7 @@
 
 //     it('should successfully create bulk assessments', async () => {
 //       assessmentRepo.getTemplateWithStructure.mockResolvedValue(mockTemplate);
-      
+
 //       assessmentRepo.getSubjectWithDetails.mockResolvedValue({
 //         id: 'subject-123',
 //         name: 'Test Subject',
@@ -368,7 +368,7 @@
 
 //     it('should handle no enrolled trainees scenario', async () => {
 //       assessmentRepo.getTemplateWithStructure.mockResolvedValue(mockTemplate);
-      
+
 //       assessmentRepo.getSubjectWithDetails.mockResolvedValue({
 //         id: 'subject-123',
 //         name: 'Test Subject',
@@ -674,7 +674,7 @@
 //       };
 
 //       assessmentRepo.getAssessmentSectionFields.mockResolvedValue(mockSectionFields);
-      
+
 //       assessmentRepo.prismaClient.assessmentSection.findUnique.mockResolvedValue({
 //         assessmentForm: {
 //           id: 'assessment-123',
@@ -708,7 +708,7 @@
 //       };
 
 //       assessmentRepo.getAssessmentSectionFields.mockResolvedValue(mockSectionFields);
-      
+
 //       assessmentRepo.prismaClient.assessmentSection.findUnique.mockResolvedValue({
 //         assessmentForm: {
 //           id: 'assessment-123',
@@ -734,7 +734,7 @@
 
 //     it('should successfully toggle trainee lock', async () => {
 //       assessmentRepo.checkAssessmentAccess.mockResolvedValue(true);
-      
+
 //       const mockResult = {
 //         success: true,
 //         isTraineeLocked: true,
@@ -760,7 +760,7 @@
 //   describe('submitAssessment', () => {
 //     it('should successfully submit assessment', async () => {
 //       assessmentRepo.checkAssessmentAccess.mockResolvedValue(true);
-      
+
 //       const mockResult = {
 //         success: true,
 //         message: 'Assessment submitted successfully'
@@ -801,7 +801,7 @@
 //       };
 
 //       assessmentRepo.getAssessmentSectionFields.mockResolvedValue(mockSectionFields);
-      
+
 //       const mockResult = {
 //         success: true,
 //         message: 'Values updated successfully'
@@ -834,7 +834,7 @@
 
 //     it('should successfully confirm participation for trainee', async () => {
 //       const traineeUser = { ...mockCurrentUser, roleName: 'TRAINEE', userId: 'trainee-123' };
-      
+
 //       assessmentRepo.findById.mockResolvedValue({
 //         ...mockAssessment,
 //         traineeId: 'trainee-123',
@@ -983,9 +983,9 @@
 //   describe('renderDocxTemplateWithImagesForTesting', () => {
 //     const renderData: RenderDocxTemplateBodyType = {
 //       templateUrl: 'https://s3.amazonaws.com/template.docx',
-//       data: { 
-//         textField: 'value1', 
-//         imageField: 'https://s3.amazonaws.com/image.jpg' 
+//       data: {
+//         textField: 'value1',
+//         imageField: 'https://s3.amazonaws.com/image.jpg'
 //       }
 //     };
 

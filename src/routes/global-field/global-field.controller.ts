@@ -130,12 +130,12 @@ export class GlobalFieldController {
   /**
    * DELETE /global-fields/:id
    * Delete global field by ID with automatic children deletion for PART/CHECK_BOX fields
-   * 
+   *
    * Behavior:
    * - Simple fields: Direct deletion
    * - PART/CHECK_BOX fields with children: Cascading deletion (removes all children first, then parent)
    * - Transaction-safe: All deletions are atomic
-   * 
+   *
    * Response includes count of deleted children for hierarchical deletions
    */
   @Delete(':id')

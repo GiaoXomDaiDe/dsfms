@@ -219,7 +219,7 @@ export class TemplateService {
       // Image field: {%name}
       else if (cleaned.startsWith('%')) {
         const fieldName = cleaned.substring(1) // Remove % prefix for image fields in schema
-        
+
         if (currentSection && !conditionalSections.has(currentSection)) {
           // field thuộc về section hiện tại (section object bình thường)
           schema[currentSection][fieldName] = ''
@@ -910,8 +910,8 @@ export class TemplateService {
     // Define allowed transitions
     const allowedTransitions: Record<string, string[]> = {
       PUBLISHED: ['DISABLED'], // Published can be disabled
-      REJECTED: ['DISABLED'],  // Rejected can be disabled
-      DISABLED: ['PENDING']    // Disabled can be enabled (moved to PENDING for review)
+      REJECTED: ['DISABLED'], // Rejected can be disabled
+      DISABLED: ['PENDING'] // Disabled can be enabled (moved to PENDING for review)
     }
 
     // Check if the transition is allowed
@@ -1212,8 +1212,6 @@ export class TemplateService {
               throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
             }
           }
-
-
         }
       }
 
@@ -1498,8 +1496,6 @@ export class TemplateService {
             throw new SignatureFieldMissingRoleError(field.fieldName, section.label)
           }
         }
-
-
       }
     }
 
@@ -1708,7 +1704,7 @@ export class TemplateService {
           if (field.fieldType === 'FINAL_SCORE_TEXT') {
             return {
               ...field,
-              options: { items: ["Pass", "Fail"] } // Hardcoded JSONB options
+              options: { items: ['Pass', 'Fail'] } // Hardcoded JSONB options
             }
           }
           return field
@@ -1841,7 +1837,9 @@ export class TemplateService {
       (field: any) => field.fieldType === 'SIGNATURE_IMG' && field.roleRequired === 'TRAINEE'
     )
     if (traineeSignatureImgFields.length > 0) {
-      throw new Error('TRAINEE roleRequired fields cannot use SIGNATURE_IMG fieldType, only SIGNATURE_DRAW is allowed for trainees')
+      throw new Error(
+        'TRAINEE roleRequired fields cannot use SIGNATURE_IMG fieldType, only SIGNATURE_DRAW is allowed for trainees'
+      )
     }
 
     // 5.1. Check at least one submittable section
@@ -1914,7 +1912,9 @@ export class TemplateService {
               if (field.fieldType === 'PART') {
                 throw new PartFieldMissingChildrenError(field.fieldName, section.label)
               } else {
-                throw new Error(`CHECK_BOX field '${field.fieldName}' in section '${section.label}' must have at least one child field`)
+                throw new Error(
+                  `CHECK_BOX field '${field.fieldName}' in section '${section.label}' must have at least one child field`
+                )
               }
             }
           }

@@ -83,11 +83,11 @@ export class AssessmentRepo {
           some: {
             subjectId,
             status: {
-              in: [ 'ENROLLED','ON_GOING', 'FINISHED']
+              in: ['ENROLLED', 'ON_GOING', 'FINISHED']
             },
             subject: {
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED']
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED']
               }
             }
           }
@@ -104,11 +104,11 @@ export class AssessmentRepo {
           where: {
             subjectId,
             status: {
-              in: ['ENROLLED','ON_GOING', 'FINISHED']
+              in: ['ENROLLED', 'ON_GOING', 'FINISHED']
             },
             subject: {
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED']
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED']
               }
             }
           },
@@ -157,7 +157,7 @@ export class AssessmentRepo {
             subject: {
               courseId,
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED'] // Only consider ongoing or completed subjects
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED'] // Only consider ongoing or completed subjects
               }
             },
             status: {
@@ -178,7 +178,7 @@ export class AssessmentRepo {
             subject: {
               courseId,
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED']
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED']
               }
             },
             status: {
@@ -216,7 +216,10 @@ export class AssessmentRepo {
     }>,
     createdById: string
   ): Promise<AssessmentFormResType[]> {
-    console.log(`Starting createAssessments with data:`, { name: assessmentData.name, traineeIds: assessmentData.traineeIds })
+    console.log(`Starting createAssessments with data:`, {
+      name: assessmentData.name,
+      traineeIds: assessmentData.traineeIds
+    })
     return await this.prisma.$transaction(async (tx) => {
       const createdAssessments: AssessmentFormResType[] = []
 
@@ -237,10 +240,11 @@ export class AssessmentRepo {
       today.setHours(0, 0, 0, 0)
       const occurrenceDate = new Date(assessmentData.occuranceDate)
       occurrenceDate.setHours(0, 0, 0, 0)
-      
+
       // If occurrence date is today, start with ON_GOING, otherwise NOT_STARTED (future dates)
       // Past dates are prevented at service layer validation
-      const initialStatus = occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
+      const initialStatus =
+        occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
 
       // Get trainee EIDs for name formatting
       const trainees = await tx.user.findMany({
@@ -253,14 +257,14 @@ export class AssessmentRepo {
         }
       })
 
-      const traineeEidMap = new Map(trainees.map(t => [t.id, t.eid]))
+      const traineeEidMap = new Map(trainees.map((t) => [t.id, t.eid]))
 
       for (const traineeId of assessmentData.traineeIds) {
         // Get trainee EID and format assessment name with dash separator
         const traineeEid = traineeEidMap.get(traineeId)
         const assessmentName = `${assessmentData.name} - ${traineeEid}`
         // console.log(`Creating assessment for trainee ${traineeId}, EID: ${traineeEid}, formatted name: "${assessmentName}"`)
-        
+
         // Create the main assessment form
         const assessmentForm = await tx.assessmentForm.create({
           data: {
@@ -1675,13 +1679,13 @@ export class AssessmentRepo {
       // Only filter TRAINEE sections
       if (section.templateSection.editBy === 'TRAINEE') {
         const fields = section.templateSection.fields
-        
+
         // If section has only one field and it's SIGNATURE_DRAW, exclude it
         if (fields.length === 1 && fields[0].fieldType === 'SIGNATURE_DRAW') {
           return false
         }
       }
-      
+
       // Keep all other sections
       return true
     })
@@ -1814,7 +1818,13 @@ export class AssessmentRepo {
       }
 
       // Add role-specific fields
-      if ((userMainRole === 'TRAINER' || userMainRole === 'TRAINEE' || userMainRole === 'DEPARTMENT_HEAD' || userMainRole === 'DEPARTMENT HEAD') && canAssessed !== undefined) {
+      if (
+        (userMainRole === 'TRAINER' ||
+          userMainRole === 'TRAINEE' ||
+          userMainRole === 'DEPARTMENT_HEAD' ||
+          userMainRole === 'DEPARTMENT HEAD') &&
+        canAssessed !== undefined
+      ) {
         return {
           roleRequirement: item.roleRequirement,
           ...baseSection,
@@ -2322,12 +2332,12 @@ export class AssessmentRepo {
         if (templateField.fieldType === 'FINAL_SCORE_TEXT' && shouldHideFinalScoreText) {
           return false
         }
-        
+
         // Filter out SIGNATURE_DRAW fields for TRAINEE sections (signature handling is in separate screen)
         if (assessmentSection.templateSection.editBy === 'TRAINEE' && templateField.fieldType === 'SIGNATURE_DRAW') {
           return false
         }
-        
+
         return true
       })
       .map((templateField, index) => {
@@ -2342,9 +2352,11 @@ export class AssessmentRepo {
           } else if (templateField.fieldType === 'SIGNATURE_DRAW') {
             // For SIGNATURE_DRAW, if value is null, fallback to assessor's full name
             if (currentUser) {
-              finalAnswerValue = `${currentUser.firstName} ${currentUser.middleName || ''} ${currentUser.lastName}`.trim()
+              finalAnswerValue =
+                `${currentUser.firstName} ${currentUser.middleName || ''} ${currentUser.lastName}`.trim()
             } else if (assessmentSection.assessedBy) {
-              finalAnswerValue = `${assessmentSection.assessedBy.firstName} ${assessmentSection.assessedBy.middleName || ''} ${assessmentSection.assessedBy.lastName}`.trim()
+              finalAnswerValue =
+                `${assessmentSection.assessedBy.firstName} ${assessmentSection.assessedBy.middleName || ''} ${assessmentSection.assessedBy.lastName}`.trim()
             }
           } else {
             const systemValue = getSystemFieldValue(templateField.fieldName)
@@ -2372,7 +2384,7 @@ export class AssessmentRepo {
         }
       })
 
-    // Get current user's role and assessment permissions  
+    // Get current user's role and assessment permissions
     let userRoleInAssessment: string | null = null
     let userMainRole: string = 'UNKNOWN'
 
@@ -2439,10 +2451,11 @@ export class AssessmentRepo {
     // DEPARTMENT_HEAD always has canUpdated = false
     let canUpdated = false
     if (userMainRole !== 'DEPARTMENT HEAD' && assessmentFormAllowsUpdates) {
-      canUpdated = canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
+      canUpdated =
+        canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
     }
 
-    // Determine if current user can save this section  
+    // Determine if current user can save this section
     // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type
     // DEPARTMENT_HEAD always has canSave = false
     let canSave = false
@@ -2484,11 +2497,12 @@ export class AssessmentRepo {
     userId: string
   ) {
     return await this.prisma.$transaction(async (tx) => {
-      // First check if section hasn't been assessed yet (safety check)
+      // First check if section hasn't been assessed yet (safety check with row locking)
       const assessmentSection = await tx.assessmentSection.findUnique({
         where: { id: assessmentSectionId },
         select: {
-          assessedById: true
+          assessedById: true,
+          createdAt: true
         }
       })
 
@@ -2497,7 +2511,7 @@ export class AssessmentRepo {
       }
 
       if (assessmentSection.assessedById !== null) {
-        throw new Error('This section has already been assessed. Use update API instead.')
+        throw new Error('This section has already been assessed by another user. Please refresh and try again.')
       }
 
       // Update each assessment value
@@ -2546,16 +2560,15 @@ export class AssessmentRepo {
         if (!isTraineeSection) return false
 
         const fields = section.templateSection.fields
-        const hasOnlySignatureDraw = fields.length === 1 && 
-          fields[0].fieldType === 'SIGNATURE_DRAW' && 
-          fields[0].roleRequired === 'TRAINEE'
-        
+        const hasOnlySignatureDraw =
+          fields.length === 1 && fields[0].fieldType === 'SIGNATURE_DRAW' && fields[0].roleRequired === 'TRAINEE'
+
         return hasOnlySignatureDraw
       })
 
       // Get total number of sections in this assessment form
       const totalSections = updatedSection.assessmentForm.sections.length
-      
+
       // Calculate effective total sections (excluding TRAINEE signature-only sections)
       const effectiveTotalSections = totalSections - traineeSignatureOnlySections.length
 
@@ -2858,13 +2871,13 @@ export class AssessmentRepo {
       }
 
       let signatureSaved = false
-      let updatedSectionIds: string[] = []
+      const updatedSectionIds: string[] = []
 
       // Find and update the TRAINEE SIGNATURE_DRAW field value AND section status
       for (const section of assessmentForm.sections) {
         // Check if this is a TRAINEE section with SIGNATURE_DRAW field
         const hasTraineeSignatureField = section.templateSection.fields.some(
-          field => field.fieldType === 'SIGNATURE_DRAW' && field.roleRequired === 'TRAINEE'
+          (field) => field.fieldType === 'SIGNATURE_DRAW' && field.roleRequired === 'TRAINEE'
         )
 
         if (hasTraineeSignatureField) {
@@ -2872,8 +2885,8 @@ export class AssessmentRepo {
           for (const templateField of section.templateSection.fields) {
             if (templateField.fieldType === 'SIGNATURE_DRAW' && templateField.roleRequired === 'TRAINEE') {
               // Find the corresponding assessment value
-              const assessmentValue = section.values.find(value => value.templateFieldId === templateField.id)
-              
+              const assessmentValue = section.values.find((value) => value.templateFieldId === templateField.id)
+
               if (assessmentValue) {
                 // Update the signature URL
                 await tx.assessmentValue.update({
@@ -2886,11 +2899,11 @@ export class AssessmentRepo {
           }
 
           // Always update section to ensure it's marked as DRAFT with proper assessedById
-          // This handles both cases: 
+          // This handles both cases:
           // 1. Section with only signature (needs status update)
           // 2. Section with other fields already filled (signature completion)
           const needsUpdate = section.status !== AssessmentSectionStatus.DRAFT || section.assessedById !== userId
-          
+
           if (needsUpdate) {
             await tx.assessmentSection.update({
               where: { id: section.id },
@@ -2900,7 +2913,7 @@ export class AssessmentRepo {
               }
             })
           }
-          
+
           // Track this section as processed (regardless of whether DB update was needed)
           updatedSectionIds.push(section.id)
         }
@@ -2983,31 +2996,34 @@ export class AssessmentRepo {
 
     // Extract unique trainers (remove duplicates if a trainer assessed multiple sections)
     const uniqueTrainers = assessmentSections
-      .filter(section => section.assessedBy) // Extra safety check
-      .reduce((trainers, section) => {
-        const trainer = section.assessedBy!
-        const existingTrainer = trainers.find(t => t.id === trainer.id)
-        
-        if (!existingTrainer) {
-          trainers.push({
-            id: trainer.id,
-            email: trainer.email,
-            firstName: trainer.firstName,
-            lastName: trainer.lastName,
-            middleName: trainer.middleName,
-            fullName: `${trainer.firstName} ${trainer.middleName || ''} ${trainer.lastName}`.trim()
-          })
-        }
-        
-        return trainers
-      }, [] as Array<{
-        id: string
-        email: string
-        firstName: string
-        lastName: string
-        middleName: string | null
-        fullName: string
-      }>)
+      .filter((section) => section.assessedBy) // Extra safety check
+      .reduce(
+        (trainers, section) => {
+          const trainer = section.assessedBy!
+          const existingTrainer = trainers.find((t) => t.id === trainer.id)
+
+          if (!existingTrainer) {
+            trainers.push({
+              id: trainer.id,
+              email: trainer.email,
+              firstName: trainer.firstName,
+              lastName: trainer.lastName,
+              middleName: trainer.middleName,
+              fullName: `${trainer.firstName} ${trainer.middleName || ''} ${trainer.lastName}`.trim()
+            })
+          }
+
+          return trainers
+        },
+        [] as Array<{
+          id: string
+          email: string
+          firstName: string
+          lastName: string
+          middleName: string | null
+          fullName: string
+        }>
+      )
 
     return uniqueTrainers
   }
@@ -3368,9 +3384,7 @@ export class AssessmentRepo {
         })
 
         // Extract base name from first assessment (get part before dash)
-        const baseName = allAssessments.length > 0 
-          ? allAssessments[0].name.split(' - ')[0] 
-          : 'Unknown Event'
+        const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3649,9 +3663,7 @@ export class AssessmentRepo {
         })
 
         // Extract base name from first assessment (get part before dash)
-        const baseName = allAssessments.length > 0 
-          ? allAssessments[0].name.split(' - ')[0] 
-          : 'Unknown Event'
+        const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3738,7 +3750,7 @@ export class AssessmentRepo {
     // Get current date (today)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    
+
     const currentDateOnly = new Date(currentOccuranceDate)
     currentDateOnly.setHours(0, 0, 0, 0)
 
@@ -3819,12 +3831,14 @@ export class AssessmentRepo {
         })
 
         if (conflictingAssessment) {
-          throw new Error('Cannot update to today - there is already another assessment event using this template on the same date')
+          throw new Error(
+            'Cannot update to today - there is already another assessment event using this template on the same date'
+          )
         }
 
         // Validate all assessments are in NOT_STARTED status
         const nonNotStartedAssessments = existingAssessments.filter(
-          assessment => assessment.status !== AssessmentStatus.NOT_STARTED
+          (assessment) => assessment.status !== AssessmentStatus.NOT_STARTED
         )
 
         if (nonNotStartedAssessments.length > 0) {
@@ -3873,13 +3887,12 @@ export class AssessmentRepo {
       if (currentDateOnly.getTime() === today.getTime() && newDateOnly > today) {
         // Check if all assessments are ON_GOING, NOT_STARTED, or other allowed statuses
         const invalidStatusAssessments = existingAssessments.filter(
-          assessment => 
-            assessment.status !== AssessmentStatus.ON_GOING && 
-            assessment.status !== AssessmentStatus.NOT_STARTED
+          (assessment) =>
+            assessment.status !== AssessmentStatus.ON_GOING && assessment.status !== AssessmentStatus.NOT_STARTED
         )
 
         if (invalidStatusAssessments.length > 0) {
-          const invalidStatuses = [...new Set(invalidStatusAssessments.map(a => a.status))].join(', ')
+          const invalidStatuses = [...new Set(invalidStatusAssessments.map((a) => a.status))].join(', ')
           throw new Error(
             `Cannot update from today to future date - some assessments have status: ${invalidStatuses}. Only ON_GOING and NOT_STARTED assessments can be moved to future date.`
           )
@@ -3925,11 +3938,11 @@ export class AssessmentRepo {
 
       // For other date changes (future to future), only allow if all are NOT_STARTED
       const nonNotStartedAssessments = existingAssessments.filter(
-        assessment => assessment.status !== AssessmentStatus.NOT_STARTED
+        (assessment) => assessment.status !== AssessmentStatus.NOT_STARTED
       )
 
       if (nonNotStartedAssessments.length > 0) {
-        const invalidStatuses = [...new Set(nonNotStartedAssessments.map(a => a.status))].join(', ')
+        const invalidStatuses = [...new Set(nonNotStartedAssessments.map((a) => a.status))].join(', ')
         throw new Error(
           `Cannot update occurrence date - some assessments have status: ${invalidStatuses}. Only NOT_STARTED assessments can have their occurrence date changed.`
         )
@@ -4180,7 +4193,7 @@ export class AssessmentRepo {
 
       // Now get all assessments for this specific event using the same logic as getSubjectAssessments
       // but with additional filters for the event (exclude name since each has unique EID)
-      let whereConditions: any = {
+      const whereConditions: any = {
         subjectId: subjectId,
         templateId: templateId,
         occuranceDate: occuranceDate
@@ -4260,16 +4273,13 @@ export class AssessmentRepo {
             }
           }
         },
-        orderBy: [
-          { occuranceDate: 'desc' },
-          { createdAt: 'desc' }
-        ],
+        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
         skip: offset,
         take: limit
       })
 
       // Transform assessments to match TrainerAssessmentListItemSchema
-      const transformedAssessments = assessments.map(assessment => ({
+      const transformedAssessments = assessments.map((assessment) => ({
         id: assessment.id,
         name: assessment.name,
         subjectId: assessment.subjectId,
@@ -4307,7 +4317,6 @@ export class AssessmentRepo {
           entityInfo: entityInfo
         }
       }
-
     } catch (error) {
       console.error('Get event subject assessments failed:', error)
       throw error
@@ -4362,7 +4371,7 @@ export class AssessmentRepo {
 
       // Now get all assessments for this specific event using the same logic as getCourseAssessments
       // but with additional filters for the event (exclude name since each has unique EID)
-      let whereConditions: any = {
+      const whereConditions: any = {
         courseId: courseId,
         templateId: templateId,
         occuranceDate: occuranceDate
@@ -4442,16 +4451,13 @@ export class AssessmentRepo {
             }
           }
         },
-        orderBy: [
-          { occuranceDate: 'desc' },
-          { createdAt: 'desc' }
-        ],
+        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
         skip: offset,
         take: limit
       })
 
       // Transform assessments to match TrainerAssessmentListItemSchema
-      const transformedAssessments = assessments.map(assessment => ({
+      const transformedAssessments = assessments.map((assessment) => ({
         id: assessment.id,
         name: assessment.name,
         subjectId: assessment.subjectId,
@@ -4489,7 +4495,6 @@ export class AssessmentRepo {
           entityInfo: entityInfo
         }
       }
-
     } catch (error) {
       console.error('Get event course assessments failed:', error)
       throw error
@@ -4560,20 +4565,24 @@ export class AssessmentRepo {
           courseId: true,
           templateId: true,
           occuranceDate: true,
-          subject: subjectId ? {
-            select: {
-              id: true,
-              name: true,
-              code: true
-            }
-          } : false,
-          course: courseId ? {
-            select: {
-              id: true,
-              name: true,
-              code: true
-            }
-          } : false,
+          subject: subjectId
+            ? {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true
+                }
+              }
+            : false,
+          course: courseId
+            ? {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true
+                }
+              }
+            : false,
           template: {
             select: {
               name: true
@@ -4587,8 +4596,8 @@ export class AssessmentRepo {
       }
 
       // Check if all assessments are in NOT_STARTED status
-      const notStartedAssessments = allAssessments.filter(a => a.status === AssessmentStatus.NOT_STARTED)
-      const otherStatusAssessments = allAssessments.filter(a => a.status !== AssessmentStatus.NOT_STARTED)
+      const notStartedAssessments = allAssessments.filter((a) => a.status === AssessmentStatus.NOT_STARTED)
+      const otherStatusAssessments = allAssessments.filter((a) => a.status !== AssessmentStatus.NOT_STARTED)
 
       if (otherStatusAssessments.length > 0) {
         throw new BadRequestException(
@@ -4654,7 +4663,6 @@ export class AssessmentRepo {
           totalAssessments: allAssessments.length
         }
       }
-
     } catch (error) {
       console.error('Archive assessment event failed:', error)
       throw error

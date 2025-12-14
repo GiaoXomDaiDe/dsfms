@@ -71,7 +71,10 @@ export class GlobalFieldService {
     }
 
     // PART và CHECK_BOX bắt buộc phải có children
-    if ((data.fieldType === 'PART' || data.fieldType === 'CHECK_BOX') && (!data.children || data.children.length === 0)) {
+    if (
+      (data.fieldType === 'PART' || data.fieldType === 'CHECK_BOX') &&
+      (!data.children || data.children.length === 0)
+    ) {
       throw new Error(`${data.fieldType} field must have at least one child field.`)
     }
 
@@ -106,7 +109,9 @@ export class GlobalFieldService {
 
     // Validate that parent field type supports children
     if (data.fieldType !== 'PART' && data.fieldType !== 'CHECK_BOX') {
-      throw new Error(`Field type '${data.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`)
+      throw new Error(
+        `Field type '${data.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`
+      )
     }
 
     // Bắt buộc phải có children cho PART và CHECK_BOX
@@ -138,7 +143,7 @@ export class GlobalFieldService {
   private validateFieldHierarchy(fields: any[], allTempIds: Set<string> = new Set()) {
     // First pass: collect all tempIds in the hierarchy
     this.collectAllTempIds(fields, allTempIds)
-    
+
     // Second pass: validate relationships
     this.validateHierarchyRelationships(fields, allTempIds)
   }
@@ -172,8 +177,6 @@ export class GlobalFieldService {
       }
     }
   }
-
-
 
   async update(id: string, data: UpdateGlobalFieldDto, updatedById?: string) {
     if (!id) {
@@ -240,11 +243,15 @@ export class GlobalFieldService {
 
     // Validate that field type supports children updates
     if (data.fieldType && data.fieldType !== 'PART' && data.fieldType !== 'CHECK_BOX') {
-      throw new Error(`Field type '${data.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`)
+      throw new Error(
+        `Field type '${data.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`
+      )
     }
-    
+
     if (existingField.fieldType !== 'PART' && existingField.fieldType !== 'CHECK_BOX') {
-      throw new Error(`Existing field type '${existingField.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`)
+      throw new Error(
+        `Existing field type '${existingField.fieldType}' cannot have children. Only PART and CHECK_BOX fields can have children.`
+      )
     }
 
     // Validate PART/CHECK_BOX fields must have children
@@ -272,7 +279,7 @@ export class GlobalFieldService {
 
   private validateUpdateHierarchy(children: any[]) {
     const tempIds = new Set<string>()
-    
+
     for (const child of children) {
       // Check for duplicate tempIds in new children
       if (child.tempId) {
