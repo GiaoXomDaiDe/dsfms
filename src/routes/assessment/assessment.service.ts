@@ -56,7 +56,9 @@ import {
   GetEventCourseAssessmentsQueryType,
   GetEventCourseAssessmentsResType,
   ArchiveAssessmentEventBodyType,
-  ArchiveAssessmentEventResType
+  ArchiveAssessmentEventResType,
+  GetDepartmentAssessmentEventsQueryType,
+  GetDepartmentAssessmentEventsResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -2612,6 +2614,56 @@ export class AssessmentService {
       }
 
       throw new BadRequestException('Failed to get assessment events')
+    }
+  }
+
+  /**
+   * Get department assessment events - grouped assessment forms by department
+   * Includes both Course and Subject scope with enhanced statistics
+   */
+  async getDepartmentAssessmentEvents(
+    query: GetDepartmentAssessmentEventsQueryType,
+    currentUser: { userId: string; roleName: string }
+  ): Promise<GetDepartmentAssessmentEventsResType> {
+    try {
+      // Get user's department from database for permission validation
+      const user = await this.assessmentRepo.prismaClient.user.findUnique({
+        where: { id: currentUser.userId },
+        select: { departmentId: true }
+      })
+
+      if (!user?.departmentId) {
+        throw new ForbiddenException('User must have a department assigned')
+      }
+
+      // For department heads, validate they can only access their own department
+      // For other roles like ADMIN, they can access any department
+      if (currentUser.roleName === 'DEPARTMENT_HEAD' && user.departmentId !== query.departmentId) {
+        throw new ForbiddenException('Department Head can only access their own department')
+      }
+
+      const result = await this.assessmentRepo.getDepartmentAssessmentEvents(
+        query.departmentId,
+        query.page,
+        query.limit,
+        query.status,
+        query.subjectId,
+        query.courseId,
+        query.templateId,
+        query.fromDate,
+        query.toDate,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get department assessment events failed:', error)
+
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error
+      }
+
+      throw new BadRequestException('Failed to get department assessment events')
     }
   }
 

@@ -821,6 +821,69 @@ export type UpdateAssessmentEventBodyType = z.infer<typeof UpdateAssessmentEvent
 export type UpdateAssessmentEventParamsType = z.infer<typeof UpdateAssessmentEventParamsSchema>
 export type UpdateAssessmentEventResType = z.infer<typeof UpdateAssessmentEventResSchema>
 
+// ===== DEPARTMENT ASSESSMENT EVENTS SCHEMAS =====
+
+// Enhanced schema for department assessment events with additional statistics
+export const DepartmentAssessmentEventItemSchema = z.object({
+  name: z.string().max(255),
+  subjectId: z.string().uuid().nullable(),
+  courseId: z.string().uuid().nullable(),
+  occuranceDate: z.coerce.date(),
+  status: AssessmentEventStatus,
+  totalTrainees: z.number().int().min(0),
+  // Additional statistics requested
+  totalAssessments: z.number().int().min(0),
+  totalReviewedForm: z.number().int().min(0),  // APPROVED or REJECTED
+  totalCancelledForm: z.number().int().min(0), // CANCELLED
+  totalTrainers: z.number().int().min(0),      // From Subject/Course_Instructor tables
+  // Additional info about the subject/course
+  entityInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    code: z.string(),
+    type: z.enum(['subject', 'course'])
+  }),
+  // Basic template info
+  templateInfo: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    isActive: z.boolean()
+  })
+})
+
+export const GetDepartmentAssessmentEventsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  departmentId: z.string().uuid('Department ID must be a valid UUID'),
+  status: AssessmentEventStatus.optional(),
+  subjectId: z.string().uuid().optional(),
+  courseId: z.string().uuid().optional(),
+  templateId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+  search: z.string().max(100).optional()
+})
+
+export const GetDepartmentAssessmentEventsResSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    events: z.array(DepartmentAssessmentEventItemSchema),
+    pagination: z.object({
+      page: z.number().int(),
+      limit: z.number().int(),
+      total: z.number().int(),
+      totalPages: z.number().int(),
+      hasNext: z.boolean(),
+      hasPrev: z.boolean()
+    })
+  })
+})
+
+export type DepartmentAssessmentEventItemType = z.infer<typeof DepartmentAssessmentEventItemSchema>
+export type GetDepartmentAssessmentEventsQueryType = z.infer<typeof GetDepartmentAssessmentEventsQuerySchema>
+export type GetDepartmentAssessmentEventsResType = z.infer<typeof GetDepartmentAssessmentEventsResSchema>
+
 // ===== EVENT ASSESSMENTS SCHEMAS =====
 
 // Query schemas for event-based assessments
@@ -835,7 +898,7 @@ export const GetEventSubjectAssessmentsBodySchema = z
 export const GetEventSubjectAssessmentsQuerySchema = z
   .object({
     page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(100).default(10),
+    limit: z.coerce.number().min(1).max(1000).default(1000),
     status: z.nativeEnum(AssessmentStatus).optional(),
     search: z.string().max(255).optional()
   })
@@ -855,7 +918,7 @@ export const GetEventCourseAssessmentsBodySchema = z
 export const GetEventCourseAssessmentsQuerySchema = z
   .object({
     page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(100).default(10),
+    limit: z.coerce.number().min(1).max(1000).default(1000),
     status: z.nativeEnum(AssessmentStatus).optional(),
     search: z.string().max(255).optional()
   })
@@ -911,15 +974,46 @@ export const GetEventSubjectAssessmentsResSchema = z.object({
   page: z.number(),
   limit: z.number(),
   totalPages: z.number(),
+  // Enhanced statistics
+  numberOfTrainees: z.number().int().min(0),
+  numberOfParticipatedTrainers: z.number().int().min(0),
   eventInfo: z.object({
     name: z.string(),
     occuranceDate: z.coerce.date(),
     templateId: z.string().uuid(),
-    entityInfo: z.object({
+    // Enhanced subject details
+    subjectInfo: z.object({
       id: z.string().uuid(),
       name: z.string(),
       code: z.string(),
-      type: z.literal('subject')
+      description: z.string().nullable(),
+      method: z.string(),
+      duration: z.number().nullable(),
+      type: z.string(),
+      passScore: z.number().nullable(),
+      startDate: z.coerce.date(),
+      endDate: z.coerce.date(),
+      status: z.string(),
+      course: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        code: z.string(),
+        description: z.string().nullable(),
+        maxNumTrainee: z.number().int(),
+        passScore: z.number().nullable(),
+        startDate: z.coerce.date(),
+        endDate: z.coerce.date(),
+        status: z.string()
+      })
+    }),
+    // Enhanced template details with content
+    templateInfo: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      version: z.number().int(),
+      status: z.string(),
+      description: z.string().nullable(),
+      templateContent: z.string().nullable() // The actual template document content
     })
   })
 })
@@ -932,15 +1026,41 @@ export const GetEventCourseAssessmentsResSchema = z.object({
   page: z.number(),
   limit: z.number(),
   totalPages: z.number(),
+  // Enhanced statistics
+  numberOfTrainees: z.number().int().min(0),
+  numberOfParticipatedTrainers: z.number().int().min(0),
   eventInfo: z.object({
     name: z.string(),
     occuranceDate: z.coerce.date(),
     templateId: z.string().uuid(),
-    entityInfo: z.object({
+    // Enhanced course details
+    courseInfo: z.object({
       id: z.string().uuid(),
       name: z.string(),
       code: z.string(),
-      type: z.literal('course')
+      description: z.string().nullable(),
+      maxNumTrainee: z.number().int(),
+      venue: z.string().nullable(),
+      note: z.string().nullable(),
+      passScore: z.number().nullable(),
+      startDate: z.coerce.date(),
+      endDate: z.coerce.date(),
+      level: z.string(),
+      status: z.string(),
+      department: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        code: z.string()
+      })
+    }),
+    // Enhanced template details with content
+    templateInfo: z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      version: z.number().int(),
+      status: z.string(),
+      description: z.string().nullable(),
+      templateContent: z.string().nullable() // The actual template document content
     })
   })
 })

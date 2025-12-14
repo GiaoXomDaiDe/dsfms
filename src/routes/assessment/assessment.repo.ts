@@ -25,7 +25,9 @@ import {
   GetEventSubjectAssessmentsResType,
   GetEventCourseAssessmentsBodyType,
   GetEventCourseAssessmentsQueryType,
-  GetEventCourseAssessmentsResType
+  GetEventCourseAssessmentsResType,
+  GetDepartmentAssessmentEventsQueryType,
+  GetDepartmentAssessmentEventsResType
 } from './assessment.model'
 import {
   AssessmentSectionNotFoundError,
@@ -3465,6 +3467,294 @@ export class AssessmentRepo {
   }
 
   /**
+   * Get department assessment events - grouped assessment forms by department with enhanced statistics
+   * Includes both Course and Subject scope with additional statistics: totalAssessments, totalReviewedForm, totalCancelledForm, totalTrainers
+   */
+  async getDepartmentAssessmentEvents(
+    departmentId: string,
+    page: number = 1,
+    limit: number = 1000,
+    status?: z.infer<typeof AssessmentEventStatus>,
+    subjectId?: string,
+    courseId?: string,
+    templateId?: string,
+    fromDate?: Date,
+    toDate?: Date,
+    search?: string
+  ): Promise<GetDepartmentAssessmentEventsResType> {
+    // Build where conditions for department-specific assessments
+    const whereConditions: any = {
+      OR: [] // Will be filled with department-related conditions
+    }
+
+    // Get department subjects and courses
+    const [departmentSubjects, departmentCourses] = await Promise.all([
+      this.prisma.subject.findMany({
+        where: { 
+          course: { 
+            departmentId,
+            status: { not: 'ARCHIVED' } // Active courses (not archived)
+          },
+          status: { not: 'ARCHIVED' } // Active subjects (not archived)
+        },
+        select: { id: true }
+      }),
+      this.prisma.course.findMany({
+        where: { 
+          departmentId,
+          status: { not: 'ARCHIVED' } // Active courses (not archived)
+        },
+        select: { id: true }
+      })
+    ])
+
+    // Add conditions for department subjects and courses
+    if (departmentSubjects.length > 0) {
+      whereConditions.OR.push({
+        subjectId: {
+          in: departmentSubjects.map(s => s.id)
+        }
+      })
+    }
+
+    if (departmentCourses.length > 0) {
+      whereConditions.OR.push({
+        courseId: {
+          in: departmentCourses.map(c => c.id)
+        }
+      })
+    }
+
+    // If no subjects or courses found for department, return empty result
+    if (whereConditions.OR.length === 0) {
+      return {
+        success: true,
+        message: 'No assessment events found for this department',
+        data: {
+          events: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false
+          }
+        }
+      }
+    }
+
+    // Apply additional filters
+    const additionalConditions: any = {}
+
+    if (subjectId) {
+      additionalConditions.subjectId = subjectId
+    }
+
+    if (courseId) {
+      additionalConditions.courseId = courseId
+    }
+
+    if (templateId) {
+      additionalConditions.templateId = templateId
+    }
+
+    if (fromDate || toDate) {
+      additionalConditions.occuranceDate = {}
+      if (fromDate) {
+        additionalConditions.occuranceDate.gte = fromDate
+      }
+      if (toDate) {
+        additionalConditions.occuranceDate.lte = toDate
+      }
+    }
+
+    if (search) {
+      additionalConditions.name = {
+        contains: search,
+        mode: 'insensitive'
+      }
+    }
+
+    // Combine department filter with additional conditions
+    const finalWhereConditions = {
+      AND: [
+        whereConditions, // Department filter (OR conditions for subjects/courses)
+        additionalConditions // Additional filters (AND conditions)
+      ]
+    }
+
+    // Get ALL grouped assessment forms first (without pagination to properly calculate status and statistics)
+    const allEvents = await this.prisma.assessmentForm.groupBy({
+      by: ['subjectId', 'courseId', 'occuranceDate', 'templateId'],
+      where: finalWhereConditions,
+      _count: {
+        id: true
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      }
+    })
+
+    // Enrich ALL events with enhanced statistics and information
+    const allEnrichedEvents = await Promise.all(
+      allEvents.map(async (event) => {
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course' } | null = null
+
+        // Get subject or course info
+        if (event.subjectId) {
+          const subject = await this.prisma.subject.findUnique({
+            where: { id: event.subjectId },
+            select: { id: true, name: true, code: true }
+          })
+          if (subject) {
+            entityInfo = {
+              id: subject.id,
+              name: subject.name,
+              code: subject.code,
+              type: 'subject'
+            }
+          }
+        } else if (event.courseId) {
+          const course = await this.prisma.course.findUnique({
+            where: { id: event.courseId },
+            select: { id: true, name: true, code: true }
+          })
+          if (course) {
+            entityInfo = {
+              id: course.id,
+              name: course.name,
+              code: course.code,
+              type: 'course'
+            }
+          }
+        }
+
+        // Get template info
+        const template = await this.prisma.templateForm.findUnique({
+          where: { id: event.templateId },
+          select: { id: true, name: true, status: true }
+        })
+
+        // Get all assessments for this event with their statuses
+        const allAssessments = await this.prisma.assessmentForm.findMany({
+          where: {
+            subjectId: event.subjectId,
+            courseId: event.courseId,
+            occuranceDate: event.occuranceDate,
+            templateId: event.templateId
+          },
+          select: { status: true, name: true }
+        })
+
+        // Calculate enhanced statistics
+        const totalAssessments = allAssessments.length
+        const totalReviewedForm = allAssessments.filter(a => 
+          a.status === 'APPROVED' || a.status === 'REJECTED'
+        ).length
+        const totalCancelledForm = allAssessments.filter(a => 
+          a.status === 'CANCELLED'
+        ).length
+
+        // Get total trainers from Subject/Course_Instructor tables
+        let totalTrainers = 0
+        if (event.subjectId) {
+          totalTrainers = await this.prisma.subjectInstructor.count({
+            where: { subjectId: event.subjectId }
+          })
+        } else if (event.courseId) {
+          totalTrainers = await this.prisma.courseInstructor.count({
+            where: { courseId: event.courseId }
+          })
+        }
+
+        // Extract base name from first assessment (get part before dash)
+        const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
+
+        // Calculate event status based on all assessments
+        let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
+
+        const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
+
+        if (allNotStarted) {
+          eventStatus = 'NOT_STARTED'
+        } else {
+          const allFinished = allAssessments.every(
+            (assessment) => assessment.status === 'APPROVED' || assessment.status === 'CANCELLED'
+          )
+
+          if (allFinished) {
+            eventStatus = 'FINISHED'
+          } else {
+            eventStatus = 'ON_GOING'
+          }
+        }
+
+        return {
+          name: baseName,
+          subjectId: event.subjectId,
+          courseId: event.courseId,
+          occuranceDate: event.occuranceDate,
+          status: eventStatus,
+          totalTrainees: event._count.id,
+          // Enhanced statistics
+          totalAssessments,
+          totalReviewedForm,
+          totalCancelledForm,
+          totalTrainers,
+          entityInfo: entityInfo || {
+            id: '',
+            name: 'Unknown',
+            code: 'UNKNOWN',
+            type: event.subjectId ? 'subject' : 'course'
+          },
+          templateInfo: template
+            ? {
+                id: template.id,
+                name: template.name,
+                isActive: template.status === 'PUBLISHED'
+              }
+            : {
+                id: event.templateId,
+                name: 'Unknown Template',
+                isActive: false
+              }
+        }
+      })
+    )
+
+    // Filter by status after calculating event status (if status filter is provided)
+    let filteredEvents = allEnrichedEvents
+    if (status) {
+      filteredEvents = allEnrichedEvents.filter((event) => event.status === status)
+    }
+
+    // Calculate total after filtering
+    const total = filteredEvents.length
+    const totalPages = Math.ceil(total / limit)
+
+    // Apply pagination to filtered results
+    const skip = (page - 1) * limit
+    const paginatedEvents = filteredEvents.slice(skip, skip + limit)
+
+    return {
+      success: true,
+      message: 'Department assessment events retrieved successfully',
+      data: {
+        events: paginatedEvents,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      }
+    }
+  }
+
+  /**
    * Get assessment events for a specific user based on their role (TRAINER/TRAINEE) and assignments
    */
   async getUserAssessmentEvents(
@@ -4154,45 +4444,102 @@ export class AssessmentRepo {
     search?: string
   ): Promise<GetEventSubjectAssessmentsResType> {
     try {
-      // First validate that this event exists in the subject (exclude name since each has unique EID)
+      // Get enhanced subject and template information
+      const [subjectInfo, templateInfo] = await Promise.all([
+        this.prisma.subject.findUnique({
+          where: { id: subjectId },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            method: true,
+            duration: true,
+            type: true,
+            passScore: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+            course: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                description: true,
+                maxNumTrainee: true,
+                passScore: true,
+                startDate: true,
+                endDate: true,
+                status: true
+              }
+            }
+          }
+        }),
+        this.prisma.templateForm.findUnique({
+          where: { id: templateId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            status: true,
+            description: true,
+            templateContent: true // The actual template document content
+          }
+        })
+      ])
+
+      if (!subjectInfo) {
+        throw new Error('Subject not found')
+      }
+      if (!templateInfo) {
+        throw new Error('Template not found')
+      }
+
+      // First validate that this event exists in the subject
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           subjectId: subjectId,
           templateId: templateId,
           occuranceDate: occuranceDate
+        }
+      })
+
+      if (!eventExists) {
+        throw new Error('Event not found in subject')
+      }
+
+      // Get statistics for all assessments in this event
+      const allEventAssessments = await this.prisma.assessmentForm.findMany({
+        where: {
+          subjectId: subjectId,
+          templateId: templateId,
+          occuranceDate: occuranceDate
         },
-        include: {
-          subject: {
+        select: {
+          id: true,
+          sections: {
             select: {
-              id: true,
-              name: true,
-              code: true,
-              course: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true
-                }
-              }
+              assessedById: true
             }
           }
         }
       })
 
-      if (!eventExists || !eventExists.subject) {
-        throw new Error('Event not found in subject')
-      }
+      // Calculate statistics
+      const numberOfTrainees = allEventAssessments.length
+      const participatedTrainers = new Set<string>()
+      
+      allEventAssessments.forEach(assessment => {
+        assessment.sections.forEach(section => {
+          if (section.assessedById) {
+            participatedTrainers.add(section.assessedById)
+          }
+        })
+      })
+      
+      const numberOfParticipatedTrainers = participatedTrainers.size
 
-      // Get entity info for response
-      const entityInfo = {
-        id: eventExists.subject.id,
-        name: eventExists.subject.name,
-        code: eventExists.subject.code,
-        type: 'subject' as const
-      }
-
-      // Now get all assessments for this specific event using the same logic as getSubjectAssessments
-      // but with additional filters for the event (exclude name since each has unique EID)
+      // Now get filtered assessments for display
       const whereConditions: any = {
         subjectId: subjectId,
         templateId: templateId,
@@ -4310,11 +4657,44 @@ export class AssessmentRepo {
         page,
         limit,
         totalPages,
+        numberOfTrainees,
+        numberOfParticipatedTrainers,
         eventInfo: {
           name: eventName,
           occuranceDate: occuranceDate,
           templateId: templateId,
-          entityInfo: entityInfo
+          subjectInfo: {
+            id: subjectInfo.id,
+            name: subjectInfo.name,
+            code: subjectInfo.code,
+            description: subjectInfo.description,
+            method: subjectInfo.method,
+            duration: subjectInfo.duration,
+            type: subjectInfo.type,
+            passScore: subjectInfo.passScore,
+            startDate: subjectInfo.startDate,
+            endDate: subjectInfo.endDate,
+            status: subjectInfo.status,
+            course: {
+              id: subjectInfo.course.id,
+              name: subjectInfo.course.name,
+              code: subjectInfo.course.code,
+              description: subjectInfo.course.description,
+              maxNumTrainee: subjectInfo.course.maxNumTrainee,
+              passScore: subjectInfo.course.passScore,
+              startDate: subjectInfo.course.startDate,
+              endDate: subjectInfo.course.endDate,
+              status: subjectInfo.course.status
+            }
+          },
+          templateInfo: {
+            id: templateInfo.id,
+            name: templateInfo.name,
+            version: templateInfo.version,
+            status: templateInfo.status,
+            description: templateInfo.description,
+            templateContent: templateInfo.templateContent
+          }
         }
       }
     } catch (error) {
@@ -4324,8 +4704,8 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get assessments for a specific event in a course
-   * Combines logic from getAssessmentEvents to validate event existence with getCourseAssessments response format
+   * Get assessments for a specific event in a course with enhanced statistics and details
+   * Includes number of trainees, participated trainers, detailed course info, and template content
    */
   async getEventCourseAssessments(
     courseId: string,
@@ -4339,38 +4719,97 @@ export class AssessmentRepo {
     search?: string
   ): Promise<GetEventCourseAssessmentsResType> {
     try {
-      // First validate that this event exists in the course (exclude name since each has unique EID)
+      // Get enhanced course and template information
+      const [courseInfo, templateInfo] = await Promise.all([
+        this.prisma.course.findUnique({
+          where: { id: courseId },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            maxNumTrainee: true,
+            venue: true,
+            note: true,
+            passScore: true,
+            startDate: true,
+            endDate: true,
+            level: true,
+            status: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        }),
+        this.prisma.templateForm.findUnique({
+          where: { id: templateId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            status: true,
+            description: true,
+            templateContent: true // The actual template document content
+          }
+        })
+      ])
+
+      if (!courseInfo) {
+        throw new Error('Course not found')
+      }
+      if (!templateInfo) {
+        throw new Error('Template not found')
+      }
+
+      // First validate that this event exists in the course
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           courseId: courseId,
           templateId: templateId,
           occuranceDate: occuranceDate
+        }
+      })
+
+      if (!eventExists) {
+        throw new Error('Event not found in course')
+      }
+
+      // Get statistics for all assessments in this event
+      const allEventAssessments = await this.prisma.assessmentForm.findMany({
+        where: {
+          courseId: courseId,
+          templateId: templateId,
+          occuranceDate: occuranceDate
         },
-        include: {
-          course: {
+        select: {
+          id: true,
+          sections: {
             select: {
-              id: true,
-              name: true,
-              code: true
+              assessedById: true
             }
           }
         }
       })
 
-      if (!eventExists || !eventExists.course) {
-        throw new Error('Event not found in course')
-      }
+      // Calculate statistics
+      const numberOfTrainees = allEventAssessments.length
+      const participatedTrainers = new Set<string>()
+      
+      allEventAssessments.forEach(assessment => {
+        assessment.sections.forEach(section => {
+          if (section.assessedById) {
+            participatedTrainers.add(section.assessedById)
+          }
+        })
+      })
+      
+      const numberOfParticipatedTrainers = participatedTrainers.size
 
-      // Get entity info for response
-      const entityInfo = {
-        id: eventExists.course.id,
-        name: eventExists.course.name,
-        code: eventExists.course.code,
-        type: 'course' as const
-      }
-
-      // Now get all assessments for this specific event using the same logic as getCourseAssessments
-      // but with additional filters for the event (exclude name since each has unique EID)
+      // Now get filtered assessments for display
       const whereConditions: any = {
         courseId: courseId,
         templateId: templateId,
@@ -4464,8 +4903,6 @@ export class AssessmentRepo {
         courseId: assessment.courseId,
         occuranceDate: assessment.occuranceDate,
         status: assessment.status,
-        createdAt: assessment.createdAt,
-        updatedAt: assessment.updatedAt,
         resultScore: assessment.resultScore,
         resultText: assessment.resultText,
         pdfUrl: assessment.pdfUrl,
@@ -4488,11 +4925,39 @@ export class AssessmentRepo {
         page,
         limit,
         totalPages,
+        numberOfTrainees,
+        numberOfParticipatedTrainers,
         eventInfo: {
           name: eventName,
           occuranceDate: occuranceDate,
           templateId: templateId,
-          entityInfo: entityInfo
+          courseInfo: {
+            id: courseInfo.id,
+            name: courseInfo.name,
+            code: courseInfo.code,
+            description: courseInfo.description,
+            maxNumTrainee: courseInfo.maxNumTrainee,
+            venue: courseInfo.venue,
+            note: courseInfo.note,
+            passScore: courseInfo.passScore,
+            startDate: courseInfo.startDate,
+            endDate: courseInfo.endDate,
+            level: courseInfo.level,
+            status: courseInfo.status,
+            department: {
+              id: courseInfo.department.id,
+              name: courseInfo.department.name,
+              code: courseInfo.department.code
+            }
+          },
+          templateInfo: {
+            id: templateInfo.id,
+            name: templateInfo.name,
+            version: templateInfo.version,
+            status: templateInfo.status,
+            description: templateInfo.description,
+            templateContent: templateInfo.templateContent
+          }
         }
       }
     } catch (error) {
