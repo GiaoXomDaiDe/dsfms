@@ -1029,6 +1029,16 @@ export class AssessmentService {
         throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
       }
 
+      // Validate SIGNATURE_DRAW fields - they cannot be null or empty
+      for (const value of body.values) {
+        const field = sectionFields.fields.find(f => f.assessmentValue.id === value.assessmentValueId)
+        if (field?.templateField.fieldType === 'SIGNATURE_DRAW') {
+          if (!value.answerValue || value.answerValue.trim() === '') {
+            throw new BadRequestException(`This field: "${field.templateField.label}" need to be signed before saving.`)
+          }
+        }
+      }
+
       // Save the values
       return await this.assessmentRepo.saveAssessmentValues(body.assessmentSectionId, body.values, userContext.userId)
     } catch (error: any) {
@@ -1220,6 +1230,16 @@ export class AssessmentService {
       const invalidIds = providedValueIds.filter((id: any) => !sectionValueIds.includes(id))
       if (invalidIds.length > 0) {
         throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
+      }
+
+      // Validate SIGNATURE_DRAW fields - they cannot be null or empty
+      for (const value of body.values) {
+        const field = sectionFields.fields.find(f => f.assessmentValue.id === value.assessmentValueId)
+        if (field?.templateField.fieldType === 'SIGNATURE_DRAW') {
+          if (!value.answerValue || value.answerValue.trim() === '') {
+            throw new BadRequestException(`This field "${field.templateField.label}" need to be signed before updating.`)
+          }
+        }
       }
 
       // Update the values (repository will check if user is the original assessor)

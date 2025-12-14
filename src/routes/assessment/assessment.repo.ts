@@ -1700,7 +1700,14 @@ export class AssessmentRepo {
             if (section.templateSection.roleInSubject) {
               // Section requires specific assessment role
               roleRequirement = section.templateSection.roleInSubject
-              canAssess = userRoleInAssessment === section.templateSection.roleInSubject
+              // ASSESSMENT_REVIEWER can see all sections (for review purposes)
+              if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
+                canAssess = true
+              }
+              // EXAMINER can only see sections matching their specific role
+              else {
+                canAssess = userRoleInAssessment === section.templateSection.roleInSubject
+              }
             } else {
               // Section just requires trainer role
               roleRequirement = 'TRAINER'
@@ -1749,8 +1756,17 @@ export class AssessmentRepo {
       if (userMainRole === 'TRAINER') {
         if (item.section.templateSection.editBy === 'TRAINER') {
           // For TRAINER sections, check if they can assess based on role match
-          if (item.roleRequirement && userRoleInAssessment === item.roleRequirement) {
-            canAssessed = basicCanAssess
+          if (item.roleRequirement && userRoleInAssessment) {
+            // ASSESSMENT_REVIEWER can see and assess all TRAINER sections (for review purposes)
+            if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
+              canAssessed = basicCanAssess
+            }
+            // EXAMINER can only assess sections matching their specific role
+            else if (userRoleInAssessment === item.roleRequirement) {
+              canAssessed = basicCanAssess
+            } else {
+              canAssessed = false
+            }
           } else {
             canAssessed = false
           }
