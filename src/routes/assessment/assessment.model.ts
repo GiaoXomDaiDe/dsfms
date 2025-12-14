@@ -469,7 +469,12 @@ export const GetAssessmentSectionsResSchema = z.object({
       id: z.string().uuid(),
       firstName: z.string(),
       lastName: z.string(),
-      eid: z.string()
+      eid: z.string(),
+      middleName: z.string().nullable().optional(),
+      traineeProfile: z.object({
+        nation: z.string().nullable().optional(),
+        trainingBatch: z.string().nullable().optional()
+      }).nullable().optional()
     }),
     template: z.object({
       id: z.string().uuid(),
@@ -492,6 +497,8 @@ export const GetAssessmentSectionsResSchema = z.object({
     occuranceDate: z.coerce.date(),
     status: z.nativeEnum(AssessmentStatus)
   }),
+  availableTrainers: z.number(),
+  templateContent: z.string().nullable().optional(),
   sections: z.array(AssessmentSectionDetailSchema),
   userRole: z.string(),
   // Optional field for TRAINEE users - indicates if assessment is locked
@@ -550,6 +557,18 @@ export const GetAssessmentSectionFieldsResSchema = z.object({
       isToggleDependent: z.boolean()
     })
   }),
+  traineeInfo: z.object({
+    id: z.string().uuid(),
+    firstName: z.string(),
+    lastName: z.string(),
+    eid: z.string(),
+    middleName: z.string().nullable().optional(),
+    traineeProfile: z.object({
+      nation: z.string().nullable().optional(),
+      trainingBatch: z.string().nullable().optional()
+    }).nullable().optional()
+  }),
+  templateContent: z.string().nullable().optional(),
   fields: z.array(AssessmentSectionFieldDetailSchema),
   totalFields: z.number()
 })

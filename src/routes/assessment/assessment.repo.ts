@@ -1567,7 +1567,8 @@ export class AssessmentRepo {
         template: {
           select: {
             id: true,
-            name: true
+            name: true,
+            templateContent: true
           }
         },
         trainee: {
@@ -1575,7 +1576,14 @@ export class AssessmentRepo {
             id: true,
             eid: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            middleName: true,
+            traineeProfile: {
+              select: {
+                nation: true,
+                trainingBatch: true
+              }
+            }
           }
         },
         subject: {
@@ -1631,6 +1639,22 @@ export class AssessmentRepo {
 
     if (!assessment) {
       throw new Error('Assessment not found')
+    }
+
+    // Get available trainers count from Subject/Course_Instructor
+    let availableTrainers = 0
+    if (assessment.subjectId) {
+      availableTrainers = await this.prisma.subjectInstructor.count({
+        where: {
+          subjectId: assessment.subjectId
+        }
+      })
+    } else if (assessment.courseId) {
+      availableTrainers = await this.prisma.courseInstructor.count({
+        where: {
+          courseId: assessment.courseId
+        }
+      })
     }
 
     // Get user's role in the course/subject
@@ -1850,7 +1874,9 @@ export class AssessmentRepo {
           id: assessment.trainee.id,
           firstName: assessment.trainee.firstName,
           lastName: assessment.trainee.lastName,
-          eid: assessment.trainee.eid
+          eid: assessment.trainee.eid,
+          middleName: assessment.trainee.middleName,
+          traineeProfile: assessment.trainee.traineeProfile
         },
         template: {
           id: assessment.template.id,
@@ -1873,6 +1899,8 @@ export class AssessmentRepo {
         occuranceDate: assessment.occuranceDate,
         status: assessment.status
       },
+      availableTrainers,
+      templateContent: assessment.template.templateContent,
       sections: sectionsWithPermissions,
       userRole: userRoleInAssessment || userMainRole,
       isTraineeLocked: assessment.isTraineeLocked
@@ -1902,7 +1930,14 @@ export class AssessmentRepo {
             id: true,
             eid: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            middleName: true,
+            traineeProfile: {
+              select: {
+                nation: true,
+                trainingBatch: true
+              }
+            }
           }
         },
         subject: {
@@ -2062,7 +2097,9 @@ export class AssessmentRepo {
           id: assessment.trainee.id,
           firstName: assessment.trainee.firstName,
           lastName: assessment.trainee.lastName,
-          eid: assessment.trainee.eid
+          eid: assessment.trainee.eid,
+          middleName: assessment.trainee.middleName,
+          traineeProfile: assessment.trainee.traineeProfile
         },
         template: {
           id: assessment.template.id,
@@ -2120,7 +2157,8 @@ export class AssessmentRepo {
             template: {
               select: {
                 id: true,
-                name: true
+                name: true,
+                templateContent: true
               }
             },
             subject: {
@@ -2485,6 +2523,15 @@ export class AssessmentRepo {
           isToggleDependent: assessmentSection.templateSection.isToggleDependent
         }
       },
+      traineeInfo: {
+        id: assessmentSection.assessmentForm.trainee.id,
+        firstName: assessmentSection.assessmentForm.trainee.firstName,
+        lastName: assessmentSection.assessmentForm.trainee.lastName,
+        eid: assessmentSection.assessmentForm.trainee.eid,
+        middleName: assessmentSection.assessmentForm.trainee.middleName,
+        traineeProfile: assessmentSection.assessmentForm.trainee.traineeProfile
+      },
+      templateContent: assessmentSection.assessmentForm.template.templateContent,
       fields: fieldsWithValues,
       totalFields: fieldsWithValues.length
     }
