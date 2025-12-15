@@ -549,7 +549,6 @@ enum ReportType {
   FACILITIES_REPORT
   COURSE_ORGANIZATION_REPORT
   FEEDBACK
-  OTHER
 }
 
 enum ReportSeverity {
