@@ -20,6 +20,8 @@ import {
   GetSubjectEnrollmentsResSchema,
   GetSubjectsQuerySchema,
   GetSubjectsResSchema,
+  GetSubjectTraineesQuerySchema,
+  GetSubjectTraineesResSchema,
   GetTraineeCourseSubjectsResSchema,
   GetTraineeEnrollmentsQuerySchema,
   GetTraineeEnrollmentsResSchema,
@@ -41,8 +43,14 @@ import { SubjectIdParamsSchema, SubjectSchema } from '~/shared/models/shared-sub
 import { UserLookupResSchema } from '~/shared/models/shared-user.model'
 
 export class GetSubjectsQueryDto extends createZodDto(GetSubjectsQuerySchema) {}
+export class GetSubjectTraineesQueryDto extends createZodDto(GetSubjectTraineesQuerySchema) {}
+
 export class GetSubjectsResDto extends createResponseDto(GetSubjectsResSchema, SubjectMes.LIST_SUCCESS) {}
 export class GetSubjectDetailResDto extends createResponseDto(GetSubjectDetailResSchema, SubjectMes.DETAIL_SUCCESS) {}
+export class GetSubjectTraineesResDto extends createResponseDto(
+  GetSubjectTraineesResSchema,
+  SubjectMes.SUBJECT_TRAINEES_SUCCESS
+) {}
 export class UpdateSubjectResDto extends createResponseDto(GetSubjectDetailResSchema, SubjectMes.UPDATE_SUCCESS) {}
 export class GetAvailableTrainersResDto extends createResponseDto(
   GetAvailableTrainersResSchema,

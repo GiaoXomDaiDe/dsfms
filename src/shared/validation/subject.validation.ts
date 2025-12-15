@@ -64,7 +64,10 @@ export const subjectTimeSlotSchema = nullableStringField(
 )
 
 export const subjectDurationSchema = nullableNumberField(
-  z.number().nonnegative('Subject duration must be greater than or equal to 0')
+  z.number().refine((val) => Number.isFinite(val) && /^\d+\.\d{2}$/.test(val.toFixed(2)), {
+    message: 'Must have exactly 2 decimal places'
+  })
+  // .nonnegative('Subject duration must be greater than or equal to 0')
 )
 
 export const subjectPassScoreSchema = nullableNumberField(
