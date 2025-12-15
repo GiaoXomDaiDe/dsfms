@@ -9,6 +9,8 @@ import { SubjectService } from '../subject/subject.service'
 import {
   CourseCannotAssignTrainerFromCurrentStatusException,
   CourseCannotBeArchivedFromCurrentStatusException,
+  CourseCannotRemoveTrainerFromCurrentStatusException,
+  CourseCannotUpdateFromCurrentStatusException,
   CourseCannotUpdateTrainerRoleFromCurrentStatusException,
   CourseCodeAlreadyExistsException,
   CourseDateRangeViolationException,
@@ -94,6 +96,10 @@ export class CourseService {
     const existingCourse = await this.courseRepo.findById(id)
     if (!existingCourse) {
       throw CourseNotFoundException
+    }
+
+    if (existingCourse.status !== CourseStatus.PLANNED) {
+      throw CourseCannotUpdateFromCurrentStatusException
     }
     // 1) Nếu đổi department → validate department mới
     if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
@@ -261,6 +267,16 @@ export class CourseService {
     courseId: string
     trainerId: string
   }): Promise<MessageResType> {
+    const course = await this.courseRepo.findById(courseId)
+
+    if (!course) {
+      throw CourseNotFoundException
+    }
+
+    if (course.status !== CourseStatus.PLANNED) {
+      throw CourseCannotRemoveTrainerFromCurrentStatusException
+    }
+
     const exists = await this.courseRepo.isTrainerAssignedToCourse({
       courseId,
       trainerUserId: trainerId
