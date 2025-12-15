@@ -7,6 +7,7 @@ export const SubjectMes = {
   ARCHIVE_SUCCESS: 'Subject archived successfully',
   ACTIVE_TRAINERS_SUCCESS: 'Active trainers fetched successfully',
   ACTIVE_TRAINEES_SUCCESS: 'Active trainees fetched successfully',
+  SUBJECT_TRAINEES_SUCCESS: 'Subject trainees fetched successfully',
   ASSIGN_TRAINER_SUCCESS: 'Trainer assigned to subject successfully',
   UPDATE_TRAINER_ASSIGNMENT_SUCCESS: 'Subject trainer assignment updated successfully',
   REMOVE_TRAINER_SUCCESS: 'Trainer removed from subject successfully',

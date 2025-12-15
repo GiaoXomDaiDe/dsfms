@@ -28,6 +28,27 @@ export const GetSubjectsResSchema = z.object({
   totalItems: z.number().int()
 })
 
+// Trainees in a subject ----------------------------------------------------
+export const GetSubjectTraineesQuerySchema = z.object({
+  batchCode: z.string().optional()
+})
+
+export const SubjectTraineeSchema = UserSchema.pick({
+  id: true,
+  eid: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  email: true
+}).extend({
+  batchCode: z.string().nullable()
+})
+
+export const GetSubjectTraineesResSchema = z.object({
+  trainees: z.array(SubjectTraineeSchema),
+  totalItems: z.number().int()
+})
+
 export const SubjectDetailInstructorSchema = UserSchema.pick({
   id: true,
   eid: true,
@@ -322,6 +343,8 @@ export const RemoveCourseTraineeEnrollmentsResSchema = z.object({
 export type GetSubjectsQueryType = z.infer<typeof GetSubjectsQuerySchema>
 export type GetSubjectsType = z.infer<typeof GetSubjectsSchema>
 export type GetSubjectsResType = z.infer<typeof GetSubjectsResSchema>
+export type GetSubjectTraineesQueryType = z.infer<typeof GetSubjectTraineesQuerySchema>
+export type GetSubjectTraineesResType = z.infer<typeof GetSubjectTraineesResSchema>
 export type GetSubjectDetailResType = z.infer<typeof GetSubjectDetailResSchema>
 export type GetAvailableTrainersResType = z.infer<typeof GetAvailableTrainersResSchema>
 export type GetActiveTraineesResType = z.infer<typeof GetActiveTraineesResSchema>

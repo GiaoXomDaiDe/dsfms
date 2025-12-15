@@ -53,6 +53,8 @@ import {
   GetActiveTraineesResType,
   GetAvailableTrainersResType,
   GetSubjectDetailResType,
+  GetSubjectTraineesQueryType,
+  GetSubjectTraineesResType,
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetTraineeCourseSubjectsResType,
@@ -107,6 +109,19 @@ export class SubjectService {
   async getActiveTrainees(body: GetActiveTraineesBodyType): Promise<GetActiveTraineesResType> {
     return await this.subjectRepo.findActiveTrainees({
       subjectIds: body.subjectIds
+    })
+  }
+
+  async getTraineesInSubject({
+    subjectId,
+    query
+  }: {
+    subjectId: string
+    query: GetSubjectTraineesQueryType
+  }): Promise<GetSubjectTraineesResType> {
+    return await this.subjectRepo.getTraineesInSubject({
+      subjectId,
+      batchCode: query.batchCode
     })
   }
 
