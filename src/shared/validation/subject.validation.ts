@@ -64,8 +64,7 @@ export const subjectTimeSlotSchema = nullableStringField(
 )
 
 export const subjectDurationSchema = nullableNumberField(
-  z.number().nonnegative('Subject duration must be greater than or equal to 0'),
-  { coerceInteger: true }
+  z.number().nonnegative('Subject duration must be greater than or equal to 0')
 )
 
 export const subjectPassScoreSchema = nullableNumberField(

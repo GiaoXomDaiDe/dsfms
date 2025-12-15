@@ -3,7 +3,7 @@ import type { ReportTypeValue } from '~/shared/constants/report.constant'
 import { ReportSeverity, ReportStatus, ReportType } from '~/shared/constants/report.constant'
 import { ReportSchema } from '~/shared/models/shared-report.model'
 
-export const REQUEST_TYPE_FILTER_MAP: Record<'INCIDENT' | 'FEEDBACK' | 'OTHER', ReportTypeValue[]> = {
+export const REQUEST_TYPE_FILTER_MAP: Record<'INCIDENT' | 'FEEDBACK', ReportTypeValue[]> = {
   INCIDENT: [
     ReportType.SAFETY_REPORT,
     ReportType.INSTRUCTOR_REPORT,
@@ -12,14 +12,13 @@ export const REQUEST_TYPE_FILTER_MAP: Record<'INCIDENT' | 'FEEDBACK' | 'OTHER', 
     ReportType.FACILITIES_REPORT,
     ReportType.COURSE_ORGANIZATION_REPORT
   ],
-  FEEDBACK: [ReportType.FEEDBACK],
-  OTHER: [ReportType.OTHER]
+  FEEDBACK: [ReportType.FEEDBACK]
 }
 
 export const GetReportsQuerySchema = z
   .object({
     requestType: z
-      .enum(['INCIDENT', 'FEEDBACK', 'OTHER'])
+      .enum(['INCIDENT', 'FEEDBACK'])
       .optional()
       .transform((value) => (value ? REQUEST_TYPE_FILTER_MAP[value] : undefined)),
     status: z.enum(ReportStatus).optional(),
@@ -52,8 +51,7 @@ export const CreateReportBodySchema = z.object({
     ReportType.TRAINING_PROGRAM_REPORT,
     ReportType.FACILITIES_REPORT,
     ReportType.COURSE_ORGANIZATION_REPORT,
-    ReportType.FEEDBACK,
-    ReportType.OTHER
+    ReportType.FEEDBACK
   ]),
   severity: z.enum(ReportSeverity).optional(),
   title: z.string().trim().min(1).max(255),

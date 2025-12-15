@@ -33,7 +33,6 @@ export class ReportsRepository {
     ReportType.TRAINING_PROGRAM_REPORT,
     ReportType.FACILITIES_REPORT,
     ReportType.COURSE_ORGANIZATION_REPORT,
-    ReportType.OTHER,
     ReportType.FEEDBACK
   ]
   private readonly userSummarySelect = {
