@@ -127,7 +127,7 @@ export class CourseRepository {
 
     if (!course) return null
 
-    const [traineeCount, courseInstructorRecords] = await Promise.all([
+    const [traineeCount, courseInstructorRecords, subjectInstructorRecords] = await Promise.all([
       this.prismaService.subjectEnrollment
         .findMany({
           where: {
@@ -153,6 +153,28 @@ export class CourseRepository {
         select: {
           trainerUserId: true,
           courseId: true,
+          roleInAssessment: true,
+          trainer: {
+            select: courseTrainerSummarySelect
+          }
+        }
+      }),
+      this.prismaService.subjectInstructor.findMany({
+        where: {
+          subject: {
+            courseId: id,
+            deletedAt: null,
+            status: {
+              not: SubjectStatus.ARCHIVED
+            }
+          },
+          trainer: {
+            deletedAt: null,
+            status: UserStatus.ACTIVE
+          }
+        },
+        select: {
+          subjectId: true,
           roleInAssessment: true,
           trainer: {
             select: courseTrainerSummarySelect
@@ -201,7 +223,27 @@ export class CourseRepository {
 
     const instructors = Array.from(courseInstructorMap.values()).sort(sortByName)
 
+    const subjectInstructorMap = new Map<string, Array<TrainerInfo & { roleInSubject: SubjectInstructorRoleValue }>>()
+
+    subjectInstructorRecords.forEach((record) => {
+      if (!record.trainer) return
+
+      const collection = subjectInstructorMap.get(record.subjectId) ?? []
+
+      collection.push({
+        ...toTrainerInfo(record.trainer),
+        roleInSubject: record.roleInAssessment as SubjectInstructorRoleValue
+      })
+
+      subjectInstructorMap.set(record.subjectId, collection)
+    })
+
     const { subjects, _count, ...courseData } = course
+
+    const subjectsWithInstructors = subjects.map((subject) => ({
+      ...subject,
+      instructors: subjectInstructorMap.get(subject.id) ?? []
+    }))
 
     return {
       ...courseData,
@@ -209,7 +251,7 @@ export class CourseRepository {
       traineeCount,
       trainerCount: trainerIds.size,
       instructors,
-      subjects
+      subjects: subjectsWithInstructors
     }
   }
 

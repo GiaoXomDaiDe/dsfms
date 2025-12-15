@@ -31,6 +31,7 @@ import {
   SubjectCannotAssignTrainerFromCurrentStatusException,
   SubjectCannotBeArchivedFromCurrentStatusException,
   SubjectCannotRemoveTrainerFromCurrentStatusException,
+  SubjectCannotUpdateFromCurrentStatusException,
   SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
   SubjectDatesOutsideCourseRangeException,
@@ -245,6 +246,10 @@ export class SubjectService {
       if (!existingSubject) {
         throw SubjectNotFoundException
       }
+
+      if ((existingSubject.status as SubjectStatusValue) !== SubjectStatus.PLANNED) {
+        throw SubjectCannotUpdateFromCurrentStatusException
+      }
       let course = null
       const existingCourseId = existingSubject.courseId
       const finalCourseId = data.courseId || existingCourseId
@@ -424,7 +429,7 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
-    if (!this.isTrainerMutationAllowed(subject.status as SubjectStatusValue)) {
+    if ((subject.status as SubjectStatusValue) !== SubjectStatus.PLANNED) {
       throw SubjectCannotRemoveTrainerFromCurrentStatusException
     }
 

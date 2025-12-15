@@ -67,6 +67,18 @@ export const CourseCannotUpdateTrainerRoleFromCurrentStatusException = courseErr
   allowedStatuses: ['PLANNED', 'ON_GOING']
 })
 
+export const CourseCannotUpdateFromCurrentStatusException = courseError({
+  message: 'Course can only be updated when status is PLANNED',
+  errorCode: 'COURSE_UPDATE_STATUS_INVALID',
+  allowedStatuses: ['PLANNED']
+})
+
+export const CourseCannotRemoveTrainerFromCurrentStatusException = courseError({
+  message: 'Trainer can only be removed when course status is PLANNED',
+  errorCode: 'COURSE_REMOVE_TRAINER_STATUS_INVALID',
+  allowedStatuses: ['PLANNED']
+})
+
 export const CourseTrainerAlreadyAssignedException = courseError({
   message: 'Trainer is already assigned to this course',
   errorCode: 'COURSE_TRAINER_ALREADY_ASSIGNED'
