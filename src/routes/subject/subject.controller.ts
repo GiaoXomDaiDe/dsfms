@@ -16,6 +16,8 @@ import {
   GetSubjectDetailResDto,
   GetSubjectsQueryDto,
   GetSubjectsResDto,
+  GetSubjectTraineesQueryDto,
+  GetSubjectTraineesResDto,
   GetTraineeCourseSubjectsResDto,
   GetTraineeEnrollmentsQueryDto,
   GetTraineeEnrollmentsResDto,
@@ -267,5 +269,19 @@ export class SubjectController {
       traineeId,
       data: body
     })
+  }
+
+  @Get(':subjectId/trainees')
+  @ZodSerializerDto(GetSubjectTraineesResDto)
+  async getTraineesInSubject(@Param() { subjectId }: SubjectIdParamsDto, @Query() query: GetSubjectTraineesQueryDto) {
+    const data = await this.subjectService.getTraineesInSubject({
+      subjectId,
+      query
+    })
+
+    return {
+      message: SubjectMes.SUBJECT_TRAINEES_SUCCESS,
+      data
+    }
   }
 }

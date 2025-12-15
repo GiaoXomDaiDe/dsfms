@@ -28,6 +28,7 @@ import {
   userTrainerDirectorySelect,
   userTrainerWithDepartmentSelect
 } from '~/shared/prisma-presets/shared-user.prisma-presets'
+import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-subject-enrollment.repo'
 import { AssignmentUserForSubject, SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
@@ -47,6 +48,7 @@ import {
   GetSubjectsQueryType,
   GetSubjectsResType,
   GetSubjectsType,
+  GetSubjectTraineesResType,
   GetTraineeCourseSubjectsResType,
   LookupTraineesBodyType,
   LookupTraineesResType,
@@ -79,7 +81,8 @@ type AssignmentUserSummary = Pick<
 export class SubjectRepository {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sharedUserRepo: SharedUserRepository
+    private readonly sharedUserRepo: SharedUserRepository,
+    private readonly sharedSubjectEnrollmentRepo: SharedSubjectEnrollmentRepository
   ) {}
 
   async list(query: GetSubjectsQueryType): Promise<GetSubjectsResType> {
@@ -295,6 +298,32 @@ export class SubjectRepository {
         eid: 'asc'
       }
     })
+
+    return {
+      trainees,
+      totalItems: trainees.length
+    }
+  }
+
+  async getTraineesInSubject({
+    subjectId,
+    batchCode
+  }: {
+    subjectId: string
+    batchCode?: string
+  }): Promise<GetSubjectTraineesResType> {
+    const enrollments = await this.sharedSubjectEnrollmentRepo.findTraineesBySubjectIds([subjectId], { batchCode })
+
+    const trainees = enrollments
+      .map((enrollment) => {
+        if (!enrollment.trainee) return null
+
+        return {
+          ...enrollment.trainee,
+          batchCode: enrollment.batchCode
+        }
+      })
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
 
     return {
       trainees,
