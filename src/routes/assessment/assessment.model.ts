@@ -467,18 +467,21 @@ export const GetAssessmentSectionsResSchema = z.object({
     name: z.string(),
     trainee: z.object({
       id: z.string().uuid(),
-      firstName: z.string(),
-      lastName: z.string(),
+      fullName: z.string(),
       eid: z.string(),
-      middleName: z.string().nullable().optional(),
       traineeProfile: z.object({
+        userId: z.string().uuid().optional(),
+        dob: z.coerce.date().nullable().optional(),
+        enrollmentDate: z.coerce.date().nullable().optional(),
+        trainingBatch: z.string().nullable().optional(),
+        passportNo: z.string().nullable().optional(),
         nation: z.string().nullable().optional(),
-        trainingBatch: z.string().nullable().optional()
       }).nullable().optional()
     }),
     template: z.object({
       id: z.string().uuid(),
-      name: z.string()
+      name: z.string(),
+      templateContent: z.string().nullable().optional()
     }),
     subject: z
       .object({
@@ -498,7 +501,6 @@ export const GetAssessmentSectionsResSchema = z.object({
     status: z.nativeEnum(AssessmentStatus)
   }),
   availableTrainers: z.number(),
-  templateContent: z.string().nullable().optional(),
   sections: z.array(AssessmentSectionDetailSchema),
   userRole: z.string(),
   // Optional field for TRAINEE users - indicates if assessment is locked
@@ -564,8 +566,16 @@ export const GetAssessmentSectionFieldsResSchema = z.object({
     eid: z.string(),
     middleName: z.string().nullable().optional(),
     traineeProfile: z.object({
+      userId: z.string().uuid().optional(),
+      dob: z.coerce.date().nullable().optional(),
+      enrollmentDate: z.coerce.date().nullable().optional(),
+      trainingBatch: z.string().nullable().optional(),
+      passportNo: z.string().nullable().optional(),
       nation: z.string().nullable().optional(),
-      trainingBatch: z.string().nullable().optional()
+      createdAt: z.coerce.date().nullable().optional(),
+      updatedAt: z.coerce.date().nullable().optional(),
+      deletedAt: z.coerce.date().nullable().optional(),
+      deletedById: z.string().uuid().nullable().optional()
     }).nullable().optional()
   }),
   templateContent: z.string().nullable().optional(),
@@ -873,7 +883,7 @@ export const DepartmentAssessmentEventItemSchema = z.object({
 export const GetDepartmentAssessmentEventsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(100),
-  departmentId: z.string().uuid('Department ID must be a valid UUID'),
+  // departmentId: z.string().uuid('Department ID must be a valid UUID'),
   status: AssessmentEventStatus.optional(),
   subjectId: z.string().uuid().optional(),
   courseId: z.string().uuid().optional(),

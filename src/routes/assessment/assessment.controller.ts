@@ -195,7 +195,7 @@ export class AssessmentController {
     @Query() query: GetDepartmentAssessmentEventsQueryDTO,
     @ActiveUser('userId') userId: string,
     @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
-    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+    @ActiveUser() currentUser: { userId: string }
   ) {
     const userContext = {
       userId,

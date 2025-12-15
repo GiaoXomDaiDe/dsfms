@@ -1036,7 +1036,7 @@ export class AssessmentService {
         const field = sectionFields.fields.find((f) => f.assessmentValue.id === value.assessmentValueId)
         if (field?.templateField.fieldType === 'SIGNATURE_DRAW') {
           if (!value.answerValue || value.answerValue.trim() === '') {
-            throw new BadRequestException(`Trường "${field.templateField.label}" cần phải được điền trước khi save`)
+            throw new BadRequestException(`This Field "${field.templateField.label}" need to be signed before saving.`)
           }
         }
       }
@@ -1255,7 +1255,7 @@ export class AssessmentService {
         const field = sectionFields.fields.find((f) => f.assessmentValue.id === value.assessmentValueId)
         if (field?.templateField.fieldType === 'SIGNATURE_DRAW') {
           if (!value.answerValue || value.answerValue.trim() === '') {
-            throw new BadRequestException(`Trường "${field.templateField.label}" cần phải được điền trước khi update`)
+            throw new BadRequestException(`This Field "${field.templateField.label}" need to be signed before updating.`)
           }
         }
       }
@@ -2638,12 +2638,12 @@ export class AssessmentService {
 
       // For department heads, validate they can only access their own department
       // For other roles like ADMIN, they can access any department
-      if (currentUser.roleName === 'DEPARTMENT_HEAD' && user.departmentId !== query.departmentId) {
+      if (currentUser.roleName === 'DEPARTMENT_HEAD') {
         throw new ForbiddenException('Department Head can only access their own department')
       }
 
       const result = await this.assessmentRepo.getDepartmentAssessmentEvents(
-        query.departmentId,
+        user?.departmentId,
         query.page,
         query.limit,
         query.status,

@@ -1580,8 +1580,12 @@ export class AssessmentRepo {
             middleName: true,
             traineeProfile: {
               select: {
-                nation: true,
-                trainingBatch: true
+                userId: true,
+                dob: true,
+                enrollmentDate: true,
+                trainingBatch: true,
+                passportNo: true,
+                nation: true
               }
             }
           }
@@ -1872,15 +1876,14 @@ export class AssessmentRepo {
         name: assessment.name,
         trainee: {
           id: assessment.trainee.id,
-          firstName: assessment.trainee.firstName,
-          lastName: assessment.trainee.lastName,
+          fullName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim(),
           eid: assessment.trainee.eid,
-          middleName: assessment.trainee.middleName,
           traineeProfile: assessment.trainee.traineeProfile
         },
         template: {
           id: assessment.template.id,
-          name: assessment.template.name
+          name: assessment.template.name,
+          templateContent: assessment.template.templateContent
         },
         subject: assessment.subject
           ? {
@@ -1900,7 +1903,6 @@ export class AssessmentRepo {
         status: assessment.status
       },
       availableTrainers,
-      templateContent: assessment.template.templateContent,
       sections: sectionsWithPermissions,
       userRole: userRoleInAssessment || userMainRole,
       isTraineeLocked: assessment.isTraineeLocked
@@ -1934,8 +1936,16 @@ export class AssessmentRepo {
             middleName: true,
             traineeProfile: {
               select: {
+                userId: true,
+                dob: true,
+                enrollmentDate: true,
+                trainingBatch: true,
+                passportNo: true,
                 nation: true,
-                trainingBatch: true
+                createdAt: true,
+                updatedAt: true,
+                deletedAt: true,
+                deletedById: true
               }
             }
           }
@@ -2148,8 +2158,16 @@ export class AssessmentRepo {
                 lastName: true,
                 traineeProfile: {
                   select: {
+                    userId: true,
+                    dob: true,
+                    enrollmentDate: true,
+                    trainingBatch: true,
+                    passportNo: true,
                     nation: true,
-                    trainingBatch: true
+                    createdAt: true,
+                    updatedAt: true,
+                    deletedAt: true,
+                    deletedById: true
                   }
                 }
               }
