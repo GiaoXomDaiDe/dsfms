@@ -3439,7 +3439,7 @@ export class AssessmentRepo {
         // Calculate status based on all assessments in the event
         let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
 
-        // Get all assessments for this event (exclude name since each has unique EID suffix)
+        // Get all assessments for this event with trainee information
         const allAssessments = await this.prisma.assessmentForm.findMany({
           where: {
             subjectId: event.subjectId,
@@ -3447,11 +3447,40 @@ export class AssessmentRepo {
             occuranceDate: event.occuranceDate,
             templateId: event.templateId
           },
-          select: { status: true, name: true }
+          select: { 
+            id: true,
+            status: true, 
+            name: true,
+            occuranceDate: true,
+            resultScore: true,
+            resultText: true,
+            pdfUrl: true,
+            trainee: {
+              select: {
+                eid: true,
+                firstName: true,
+                lastName: true,
+                middleName: true
+              }
+            }
+          }
         })
 
         // Extract base name from first assessment (get part before dash)
         const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
+
+        // Build traineeRoster array with assessment details
+        const traineeRoster = allAssessments.map((assessment) => ({
+          assessmentFormId: assessment.id,
+          assessmentFormName: assessment.name,
+          traineeFullName: `${assessment.trainee.lastName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.firstName}`.trim(),
+          traineeEid: assessment.trainee.eid,
+          occuranceDate: assessment.occuranceDate,
+          status: assessment.status,
+          resultScore: assessment.resultScore,
+          resultText: assessment.resultText,
+          pdfUrl: assessment.pdfUrl
+        }))
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3495,7 +3524,8 @@ export class AssessmentRepo {
                 id: event.templateId,
                 name: 'Unknown Template',
                 isActive: false
-              }
+              },
+          traineeRoster
         }
       })
     )
@@ -4006,7 +4036,7 @@ export class AssessmentRepo {
         // Calculate status based on all assessments in the event
         let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
 
-        // Get all assessments for this event (exclude name since each has unique EID suffix)
+        // Get all assessments for this event with trainee information
         const allAssessments = await this.prisma.assessmentForm.findMany({
           where: {
             subjectId: event.subjectId,
@@ -4014,11 +4044,40 @@ export class AssessmentRepo {
             occuranceDate: event.occuranceDate,
             templateId: event.templateId
           },
-          select: { status: true, name: true }
+          select: { 
+            id: true,
+            status: true, 
+            name: true,
+            occuranceDate: true,
+            resultScore: true,
+            resultText: true,
+            pdfUrl: true,
+            trainee: {
+              select: {
+                eid: true,
+                firstName: true,
+                lastName: true,
+                middleName: true
+              }
+            }
+          }
         })
 
         // Extract base name from first assessment (get part before dash)
         const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
+
+        // Build traineeRoster array with assessment details
+        const traineeRoster = allAssessments.map((assessment) => ({
+          assessmentFormId: assessment.id,
+          assessmentFormName: assessment.name,
+          traineeFullName: `${assessment.trainee.lastName}${assessment.trainee.middleName ? ' ' + assessment.trainee.middleName : ''} ${assessment.trainee.firstName}`.trim(),
+          traineeEid: assessment.trainee.eid,
+          occuranceDate: assessment.occuranceDate,
+          status: assessment.status,
+          resultScore: assessment.resultScore,
+          resultText: assessment.resultText,
+          pdfUrl: assessment.pdfUrl
+        }))
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -4062,7 +4121,8 @@ export class AssessmentRepo {
                 id: event.templateId,
                 name: 'Unknown Template',
                 isActive: false
-              }
+              },
+          traineeRoster
         }
       })
     )

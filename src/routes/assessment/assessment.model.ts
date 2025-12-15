@@ -734,7 +734,19 @@ export const AssessmentEventItemSchema = z.object({
     id: z.string().uuid(),
     name: z.string(),
     isActive: z.boolean()
-  })
+  }),
+  // Trainee roster with assessment details
+  traineeRoster: z.array(z.object({
+    assessmentFormId: z.string().uuid(),
+    assessmentFormName: z.string(),
+    traineeFullName: z.string(),
+    traineeEid: z.string(),
+    occuranceDate: z.coerce.date(),
+    status: z.nativeEnum(AssessmentStatus),
+    resultScore: z.number().nullable(),
+    resultText: z.nativeEnum(AssessmentResult).nullable(),
+    pdfUrl: z.string().nullable()
+  }))
 })
 
 export const GetAssessmentEventsQuerySchema = z.object({
