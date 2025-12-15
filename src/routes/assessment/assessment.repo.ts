@@ -25,7 +25,9 @@ import {
   GetEventSubjectAssessmentsResType,
   GetEventCourseAssessmentsBodyType,
   GetEventCourseAssessmentsQueryType,
-  GetEventCourseAssessmentsResType
+  GetEventCourseAssessmentsResType,
+  GetDepartmentAssessmentEventsQueryType,
+  GetDepartmentAssessmentEventsResType
 } from './assessment.model'
 import {
   AssessmentSectionNotFoundError,
@@ -83,11 +85,11 @@ export class AssessmentRepo {
           some: {
             subjectId,
             status: {
-              in: [ 'ENROLLED','ON_GOING', 'FINISHED']
+              in: ['ENROLLED', 'ON_GOING', 'FINISHED']
             },
             subject: {
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED']
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED']
               }
             }
           }
@@ -104,11 +106,11 @@ export class AssessmentRepo {
           where: {
             subjectId,
             status: {
-              in: ['ENROLLED','ON_GOING', 'FINISHED']
+              in: ['ENROLLED', 'ON_GOING', 'FINISHED']
             },
             subject: {
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED']
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED']
               }
             }
           },
@@ -157,7 +159,7 @@ export class AssessmentRepo {
             subject: {
               courseId,
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED'] // Only consider ongoing or completed subjects
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED'] // Only consider ongoing or completed subjects
               }
             },
             status: {
@@ -178,7 +180,7 @@ export class AssessmentRepo {
             subject: {
               courseId,
               status: {
-                in: ['PLANNED','ON_GOING', 'COMPLETED']
+                in: ['PLANNED', 'ON_GOING', 'COMPLETED']
               }
             },
             status: {
@@ -216,7 +218,10 @@ export class AssessmentRepo {
     }>,
     createdById: string
   ): Promise<AssessmentFormResType[]> {
-    console.log(`Starting createAssessments with data:`, { name: assessmentData.name, traineeIds: assessmentData.traineeIds })
+    console.log(`Starting createAssessments with data:`, {
+      name: assessmentData.name,
+      traineeIds: assessmentData.traineeIds
+    })
     return await this.prisma.$transaction(async (tx) => {
       const createdAssessments: AssessmentFormResType[] = []
 
@@ -237,10 +242,11 @@ export class AssessmentRepo {
       today.setHours(0, 0, 0, 0)
       const occurrenceDate = new Date(assessmentData.occuranceDate)
       occurrenceDate.setHours(0, 0, 0, 0)
-      
+
       // If occurrence date is today, start with ON_GOING, otherwise NOT_STARTED (future dates)
       // Past dates are prevented at service layer validation
-      const initialStatus = occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
+      const initialStatus =
+        occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
 
       // Get trainee EIDs for name formatting
       const trainees = await tx.user.findMany({
@@ -253,14 +259,14 @@ export class AssessmentRepo {
         }
       })
 
-      const traineeEidMap = new Map(trainees.map(t => [t.id, t.eid]))
+      const traineeEidMap = new Map(trainees.map((t) => [t.id, t.eid]))
 
       for (const traineeId of assessmentData.traineeIds) {
         // Get trainee EID and format assessment name with dash separator
         const traineeEid = traineeEidMap.get(traineeId)
         const assessmentName = `${assessmentData.name} - ${traineeEid}`
         // console.log(`Creating assessment for trainee ${traineeId}, EID: ${traineeEid}, formatted name: "${assessmentName}"`)
-        
+
         // Create the main assessment form
         const assessmentForm = await tx.assessmentForm.create({
           data: {
@@ -1561,7 +1567,8 @@ export class AssessmentRepo {
         template: {
           select: {
             id: true,
-            name: true
+            name: true,
+            templateContent: true
           }
         },
         trainee: {
@@ -1569,7 +1576,18 @@ export class AssessmentRepo {
             id: true,
             eid: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            middleName: true,
+            traineeProfile: {
+              select: {
+                userId: true,
+                dob: true,
+                enrollmentDate: true,
+                trainingBatch: true,
+                passportNo: true,
+                nation: true
+              }
+            }
           }
         },
         subject: {
@@ -1627,6 +1645,22 @@ export class AssessmentRepo {
       throw new Error('Assessment not found')
     }
 
+    // Get available trainers count from Subject/Course_Instructor
+    let availableTrainers = 0
+    if (assessment.subjectId) {
+      availableTrainers = await this.prisma.subjectInstructor.count({
+        where: {
+          subjectId: assessment.subjectId
+        }
+      })
+    } else if (assessment.courseId) {
+      availableTrainers = await this.prisma.courseInstructor.count({
+        where: {
+          courseId: assessment.courseId
+        }
+      })
+    }
+
     // Get user's role in the course/subject
     let userRoleInAssessment: string | null = null
 
@@ -1675,13 +1709,13 @@ export class AssessmentRepo {
       // Only filter TRAINEE sections
       if (section.templateSection.editBy === 'TRAINEE') {
         const fields = section.templateSection.fields
-        
+
         // If section has only one field and it's SIGNATURE_DRAW, exclude it
         if (fields.length === 1 && fields[0].fieldType === 'SIGNATURE_DRAW') {
           return false
         }
       }
-      
+
       // Keep all other sections
       return true
     })
@@ -1700,7 +1734,14 @@ export class AssessmentRepo {
             if (section.templateSection.roleInSubject) {
               // Section requires specific assessment role
               roleRequirement = section.templateSection.roleInSubject
-              canAssess = userRoleInAssessment === section.templateSection.roleInSubject
+              // ASSESSMENT_REVIEWER can see all sections (for review purposes)
+              if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
+                canAssess = true
+              }
+              // EXAMINER can only see sections matching their specific role
+              else {
+                canAssess = userRoleInAssessment === section.templateSection.roleInSubject
+              }
             } else {
               // Section just requires trainer role
               roleRequirement = 'TRAINER'
@@ -1749,8 +1790,17 @@ export class AssessmentRepo {
       if (userMainRole === 'TRAINER') {
         if (item.section.templateSection.editBy === 'TRAINER') {
           // For TRAINER sections, check if they can assess based on role match
-          if (item.roleRequirement && userRoleInAssessment === item.roleRequirement) {
-            canAssessed = basicCanAssess
+          if (item.roleRequirement && userRoleInAssessment) {
+            // ASSESSMENT_REVIEWER can see and assess all TRAINER sections (for review purposes)
+            if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
+              canAssessed = basicCanAssess
+            }
+            // EXAMINER can only assess sections matching their specific role
+            else if (userRoleInAssessment === item.roleRequirement) {
+              canAssessed = basicCanAssess
+            } else {
+              canAssessed = false
+            }
           } else {
             canAssessed = false
           }
@@ -1798,7 +1848,13 @@ export class AssessmentRepo {
       }
 
       // Add role-specific fields
-      if ((userMainRole === 'TRAINER' || userMainRole === 'TRAINEE' || userMainRole === 'DEPARTMENT_HEAD' || userMainRole === 'DEPARTMENT HEAD') && canAssessed !== undefined) {
+      if (
+        (userMainRole === 'TRAINER' ||
+          userMainRole === 'TRAINEE' ||
+          userMainRole === 'DEPARTMENT_HEAD' ||
+          userMainRole === 'DEPARTMENT HEAD') &&
+        canAssessed !== undefined
+      ) {
         return {
           roleRequirement: item.roleRequirement,
           ...baseSection,
@@ -1820,13 +1876,14 @@ export class AssessmentRepo {
         name: assessment.name,
         trainee: {
           id: assessment.trainee.id,
-          firstName: assessment.trainee.firstName,
-          lastName: assessment.trainee.lastName,
-          eid: assessment.trainee.eid
+          fullName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim(),
+          eid: assessment.trainee.eid,
+          traineeProfile: assessment.trainee.traineeProfile
         },
         template: {
           id: assessment.template.id,
-          name: assessment.template.name
+          name: assessment.template.name,
+          templateContent: assessment.template.templateContent
         },
         subject: assessment.subject
           ? {
@@ -1845,6 +1902,7 @@ export class AssessmentRepo {
         occuranceDate: assessment.occuranceDate,
         status: assessment.status
       },
+      availableTrainers,
       sections: sectionsWithPermissions,
       userRole: userRoleInAssessment || userMainRole,
       isTraineeLocked: assessment.isTraineeLocked
@@ -1874,7 +1932,22 @@ export class AssessmentRepo {
             id: true,
             eid: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            middleName: true,
+            traineeProfile: {
+              select: {
+                userId: true,
+                dob: true,
+                enrollmentDate: true,
+                trainingBatch: true,
+                passportNo: true,
+                nation: true,
+                createdAt: true,
+                updatedAt: true,
+                deletedAt: true,
+                deletedById: true
+              }
+            }
           }
         },
         subject: {
@@ -2034,7 +2107,9 @@ export class AssessmentRepo {
           id: assessment.trainee.id,
           firstName: assessment.trainee.firstName,
           lastName: assessment.trainee.lastName,
-          eid: assessment.trainee.eid
+          eid: assessment.trainee.eid,
+          middleName: assessment.trainee.middleName,
+          traineeProfile: assessment.trainee.traineeProfile
         },
         template: {
           id: assessment.template.id,
@@ -2083,8 +2158,16 @@ export class AssessmentRepo {
                 lastName: true,
                 traineeProfile: {
                   select: {
+                    userId: true,
+                    dob: true,
+                    enrollmentDate: true,
+                    trainingBatch: true,
+                    passportNo: true,
                     nation: true,
-                    trainingBatch: true
+                    createdAt: true,
+                    updatedAt: true,
+                    deletedAt: true,
+                    deletedById: true
                   }
                 }
               }
@@ -2092,7 +2175,8 @@ export class AssessmentRepo {
             template: {
               select: {
                 id: true,
-                name: true
+                name: true,
+                templateContent: true
               }
             },
             subject: {
@@ -2306,12 +2390,12 @@ export class AssessmentRepo {
         if (templateField.fieldType === 'FINAL_SCORE_TEXT' && shouldHideFinalScoreText) {
           return false
         }
-        
+
         // Filter out SIGNATURE_DRAW fields for TRAINEE sections (signature handling is in separate screen)
         if (assessmentSection.templateSection.editBy === 'TRAINEE' && templateField.fieldType === 'SIGNATURE_DRAW') {
           return false
         }
-        
+
         return true
       })
       .map((templateField, index) => {
@@ -2326,9 +2410,11 @@ export class AssessmentRepo {
           } else if (templateField.fieldType === 'SIGNATURE_DRAW') {
             // For SIGNATURE_DRAW, if value is null, fallback to assessor's full name
             if (currentUser) {
-              finalAnswerValue = `${currentUser.firstName} ${currentUser.middleName || ''} ${currentUser.lastName}`.trim()
+              finalAnswerValue =
+                `${currentUser.firstName} ${currentUser.middleName || ''} ${currentUser.lastName}`.trim()
             } else if (assessmentSection.assessedBy) {
-              finalAnswerValue = `${assessmentSection.assessedBy.firstName} ${assessmentSection.assessedBy.middleName || ''} ${assessmentSection.assessedBy.lastName}`.trim()
+              finalAnswerValue =
+                `${assessmentSection.assessedBy.firstName} ${assessmentSection.assessedBy.middleName || ''} ${assessmentSection.assessedBy.lastName}`.trim()
             }
           } else {
             const systemValue = getSystemFieldValue(templateField.fieldName)
@@ -2356,7 +2442,7 @@ export class AssessmentRepo {
         }
       })
 
-    // Get current user's role and assessment permissions  
+    // Get current user's role and assessment permissions
     let userRoleInAssessment: string | null = null
     let userMainRole: string = 'UNKNOWN'
 
@@ -2423,10 +2509,11 @@ export class AssessmentRepo {
     // DEPARTMENT_HEAD always has canUpdated = false
     let canUpdated = false
     if (userMainRole !== 'DEPARTMENT HEAD' && assessmentFormAllowsUpdates) {
-      canUpdated = canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
+      canUpdated =
+        canAssessSection && assessmentSection.assessedById !== null && assessmentSection.assessedById === userId
     }
 
-    // Determine if current user can save this section  
+    // Determine if current user can save this section
     // canSave: false by default, true if section hasn't been assessed yet AND user can assess this section type
     // DEPARTMENT_HEAD always has canSave = false
     let canSave = false
@@ -2454,6 +2541,15 @@ export class AssessmentRepo {
           isToggleDependent: assessmentSection.templateSection.isToggleDependent
         }
       },
+      traineeInfo: {
+        id: assessmentSection.assessmentForm.trainee.id,
+        firstName: assessmentSection.assessmentForm.trainee.firstName,
+        lastName: assessmentSection.assessmentForm.trainee.lastName,
+        eid: assessmentSection.assessmentForm.trainee.eid,
+        middleName: assessmentSection.assessmentForm.trainee.middleName,
+        traineeProfile: assessmentSection.assessmentForm.trainee.traineeProfile
+      },
+      templateContent: assessmentSection.assessmentForm.template.templateContent,
       fields: fieldsWithValues,
       totalFields: fieldsWithValues.length
     }
@@ -2468,11 +2564,12 @@ export class AssessmentRepo {
     userId: string
   ) {
     return await this.prisma.$transaction(async (tx) => {
-      // First check if section hasn't been assessed yet (safety check)
+      // First check if section hasn't been assessed yet (safety check with row locking)
       const assessmentSection = await tx.assessmentSection.findUnique({
         where: { id: assessmentSectionId },
         select: {
-          assessedById: true
+          assessedById: true,
+          createdAt: true
         }
       })
 
@@ -2481,7 +2578,7 @@ export class AssessmentRepo {
       }
 
       if (assessmentSection.assessedById !== null) {
-        throw new Error('This section has already been assessed. Use update API instead.')
+        throw new Error('This section has already been assessed by another user. Please refresh and try again.')
       }
 
       // Update each assessment value
@@ -2530,16 +2627,15 @@ export class AssessmentRepo {
         if (!isTraineeSection) return false
 
         const fields = section.templateSection.fields
-        const hasOnlySignatureDraw = fields.length === 1 && 
-          fields[0].fieldType === 'SIGNATURE_DRAW' && 
-          fields[0].roleRequired === 'TRAINEE'
-        
+        const hasOnlySignatureDraw =
+          fields.length === 1 && fields[0].fieldType === 'SIGNATURE_DRAW' && fields[0].roleRequired === 'TRAINEE'
+
         return hasOnlySignatureDraw
       })
 
       // Get total number of sections in this assessment form
       const totalSections = updatedSection.assessmentForm.sections.length
-      
+
       // Calculate effective total sections (excluding TRAINEE signature-only sections)
       const effectiveTotalSections = totalSections - traineeSignatureOnlySections.length
 
@@ -2842,13 +2938,13 @@ export class AssessmentRepo {
       }
 
       let signatureSaved = false
-      let updatedSectionIds: string[] = []
+      const updatedSectionIds: string[] = []
 
       // Find and update the TRAINEE SIGNATURE_DRAW field value AND section status
       for (const section of assessmentForm.sections) {
         // Check if this is a TRAINEE section with SIGNATURE_DRAW field
         const hasTraineeSignatureField = section.templateSection.fields.some(
-          field => field.fieldType === 'SIGNATURE_DRAW' && field.roleRequired === 'TRAINEE'
+          (field) => field.fieldType === 'SIGNATURE_DRAW' && field.roleRequired === 'TRAINEE'
         )
 
         if (hasTraineeSignatureField) {
@@ -2856,8 +2952,8 @@ export class AssessmentRepo {
           for (const templateField of section.templateSection.fields) {
             if (templateField.fieldType === 'SIGNATURE_DRAW' && templateField.roleRequired === 'TRAINEE') {
               // Find the corresponding assessment value
-              const assessmentValue = section.values.find(value => value.templateFieldId === templateField.id)
-              
+              const assessmentValue = section.values.find((value) => value.templateFieldId === templateField.id)
+
               if (assessmentValue) {
                 // Update the signature URL
                 await tx.assessmentValue.update({
@@ -2870,11 +2966,11 @@ export class AssessmentRepo {
           }
 
           // Always update section to ensure it's marked as DRAFT with proper assessedById
-          // This handles both cases: 
+          // This handles both cases:
           // 1. Section with only signature (needs status update)
           // 2. Section with other fields already filled (signature completion)
           const needsUpdate = section.status !== AssessmentSectionStatus.DRAFT || section.assessedById !== userId
-          
+
           if (needsUpdate) {
             await tx.assessmentSection.update({
               where: { id: section.id },
@@ -2884,7 +2980,7 @@ export class AssessmentRepo {
               }
             })
           }
-          
+
           // Track this section as processed (regardless of whether DB update was needed)
           updatedSectionIds.push(section.id)
         }
@@ -2967,31 +3063,34 @@ export class AssessmentRepo {
 
     // Extract unique trainers (remove duplicates if a trainer assessed multiple sections)
     const uniqueTrainers = assessmentSections
-      .filter(section => section.assessedBy) // Extra safety check
-      .reduce((trainers, section) => {
-        const trainer = section.assessedBy!
-        const existingTrainer = trainers.find(t => t.id === trainer.id)
-        
-        if (!existingTrainer) {
-          trainers.push({
-            id: trainer.id,
-            email: trainer.email,
-            firstName: trainer.firstName,
-            lastName: trainer.lastName,
-            middleName: trainer.middleName,
-            fullName: `${trainer.firstName} ${trainer.middleName || ''} ${trainer.lastName}`.trim()
-          })
-        }
-        
-        return trainers
-      }, [] as Array<{
-        id: string
-        email: string
-        firstName: string
-        lastName: string
-        middleName: string | null
-        fullName: string
-      }>)
+      .filter((section) => section.assessedBy) // Extra safety check
+      .reduce(
+        (trainers, section) => {
+          const trainer = section.assessedBy!
+          const existingTrainer = trainers.find((t) => t.id === trainer.id)
+
+          if (!existingTrainer) {
+            trainers.push({
+              id: trainer.id,
+              email: trainer.email,
+              firstName: trainer.firstName,
+              lastName: trainer.lastName,
+              middleName: trainer.middleName,
+              fullName: `${trainer.firstName} ${trainer.middleName || ''} ${trainer.lastName}`.trim()
+            })
+          }
+
+          return trainers
+        },
+        [] as Array<{
+          id: string
+          email: string
+          firstName: string
+          lastName: string
+          middleName: string | null
+          fullName: string
+        }>
+      )
 
     return uniqueTrainers
   }
@@ -3352,9 +3451,7 @@ export class AssessmentRepo {
         })
 
         // Extract base name from first assessment (get part before dash)
-        const baseName = allAssessments.length > 0 
-          ? allAssessments[0].name.split(' - ')[0] 
-          : 'Unknown Event'
+        const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3420,6 +3517,294 @@ export class AssessmentRepo {
     return {
       success: true,
       message: 'Assessment events retrieved successfully',
+      data: {
+        events: paginatedEvents,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      }
+    }
+  }
+
+  /**
+   * Get department assessment events - grouped assessment forms by department with enhanced statistics
+   * Includes both Course and Subject scope with additional statistics: totalAssessments, totalReviewedForm, totalCancelledForm, totalTrainers
+   */
+  async getDepartmentAssessmentEvents(
+    departmentId: string,
+    page: number = 1,
+    limit: number = 1000,
+    status?: z.infer<typeof AssessmentEventStatus>,
+    subjectId?: string,
+    courseId?: string,
+    templateId?: string,
+    fromDate?: Date,
+    toDate?: Date,
+    search?: string
+  ): Promise<GetDepartmentAssessmentEventsResType> {
+    // Build where conditions for department-specific assessments
+    const whereConditions: any = {
+      OR: [] // Will be filled with department-related conditions
+    }
+
+    // Get department subjects and courses
+    const [departmentSubjects, departmentCourses] = await Promise.all([
+      this.prisma.subject.findMany({
+        where: { 
+          course: { 
+            departmentId,
+            status: { not: 'ARCHIVED' } // Active courses (not archived)
+          },
+          status: { not: 'ARCHIVED' } // Active subjects (not archived)
+        },
+        select: { id: true }
+      }),
+      this.prisma.course.findMany({
+        where: { 
+          departmentId,
+          status: { not: 'ARCHIVED' } // Active courses (not archived)
+        },
+        select: { id: true }
+      })
+    ])
+
+    // Add conditions for department subjects and courses
+    if (departmentSubjects.length > 0) {
+      whereConditions.OR.push({
+        subjectId: {
+          in: departmentSubjects.map(s => s.id)
+        }
+      })
+    }
+
+    if (departmentCourses.length > 0) {
+      whereConditions.OR.push({
+        courseId: {
+          in: departmentCourses.map(c => c.id)
+        }
+      })
+    }
+
+    // If no subjects or courses found for department, return empty result
+    if (whereConditions.OR.length === 0) {
+      return {
+        success: true,
+        message: 'No assessment events found for this department',
+        data: {
+          events: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false
+          }
+        }
+      }
+    }
+
+    // Apply additional filters
+    const additionalConditions: any = {}
+
+    if (subjectId) {
+      additionalConditions.subjectId = subjectId
+    }
+
+    if (courseId) {
+      additionalConditions.courseId = courseId
+    }
+
+    if (templateId) {
+      additionalConditions.templateId = templateId
+    }
+
+    if (fromDate || toDate) {
+      additionalConditions.occuranceDate = {}
+      if (fromDate) {
+        additionalConditions.occuranceDate.gte = fromDate
+      }
+      if (toDate) {
+        additionalConditions.occuranceDate.lte = toDate
+      }
+    }
+
+    if (search) {
+      additionalConditions.name = {
+        contains: search,
+        mode: 'insensitive'
+      }
+    }
+
+    // Combine department filter with additional conditions
+    const finalWhereConditions = {
+      AND: [
+        whereConditions, // Department filter (OR conditions for subjects/courses)
+        additionalConditions // Additional filters (AND conditions)
+      ]
+    }
+
+    // Get ALL grouped assessment forms first (without pagination to properly calculate status and statistics)
+    const allEvents = await this.prisma.assessmentForm.groupBy({
+      by: ['subjectId', 'courseId', 'occuranceDate', 'templateId'],
+      where: finalWhereConditions,
+      _count: {
+        id: true
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      }
+    })
+
+    // Enrich ALL events with enhanced statistics and information
+    const allEnrichedEvents = await Promise.all(
+      allEvents.map(async (event) => {
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course' } | null = null
+
+        // Get subject or course info
+        if (event.subjectId) {
+          const subject = await this.prisma.subject.findUnique({
+            where: { id: event.subjectId },
+            select: { id: true, name: true, code: true }
+          })
+          if (subject) {
+            entityInfo = {
+              id: subject.id,
+              name: subject.name,
+              code: subject.code,
+              type: 'subject'
+            }
+          }
+        } else if (event.courseId) {
+          const course = await this.prisma.course.findUnique({
+            where: { id: event.courseId },
+            select: { id: true, name: true, code: true }
+          })
+          if (course) {
+            entityInfo = {
+              id: course.id,
+              name: course.name,
+              code: course.code,
+              type: 'course'
+            }
+          }
+        }
+
+        // Get template info
+        const template = await this.prisma.templateForm.findUnique({
+          where: { id: event.templateId },
+          select: { id: true, name: true, status: true }
+        })
+
+        // Get all assessments for this event with their statuses
+        const allAssessments = await this.prisma.assessmentForm.findMany({
+          where: {
+            subjectId: event.subjectId,
+            courseId: event.courseId,
+            occuranceDate: event.occuranceDate,
+            templateId: event.templateId
+          },
+          select: { status: true, name: true }
+        })
+
+        // Calculate enhanced statistics
+        const totalAssessments = allAssessments.length
+        const totalReviewedForm = allAssessments.filter(a => 
+          a.status === 'APPROVED' || a.status === 'REJECTED'
+        ).length
+        const totalCancelledForm = allAssessments.filter(a => 
+          a.status === 'CANCELLED'
+        ).length
+
+        // Get total trainers from Subject/Course_Instructor tables
+        let totalTrainers = 0
+        if (event.subjectId) {
+          totalTrainers = await this.prisma.subjectInstructor.count({
+            where: { subjectId: event.subjectId }
+          })
+        } else if (event.courseId) {
+          totalTrainers = await this.prisma.courseInstructor.count({
+            where: { courseId: event.courseId }
+          })
+        }
+
+        // Extract base name from first assessment (get part before dash)
+        const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
+
+        // Calculate event status based on all assessments
+        let eventStatus: 'NOT_STARTED' | 'ON_GOING' | 'FINISHED'
+
+        const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
+
+        if (allNotStarted) {
+          eventStatus = 'NOT_STARTED'
+        } else {
+          const allFinished = allAssessments.every(
+            (assessment) => assessment.status === 'APPROVED' || assessment.status === 'CANCELLED'
+          )
+
+          if (allFinished) {
+            eventStatus = 'FINISHED'
+          } else {
+            eventStatus = 'ON_GOING'
+          }
+        }
+
+        return {
+          name: baseName,
+          subjectId: event.subjectId,
+          courseId: event.courseId,
+          occuranceDate: event.occuranceDate,
+          status: eventStatus,
+          totalTrainees: event._count.id,
+          // Enhanced statistics
+          totalAssessments,
+          totalReviewedForm,
+          totalCancelledForm,
+          totalTrainers,
+          entityInfo: entityInfo || {
+            id: '',
+            name: 'Unknown',
+            code: 'UNKNOWN',
+            type: event.subjectId ? 'subject' : 'course'
+          },
+          templateInfo: template
+            ? {
+                id: template.id,
+                name: template.name,
+                isActive: template.status === 'PUBLISHED'
+              }
+            : {
+                id: event.templateId,
+                name: 'Unknown Template',
+                isActive: false
+              }
+        }
+      })
+    )
+
+    // Filter by status after calculating event status (if status filter is provided)
+    let filteredEvents = allEnrichedEvents
+    if (status) {
+      filteredEvents = allEnrichedEvents.filter((event) => event.status === status)
+    }
+
+    // Calculate total after filtering
+    const total = filteredEvents.length
+    const totalPages = Math.ceil(total / limit)
+
+    // Apply pagination to filtered results
+    const skip = (page - 1) * limit
+    const paginatedEvents = filteredEvents.slice(skip, skip + limit)
+
+    return {
+      success: true,
+      message: 'Department assessment events retrieved successfully',
       data: {
         events: paginatedEvents,
         pagination: {
@@ -3633,9 +4018,7 @@ export class AssessmentRepo {
         })
 
         // Extract base name from first assessment (get part before dash)
-        const baseName = allAssessments.length > 0 
-          ? allAssessments[0].name.split(' - ')[0] 
-          : 'Unknown Event'
+        const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
 
         // Check if all assessments are NOT_STARTED
         const allNotStarted = allAssessments.every((assessment) => assessment.status === 'NOT_STARTED')
@@ -3722,7 +4105,7 @@ export class AssessmentRepo {
     // Get current date (today)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    
+
     const currentDateOnly = new Date(currentOccuranceDate)
     currentDateOnly.setHours(0, 0, 0, 0)
 
@@ -3803,12 +4186,14 @@ export class AssessmentRepo {
         })
 
         if (conflictingAssessment) {
-          throw new Error('Cannot update to today - there is already another assessment event using this template on the same date')
+          throw new Error(
+            'Cannot update to today - there is already another assessment event using this template on the same date'
+          )
         }
 
         // Validate all assessments are in NOT_STARTED status
         const nonNotStartedAssessments = existingAssessments.filter(
-          assessment => assessment.status !== AssessmentStatus.NOT_STARTED
+          (assessment) => assessment.status !== AssessmentStatus.NOT_STARTED
         )
 
         if (nonNotStartedAssessments.length > 0) {
@@ -3857,13 +4242,12 @@ export class AssessmentRepo {
       if (currentDateOnly.getTime() === today.getTime() && newDateOnly > today) {
         // Check if all assessments are ON_GOING, NOT_STARTED, or other allowed statuses
         const invalidStatusAssessments = existingAssessments.filter(
-          assessment => 
-            assessment.status !== AssessmentStatus.ON_GOING && 
-            assessment.status !== AssessmentStatus.NOT_STARTED
+          (assessment) =>
+            assessment.status !== AssessmentStatus.ON_GOING && assessment.status !== AssessmentStatus.NOT_STARTED
         )
 
         if (invalidStatusAssessments.length > 0) {
-          const invalidStatuses = [...new Set(invalidStatusAssessments.map(a => a.status))].join(', ')
+          const invalidStatuses = [...new Set(invalidStatusAssessments.map((a) => a.status))].join(', ')
           throw new Error(
             `Cannot update from today to future date - some assessments have status: ${invalidStatuses}. Only ON_GOING and NOT_STARTED assessments can be moved to future date.`
           )
@@ -3909,11 +4293,11 @@ export class AssessmentRepo {
 
       // For other date changes (future to future), only allow if all are NOT_STARTED
       const nonNotStartedAssessments = existingAssessments.filter(
-        assessment => assessment.status !== AssessmentStatus.NOT_STARTED
+        (assessment) => assessment.status !== AssessmentStatus.NOT_STARTED
       )
 
       if (nonNotStartedAssessments.length > 0) {
-        const invalidStatuses = [...new Set(nonNotStartedAssessments.map(a => a.status))].join(', ')
+        const invalidStatuses = [...new Set(nonNotStartedAssessments.map((a) => a.status))].join(', ')
         throw new Error(
           `Cannot update occurrence date - some assessments have status: ${invalidStatuses}. Only NOT_STARTED assessments can have their occurrence date changed.`
         )
@@ -4125,46 +4509,103 @@ export class AssessmentRepo {
     search?: string
   ): Promise<GetEventSubjectAssessmentsResType> {
     try {
-      // First validate that this event exists in the subject (exclude name since each has unique EID)
+      // Get enhanced subject and template information
+      const [subjectInfo, templateInfo] = await Promise.all([
+        this.prisma.subject.findUnique({
+          where: { id: subjectId },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            method: true,
+            duration: true,
+            type: true,
+            passScore: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+            course: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                description: true,
+                maxNumTrainee: true,
+                passScore: true,
+                startDate: true,
+                endDate: true,
+                status: true
+              }
+            }
+          }
+        }),
+        this.prisma.templateForm.findUnique({
+          where: { id: templateId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            status: true,
+            description: true,
+            templateContent: true // The actual template document content
+          }
+        })
+      ])
+
+      if (!subjectInfo) {
+        throw new Error('Subject not found')
+      }
+      if (!templateInfo) {
+        throw new Error('Template not found')
+      }
+
+      // First validate that this event exists in the subject
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           subjectId: subjectId,
           templateId: templateId,
           occuranceDate: occuranceDate
+        }
+      })
+
+      if (!eventExists) {
+        throw new Error('Event not found in subject')
+      }
+
+      // Get statistics for all assessments in this event
+      const allEventAssessments = await this.prisma.assessmentForm.findMany({
+        where: {
+          subjectId: subjectId,
+          templateId: templateId,
+          occuranceDate: occuranceDate
         },
-        include: {
-          subject: {
+        select: {
+          id: true,
+          sections: {
             select: {
-              id: true,
-              name: true,
-              code: true,
-              course: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true
-                }
-              }
+              assessedById: true
             }
           }
         }
       })
 
-      if (!eventExists || !eventExists.subject) {
-        throw new Error('Event not found in subject')
-      }
+      // Calculate statistics
+      const numberOfTrainees = allEventAssessments.length
+      const participatedTrainers = new Set<string>()
+      
+      allEventAssessments.forEach(assessment => {
+        assessment.sections.forEach(section => {
+          if (section.assessedById) {
+            participatedTrainers.add(section.assessedById)
+          }
+        })
+      })
+      
+      const numberOfParticipatedTrainers = participatedTrainers.size
 
-      // Get entity info for response
-      const entityInfo = {
-        id: eventExists.subject.id,
-        name: eventExists.subject.name,
-        code: eventExists.subject.code,
-        type: 'subject' as const
-      }
-
-      // Now get all assessments for this specific event using the same logic as getSubjectAssessments
-      // but with additional filters for the event (exclude name since each has unique EID)
-      let whereConditions: any = {
+      // Now get filtered assessments for display
+      const whereConditions: any = {
         subjectId: subjectId,
         templateId: templateId,
         occuranceDate: occuranceDate
@@ -4244,16 +4685,13 @@ export class AssessmentRepo {
             }
           }
         },
-        orderBy: [
-          { occuranceDate: 'desc' },
-          { createdAt: 'desc' }
-        ],
+        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
         skip: offset,
         take: limit
       })
 
       // Transform assessments to match TrainerAssessmentListItemSchema
-      const transformedAssessments = assessments.map(assessment => ({
+      const transformedAssessments = assessments.map((assessment) => ({
         id: assessment.id,
         name: assessment.name,
         subjectId: assessment.subjectId,
@@ -4284,14 +4722,46 @@ export class AssessmentRepo {
         page,
         limit,
         totalPages,
+        numberOfTrainees,
+        numberOfParticipatedTrainers,
         eventInfo: {
           name: eventName,
           occuranceDate: occuranceDate,
           templateId: templateId,
-          entityInfo: entityInfo
+          subjectInfo: {
+            id: subjectInfo.id,
+            name: subjectInfo.name,
+            code: subjectInfo.code,
+            description: subjectInfo.description,
+            method: subjectInfo.method,
+            duration: subjectInfo.duration,
+            type: subjectInfo.type,
+            passScore: subjectInfo.passScore,
+            startDate: subjectInfo.startDate,
+            endDate: subjectInfo.endDate,
+            status: subjectInfo.status,
+            course: {
+              id: subjectInfo.course.id,
+              name: subjectInfo.course.name,
+              code: subjectInfo.course.code,
+              description: subjectInfo.course.description,
+              maxNumTrainee: subjectInfo.course.maxNumTrainee,
+              passScore: subjectInfo.course.passScore,
+              startDate: subjectInfo.course.startDate,
+              endDate: subjectInfo.course.endDate,
+              status: subjectInfo.course.status
+            }
+          },
+          templateInfo: {
+            id: templateInfo.id,
+            name: templateInfo.name,
+            version: templateInfo.version,
+            status: templateInfo.status,
+            description: templateInfo.description,
+            templateContent: templateInfo.templateContent
+          }
         }
       }
-
     } catch (error) {
       console.error('Get event subject assessments failed:', error)
       throw error
@@ -4299,8 +4769,8 @@ export class AssessmentRepo {
   }
 
   /**
-   * Get assessments for a specific event in a course
-   * Combines logic from getAssessmentEvents to validate event existence with getCourseAssessments response format
+   * Get assessments for a specific event in a course with enhanced statistics and details
+   * Includes number of trainees, participated trainers, detailed course info, and template content
    */
   async getEventCourseAssessments(
     courseId: string,
@@ -4314,39 +4784,98 @@ export class AssessmentRepo {
     search?: string
   ): Promise<GetEventCourseAssessmentsResType> {
     try {
-      // First validate that this event exists in the course (exclude name since each has unique EID)
+      // Get enhanced course and template information
+      const [courseInfo, templateInfo] = await Promise.all([
+        this.prisma.course.findUnique({
+          where: { id: courseId },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            maxNumTrainee: true,
+            venue: true,
+            note: true,
+            passScore: true,
+            startDate: true,
+            endDate: true,
+            level: true,
+            status: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true
+              }
+            }
+          }
+        }),
+        this.prisma.templateForm.findUnique({
+          where: { id: templateId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            status: true,
+            description: true,
+            templateContent: true // The actual template document content
+          }
+        })
+      ])
+
+      if (!courseInfo) {
+        throw new Error('Course not found')
+      }
+      if (!templateInfo) {
+        throw new Error('Template not found')
+      }
+
+      // First validate that this event exists in the course
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           courseId: courseId,
           templateId: templateId,
           occuranceDate: occuranceDate
+        }
+      })
+
+      if (!eventExists) {
+        throw new Error('Event not found in course')
+      }
+
+      // Get statistics for all assessments in this event
+      const allEventAssessments = await this.prisma.assessmentForm.findMany({
+        where: {
+          courseId: courseId,
+          templateId: templateId,
+          occuranceDate: occuranceDate
         },
-        include: {
-          course: {
+        select: {
+          id: true,
+          sections: {
             select: {
-              id: true,
-              name: true,
-              code: true
+              assessedById: true
             }
           }
         }
       })
 
-      if (!eventExists || !eventExists.course) {
-        throw new Error('Event not found in course')
-      }
+      // Calculate statistics
+      const numberOfTrainees = allEventAssessments.length
+      const participatedTrainers = new Set<string>()
+      
+      allEventAssessments.forEach(assessment => {
+        assessment.sections.forEach(section => {
+          if (section.assessedById) {
+            participatedTrainers.add(section.assessedById)
+          }
+        })
+      })
+      
+      const numberOfParticipatedTrainers = participatedTrainers.size
 
-      // Get entity info for response
-      const entityInfo = {
-        id: eventExists.course.id,
-        name: eventExists.course.name,
-        code: eventExists.course.code,
-        type: 'course' as const
-      }
-
-      // Now get all assessments for this specific event using the same logic as getCourseAssessments
-      // but with additional filters for the event (exclude name since each has unique EID)
-      let whereConditions: any = {
+      // Now get filtered assessments for display
+      const whereConditions: any = {
         courseId: courseId,
         templateId: templateId,
         occuranceDate: occuranceDate
@@ -4426,24 +4955,19 @@ export class AssessmentRepo {
             }
           }
         },
-        orderBy: [
-          { occuranceDate: 'desc' },
-          { createdAt: 'desc' }
-        ],
+        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
         skip: offset,
         take: limit
       })
 
       // Transform assessments to match TrainerAssessmentListItemSchema
-      const transformedAssessments = assessments.map(assessment => ({
+      const transformedAssessments = assessments.map((assessment) => ({
         id: assessment.id,
         name: assessment.name,
         subjectId: assessment.subjectId,
         courseId: assessment.courseId,
         occuranceDate: assessment.occuranceDate,
         status: assessment.status,
-        createdAt: assessment.createdAt,
-        updatedAt: assessment.updatedAt,
         resultScore: assessment.resultScore,
         resultText: assessment.resultText,
         pdfUrl: assessment.pdfUrl,
@@ -4466,14 +4990,41 @@ export class AssessmentRepo {
         page,
         limit,
         totalPages,
+        numberOfTrainees,
+        numberOfParticipatedTrainers,
         eventInfo: {
           name: eventName,
           occuranceDate: occuranceDate,
           templateId: templateId,
-          entityInfo: entityInfo
+          courseInfo: {
+            id: courseInfo.id,
+            name: courseInfo.name,
+            code: courseInfo.code,
+            description: courseInfo.description,
+            maxNumTrainee: courseInfo.maxNumTrainee,
+            venue: courseInfo.venue,
+            note: courseInfo.note,
+            passScore: courseInfo.passScore,
+            startDate: courseInfo.startDate,
+            endDate: courseInfo.endDate,
+            level: courseInfo.level,
+            status: courseInfo.status,
+            department: {
+              id: courseInfo.department.id,
+              name: courseInfo.department.name,
+              code: courseInfo.department.code
+            }
+          },
+          templateInfo: {
+            id: templateInfo.id,
+            name: templateInfo.name,
+            version: templateInfo.version,
+            status: templateInfo.status,
+            description: templateInfo.description,
+            templateContent: templateInfo.templateContent
+          }
         }
       }
-
     } catch (error) {
       console.error('Get event course assessments failed:', error)
       throw error
@@ -4544,20 +5095,24 @@ export class AssessmentRepo {
           courseId: true,
           templateId: true,
           occuranceDate: true,
-          subject: subjectId ? {
-            select: {
-              id: true,
-              name: true,
-              code: true
-            }
-          } : false,
-          course: courseId ? {
-            select: {
-              id: true,
-              name: true,
-              code: true
-            }
-          } : false,
+          subject: subjectId
+            ? {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true
+                }
+              }
+            : false,
+          course: courseId
+            ? {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true
+                }
+              }
+            : false,
           template: {
             select: {
               name: true
@@ -4571,8 +5126,8 @@ export class AssessmentRepo {
       }
 
       // Check if all assessments are in NOT_STARTED status
-      const notStartedAssessments = allAssessments.filter(a => a.status === AssessmentStatus.NOT_STARTED)
-      const otherStatusAssessments = allAssessments.filter(a => a.status !== AssessmentStatus.NOT_STARTED)
+      const notStartedAssessments = allAssessments.filter((a) => a.status === AssessmentStatus.NOT_STARTED)
+      const otherStatusAssessments = allAssessments.filter((a) => a.status !== AssessmentStatus.NOT_STARTED)
 
       if (otherStatusAssessments.length > 0) {
         throw new BadRequestException(
@@ -4638,7 +5193,6 @@ export class AssessmentRepo {
           totalAssessments: allAssessments.length
         }
       }
-
     } catch (error) {
       console.error('Archive assessment event failed:', error)
       throw error

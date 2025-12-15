@@ -56,7 +56,9 @@ import {
   GetEventCourseAssessmentsQueryType,
   GetEventCourseAssessmentsResType,
   ArchiveAssessmentEventBodyType,
-  ArchiveAssessmentEventResType
+  ArchiveAssessmentEventResType,
+  GetDepartmentAssessmentEventsQueryType,
+  GetDepartmentAssessmentEventsResType
 } from './assessment.model'
 import {
   TemplateNotFoundException,
@@ -1029,6 +1031,32 @@ export class AssessmentService {
         throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
       }
 
+      // Validate SIGNATURE_DRAW fields - they cannot be null or empty
+      for (const value of body.values) {
+        const field = sectionFields.fields.find((f) => f.assessmentValue.id === value.assessmentValueId)
+        if (field?.templateField.fieldType === 'SIGNATURE_DRAW') {
+          if (!value.answerValue || value.answerValue.trim() === '') {
+            throw new BadRequestException(`This Field "${field.templateField.label}" need to be signed before saving.`)
+          }
+        }
+      }
+
+      // Check for concurrent access - ensure section is still unassessed
+      const currentSection = await this.assessmentRepo.prismaClient.assessmentSection.findUnique({
+        where: { id: body.assessmentSectionId },
+        select: { assessedById: true, createdAt: true }
+      })
+
+      if (!currentSection) {
+        throw new NotFoundException('Assessment section not found')
+      }
+
+      if (currentSection.assessedById !== null) {
+        throw new BadRequestException(
+          'This section has already been assessed by another user. Please refresh and check the current status.'
+        )
+      }
+
       // Save the values
       return await this.assessmentRepo.saveAssessmentValues(body.assessmentSectionId, body.values, userContext.userId)
     } catch (error: any) {
@@ -1222,6 +1250,34 @@ export class AssessmentService {
         throw new BadRequestException(`Invalid assessment value IDs: ${invalidIds.join(', ')}`)
       }
 
+      // Validate SIGNATURE_DRAW fields - they cannot be null or empty
+      for (const value of body.values) {
+        const field = sectionFields.fields.find((f) => f.assessmentValue.id === value.assessmentValueId)
+        if (field?.templateField.fieldType === 'SIGNATURE_DRAW') {
+          if (!value.answerValue || value.answerValue.trim() === '') {
+            throw new BadRequestException(`This Field "${field.templateField.label}" need to be signed before updating.`)
+          }
+        }
+      }
+
+      // Check for concurrent access - ensure section is still editable by current user
+      const currentSection = await this.assessmentRepo.prismaClient.assessmentSection.findUnique({
+        where: { id: body.assessmentSectionId },
+        select: {
+          assessedById: true,
+          createdAt: true,
+          status: true
+        }
+      })
+
+      if (!currentSection) {
+        throw new NotFoundException('Assessment section not found')
+      }
+
+      if (currentSection.assessedById !== userContext.userId) {
+        throw new ForbiddenException('You can only update sections that you originally assessed')
+      }
+
       // Update the values (repository will check if user is the original assessor)
       return await this.assessmentRepo.updateAssessmentValues(body.assessmentSectionId, body.values, userContext.userId)
     } catch (error: any) {
@@ -1285,7 +1341,11 @@ export class AssessmentService {
       }
 
       // Update status and save trainee signature
-      const result = await this.assessmentRepo.confirmAssessmentParticipation(assessmentId, body.traineeSignatureUrl, userContext.userId)
+      const result = await this.assessmentRepo.confirmAssessmentParticipation(
+        assessmentId,
+        body.traineeSignatureUrl,
+        userContext.userId
+      )
 
       return {
         success: true,
@@ -1370,12 +1430,14 @@ export class AssessmentService {
       // Send email notification if assessment is rejected
       if (body.action === 'REJECTED') {
         // Log that rejection comment is being saved to assessment form
-        console.log(`Assessment ${assessmentId} rejected with comment: "${body.comment || 'No comment provided'}" - Comment saved to assessment form`)
-        
+        console.log(
+          `Assessment ${assessmentId} rejected with comment: "${body.comment || 'No comment provided'}" - Comment saved to assessment form`
+        )
+
         try {
           // Get detailed assessment information for email
           const detailedAssessment = await this.assessmentRepo.getAssessmentWithDetails(assessmentId)
-          
+
           // Get all trainers who assessed sections in this assessment
           const trainerAssessors = await this.assessmentRepo.getTrainerAssessors(assessmentId)
 
@@ -1436,7 +1498,7 @@ export class AssessmentService {
         try {
           // Get detailed assessment information for email
           const detailedAssessment = await this.assessmentRepo.findById(assessmentId)
-          
+
           if (detailedAssessment) {
             // Format dates for email
             const assessmentDate = new Date(detailedAssessment.occuranceDate).toLocaleDateString('en-US', {
@@ -1444,7 +1506,7 @@ export class AssessmentService {
               month: 'long',
               day: 'numeric'
             })
-            
+
             const approvalDate = new Date().toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
@@ -1452,8 +1514,8 @@ export class AssessmentService {
             })
 
             // Get subject or course name
-            const subjectOrCourseName = detailedAssessment.subject?.name || 
-              detailedAssessment.course?.name || 'Assessment'
+            const subjectOrCourseName =
+              detailedAssessment.subject?.name || detailedAssessment.course?.name || 'Assessment'
 
             await this.nodemailerService.sendApprovedAssessmentEmail(
               detailedAssessment.trainee.email,
@@ -1464,7 +1526,7 @@ export class AssessmentService {
               approvalDate,
               `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}`
             )
-            
+
             console.log(`Approval notification email sent successfully to ${detailedAssessment.trainee.email}`)
           }
         } catch (emailError) {
@@ -1562,9 +1624,7 @@ export class AssessmentService {
    * Render DOCX template with provided data for testing purposes
    * Public API to test template rendering without going through approval process
    */
-  async renderDocxTemplateForTesting(
-    body: RenderDocxTemplateBodyType
-  ): Promise<RenderDocxTemplateResType> {
+  async renderDocxTemplateForTesting(body: RenderDocxTemplateBodyType): Promise<RenderDocxTemplateResType> {
     try {
       // Download the template from the provided URL
       const templateBuffer = await this.downloadFileFromS3(body.templateUrl)
@@ -1613,9 +1673,7 @@ export class AssessmentService {
    * Public API to test template rendering with images from S3 URLs without going through approval process
    * Now uses the unified renderDocxTemplate method that handles both text and images
    */
-  async renderDocxTemplateWithImagesForTesting(
-    body: RenderDocxTemplateBodyType
-  ): Promise<RenderDocxTemplateResType> {
+  async renderDocxTemplateWithImagesForTesting(body: RenderDocxTemplateBodyType): Promise<RenderDocxTemplateResType> {
     try {
       // Download the template from the provided URL
       const templateBuffer = await this.downloadFileFromS3(body.templateUrl)
@@ -1729,20 +1787,20 @@ export class AssessmentService {
     try {
       console.log(`=== Processing Assessment Result for ${assessmentId} ===`)
       console.log(`AssessmentForm IDs - subjectId: ${assessmentForm.subjectId}, courseId: ${assessmentForm.courseId}`)
-      
+
       // Get all assessment values with field types
       const assessmentValues = await this.assessmentRepo.getAssessmentValues(assessmentId)
 
       // Find FINAL_SCORE_NUM and FINAL_SCORE_TEXT fields
       const finalScoreNumValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_NUM')
       const finalScoreTextValue = assessmentValues.find((av) => av.templateField?.fieldType === 'FINAL_SCORE_TEXT')
-      
+
       console.log(`FINAL_SCORE_NUM value: ${finalScoreNumValue?.answerValue || 'null'}`)
       console.log(`FINAL_SCORE_TEXT value: ${finalScoreTextValue?.answerValue || 'null'}`)
 
       // Get pass score from subject or course - fetch directly from database to ensure we have the latest data
       let passScore: number | null = null
-      
+
       // Priority: Subject first (if subjectId exists, ignore courseId)
       if (assessmentForm.subjectId) {
         const subject = await this.assessmentRepo.prismaClient.subject.findUnique({
@@ -1751,7 +1809,7 @@ export class AssessmentService {
         })
         passScore = subject?.passScore || null
         // console.log(`Assessment ${assessmentId} - Subject passScore: ${passScore}`)
-      } 
+      }
       // Only check course if no subject
       else if (assessmentForm.courseId) {
         const course = await this.assessmentRepo.prismaClient.course.findUnique({
@@ -1793,7 +1851,7 @@ export class AssessmentService {
       else if (finalScoreTextValue && !finalScoreNumValue) {
         // User manually enters text, read the value they entered
         resultScore = null
-        
+
         // Read the user's FINAL_SCORE_TEXT value
         const textValue = finalScoreTextValue.answerValue?.toUpperCase()
         if (textValue === 'PASS') {
@@ -1835,7 +1893,8 @@ export class AssessmentService {
       // Prepare comment for cases where result cannot be calculated due to missing passScore
       let comment: string | null = null
       if (finalScoreNumValue && passScore === null) {
-        comment = 'Cannot calculate result because Course does not have pass Score defined, ask Administrator to check through report'
+        comment =
+          'Cannot calculate result because Course does not have pass Score defined, ask Administrator to check through report'
       }
 
       // Update AssessmentForm with calculated results
@@ -1879,8 +1938,6 @@ export class AssessmentService {
       throw new BadRequestException('Failed to download template file')
     }
   }
-
-
 
   /**
    * Build assessment data object from assessment values using template schema as base structure
@@ -1957,7 +2014,7 @@ export class AssessmentService {
     })
 
     const valueToSectionMap = new Map<string, string>()
-    assessmentValuesWithSections.forEach(av => {
+    assessmentValuesWithSections.forEach((av) => {
       valueToSectionMap.set(av.id, av.assessmentSectionId)
     })
 
@@ -1966,23 +2023,25 @@ export class AssessmentService {
 
     assessmentValues.forEach((assessmentValue) => {
       if (assessmentValue.templateField && assessmentValue.templateField.fieldName) {
-        let finalValue = this.parseAssessmentValue(
-          assessmentValue.answerValue,
-          assessmentValue.templateField.fieldType
-        )
+        let finalValue = this.parseAssessmentValue(assessmentValue.answerValue, assessmentValue.templateField.fieldType)
 
         // Only do fallbacks for SIGNATURE_DRAW fields (SIGNATURE_IMG was pre-populated)
-        if ((finalValue === null || finalValue === '') && assessmentValue.templateField.fieldType === 'SIGNATURE_DRAW') {
+        if (
+          (finalValue === null || finalValue === '') &&
+          assessmentValue.templateField.fieldType === 'SIGNATURE_DRAW'
+        ) {
           const roleRequired = assessmentValue.templateField.roleRequired
           const sectionId = valueToSectionMap.get(assessmentValue.id)
           const sectionInfo = sectionId ? sectionAssessorMap.get(sectionId) : null
 
           if (roleRequired === 'TRAINER' && sectionInfo?.assessedBy) {
             // TRAINER SIGNATURE_DRAW: fallback to assessor's full name
-            finalValue = `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
+            finalValue =
+              `${sectionInfo.assessedBy.firstName} ${sectionInfo.assessedBy.middleName || ''} ${sectionInfo.assessedBy.lastName}`.trim()
           } else if (roleRequired === 'TRAINEE') {
             // TRAINEE SIGNATURE_DRAW: fallback to trainee's full name
-            finalValue = `${assessmentForm.trainee.firstName} ${assessmentForm.trainee.middleName || ''} ${assessmentForm.trainee.lastName}`.trim()
+            finalValue =
+              `${assessmentForm.trainee.firstName} ${assessmentForm.trainee.middleName || ''} ${assessmentForm.trainee.lastName}`.trim()
           }
         }
 
@@ -2005,7 +2064,7 @@ export class AssessmentService {
 
     // Step 6: Use templateSchema as base and populate with actual values using path mapping
     const populatedSchema = this.populateSchemaWithPathValues(templateSchema, pathValueMap)
-    
+
     // Convert null values to empty strings in nested objects (PART/CHECK_BOX fields)
     return this.convertNullsToEmptyStringsInNestedObjects(populatedSchema)
   }
@@ -2025,10 +2084,7 @@ export class AssessmentService {
           fieldType: 'SIGNATURE_IMG',
           roleRequired: 'TRAINER'
         },
-        OR: [
-          { answerValue: null },
-          { answerValue: '' }
-        ]
+        OR: [{ answerValue: null }, { answerValue: '' }]
       },
       include: {
         assessmentSection: {
@@ -2055,13 +2111,14 @@ export class AssessmentService {
     // Update each SIGNATURE_IMG field with trainer's signatureImageUrl or fallback to name
     const updatePromises = signatureImgFields.map(async (field) => {
       let signatureValue = ''
-      
+
       if (field.assessmentSection.assessedBy?.signatureImageUrl) {
         // Use trainer's signature image URL
         signatureValue = field.assessmentSection.assessedBy.signatureImageUrl
       } else if (field.assessmentSection.assessedBy) {
         // Fallback to trainer's full name if no signature image
-        signatureValue = `${field.assessmentSection.assessedBy.firstName} ${field.assessmentSection.assessedBy.middleName || ''} ${field.assessmentSection.assessedBy.lastName}`.trim()
+        signatureValue =
+          `${field.assessmentSection.assessedBy.firstName} ${field.assessmentSection.assessedBy.middleName || ''} ${field.assessmentSection.assessedBy.lastName}`.trim()
       }
 
       // Update the assessment value if we have a signature value
@@ -2075,8 +2132,10 @@ export class AssessmentService {
 
     // Execute all updates
     await Promise.all(updatePromises.filter(Boolean))
-    
-    console.log(`Pre-populated ${signatureImgFields.length} TRAINER SIGNATURE_IMG fields for assessment ${assessmentId}`)
+
+    console.log(
+      `Pre-populated ${signatureImgFields.length} TRAINER SIGNATURE_IMG fields for assessment ${assessmentId}`
+    )
   }
 
   /**
@@ -2211,10 +2270,10 @@ export class AssessmentService {
   private parseAssessmentValue(value: string | null | undefined, fieldType?: string): any {
     // CRITICAL: Convert null/undefined values to empty strings for template mapping
     // This will result in "fieldName": "" in the JSON output for docxtemplater
-    if (value === null || value === undefined) return ""
+    if (value === null || value === undefined) return ''
 
     // If value is empty string, keep it as empty string
-    if (value === '') return ""
+    if (value === '') return ''
 
     // Handle specific field types first - ONLY convert when field type is explicit
     if (fieldType === 'TOGGLE' || fieldType === 'SECTION_CONTROL_TOGGLE') {
@@ -2250,10 +2309,10 @@ export class AssessmentService {
   private convertNullsToEmptyStringsInNestedObjects(obj: any): any {
     if (Array.isArray(obj)) {
       // Handle arrays - recurse into each element
-      return obj.map(item => this.convertNullsToEmptyStringsInNestedObjects(item))
+      return obj.map((item) => this.convertNullsToEmptyStringsInNestedObjects(item))
     } else if (typeof obj === 'object' && obj !== null) {
       const result: any = {}
-      
+
       for (const [key, value] of Object.entries(obj)) {
         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
           // This is a nested object (likely PART/CHECK_BOX field)
@@ -2264,10 +2323,10 @@ export class AssessmentService {
           result[key] = value
         }
       }
-      
+
       return result
     }
-    
+
     return obj
   }
 
@@ -2277,14 +2336,14 @@ export class AssessmentService {
    */
   private convertNullsInObject(obj: any): any {
     if (Array.isArray(obj)) {
-      return obj.map(item => this.convertNullsToEmptyStringsInNestedObjects(item))
+      return obj.map((item) => this.convertNullsToEmptyStringsInNestedObjects(item))
     } else if (typeof obj === 'object' && obj !== null) {
       const result: any = {}
-      
+
       for (const [key, value] of Object.entries(obj)) {
         if (value === null || value === undefined) {
           // Convert null/undefined to empty string in nested objects
-          result[key] = ""
+          result[key] = ''
         } else if (typeof value === 'object') {
           // Recurse for deeper nesting
           result[key] = this.convertNullsInObject(value)
@@ -2293,11 +2352,11 @@ export class AssessmentService {
           result[key] = value
         }
       }
-      
+
       return result
     }
-    
-    return (obj === null || obj === undefined) ? "" : obj
+
+    return obj === null || obj === undefined ? '' : obj
   }
 
   /**
@@ -2315,32 +2374,34 @@ export class AssessmentService {
       // Helper function to download image from S3 URL
       const downloadImageFromUrl = (url: string): Promise<Buffer> => {
         return new Promise((resolve, reject) => {
-          https.get(url, (response: any) => {
-            if (response.statusCode !== 200) {
-              return reject(new Error(`Failed to download image from ${url}, status: ${response.statusCode}`))
-            }
+          https
+            .get(url, (response: any) => {
+              if (response.statusCode !== 200) {
+                return reject(new Error(`Failed to download image from ${url}, status: ${response.statusCode}`))
+              }
 
-            const chunks: Buffer[] = []
-            response.on('data', (chunk: Buffer) => chunks.push(chunk))
-            response.on('end', () => resolve(Buffer.concat(chunks)))
-            response.on('error', reject)
-          }).on('error', reject)
+              const chunks: Buffer[] = []
+              response.on('data', (chunk: Buffer) => chunks.push(chunk))
+              response.on('end', () => resolve(Buffer.concat(chunks)))
+              response.on('error', reject)
+            })
+            .on('error', reject)
         })
       }
 
       // Check if data contains any image fields (URLs starting with http/https)
-      const hasImages = Object.values(data).some(value => 
-        typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))
+      const hasImages = Object.values(data).some(
+        (value) => typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))
       )
 
       if (hasImages) {
         // Use image module for templates with images
         // console.log('Template contains images, using image module')
-        
+
         // Configure image module options
         const imageOpts = {
           centered: false, // Set to true to center all images
-          fileType: "docx", // Document type
+          fileType: 'docx', // Document type
 
           // Async function to get image from S3 URL
           getImage: async (tagValue: string, tagName: string) => {
@@ -2365,7 +2426,7 @@ export class AssessmentService {
             try {
               const dimensions = sizeOf(img)
               console.log(`Image ${tagName} dimensions: ${dimensions.width}x${dimensions.height}`)
-              
+
               // Set default size (self configurable)
               let width = dimensions.width
               let height = dimensions.height
@@ -2377,7 +2438,7 @@ export class AssessmentService {
                 const widthRatio = maxWidth / width
                 const heightRatio = maxHeight / height
                 const ratio = Math.min(widthRatio, heightRatio)
-                
+
                 width = Math.round(width * ratio)
                 height = Math.round(height * ratio)
                 console.log(`Scaled image ${tagName} to: ${width}x${height}`)
@@ -2399,10 +2460,7 @@ export class AssessmentService {
         const zip = new PizZip(templateBuffer)
 
         // Create docxtemplater instance with image module
-        const doc = new Docxtemplater()
-          .loadZip(zip)
-          .attachModule(imageModule)
-          .compile()
+        const doc = new Docxtemplater().loadZip(zip).attachModule(imageModule).compile()
 
         console.log('Rendering DOCX template with mixed data (text + images):', Object.keys(data))
 
@@ -2418,11 +2476,10 @@ export class AssessmentService {
 
         console.log('DOCX template with mixed data rendered successfully')
         return buffer
-
       } else {
         // Use regular docxtemplater for text-only templates
         console.log('Template contains only text data, using regular docxtemplater')
-        
+
         // Load template with PizZip (unzip the content of the file)
         const zip = new PizZip(templateBuffer)
 
@@ -2448,10 +2505,9 @@ export class AssessmentService {
         console.log('DOCX template with text data rendered successfully')
         return buffer
       }
-
     } catch (error: any) {
       console.error('DOCX template rendering failed:', error)
-      
+
       // Handle image processing errors
       if (error.message?.includes('Image processing failed')) {
         throw new BadRequestException(`Template rendering failed: ${error.message}`)
@@ -2558,6 +2614,56 @@ export class AssessmentService {
       }
 
       throw new BadRequestException('Failed to get assessment events')
+    }
+  }
+
+  /**
+   * Get department assessment events - grouped assessment forms by department
+   * Includes both Course and Subject scope with enhanced statistics
+   */
+  async getDepartmentAssessmentEvents(
+    query: GetDepartmentAssessmentEventsQueryType,
+    currentUser: { userId: string; roleName: string }
+  ): Promise<GetDepartmentAssessmentEventsResType> {
+    try {
+      // Get user's department from database for permission validation
+      const user = await this.assessmentRepo.prismaClient.user.findUnique({
+        where: { id: currentUser.userId },
+        select: { departmentId: true }
+      })
+
+      if (!user?.departmentId) {
+        throw new ForbiddenException('User must have a department assigned')
+      }
+
+      // For department heads, validate they can only access their own department
+      // For other roles like ADMIN, they can access any department
+      if (currentUser.roleName === 'DEPARTMENT_HEAD') {
+        throw new ForbiddenException('Department Head can only access their own department')
+      }
+
+      const result = await this.assessmentRepo.getDepartmentAssessmentEvents(
+        user?.departmentId,
+        query.page,
+        query.limit,
+        query.status,
+        query.subjectId,
+        query.courseId,
+        query.templateId,
+        query.fromDate,
+        query.toDate,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get department assessment events failed:', error)
+
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error
+      }
+
+      throw new BadRequestException('Failed to get department assessment events')
     }
   }
 

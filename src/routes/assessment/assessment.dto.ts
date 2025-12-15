@@ -50,7 +50,9 @@ import {
   GetEventCourseAssessmentsQuerySchema,
   GetEventCourseAssessmentsResSchema,
   ArchiveAssessmentEventBodySchema,
-  ArchiveAssessmentEventResSchema
+  ArchiveAssessmentEventResSchema,
+  GetDepartmentAssessmentEventsQuerySchema,
+  GetDepartmentAssessmentEventsResSchema
 } from './assessment.model'
 
 // ===== REQUEST DTOs =====
@@ -146,6 +148,12 @@ export class GetAssessmentEventsResDTO extends createZodDto(GetAssessmentEventsR
 export class GetUserAssessmentEventsQueryDTO extends createZodDto(GetUserAssessmentEventsQuerySchema) {}
 
 export class GetUserAssessmentEventsResDTO extends createZodDto(GetUserAssessmentEventsResSchema) {}
+
+// ===== DEPARTMENT ASSESSMENT EVENT DTOs =====
+
+export class GetDepartmentAssessmentEventsQueryDTO extends createZodDto(GetDepartmentAssessmentEventsQuerySchema) {}
+
+export class GetDepartmentAssessmentEventsResDTO extends createZodDto(GetDepartmentAssessmentEventsResSchema) {}
 
 export class UpdateAssessmentEventBodyDTO extends createZodDto(UpdateAssessmentEventBodySchema) {}
 

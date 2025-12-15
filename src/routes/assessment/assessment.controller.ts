@@ -45,7 +45,9 @@ import {
   GetEventCourseAssessmentsQueryDTO,
   GetEventCourseAssessmentsResDTO,
   ArchiveAssessmentEventBodyDTO,
-  ArchiveAssessmentEventResDTO
+  ArchiveAssessmentEventResDTO,
+  GetDepartmentAssessmentEventsQueryDTO,
+  GetDepartmentAssessmentEventsResDTO
 } from './assessment.dto'
 import { AssessmentService } from './assessment.service'
 import { ActiveRolePermissions } from '~/shared/decorators/active-role-permissions.decorator'
@@ -183,9 +185,30 @@ export class AssessmentController {
   }
 
   /**
+   * GET /assessments/department-events
+   * Get assessment events grouped by department - includes both Course and Subject scope
+   * Provides enhanced statistics: totalAssessments, totalReviewedForm, totalCancelledForm, totalTrainers
+   */
+  @Get('department-events')
+  @ZodSerializerDto(GetDepartmentAssessmentEventsResDTO)
+  async getDepartmentAssessmentEvents(
+    @Query() query: GetDepartmentAssessmentEventsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name
+    }
+
+    return await this.assessmentService.getDepartmentAssessmentEvents(query, userContext)
+  }
+
+  /**
    * POST /assessments/events/subject
    * Get assessments for a specific event in a subject
-   * Body: subjectId, templateId, occuranceDate, name
+   * Body: subjectId, templateId, occuranceDate
    * Query params: page, limit, status, search
    */
   @Post('events/subject')
@@ -209,7 +232,7 @@ export class AssessmentController {
   /**
    * POST /assessments/events/course
    * Get assessments for a specific event in a course
-   * Body: courseId, templateId, occuranceDate, name
+   * Body: courseId, templateId, occuranceDate
    * Query params: page, limit, status, search
    */
   @Post('events/course')
@@ -585,19 +608,16 @@ export class AssessmentController {
   @Post('render-docx-template-with-images/download')
   @IsPublic()
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-  async renderDocxTemplateWithImagesForDownload(
-    @Body() body: RenderDocxTemplateBodyDTO,
-    @Res() res: Response
-  ) {
+  async renderDocxTemplateWithImagesForDownload(@Body() body: RenderDocxTemplateBodyDTO, @Res() res: Response) {
     const result = await this.assessmentService.renderDocxTemplateWithImagesForTesting(body)
-    
+
     // Convert base64 back to buffer
     const buffer = Buffer.from(result.data.buffer, 'base64')
-    
+
     // Set headers for file download
     res.setHeader('Content-Disposition', `attachment; filename="${result.data.filename}"`)
     res.setHeader('Content-Length', buffer.length)
-    
+
     // Send the buffer directly
     res.send(buffer)
   }
