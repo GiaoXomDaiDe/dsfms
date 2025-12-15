@@ -15,8 +15,7 @@ const REPORT_TYPE_VALUES: [ReportTypeLiteral, ...ReportTypeLiteral[]] = [
   ReportType.TRAINING_PROGRAM_REPORT,
   ReportType.FACILITIES_REPORT,
   ReportType.COURSE_ORGANIZATION_REPORT,
-  ReportType.FEEDBACK,
-  ReportType.OTHER
+  ReportType.FEEDBACK
 ]
 
 const REPORT_SEVERITY_VALUES: [ReportSeverityLiteral, ...ReportSeverityLiteral[]] = [
