@@ -2653,11 +2653,11 @@ export class AssessmentService {
         throw new ForbiddenException('User must have a department assigned')
       }
 
-      // For department heads, validate they can only access their own department
-      // For other roles like ADMIN, they can access any department
-      if (currentUser.roleName === 'DEPARTMENT_HEAD') {
-        throw new ForbiddenException('Department Head can only access their own department')
-      }
+      // // For department heads, validate they can only access their own department
+      // // For other roles like ADMIN, they can access any department
+      // if (currentUser.roleName === 'DEPARTMENT_HEAD') {
+      //   throw new ForbiddenException('Department Head can only access their own department')
+      // }
 
       const result = await this.assessmentRepo.getDepartmentAssessmentEvents(
         user?.departmentId,
