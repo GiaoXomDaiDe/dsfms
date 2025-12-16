@@ -26,7 +26,10 @@ export class DepartmentRepository {
 
     const departments = await this.prismaService.department.findMany({
       where: whereClause,
-      include: departmentWithHeadInclude
+      include: departmentWithHeadInclude,
+      orderBy: {
+        code: 'asc'
+      }
     })
 
     const departmentsWithStats = await Promise.all(
