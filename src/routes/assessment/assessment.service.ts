@@ -268,8 +268,16 @@ export class AssessmentService {
         totalCreated: createdAssessments.length
       }
     } catch (error) {
-      // Log the error for debugging
-      console.error('Assessment creation failed:', error)
+      // Log the error for debugging with more details
+      console.error('Assessment creation failed:', {
+        error: error.message,
+        code: error.code,
+        name: error.name,
+        traineeCount: data.traineeIds?.length,
+        templateId: data.templateId,
+        subjectId: data.subjectId,
+        courseId: data.courseId
+      })
 
       // Re-throw known business logic errors
       if (
@@ -282,8 +290,9 @@ export class AssessmentService {
         throw error
       }
 
-      // Handle Prisma transaction errors
-      if (error.code === 'P2034' || error.message?.includes('transaction')) {
+      // Handle Prisma transaction errors with more specific messages
+      if (error.code === 'P2034' || error.message?.includes('transaction') || error.message?.includes('timeout')) {
+        console.error('Transaction timeout - consider processing in smaller batches')
         throw DatabaseTransactionFailedException
       }
 
@@ -508,8 +517,15 @@ export class AssessmentService {
         entityInfo
       }
     } catch (error) {
-      // Log the error for debugging
-      console.error('Bulk assessment creation failed:', error)
+      // Log the error for debugging with more details
+      console.error('Bulk assessment creation failed:', {
+        error: error.message,
+        code: error.code,
+        name: error.name,
+        templateId: data.templateId,
+        subjectId: data.subjectId,
+        courseId: data.courseId
+      })
 
       // Re-throw known business logic errors
       if (
@@ -522,8 +538,9 @@ export class AssessmentService {
         throw error
       }
 
-      // Handle Prisma transaction errors
-      if (error.code === 'P2034' || error.message?.includes('transaction')) {
+      // Handle Prisma transaction errors with more specific messages
+      if (error.code === 'P2034' || error.message?.includes('transaction') || error.message?.includes('timeout')) {
+        console.error('Transaction timeout - consider processing in smaller batches')
         throw DatabaseTransactionFailedException
       }
 
