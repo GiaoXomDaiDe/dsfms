@@ -64,6 +64,14 @@ export const CreateTraineeProfileSchema = TraineeProfileSchema.pick({
   trainingBatch: true,
   passportNo: true,
   nation: true
+}).superRefine((data, ctx) => {
+  if (data.enrollmentDate && data.enrollmentDate < data.dob) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Enrollment date cannot be earlier than date of birth',
+      path: ['enrollmentDate']
+    })
+  }
 })
 
 export const UpdateTrainerProfileSchema = TrainerProfileSchema.pick({
@@ -79,7 +87,18 @@ export const UpdateTraineeProfileSchema = TraineeProfileSchema.pick({
   trainingBatch: true,
   passportNo: true,
   nation: true
-}).partial()
+})
+  .partial()
+  .superRefine((data, ctx) => {
+    // Only validate when both dates are provided; supports partial updates.
+    if (data.enrollmentDate && data.dob && data.enrollmentDate < data.dob) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Enrollment date cannot be earlier than date of birth',
+        path: ['enrollmentDate']
+      })
+    }
+  })
 
 export type TrainerProfileType = z.infer<typeof TrainerProfileSchema>
 export type TraineeProfileType = z.infer<typeof TraineeProfileSchema>
