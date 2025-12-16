@@ -1,9 +1,18 @@
 import { AssessmentStatus } from '@prisma/client'
 import z from 'zod'
 
+export const DASHBOARD_ASSESSMENT_STATUSES = [
+  AssessmentStatus.NOT_STARTED,
+  AssessmentStatus.ON_GOING,
+  AssessmentStatus.SUBMITTED,
+  AssessmentStatus.APPROVED,
+  AssessmentStatus.REJECTED,
+  AssessmentStatus.CANCELLED
+] as const
+
 const DepartmentMetricSchema = z.object({
   departmentId: z.uuid(),
-  departmentName: z.string().min(1)
+  departmentCode: z.string().min(1)
 })
 
 export const OngoingCourseMetricSchema = DepartmentMetricSchema.extend({
@@ -15,7 +24,7 @@ export const OngoingEnrollmentMetricSchema = DepartmentMetricSchema.extend({
 })
 
 export const AssessmentStatusMetricSchema = z.object({
-  status: z.enum(AssessmentStatus),
+  status: z.enum(DASHBOARD_ASSESSMENT_STATUSES),
   count: z.number().int().nonnegative()
 })
 

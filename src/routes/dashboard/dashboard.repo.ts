@@ -4,6 +4,7 @@ import {
   AcademicOverviewResType,
   AssessmentStatusMetricType,
   CourseEffectivenessMetricType,
+  DASHBOARD_ASSESSMENT_STATUSES,
   OngoingCourseMetricType,
   OngoingEnrollmentMetricType,
   TraineeDashboardResType,
@@ -15,7 +16,7 @@ import { PrismaService } from '~/shared/services/prisma.service'
 
 type ActiveDepartment = {
   id: string
-  name: string
+  code: string
 }
 
 @Injectable()
@@ -53,7 +54,7 @@ export class DashboardRepository {
       },
       select: {
         id: true,
-        name: true
+        code: true
       }
     })
   }
@@ -74,7 +75,7 @@ export class DashboardRepository {
 
     return departments.map((department) => ({
       departmentId: department.id,
-      departmentName: department.name,
+      departmentCode: department.code,
       ongoingCourseCount: courseCountByDept.get(department.id) ?? 0
     }))
   }
@@ -117,7 +118,7 @@ export class DashboardRepository {
 
     return departments.map((department) => ({
       departmentId: department.id,
-      departmentName: department.name,
+      departmentCode: department.code,
       ongoingEnrollmentCount: enrollmentCountByDept.get(department.id) ?? 0
     }))
   }
@@ -132,7 +133,7 @@ export class DashboardRepository {
 
     const assessmentCountByStatus = new Map(assessmentGroups.map((group) => [group.status, group._count._all]))
 
-    return (Object.values(AssessmentStatus) as AssessmentStatus[]).map((status) => ({
+    return DASHBOARD_ASSESSMENT_STATUSES.map((status) => ({
       status,
       count: assessmentCountByStatus.get(status) ?? 0
     }))
@@ -144,7 +145,7 @@ export class DashboardRepository {
     const effectivenessRaw = await this.prisma.$queryRaw<
       {
         departmentId: string
-        departmentName: string
+        departmentCode: string
         courseId: string
         courseName: string
         passCount: number
@@ -216,7 +217,7 @@ export class DashboardRepository {
       if (!departmentMetric) {
         effectivenessByDept.set(row.departmentId, {
           departmentId: row.departmentId,
-          departmentName: row.departmentName,
+          departmentCode: row.departmentCode,
           passCount: row.passCount,
           failCount: row.failCount,
           totalApproved: row.totalApproved,
@@ -246,7 +247,7 @@ export class DashboardRepository {
 
       return {
         departmentId: department.id,
-        departmentName: department.name,
+        departmentCode: department.code,
         passCount: 0,
         failCount: 0,
         totalApproved: 0,
