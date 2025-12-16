@@ -1,5 +1,4 @@
 import { NestFactory } from '@nestjs/core'
-import { ZodValidationPipe } from 'nestjs-zod'
 import envConfig from '~/shared/config'
 import { AppModule } from './app.module'
 
@@ -7,7 +6,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose']
   })
-  app.useGlobalPipes(new ZodValidationPipe())
+  // app.useGlobalPipes(new ZodValidationPipe())
   app.enableCors()
   await app.listen(envConfig.PORT ?? 4000)
 }
