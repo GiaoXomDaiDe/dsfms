@@ -220,178 +220,205 @@ export class AssessmentRepo {
   ): Promise<AssessmentFormResType[]> {
     console.log(`Starting createAssessments with data:`, {
       name: assessmentData.name,
-      traineeIds: assessmentData.traineeIds
+      traineeCount: assessmentData.traineeIds.length,
+      sectionCount: templateSections.length
     })
-    return await this.prisma.$transaction(async (tx) => {
-      const createdAssessments: AssessmentFormResType[] = []
 
-      // If creating for subject, get the courseId from that subject
-      let courseId = assessmentData.courseId
-      if (assessmentData.subjectId && !courseId) {
-        const subject = await tx.subject.findUnique({
-          where: { id: assessmentData.subjectId },
-          select: { courseId: true }
-        })
-        if (subject) {
-          courseId = subject.courseId
-        }
-      }
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const createdAssessments: AssessmentFormResType[] = []
 
-      // Determine initial status based on occurrence date
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const occurrenceDate = new Date(assessmentData.occuranceDate)
-      occurrenceDate.setHours(0, 0, 0, 0)
+          // If creating for subject, get the courseId from that subject
+          let courseId = assessmentData.courseId
+          if (assessmentData.subjectId && !courseId) {
+            const subject = await tx.subject.findUnique({
+              where: { id: assessmentData.subjectId },
+              select: { courseId: true }
+            })
+            if (subject) {
+              courseId = subject.courseId
+            }
+          }
 
-      // If occurrence date is today, start with ON_GOING, otherwise NOT_STARTED (future dates)
-      // Past dates are prevented at service layer validation
-      const initialStatus =
-        occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
+          // Determine initial status based on occurrence date
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const occurrenceDate = new Date(assessmentData.occuranceDate)
+          occurrenceDate.setHours(0, 0, 0, 0)
 
-      // Get trainee EIDs for name formatting
-      const trainees = await tx.user.findMany({
-        where: {
-          id: { in: assessmentData.traineeIds }
-        },
-        select: {
-          id: true,
-          eid: true
-        }
-      })
+          // If occurrence date is today, start with ON_GOING, otherwise NOT_STARTED (future dates)
+          // Past dates are prevented at service layer validation
+          const initialStatus =
+            occurrenceDate.getTime() === today.getTime() ? AssessmentStatus.ON_GOING : AssessmentStatus.NOT_STARTED
 
-      const traineeEidMap = new Map(trainees.map((t) => [t.id, t.eid]))
+          // Get trainee EIDs for name formatting
+          const trainees = await tx.user.findMany({
+            where: {
+              id: { in: assessmentData.traineeIds }
+            },
+            select: {
+              id: true,
+              eid: true
+            }
+          })
 
-      for (const traineeId of assessmentData.traineeIds) {
-        // Get trainee EID and format assessment name with dash separator
-        const traineeEid = traineeEidMap.get(traineeId)
-        const assessmentName = `${assessmentData.name} - ${traineeEid}`
-        // console.log(`Creating assessment for trainee ${traineeId}, EID: ${traineeEid}, formatted name: "${assessmentName}"`)
+          const traineeEidMap = new Map(trainees.map((t) => [t.id, t.eid]))
 
-        // Create the main assessment form
-        const assessmentForm = await tx.assessmentForm.create({
-          data: {
-            templateId: assessmentData.templateId,
-            name: assessmentName,
-            subjectId: assessmentData.subjectId || null,
-            courseId: courseId || null,
-            occuranceDate: assessmentData.occuranceDate,
-            createdById,
-            updatedById: createdById,
-            traineeId,
-            status: initialStatus,
-            isTraineeLocked: true,
-            // All nullable fields remain null by default
-            submittedAt: null,
-            comment: null,
-            approvedById: null,
-            approvedAt: null,
-            resultScore: null,
-            resultText: null,
-            pdfUrl: null
-          },
-          include: {
-            template: {
-              select: {
-                id: true,
-                name: true,
-                version: true,
-                department: {
+          for (const traineeId of assessmentData.traineeIds) {
+            // Get trainee EID and format assessment name with dash separator
+            const traineeEid = traineeEidMap.get(traineeId)
+            const assessmentName = `${assessmentData.name} - ${traineeEid}`
+
+            // Create the main assessment form
+            const assessmentForm = await tx.assessmentForm.create({
+              data: {
+                templateId: assessmentData.templateId,
+                name: assessmentName,
+                subjectId: assessmentData.subjectId || null,
+                courseId: courseId || null,
+                occuranceDate: assessmentData.occuranceDate,
+                createdById,
+                updatedById: createdById,
+                traineeId,
+                status: initialStatus,
+                isTraineeLocked: true,
+                // All nullable fields remain null by default
+                submittedAt: null,
+                comment: null,
+                approvedById: null,
+                approvedAt: null,
+                resultScore: null,
+                resultText: null,
+                pdfUrl: null
+              },
+              include: {
+                template: {
                   select: {
                     id: true,
                     name: true,
-                    code: true
+                    version: true,
+                    department: {
+                      select: {
+                        id: true,
+                        name: true,
+                        code: true
+                      }
+                    }
                   }
-                }
-              }
-            },
-            trainee: {
-              select: {
-                id: true,
-                eid: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                email: true
-              }
-            },
-            subject: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
+                },
+                trainee: {
+                  select: {
+                    id: true,
+                    eid: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    email: true
+                  }
+                },
+                subject: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    course: {
+                      select: {
+                        id: true,
+                        name: true,
+                        code: true
+                      }
+                    }
+                  }
+                },
                 course: {
                   select: {
                     id: true,
                     name: true,
-                    code: true
+                    code: true,
+                    department: {
+                      select: {
+                        id: true,
+                        name: true,
+                        code: true
+                      }
+                    }
                   }
-                }
-              }
-            },
-            course: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-                department: {
+                },
+                createdBy: {
                   select: {
                     id: true,
-                    name: true,
-                    code: true
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    email: true
+                  }
+                },
+                approvedBy: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    middleName: true,
+                    email: true
                   }
                 }
               }
-            },
-            createdBy: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                email: true
-              }
-            },
-            approvedBy: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                email: true
-              }
-            }
-          }
-        })
+            })
 
-        // Create assessment sections for each template section
-        for (const templateSection of templateSections) {
-          const assessmentSection = await tx.assessmentSection.create({
-            data: {
+            // Batch create assessment sections for all template sections
+            const sectionsToCreate = templateSections.map((templateSection) => ({
               assessmentFormId: assessmentForm.id,
               templateSectionId: templateSection.id,
               status: AssessmentSectionStatus.REQUIRED_ASSESSMENT,
-              assessedById: null // Will be set when someone starts filling the section
-            }
-          })
+              assessedById: null
+            }))
 
-          // Create assessment values for each field in the section
-          for (const field of templateSection.fields) {
-            await tx.assessmentValue.create({
-              data: {
-                assessmentSectionId: assessmentSection.id,
-                templateFieldId: field.id,
-                answerValue: null, // Empty initially
-                createdById
-              }
+            const createdSections = await tx.assessmentSection.createManyAndReturn({
+              data: sectionsToCreate
             })
+
+            // Batch create assessment values for all fields in all sections
+            const valuesToCreate = []
+            for (let i = 0; i < templateSections.length; i++) {
+              const templateSection = templateSections[i]
+              const assessmentSection = createdSections[i]
+
+              for (const field of templateSection.fields) {
+                valuesToCreate.push({
+                  assessmentSectionId: assessmentSection.id,
+                  templateFieldId: field.id,
+                  answerValue: null,
+                  createdById
+                })
+              }
+            }
+
+            // Batch create all assessment values at once
+            if (valuesToCreate.length > 0) {
+              await tx.assessmentValue.createMany({
+                data: valuesToCreate
+              })
+            }
+
+            createdAssessments.push(assessmentForm as AssessmentFormResType)
           }
+
+          console.log(`Successfully created ${createdAssessments.length} assessments`)
+          return createdAssessments
+        },
+        {
+          timeout: 120000 // 120 seconds timeout for bulk operations
         }
-
-        createdAssessments.push(assessmentForm as AssessmentFormResType)
-      }
-
-      return createdAssessments
-    })
+      )
+    } catch (error) {
+      console.error('Transaction failed in createAssessments:', {
+        error: error.message,
+        code: error.code,
+        traineeCount: assessmentData.traineeIds.length
+      })
+      throw error
+    }
   }
 
   /**
