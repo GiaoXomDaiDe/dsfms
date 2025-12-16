@@ -102,7 +102,7 @@ export class CourseService {
       throw CourseCannotUpdateFromCurrentStatusException
     }
     // 1) Nếu đổi department → validate department mới
-    if (data.departmentId && data.departmentId !== existingCourse.departmentId) {
+    if (data.departmentId && data.departmentId !== existingCourse.department.id) {
       const isActiveDept = await this.sharedDepartmentRepo.exists(data.departmentId)
 
       if (!isActiveDept) {

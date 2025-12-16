@@ -47,15 +47,6 @@ export const trainerYearsOfExperienceSchema = nullableNumberField(
   { coerceInteger: true }
 ).default(0)
 
-export const trainerBioSchema = optionalText({
-  field: 'Bio',
-  max: 1000,
-  options: {
-    pattern: BASIC_TEXT_REGEX,
-    message: BIO_MESSAGE
-  }
-})
-
 export const traineeTrainingBatchSchema = requiredText({
   field: 'Training batch',
   max: 100,
