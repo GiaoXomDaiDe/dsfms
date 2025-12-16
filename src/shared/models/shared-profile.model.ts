@@ -1,10 +1,14 @@
 import z from 'zod'
-import { isoDateSchema, isoDatetimeSchema, nullableUuidSchema } from '~/shared/helpers/zod-validation.helper'
+import {
+  isoDateSchema,
+  isoDatetimeSchema,
+  nullableStringField,
+  nullableUuidSchema
+} from '~/shared/helpers/zod-validation.helper'
 import {
   traineeNationSchema,
   traineePassportSchema,
   traineeTrainingBatchSchema,
-  trainerBioSchema,
   trainerCertificationNumberSchema,
   trainerSpecializationSchema,
   trainerYearsOfExperienceSchema
@@ -14,7 +18,7 @@ export const TrainerProfileSchema = z.object({
   specialization: trainerSpecializationSchema,
   certificationNumber: trainerCertificationNumberSchema,
   yearsOfExp: trainerYearsOfExperienceSchema,
-  bio: trainerBioSchema,
+  bio: nullableStringField(z.string()),
   createdById: nullableUuidSchema,
   updatedById: nullableUuidSchema,
   deletedById: nullableUuidSchema,

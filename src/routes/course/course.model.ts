@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import {
   GetTraineeEnrollmentsQuerySchema,
-  SubjectDetailInstructorSchema,
   TraineeEnrollmentRecordSchema,
   TraineeEnrollmentSubjectSchema,
   TraineeEnrollmentUserSchema
@@ -51,7 +50,9 @@ export const GetCoursesResSchema = z.object({
   totalItems: z.number()
 })
 
-export const GetCourseResSchema = CourseSchema.extend({
+const CourseDetailBaseSchema = CourseSchema.omit({ departmentId: true })
+
+export const GetCourseResSchema = CourseDetailBaseSchema.extend({
   department: DepartmentSchema.pick({
     id: true,
     name: true,
@@ -61,12 +62,8 @@ export const GetCourseResSchema = CourseSchema.extend({
   subjectCount: z.number().int().default(0),
   traineeCount: z.number().int().default(0),
   trainerCount: z.number().int().default(0),
-  instructors: z.array(CourseInstructorSchema).default([]),
-  subjects: z.array(
-    SubjectSchema.omit({ courseId: true }).extend({
-      instructors: z.array(SubjectDetailInstructorSchema).default([])
-    })
-  )
+  courseInstructors: z.array(CourseInstructorSchema).default([]),
+  subjects: z.array(SubjectSchema.omit({ courseId: true }))
 })
 
 export const CreateCourseBodySchema = CourseSchema.pick({
