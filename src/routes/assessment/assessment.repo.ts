@@ -3542,6 +3542,10 @@ export class AssessmentRepo {
           }
         }
 
+        // Calculate totalPassed and totalFailed based on resultText
+        const totalPassed = allAssessments.filter((assessment) => assessment.resultText === 'PASS').length
+        const totalFailed = allAssessments.filter((assessment) => assessment.resultText === 'FAIL').length
+
         return {
           name: baseName,
           subjectId: event.subjectId,
@@ -3549,6 +3553,8 @@ export class AssessmentRepo {
           occuranceDate: event.occuranceDate,
           status: eventStatus,
           totalTrainees: event._count.id,
+          totalPassed,
+          totalFailed,
           entityInfo: entityInfo || {
             id: '',
             name: 'Unknown',
@@ -4151,6 +4157,10 @@ export class AssessmentRepo {
           }
         }
 
+        // Calculate totalPassed and totalFailed based on resultText
+        const totalPassed = allAssessments.filter((assessment) => assessment.resultText === 'PASS').length
+        const totalFailed = allAssessments.filter((assessment) => assessment.resultText === 'FAIL').length
+
         return {
           name: baseName,
           subjectId: event.subjectId,
@@ -4158,6 +4168,8 @@ export class AssessmentRepo {
           occuranceDate: event.occuranceDate,
           status: eventStatus,
           totalTrainees: event._count.id,
+          totalPassed,
+          totalFailed,
           entityInfo: entityInfo || {
             id: '',
             name: 'Unknown',

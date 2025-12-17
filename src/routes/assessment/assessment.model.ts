@@ -722,6 +722,8 @@ export const AssessmentEventItemSchema = z.object({
   occuranceDate: z.coerce.date(),
   status: AssessmentEventStatus,
   totalTrainees: z.number().int().min(0),
+  totalPassed: z.number().int().min(0),
+  totalFailed: z.number().int().min(0),
   // Additional info about the subject/course
   entityInfo: z.object({
     id: z.string().uuid(),
