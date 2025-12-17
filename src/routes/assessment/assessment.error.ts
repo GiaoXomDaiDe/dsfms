@@ -48,9 +48,9 @@ export const SubjectNotFoundException = new NotFoundException('Subject not found
 
 export const CourseNotFoundException = new NotFoundException('Course not found')
 
-export const SubjectNotActiveException = new BadRequestException('Subject is not active or has been deleted')
+export const SubjectNotActiveException = new BadRequestException('Subject is archived or has been deleted')
 
-export const CourseNotActiveException = new BadRequestException('Course is not active or has been deleted')
+export const CourseNotActiveException = new BadRequestException('Course is archived or has been deleted')
 
 // ===== DATE VALIDATION ERRORS =====
 
