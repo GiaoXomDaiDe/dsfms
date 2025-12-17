@@ -3429,20 +3429,30 @@ export class AssessmentRepo {
     // Enrich ALL events with subject/course and template information and calculate status
     const allEnrichedEvents = await Promise.all(
       allEvents.map(async (event) => {
-        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course' } | null = null
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course'; belongToCourseName: string | null } | null = null
 
         // Get subject or course info
         if (event.subjectId) {
           const subject = await this.prisma.subject.findUnique({
             where: { id: event.subjectId },
-            select: { id: true, name: true, code: true }
+            select: { 
+              id: true, 
+              name: true, 
+              code: true,
+              course: {
+                select: {
+                  name: true
+                }
+              }
+            }
           })
           if (subject) {
             entityInfo = {
               id: subject.id,
               name: subject.name,
               code: subject.code,
-              type: 'subject'
+              type: 'subject',
+              belongToCourseName: subject.course.name
             }
           }
         } else if (event.courseId) {
@@ -3455,7 +3465,8 @@ export class AssessmentRepo {
               id: course.id,
               name: course.name,
               code: course.code,
-              type: 'course'
+              type: 'course',
+              belongToCourseName: null
             }
           }
         }
@@ -3542,7 +3553,8 @@ export class AssessmentRepo {
             id: '',
             name: 'Unknown',
             code: 'UNKNOWN',
-            type: event.subjectId ? 'subject' : 'course'
+            type: event.subjectId ? 'subject' : 'course',
+            belongToCourseName: null
           },
           templateInfo: template
             ? {
@@ -4026,20 +4038,30 @@ export class AssessmentRepo {
     // Enrich ALL events with subject/course and template information and calculate status
     const allEnrichedEvents = await Promise.all(
       allEvents.map(async (event) => {
-        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course' } | null = null
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course'; belongToCourseName: string | null } | null = null
 
         // Get subject or course info
         if (event.subjectId) {
           const subject = await this.prisma.subject.findUnique({
             where: { id: event.subjectId },
-            select: { id: true, name: true, code: true }
+            select: { 
+              id: true, 
+              name: true, 
+              code: true,
+              course: {
+                select: {
+                  name: true
+                }
+              }
+            }
           })
           if (subject) {
             entityInfo = {
               id: subject.id,
               name: subject.name,
               code: subject.code,
-              type: 'subject'
+              type: 'subject',
+              belongToCourseName: subject.course.name
             }
           }
         } else if (event.courseId) {
@@ -4052,7 +4074,8 @@ export class AssessmentRepo {
               id: course.id,
               name: course.name,
               code: course.code,
-              type: 'course'
+              type: 'course',
+              belongToCourseName: null
             }
           }
         }
@@ -4139,7 +4162,8 @@ export class AssessmentRepo {
             id: '',
             name: 'Unknown',
             code: 'UNKNOWN',
-            type: event.subjectId ? 'subject' : 'course'
+            type: event.subjectId ? 'subject' : 'course',
+            belongToCourseName: null
           },
           templateInfo: template
             ? {
