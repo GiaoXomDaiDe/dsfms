@@ -124,7 +124,7 @@ export class AssessmentService {
         if (!subject) {
           throw SubjectNotFoundException
         }
-        if (subject.status !== SubjectStatus.PLANNED && subject.status !== SubjectStatus.ON_GOING) {
+        if (subject.status === SubjectStatus.ARCHIVED) {
           throw SubjectNotActiveException
         }
         entityDepartmentId = subject.course.department.id
@@ -135,7 +135,7 @@ export class AssessmentService {
         if (!course) {
           throw CourseNotFoundException
         }
-        if (course.status !== CourseStatus.PLANNED && course.status !== CourseStatus.ON_GOING) {
+        if (course.status === CourseStatus.ARCHIVED) {
           throw CourseNotActiveException
         }
         entityDepartmentId = course.department.id
@@ -337,7 +337,7 @@ export class AssessmentService {
         if (!subject) {
           throw SubjectNotFoundException
         }
-        if (subject.status !== SubjectStatus.PLANNED && subject.status !== SubjectStatus.ON_GOING) {
+        if (subject.status === SubjectStatus.ARCHIVED) {
           throw SubjectNotActiveException
         }
         entityDepartmentId = subject.course.department.id
@@ -355,7 +355,7 @@ export class AssessmentService {
         if (!course) {
           throw CourseNotFoundException
         }
-        if (course.status !== CourseStatus.PLANNED && course.status !== CourseStatus.ON_GOING) {
+        if (course.status === CourseStatus.ARCHIVED) {
           throw CourseNotActiveException
         }
         entityDepartmentId = course.department.id

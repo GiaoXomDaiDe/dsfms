@@ -2293,6 +2293,9 @@ export class AssessmentRepo {
       const assessment = assessmentSection.assessmentForm
 
       switch (fieldName) {
+        case 'trainee_passport_no':
+          return assessment.trainee.traineeProfile?.passportNo || null
+          
         case 'trainee_name':
           return `${assessment.trainee.lastName} ${assessment.trainee.middleName || ''} ${assessment.trainee.firstName}`.trim()
 
