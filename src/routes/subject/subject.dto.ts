@@ -12,6 +12,7 @@ import {
   CreateSubjectBodySchema,
   GetActiveTraineesBodySchema,
   GetActiveTraineesResSchema,
+  GetAvailableTrainersQuerySchema,
   GetAvailableTrainersResSchema,
   GetEnrollmentsQuerySchema,
   GetEnrollmentsResSchema,
@@ -27,7 +28,7 @@ import {
   GetTraineeEnrollmentsResSchema,
   LookupTraineesBodySchema,
   RemoveCourseEnrollmentsByBatchResSchema,
-  RemoveCourseTraineeEnrollmentsBodySchema,
+  RemoveCourseTraineeEnrollmentsParamsSchema,
   RemoveCourseTraineeEnrollmentsResSchema,
   RemoveEnrollmentsBodySchema,
   RemoveEnrollmentsResSchema,
@@ -44,6 +45,7 @@ import { UserLookupResSchema } from '~/shared/models/shared-user.model'
 
 export class GetSubjectsQueryDto extends createZodDto(GetSubjectsQuerySchema) {}
 export class GetSubjectTraineesQueryDto extends createZodDto(GetSubjectTraineesQuerySchema) {}
+export class GetAvailableTrainersQueryDto extends createZodDto(GetAvailableTrainersQuerySchema) {}
 
 export class GetSubjectsResDto extends createResponseDto(GetSubjectsResSchema, SubjectMes.LIST_SUCCESS) {}
 export class GetSubjectDetailResDto extends createResponseDto(GetSubjectDetailResSchema, SubjectMes.DETAIL_SUCCESS) {}
@@ -110,7 +112,7 @@ export class RemoveCourseEnrollmentsByBatchResDto extends createResponseDto(
   RemoveCourseEnrollmentsByBatchResSchema,
   SubjectMes.REMOVE_COURSE_ENROLLMENTS_BY_BATCH_SUCCESS
 ) {}
-export class RemoveCourseTraineeEnrollmentsBodyDto extends createZodDto(RemoveCourseTraineeEnrollmentsBodySchema) {}
+export class RemoveCourseTraineeEnrollmentsParamsDto extends createZodDto(RemoveCourseTraineeEnrollmentsParamsSchema) {}
 export class RemoveCourseTraineeEnrollmentsResDto extends createResponseDto(
   RemoveCourseTraineeEnrollmentsResSchema,
   SubjectMes.REMOVE_COURSE_TRAINEE_ENROLLMENTS_SUCCESS

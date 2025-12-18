@@ -34,6 +34,7 @@ import { PrismaService } from '~/shared/services/prisma.service'
 import {
   CannotArchiveSubjectWithNonCancelledEnrollmentsException,
   CourseNotFoundException,
+  SubjectEnrollmentRemovalNotAllowedFromCurrentStatusException,
   SubjectNotFoundException,
   TraineeNotFoundException,
   TraineeResolutionFailureException,
@@ -237,7 +238,49 @@ export class SubjectRepository {
     }
   }
 
-  async findActiveTrainers(): Promise<GetAvailableTrainersResType> {
+  async findActiveTrainers({
+    subjectId,
+    courseId
+  }: {
+    subjectId?: string
+    courseId?: string
+  }): Promise<GetAvailableTrainersResType> {
+    const excludeTrainerIds = new Set<string>()
+
+    if (subjectId) {
+      const subjectInstructors = await this.prisma.subjectInstructor.findMany({
+        where: {
+          subjectId,
+          trainer: {
+            deletedAt: null,
+            status: UserStatus.ACTIVE
+          }
+        },
+        select: { trainerUserId: true }
+      })
+
+      subjectInstructors.forEach((i) => {
+        if (i.trainerUserId) excludeTrainerIds.add(i.trainerUserId)
+      })
+    }
+
+    if (courseId) {
+      const courseInstructors = await this.prisma.courseInstructor.findMany({
+        where: {
+          courseId,
+          trainer: {
+            deletedAt: null,
+            status: UserStatus.ACTIVE
+          }
+        },
+        select: { trainerUserId: true }
+      })
+
+      courseInstructors.forEach((i) => {
+        if (i.trainerUserId) excludeTrainerIds.add(i.trainerUserId)
+      })
+    }
+
     const trainers = await this.prisma.user.findMany({
       where: {
         deletedAt: null,
@@ -246,7 +289,12 @@ export class SubjectRepository {
         },
         role: {
           name: RoleName.TRAINER
-        }
+        },
+        ...(excludeTrainerIds.size > 0 && {
+          id: {
+            notIn: Array.from(excludeTrainerIds)
+          }
+        })
       },
       select: userTrainerDirectorySelect,
       orderBy: {
@@ -258,7 +306,7 @@ export class SubjectRepository {
   }
 
   async findActiveTrainees({ subjectIds }: { subjectIds?: string[] }): Promise<GetActiveTraineesResType> {
-    let conflictingUserIds: string[] = []
+    const conflictingUserIds = new Set<string>()
 
     if (subjectIds && subjectIds.length > 0) {
       const blockingStatuses: SubjectEnrollmentStatusValue[] = [
@@ -266,18 +314,52 @@ export class SubjectRepository {
         SubjectEnrollmentStatus.ON_GOING
       ]
 
-      const conflicts = await this.prisma.subjectEnrollment.findMany({
+      const uniqueSubjectIds = Array.from(new Set(subjectIds))
+
+      const enrollments = await this.prisma.subjectEnrollment.findMany({
         where: {
-          subjectId: { in: subjectIds },
+          subjectId: { in: uniqueSubjectIds },
           status: { in: blockingStatuses }
         },
         select: {
+          subjectId: true,
           traineeUserId: true
-        },
-        distinct: ['traineeUserId']
+        }
       })
 
-      conflictingUserIds = conflicts.map((conflict) => conflict.traineeUserId).filter((id): id is string => Boolean(id))
+      if (uniqueSubjectIds.length === 1) {
+        enrollments.forEach((enrollment) => {
+          if (enrollment.traineeUserId) {
+            conflictingUserIds.add(enrollment.traineeUserId)
+          }
+        })
+      } else {
+        const subjectToTraineeMap = new Map<string, Set<string>>()
+
+        enrollments.forEach((enrollment) => {
+          if (!enrollment.subjectId || !enrollment.traineeUserId) return
+
+          const set = subjectToTraineeMap.get(enrollment.subjectId) ?? new Set<string>()
+          set.add(enrollment.traineeUserId)
+          subjectToTraineeMap.set(enrollment.subjectId, set)
+        })
+
+        const subjectSets = uniqueSubjectIds.map((id) => subjectToTraineeMap.get(id) ?? new Set<string>())
+
+        if (subjectSets.length > 0) {
+          const intersection = new Set<string>(subjectSets[0])
+          for (let i = 1; i < subjectSets.length; i++) {
+            const currentSet = subjectSets[i]
+            for (const traineeId of Array.from(intersection)) {
+              if (!currentSet.has(traineeId)) {
+                intersection.delete(traineeId)
+              }
+            }
+          }
+
+          intersection.forEach((id) => conflictingUserIds.add(id))
+        }
+      }
     }
 
     const trainees = await this.prisma.user.findMany({
@@ -287,9 +369,9 @@ export class SubjectRepository {
         role: {
           name: RoleName.TRAINEE
         },
-        ...(conflictingUserIds.length > 0 && {
+        ...(conflictingUserIds.size > 0 && {
           id: {
-            notIn: conflictingUserIds
+            notIn: Array.from(conflictingUserIds)
           }
         })
       },
@@ -697,7 +779,8 @@ export class SubjectRepository {
 
     if (newEnrollments.length > 0) {
       await this.prisma.subjectEnrollment.createMany({
-        data: newEnrollments
+        data: newEnrollments,
+        skipDuplicates: true
       })
     }
 
@@ -1074,17 +1157,18 @@ export class SubjectRepository {
   }
 
   async removeCourseEnrollmentsForTrainee({
-    traineeEid,
-    courseCode
+    traineeId,
+    courseId
   }: {
-    traineeEid: string
-    courseCode: string
+    traineeId: string
+    courseId: string
   }): Promise<{ removedEnrollmentsCount: number; affectedSubjectCodes: string[] }> {
-    // Find trainee by EID
+    // Validate trainee
     const trainee = await this.prisma.user.findFirst({
       where: {
-        eid: traineeEid,
+        id: traineeId,
         deletedAt: null,
+        status: UserStatus.ACTIVE,
         role: {
           name: RoleName.TRAINEE
         }
@@ -1098,17 +1182,18 @@ export class SubjectRepository {
       throw TraineeNotFoundException
     }
 
-    // Find course by code
+    // Validate course
     const course = await this.prisma.course.findFirst({
       where: {
-        code: courseCode,
+        id: courseId,
         deletedAt: null,
         status: {
           not: CourseStatus.ARCHIVED
         }
       },
       select: {
-        id: true
+        id: true,
+        status: true
       }
     })
 
@@ -1116,7 +1201,7 @@ export class SubjectRepository {
       throw CourseNotFoundException
     }
 
-    // Find subjects in the course
+    // Find subjects in the course (must be PLANNED)
     const subjects = await this.prisma.subject.findMany({
       where: {
         courseId: course.id,
@@ -1124,7 +1209,8 @@ export class SubjectRepository {
       },
       select: {
         id: true,
-        code: true
+        code: true,
+        status: true
       }
     })
 
@@ -1135,16 +1221,20 @@ export class SubjectRepository {
       }
     }
 
+    const nonPlanned = subjects.find((s) => s.status !== SubjectStatus.PLANNED)
+    if (nonPlanned) {
+      throw SubjectEnrollmentRemovalNotAllowedFromCurrentStatusException
+    }
+
     const subjectIds = subjects.map((subject) => subject.id)
 
-    // Find enrollments with ENROLLED status only
+    // Find enrollments for trainee across those subjects
     const enrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
         subjectId: {
           in: subjectIds
         },
-        traineeUserId: trainee.id,
-        status: SubjectEnrollmentStatus.ENROLLED
+        traineeUserId: trainee.id
       },
       select: {
         subjectId: true
@@ -1160,15 +1250,14 @@ export class SubjectRepository {
 
     const affectedSubjectIds = Array.from(new Set(enrollments.map((enrollment) => enrollment.subjectId)))
 
-    // Cancel ENROLLED enrollments instead of hard delete
+    // Cancel enrollments
     const now = new Date()
     const { count } = await this.prisma.subjectEnrollment.updateMany({
       where: {
         subjectId: {
           in: affectedSubjectIds
         },
-        traineeUserId: trainee.id,
-        status: SubjectEnrollmentStatus.ENROLLED
+        traineeUserId: trainee.id
       },
       data: {
         status: SubjectEnrollmentStatus.CANCELLED,
@@ -1176,7 +1265,6 @@ export class SubjectRepository {
       }
     })
 
-    // Get subject codes for affected subjects
     const affectedSubjects = subjects.filter((subject) => affectedSubjectIds.includes(subject.id))
     const affectedSubjectCodes = affectedSubjects.map((subject) => subject.code)
 

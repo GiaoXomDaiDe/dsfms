@@ -117,6 +117,9 @@ export const SubjectCannotRemoveTrainerFromCurrentStatusException = new BadReque
 export const SubjectCannotUpdateFromCurrentStatusException = new BadRequestException(
   'Subject can only be updated when status is PLANNED'
 )
+export const SubjectEnrollmentRemovalNotAllowedFromCurrentStatusException = new BadRequestException(
+  'Subject status must be PLANNED to remove enrollments'
+)
 export const SubjectEnrollmentNotAllowedFromCurrentStatusException = new BadRequestException(
   'Subject can only enroll trainees when status is PLANNED'
 )

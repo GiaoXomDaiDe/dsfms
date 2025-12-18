@@ -21,7 +21,7 @@ import {
   UpdateRoleBodyType
 } from '~/routes/role/role.model'
 import { RoleRepo } from '~/routes/role/role.repo'
-import { DEFAULT_ROLE_ENDPOINT_PERMISSION_NAMES } from '~/shared/constants/permission.constant'
+import { getDefaultPermissionNamesForRole } from '~/shared/constants/role-default-permissions/role-default-permissions.constant'
 import { isNotFoundPrismaError, isUniqueConstraintPrismaError } from '~/shared/helper'
 import { SharedPermissionGroupRepository } from '~/shared/repositories/shared-permission-group.repo'
 import { SharedPermissionRepository } from '~/shared/repositories/shared-permission.repo'
@@ -88,7 +88,7 @@ export class RoleService {
   async create({ data, createdById }: { data: CreateRoleBodyType; createdById: string }): Promise<CreateRoleResType> {
     const [permissionIds, defaultPermissionIds] = await Promise.all([
       this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes),
-      this.sharedPermissionRepo.findActiveIdsByNames(DEFAULT_ROLE_ENDPOINT_PERMISSION_NAMES)
+      this.sharedPermissionRepo.findActiveIdsByNames(getDefaultPermissionNamesForRole(data.name))
     ])
 
     const mergedPermissionIds = Array.from(new Set([...permissionIds, ...defaultPermissionIds]))
@@ -118,7 +118,7 @@ export class RoleService {
     if (data.permissionGroupCodes && data.permissionGroupCodes.length > 0) {
       const [groupPermissionIds, defaultPermissionIds] = await Promise.all([
         this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes),
-        this.sharedPermissionRepo.findActiveIdsByNames(DEFAULT_ROLE_ENDPOINT_PERMISSION_NAMES)
+        this.sharedPermissionRepo.findActiveIdsByNames(getDefaultPermissionNamesForRole(existingRole.name))
       ])
 
       permissionIds = Array.from(new Set([...groupPermissionIds, ...defaultPermissionIds]))

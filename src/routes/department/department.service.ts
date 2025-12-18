@@ -330,6 +330,7 @@ export class DepartmentService {
     targetDepartmentId?: string
   ): Promise<{ id: string; departmentId: string | null }> {
     const user = await this.sharedUserRepo.findUniqueIncludeProfile(headUserId)
+    console.log(user)
 
     if (!user) throw DepartmentHeadUserNotFoundException
     if (user.role.name !== RoleName.DEPARTMENT_HEAD) throw DepartmentHeadMustHaveRoleException

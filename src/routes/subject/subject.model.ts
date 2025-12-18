@@ -119,6 +119,16 @@ export const GetAvailableTrainersResSchema = z.object({
   totalCount: z.number().int()
 })
 
+export const GetAvailableTrainersQuerySchema = z
+  .object({
+    subjectId: z.uuid().optional(),
+    courseId: z.uuid().optional()
+  })
+  .refine((data) => data.subjectId || data.courseId, {
+    message: 'Either subjectId or courseId is required',
+    path: ['subjectId']
+  })
+
 export const ActiveTraineeSchema = UserSchema.pick({
   id: true,
   eid: true,
@@ -329,9 +339,9 @@ export const RemoveCourseEnrollmentsByBatchResSchema = z.object({
   message: z.string()
 })
 
-export const RemoveCourseTraineeEnrollmentsBodySchema = z.object({
-  traineeEid: z.string().min(1),
-  courseCode: z.string().min(1)
+export const RemoveCourseTraineeEnrollmentsParamsSchema = z.object({
+  courseId: z.uuid(),
+  traineeId: z.uuid()
 })
 
 export const RemoveCourseTraineeEnrollmentsResSchema = z.object({
@@ -372,7 +382,7 @@ export type SubjectEnrollmentSummaryType = z.infer<typeof SubjectEnrollmentSumma
 export type SubjectEnrollmentListItemType = z.infer<typeof SubjectEnrollmentListItemSchema>
 export type GetSubjectEnrollmentsResType = z.infer<typeof GetSubjectEnrollmentsResSchema>
 export type RemoveCourseEnrollmentsByBatchResType = z.infer<typeof RemoveCourseEnrollmentsByBatchResSchema>
-export type RemoveCourseTraineeEnrollmentsBodyType = z.infer<typeof RemoveCourseTraineeEnrollmentsBodySchema>
+export type RemoveCourseTraineeEnrollmentsParamsType = z.infer<typeof RemoveCourseTraineeEnrollmentsParamsSchema>
 export type RemoveCourseTraineeEnrollmentsResType = z.infer<typeof RemoveCourseTraineeEnrollmentsResSchema>
 export type GetActiveTraineesBodyType = z.infer<typeof GetActiveTraineesBodySchema>
 

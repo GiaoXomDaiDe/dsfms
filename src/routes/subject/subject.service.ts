@@ -64,7 +64,6 @@ import {
   LookupTraineesBodyType,
   LookupTraineesResType,
   RemoveCourseEnrollmentsByBatchResType,
-  RemoveCourseTraineeEnrollmentsBodyType,
   RemoveCourseTraineeEnrollmentsResType,
   RemoveEnrollmentsBodyType,
   RemoveEnrollmentsResType,
@@ -101,8 +100,8 @@ export class SubjectService {
     return subject
   }
 
-  async getActiveTrainers(): Promise<GetAvailableTrainersResType> {
-    const trainers = await this.subjectRepo.findActiveTrainers()
+  async getActiveTrainers(query: { subjectId?: string; courseId?: string }): Promise<GetAvailableTrainersResType> {
+    const trainers = await this.subjectRepo.findActiveTrainers(query)
 
     return trainers
   }
@@ -638,18 +637,20 @@ export class SubjectService {
   }
 
   async removeCourseEnrollmentsForTrainee({
-    data
+    courseId,
+    traineeId
   }: {
-    data: RemoveCourseTraineeEnrollmentsBodyType
+    courseId: string
+    traineeId: string
   }): Promise<RemoveCourseTraineeEnrollmentsResType> {
     const result = await this.subjectRepo.removeCourseEnrollmentsForTrainee({
-      traineeEid: data.traineeEid,
-      courseCode: data.courseCode
+      traineeId,
+      courseId
     })
 
     const message =
       result.removedEnrollmentsCount > 0
-        ? `Removed ${result.removedEnrollmentsCount} enrollments for trainee ${data.traineeEid} from course ${data.courseCode}`
+        ? `Removed ${result.removedEnrollmentsCount} enrollments for trainee ${traineeId} from course ${courseId}`
         : 'No enrollments found for this trainee in the course'
 
     return {
