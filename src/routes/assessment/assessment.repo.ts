@@ -1774,7 +1774,7 @@ export class AssessmentRepo {
               roleRequirement = 'TRAINER'
               canAssess = userRoleInAssessment !== null // Must be assigned to subject/course
             }
-          } else if (userMainRole === 'DEPARTMENT HEAD') {
+          } else if (userMainRole === 'DEPARTMENT HEAD' || userMainRole === 'DEPARTMENT_HEAD' ) {
             // DEPARTMENT_HEAD can see all sections but cannot assess them
             canAssess = true
           }
