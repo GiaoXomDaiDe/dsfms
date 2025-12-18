@@ -9,6 +9,7 @@ import {
   UpdateDepartmentBodyType
 } from '~/routes/department/department.model'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { SubjectEnrollmentStatus, SubjectStatus } from '~/shared/constants/subject.constant'
 import { SerializeAll } from '~/shared/decorators/serialize.decorator'
 import {
   departmentWithHeadBasicInclude,
@@ -34,11 +35,13 @@ export class DepartmentRepository {
 
     const departmentsWithStats = await Promise.all(
       departments.map(async (department) => {
-        const courseCount = await this.getCourseCountByDepartment(department.id)
+        const stats = await this.getDepartmentStats(department.id)
 
         return {
           ...department,
-          courseCount
+          courseCount: stats.courseCount,
+          trainerCount: stats.trainerCount,
+          traineeCount: stats.traineeCount
         }
       })
     )
@@ -57,7 +60,7 @@ export class DepartmentRepository {
 
     if (!department) return null
 
-    const courseCount = await this.getCourseCountByDepartment(id)
+    const stats = await this.getDepartmentStats(id)
 
     // Get ALL courses of this department
     const courses = await this.prismaService.course.findMany({
@@ -101,7 +104,9 @@ export class DepartmentRepository {
 
     return {
       ...department,
-      courseCount,
+      courseCount: stats.courseCount,
+      trainerCount: stats.trainerCount,
+      traineeCount: stats.traineeCount,
       courses: formattedCourses
     }
   }
@@ -233,15 +238,90 @@ export class DepartmentRepository {
     }
   }
 
-  private async getCourseCountByDepartment(departmentId: string): Promise<number> {
-    return this.prismaService.course.count({
+  private async getDepartmentStats(departmentId: string): Promise<{
+    courseCount: number
+    trainerCount: number
+    traineeCount: number
+  }> {
+    const courses = await this.prismaService.course.findMany({
       where: {
         departmentId,
         deletedAt: null,
         status: {
           notIn: ['ARCHIVED']
         }
+      },
+      select: {
+        id: true
       }
     })
+
+    const courseIds = courses.map((course) => course.id)
+
+    if (courseIds.length === 0) {
+      return {
+        courseCount: 0,
+        trainerCount: 0,
+        traineeCount: 0
+      }
+    }
+
+    const subjects = await this.prismaService.subject.findMany({
+      where: {
+        courseId: { in: courseIds },
+        deletedAt: null,
+        status: {
+          notIn: [SubjectStatus.ARCHIVED]
+        }
+      },
+      select: {
+        id: true
+      }
+    })
+
+    const subjectIds = subjects.map((subject) => subject.id)
+
+    const [courseInstructorCount, subjectInstructorCount, traineeCount] = await Promise.all([
+      this.prismaService.courseInstructor.count({
+        where: {
+          courseId: { in: courseIds },
+          trainer: {
+            deletedAt: null,
+            status: UserStatus.ACTIVE
+          }
+        }
+      }),
+      subjectIds.length > 0
+        ? this.prismaService.subjectInstructor.count({
+            where: {
+              subjectId: { in: subjectIds },
+              trainer: {
+                deletedAt: null,
+                status: UserStatus.ACTIVE
+              }
+            }
+          })
+        : Promise.resolve(0),
+      subjectIds.length > 0
+        ? this.prismaService.subjectEnrollment.count({
+            where: {
+              subjectId: { in: subjectIds },
+              status: {
+                not: SubjectEnrollmentStatus.CANCELLED
+              },
+              trainee: {
+                deletedAt: null,
+                status: UserStatus.ACTIVE
+              }
+            }
+          })
+        : Promise.resolve(0)
+    ])
+
+    return {
+      courseCount: courseIds.length,
+      trainerCount: courseInstructorCount + subjectInstructorCount,
+      traineeCount
+    }
   }
 }

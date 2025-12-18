@@ -34,7 +34,9 @@ export const DepartmentResSchema = DepartmentSchema.extend({
       })
     })
     .nullable(),
-  courseCount: z.number().default(0)
+  courseCount: z.number().int().default(0),
+  trainerCount: z.number().int().default(0),
+  traineeCount: z.number().int().default(0)
 })
 
 // Course Detail Schema for Department
