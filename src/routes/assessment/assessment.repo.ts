@@ -471,12 +471,16 @@ export class AssessmentRepo {
   async checkTraineeAssessmentExists(
     traineeIds: string[],
     templateId: string,
-    occuranceDate: Date
+    occuranceDate: Date,
+    subjectId?: string,
+    courseId?: string
   ): Promise<Array<{ traineeId: string; traineeName: string; assessmentId: string }>> {
     const whereClause: Prisma.AssessmentFormWhereInput = {
       traineeId: { in: traineeIds },
       templateId,
-      occuranceDate
+      occuranceDate,
+      ...(subjectId && { subjectId }),
+      ...(courseId && { courseId })
     }
 
     const existingAssessments = await this.prisma.assessmentForm.findMany({
