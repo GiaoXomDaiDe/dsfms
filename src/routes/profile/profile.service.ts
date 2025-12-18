@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import {
   AvatarInvalidFormatException,
   AvatarSourceMissingException,
@@ -89,14 +89,12 @@ export class ProfileService {
     }
   }
 
-  async resetPassword({
-    userId,
-    body
-  }: {
-    userId: string
-    body: Omit<ResetPasswordBodyType, 'confirmNewPassword'>
-  }): Promise<MessageResType> {
-    const { oldPassword, newPassword } = body
+  async resetPassword({ userId, body }: { userId: string; body: ResetPasswordBodyType }): Promise<MessageResType> {
+    const { oldPassword, newPassword, confirmNewPassword } = body
+
+    if (newPassword !== confirmNewPassword) {
+      throw new BadRequestException('New password and confirmation do not match')
+    }
 
     const user = await this.sharedUserRepository.findUnique({
       id: userId

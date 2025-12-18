@@ -12,6 +12,7 @@ import {
   CreateSubjectResDto,
   GetActiveTraineesBodyDto,
   GetActiveTraineesResDto,
+  GetAvailableTrainersQueryDto,
   GetAvailableTrainersResDto,
   GetSubjectDetailResDto,
   GetSubjectsQueryDto,
@@ -23,7 +24,7 @@ import {
   GetTraineeEnrollmentsResDto,
   LookupTraineesBodyDto,
   LookupTraineesResDto,
-  RemoveCourseTraineeEnrollmentsBodyDto,
+  RemoveCourseTraineeEnrollmentsParamsDto,
   RemoveCourseTraineeEnrollmentsResDto,
   RemoveEnrollmentsBodyDto,
   RemoveEnrollmentsResDto,
@@ -58,8 +59,8 @@ export class SubjectController {
 
   @Get('courses/active-trainers')
   @ZodSerializerDto(GetAvailableTrainersResDto)
-  async getActiveTrainers() {
-    const data = await this.subjectService.getActiveTrainers()
+  async getActiveTrainers(@Query() query: GetAvailableTrainersQueryDto) {
+    const data = await this.subjectService.getActiveTrainers(query)
     return {
       message: SubjectMes.ACTIVE_TRAINERS_SUCCESS,
       data
@@ -233,11 +234,12 @@ export class SubjectController {
     }
   }
 
-  @Delete('courses/trainees/enrollments')
+  @Delete('courses/:courseId/trainees/:traineeId')
   @ZodSerializerDto(RemoveCourseTraineeEnrollmentsResDto)
-  async removeCourseEnrollmentsForTrainee(@Body() body: RemoveCourseTraineeEnrollmentsBodyDto) {
+  async removeCourseEnrollmentsForTrainee(@Param() params: RemoveCourseTraineeEnrollmentsParamsDto) {
     const data = await this.subjectService.removeCourseEnrollmentsForTrainee({
-      data: body
+      courseId: params.courseId,
+      traineeId: params.traineeId
     })
     return {
       message: SubjectMes.REMOVE_COURSE_TRAINEE_ENROLLMENTS_SUCCESS,

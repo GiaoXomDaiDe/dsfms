@@ -42,21 +42,16 @@ export const GetReportParamsSchema = z
   })
   .strict()
 
-export const CreateReportBodySchema = z.object({
-  isAnonymous: z.boolean().optional().default(false),
-  requestType: z.enum([
-    ReportType.SAFETY_REPORT,
-    ReportType.INSTRUCTOR_REPORT,
-    ReportType.FATIGUE_REPORT,
-    ReportType.TRAINING_PROGRAM_REPORT,
-    ReportType.FACILITIES_REPORT,
-    ReportType.COURSE_ORGANIZATION_REPORT,
-    ReportType.FEEDBACK
-  ]),
-  severity: z.enum(ReportSeverity).optional(),
-  title: z.string().trim().min(1).max(255),
-  description: z.string().trim().min(1).max(4000).optional(),
-  actionsTaken: z.string().trim().min(1).max(2000).optional()
+export const CreateReportBodySchema = ReportSchema.pick({
+  isAnonymous: true,
+  requestType: true,
+  severity: true,
+  title: true,
+  description: true,
+  actionsTaken: true
+}).extend({
+  // Override isAnonymous to be optional with default false
+  isAnonymous: z.boolean().optional().default(false)
 })
 
 export const CreateReportResSchema = ReportSchema
