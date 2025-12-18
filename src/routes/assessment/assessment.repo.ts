@@ -1369,6 +1369,85 @@ export class AssessmentRepo {
   }
 
   /**
+   * Get all assessments for a specific trainee (not filtered by course/subject)
+   */
+  async getTraineeAssessments(
+    traineeUserId: string,
+    page: number = 1,
+    limit: number = 1000,
+    status?: AssessmentStatus,
+    search?: string
+  ) {
+    const whereClause: Prisma.AssessmentFormWhereInput = {
+      traineeId: traineeUserId,
+      ...(status && { status })
+    }
+
+    // Add search functionality
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        {
+          subject: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { code: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        },
+        {
+          course: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { code: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        }
+      ]
+    }
+
+    const skip = (page - 1) * limit
+
+    // Get total count
+    const totalItems = await this.prisma.assessmentForm.count({
+      where: whereClause
+    })
+
+    // Get assessments without trainee info (since this endpoint is for the current trainee only)
+    const assessments = await this.prisma.assessmentForm.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        subjectId: true,
+        courseId: true,
+        occuranceDate: true,
+        status: true,
+        resultScore: true,
+        resultText: true,
+        pdfUrl: true,
+        comment: true,
+        isTraineeLocked: true
+      },
+      orderBy: {
+        occuranceDate: 'desc'
+      },
+      skip,
+      take: limit
+    })
+
+    const totalPages = Math.ceil(totalItems / limit)
+
+    return {
+      assessments: assessments,
+      totalItems,
+      page,
+      limit,
+      totalPages
+    }
+  }
+
+  /**
    * Get assessments for a department (for Department Head)
    * Permanently blocks access to assessments in early stages (NOT_STARTED, ON_GOING, SIGNATURE_PENDING, DRAFT, READY_TO_SUBMIT)
    * Only allows access to completed workflow assessments (SUBMITTED, APPROVED, REJECTED, CANCELLED)
@@ -1905,7 +1984,7 @@ export class AssessmentRepo {
         name: assessment.name,
         trainee: {
           id: assessment.trainee.id,
-          fullName: `${assessment.trainee.firstName} ${assessment.trainee.middleName || ''} ${assessment.trainee.lastName}`.trim(),
+          fullName: `${assessment.trainee.lastName} ${assessment.trainee.middleName || ''} ${assessment.trainee.firstName}`.trim(),
           eid: assessment.trainee.eid,
           traineeProfile: assessment.trainee.traineeProfile
         },
@@ -3806,6 +3885,9 @@ export class AssessmentRepo {
         const totalCancelledForm = allAssessments.filter(a => 
           a.status === 'CANCELLED'
         ).length
+        const totalSubmittedForm = allAssessments.filter(a => 
+          a.status === 'SUBMITTED'
+        ).length
 
         // Get total trainers from Subject/Course_Instructor tables
         let totalTrainers = 0
@@ -3852,6 +3934,7 @@ export class AssessmentRepo {
           totalAssessments,
           totalReviewedForm,
           totalCancelledForm,
+          totalSubmittedForm,
           totalTrainers,
           entityInfo: entityInfo || {
             id: '',
@@ -4808,6 +4891,7 @@ export class AssessmentRepo {
               id: true,
               eid: true,
               firstName: true,
+              middleName: true,
               lastName: true,
               email: true
             }
@@ -4819,7 +4903,9 @@ export class AssessmentRepo {
             }
           }
         },
-        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { trainee: { eid: 'asc' } }
+        ],
         skip: offset,
         take: limit
       })
@@ -4842,7 +4928,7 @@ export class AssessmentRepo {
         trainee: {
           id: assessment.trainee.id,
           eid: assessment.trainee.eid,
-          fullName: `${assessment.trainee.firstName} ${assessment.trainee.lastName}`.trim(),
+          fullName: `${assessment.trainee.lastName} ${assessment.trainee.middleName || ''} ${assessment.trainee.firstName}`.trim(),
           email: assessment.trainee.email
         }
       }))
@@ -5078,6 +5164,7 @@ export class AssessmentRepo {
               id: true,
               eid: true,
               firstName: true,
+              middleName: true,
               lastName: true,
               email: true
             }
@@ -5089,7 +5176,9 @@ export class AssessmentRepo {
             }
           }
         },
-        orderBy: [{ occuranceDate: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { trainee: { eid: 'asc' } }
+        ],
         skip: offset,
         take: limit
       })
@@ -5110,7 +5199,7 @@ export class AssessmentRepo {
         trainee: {
           id: assessment.trainee.id,
           eid: assessment.trainee.eid,
-          fullName: `${assessment.trainee.firstName} ${assessment.trainee.lastName}`.trim(),
+          fullName: `${assessment.trainee.lastName} ${assessment.trainee.middleName || ''} ${assessment.trainee.firstName}`.trim(),
           email: assessment.trainee.email
         }
       }))

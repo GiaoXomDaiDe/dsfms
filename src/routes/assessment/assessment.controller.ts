@@ -14,6 +14,8 @@ import {
   GetSubjectAssessmentsResDTO,
   GetCourseAssessmentsQueryDTO,
   GetCourseAssessmentsResDTO,
+  GetTraineeAssessmentsQueryDTO,
+  GetTraineeAssessmentsResDTO,
   GetAssessmentSectionsResDTO,
   GetAssessmentSectionFieldsResDTO,
   SaveAssessmentValuesBodyDTO,
@@ -140,6 +142,27 @@ export class AssessmentController {
     }
 
     return await this.assessmentService.getCourseAssessments(query, userContext)
+  }
+
+  /**
+   * GET /assessments/trainee
+   * List all assessments for the current trainee (not filtered by course/subject)
+   */
+  @Get('trainee')
+  @ZodSerializerDto(GetTraineeAssessmentsResDTO)
+  async getTraineeAssessments(
+    @Query() query: GetTraineeAssessmentsQueryDTO,
+    @ActiveUser('userId') userId: string,
+    @ActiveRolePermissions() rolePermissions: { name: string; permissions?: any[] },
+    @ActiveUser() currentUser: { userId: string; departmentId?: string }
+  ) {
+    const userContext = {
+      userId,
+      roleName: rolePermissions.name,
+      departmentId: currentUser.departmentId
+    }
+
+    return await this.assessmentService.getTraineeAssessments(query, userContext)
   }
 
   /**

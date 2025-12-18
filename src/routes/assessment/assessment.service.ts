@@ -25,6 +25,8 @@ import {
   GetSubjectAssessmentsResType,
   GetCourseAssessmentsQueryType,
   GetCourseAssessmentsResType,
+  GetTraineeAssessmentsQueryType,
+  GetTraineeAssessmentsResType,
   GetAssessmentSectionsResType,
   GetAssessmentSectionFieldsResType,
   SaveAssessmentValuesBodyType,
@@ -662,6 +664,39 @@ export class AssessmentService {
       }
 
       throw new InternalServerErrorException('Failed to get course assessments')
+    }
+  }
+
+  /**
+   * Get all assessments for a trainee (not filtered by course/subject)
+   */
+  async getTraineeAssessments(
+    query: GetTraineeAssessmentsQueryType,
+    currentUser: { userId: string; roleName: string; departmentId?: string }
+  ): Promise<GetTraineeAssessmentsResType> {
+    try {
+      // Only trainees can access their own assessments through this endpoint
+      if (currentUser.roleName !== 'TRAINEE') {
+        throw new ForbiddenException('This endpoint is only accessible by trainees')
+      }
+
+      const result = await this.assessmentRepo.getTraineeAssessments(
+        currentUser.userId,
+        query.page,
+        query.limit,
+        query.status,
+        query.search
+      )
+
+      return result
+    } catch (error) {
+      console.error('Get trainee assessments failed:', error)
+
+      if (error instanceof ForbiddenException) {
+        throw error
+      }
+
+      throw new InternalServerErrorException('Failed to get trainee assessments')
     }
   }
 
@@ -1544,7 +1579,8 @@ export class AssessmentService {
               subjectOrCourseName,
               assessmentDate,
               approvalDate,
-              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}`
+              `${process.env.FRONTEND_URL || 'http://localhost:4000'}/assessments/${assessmentId}`,
+              detailedAssessment.pdfUrl || undefined
             )
 
             console.log(`Approval notification email sent successfully to ${detailedAssessment.trainee.email}`)

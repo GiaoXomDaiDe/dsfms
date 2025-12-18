@@ -15,7 +15,10 @@ import {
   GetCourseAssessmentsQuerySchema,
   GetSubjectAssessmentsResSchema,
   GetCourseAssessmentsResSchema,
+  GetTraineeAssessmentsQuerySchema,
+  GetTraineeAssessmentsResSchema,
   TrainerAssessmentListItemSchema,
+  TraineeAssessmentListItemSchema,
   GetAssessmentSectionsQuerySchema,
   GetAssessmentSectionsResSchema,
   GetAssessmentSectionFieldsQuerySchema,
@@ -93,7 +96,13 @@ export class GetSubjectAssessmentsResDTO extends createZodDto(GetSubjectAssessme
 
 export class GetCourseAssessmentsResDTO extends createZodDto(GetCourseAssessmentsResSchema) {}
 
+export class GetTraineeAssessmentsQueryDTO extends createZodDto(GetTraineeAssessmentsQuerySchema) {}
+
+export class GetTraineeAssessmentsResDTO extends createZodDto(GetTraineeAssessmentsResSchema) {}
+
 export class TrainerAssessmentListItemDTO extends createZodDto(TrainerAssessmentListItemSchema) {}
+
+export class TraineeAssessmentListItemDTO extends createZodDto(TraineeAssessmentListItemSchema) {}
 
 export class GetAssessmentSectionsQueryDTO extends createZodDto(GetAssessmentSectionsQuerySchema) {}
 
@@ -208,7 +217,10 @@ export type {
   GetCourseAssessmentsQueryType,
   GetSubjectAssessmentsResType,
   GetCourseAssessmentsResType,
+  GetTraineeAssessmentsQueryType,
+  GetTraineeAssessmentsResType,
   TrainerAssessmentListItemType,
+  TraineeAssessmentListItemType,
   GetAssessmentSectionsQueryType,
   GetAssessmentSectionsResType,
   GetAssessmentSectionFieldsQueryType,

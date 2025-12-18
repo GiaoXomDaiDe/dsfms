@@ -37,6 +37,12 @@
                     </a>
                 </div>
 
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="[PDF_URL]" style="display: inline-block; background-color: #3498db; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+                        Download Assessment PDF
+                    </a>
+                </div>
+
                 <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 20px 0;">
                     <strong>Need Help?</strong><br>
                     If you have any questions about your assessment result or need assistance accessing the system, please contact your instructor or <a href="https://capstoneproject-dsfms.github.io/dsfms-template/reports/create">contact SQA team</a>
