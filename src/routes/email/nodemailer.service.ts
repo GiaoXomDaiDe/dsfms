@@ -325,7 +325,8 @@ This account was created on ${creationDate}.`
     subjectOrCourseName: string,
     assessmentDate: string,
     approvalDate: string,
-    assessmentUrl?: string
+    assessmentUrl?: string,
+    pdfUrl?: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Read email template
@@ -338,6 +339,7 @@ This account was created on ${creationDate}.`
       htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_DATE\]/g, assessmentDate)
       htmlTemplate = htmlTemplate.replace(/\[APPROVAL_DATE\]/g, approvalDate)
       htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_URL\]/g, assessmentUrl || '#')
+      htmlTemplate = htmlTemplate.replace(/\[PDF_URL\]/g, pdfUrl || '#')
 
       const emailData = {
         to: traineeEmail,

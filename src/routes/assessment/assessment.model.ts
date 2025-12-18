@@ -421,6 +421,46 @@ export const GetCourseAssessmentsResSchema = z.object({
 
 export type GetCourseAssessmentsResType = z.infer<typeof GetCourseAssessmentsResSchema>
 
+// Trainee assessment item schema (without trainee info since it's for the current trainee only)
+export const TraineeAssessmentListItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  subjectId: z.string().uuid().nullable(),
+  courseId: z.string().uuid().nullable(),
+  occuranceDate: z.coerce.date(),
+  status: z.nativeEnum(AssessmentStatus),
+  resultScore: z.number().nullable(),
+  resultText: z.nativeEnum(AssessmentResult).nullable(),
+  pdfUrl: z.string().nullable(),
+  comment: z.string().nullable(),
+  isTraineeLocked: z.boolean()
+})
+
+export type TraineeAssessmentListItemType = z.infer<typeof TraineeAssessmentListItemSchema>
+
+// Trainee assessments query schema (no course/subject filter)
+export const GetTraineeAssessmentsQuerySchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(1000),
+    status: z.nativeEnum(AssessmentStatus).optional(),
+    search: z.string().max(255).optional()
+  })
+  .strict()
+
+export type GetTraineeAssessmentsQueryType = z.infer<typeof GetTraineeAssessmentsQuerySchema>
+
+// Response schema for trainee assessments
+export const GetTraineeAssessmentsResSchema = z.object({
+  assessments: z.array(TraineeAssessmentListItemSchema),
+  totalItems: z.number(),
+  page: z.number(),
+  limit: z.number(),
+  totalPages: z.number()
+})
+
+export type GetTraineeAssessmentsResType = z.infer<typeof GetTraineeAssessmentsResSchema>
+
 // Get Assessment Sections for Assessment (for trainers to see what they can assess)
 export const GetAssessmentSectionsQuerySchema = z.object({
   assessmentId: z.string().uuid()
@@ -879,6 +919,7 @@ export const DepartmentAssessmentEventItemSchema = z.object({
   totalAssessments: z.number().int().min(0),
   totalReviewedForm: z.number().int().min(0),  // APPROVED or REJECTED
   totalCancelledForm: z.number().int().min(0), // CANCELLED
+  totalSubmittedForm: z.number().int().min(0), // SUBMITTED
   totalTrainers: z.number().int().min(0),      // From Subject/Course_Instructor tables
   // Additional info about the subject/course
   entityInfo: z.object({
