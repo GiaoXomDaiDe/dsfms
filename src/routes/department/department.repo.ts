@@ -281,29 +281,33 @@ export class DepartmentRepository {
 
     const subjectIds = subjects.map((subject) => subject.id)
 
-    const [courseInstructorCount, subjectInstructorCount, traineeCount] = await Promise.all([
-      this.prismaService.courseInstructor.count({
+    const [courseInstructorIds, subjectInstructorIds, traineeIds] = await Promise.all([
+      this.prismaService.courseInstructor.findMany({
         where: {
           courseId: { in: courseIds },
           trainer: {
             deletedAt: null,
             status: UserStatus.ACTIVE
           }
-        }
+        },
+        select: { trainerUserId: true },
+        distinct: ['trainerUserId']
       }),
       subjectIds.length > 0
-        ? this.prismaService.subjectInstructor.count({
+        ? this.prismaService.subjectInstructor.findMany({
             where: {
               subjectId: { in: subjectIds },
               trainer: {
                 deletedAt: null,
                 status: UserStatus.ACTIVE
               }
-            }
+            },
+            select: { trainerUserId: true },
+            distinct: ['trainerUserId']
           })
-        : Promise.resolve(0),
+        : Promise.resolve<Array<{ trainerUserId: string | null }>>([]),
       subjectIds.length > 0
-        ? this.prismaService.subjectEnrollment.count({
+        ? this.prismaService.subjectEnrollment.findMany({
             where: {
               subjectId: { in: subjectIds },
               status: {
@@ -313,15 +317,24 @@ export class DepartmentRepository {
                 deletedAt: null,
                 status: UserStatus.ACTIVE
               }
-            }
+            },
+            select: { traineeUserId: true },
+            distinct: ['traineeUserId']
           })
-        : Promise.resolve(0)
+        : Promise.resolve<Array<{ traineeUserId: string | null }>>([])
     ])
+
+    const trainerIdSet = new Set<string>()
+    courseInstructorIds.forEach((i) => i.trainerUserId && trainerIdSet.add(i.trainerUserId))
+    subjectInstructorIds.forEach((i) => i.trainerUserId && trainerIdSet.add(i.trainerUserId))
+
+    const traineeIdSet = new Set<string>()
+    traineeIds.forEach((t) => t.traineeUserId && traineeIdSet.add(t.traineeUserId))
 
     return {
       courseCount: courseIds.length,
-      trainerCount: courseInstructorCount + subjectInstructorCount,
-      traineeCount
+      trainerCount: trainerIdSet.size,
+      traineeCount: traineeIdSet.size
     }
   }
 }
