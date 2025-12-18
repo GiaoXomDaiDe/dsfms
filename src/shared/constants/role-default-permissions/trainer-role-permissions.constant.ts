@@ -16,6 +16,6 @@ export const TRAINER_DEFAULT_ENDPOINT_PERMISSION_NAMES: readonly string[] = [
   'GET /assessments/:assessmentId/sections',
   'GET /assessments/course',
   'GET /assessments/subject',
-  'GET /assessments/:assessmentId',
-  'GET /templates/pdf/:templateFormId'
+  'GET /assessments/:assessmentId'
+  // 'GET /templates/pdf/:templateFormId' // có thể xóa
 ]
