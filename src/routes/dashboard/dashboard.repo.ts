@@ -171,6 +171,7 @@ export class DashboardRepository {
       SELECT
         d.id   AS "departmentId",
         d.name AS "departmentName",
+        d.code AS "departmentCode",
         c.id   AS "courseId",
         c.name AS "courseName",
         -- Đếm số form có resultText = PASS
