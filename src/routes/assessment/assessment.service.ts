@@ -439,7 +439,9 @@ export class AssessmentService {
       const existingAssessments = await this.assessmentRepo.checkTraineeAssessmentExists(
         traineeIds,
         data.templateId,
-        data.occuranceDate
+        data.occuranceDate,
+        data.subjectId,
+        data.courseId
       )
 
       // Filter out trainees who already have assessments
