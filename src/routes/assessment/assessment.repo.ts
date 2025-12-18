@@ -4813,17 +4813,29 @@ export class AssessmentRepo {
 
       // Calculate statistics
       const numberOfTrainees = allEventAssessments.length
-      const participatedTrainers = new Set<string>()
       
+      // Collect all unique assessor IDs from sections
+      const allAssessorIds = new Set<string>()
       allEventAssessments.forEach(assessment => {
         assessment.sections.forEach(section => {
           if (section.assessedById) {
-            participatedTrainers.add(section.assessedById)
+            allAssessorIds.add(section.assessedById)
           }
         })
       })
       
-      const numberOfParticipatedTrainers = participatedTrainers.size
+      // Filter to only count users with TRAINER role
+      const trainersWhoAssessed = await this.prisma.user.findMany({
+        where: {
+          id: { in: Array.from(allAssessorIds) },
+          role: {
+            name: 'TRAINER'
+          }
+        },
+        select: { id: true }
+      })
+      
+      const numberOfParticipatedTrainers = trainersWhoAssessed.length
 
       // Now get filtered assessments for display
       const whereConditions: any = {
@@ -5058,6 +5070,7 @@ export class AssessmentRepo {
       const eventExists = await this.prisma.assessmentForm.findFirst({
         where: {
           courseId: courseId,
+          subjectId: null, // Course scope: only assessments where subjectId is null
           templateId: templateId,
           occuranceDate: occuranceDate
         }
@@ -5071,6 +5084,7 @@ export class AssessmentRepo {
       const allEventAssessments = await this.prisma.assessmentForm.findMany({
         where: {
           courseId: courseId,
+          subjectId: null, // Course scope: only assessments where subjectId is null
           templateId: templateId,
           occuranceDate: occuranceDate
         },
@@ -5086,21 +5100,34 @@ export class AssessmentRepo {
 
       // Calculate statistics
       const numberOfTrainees = allEventAssessments.length
-      const participatedTrainers = new Set<string>()
       
+      // Collect all unique assessor IDs from sections
+      const allAssessorIds = new Set<string>()
       allEventAssessments.forEach(assessment => {
         assessment.sections.forEach(section => {
           if (section.assessedById) {
-            participatedTrainers.add(section.assessedById)
+            allAssessorIds.add(section.assessedById)
           }
         })
       })
       
-      const numberOfParticipatedTrainers = participatedTrainers.size
+      // Filter to only count users with TRAINER role
+      const trainersWhoAssessed = await this.prisma.user.findMany({
+        where: {
+          id: { in: Array.from(allAssessorIds) },
+          role: {
+            name: 'TRAINER'
+          }
+        },
+        select: { id: true }
+      })
+      
+      const numberOfParticipatedTrainers = trainersWhoAssessed.length
 
       // Now get filtered assessments for display
       const whereConditions: any = {
         courseId: courseId,
+        subjectId: null, // Course scope: only assessments where subjectId is null
         templateId: templateId,
         occuranceDate: occuranceDate
       }
