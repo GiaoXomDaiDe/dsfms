@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 
 export const departmentHeadBasicSelect = {
   id: true,
+  eid: true,
   firstName: true,
   middleName: true,
   lastName: true,

@@ -12,6 +12,6 @@ export const DEPARTMENT_HEAD_DEFAULT_ENDPOINT_PERMISSION_NAMES: readonly string[
   'GET /assessments/department-events',
   'GET /assessments/sections/:assessmentSectionId/fields',
   'GET /assessments/:assessmentId/sections',
-  'GET /templates/pdf/:templateFormId',
+  // 'GET /templates/pdf/:templateFormId', // có thể xóa
   'GET /departments/me'
 ]
