@@ -1818,9 +1818,11 @@ export class AssessmentRepo {
         if (item.section.templateSection.editBy === 'TRAINER') {
           // For TRAINER sections, check if they can assess based on role match
           if (item.roleRequirement && userRoleInAssessment) {
-            // ASSESSMENT_REVIEWER can see and assess all TRAINER sections (for review purposes)
+            // ASSESSMENT_REVIEWER can only assess sections that specifically require ASSESSMENT_REVIEWER role
+            // They can VIEW all sections, but can only ASSESS sections matching their role
             if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
-              canAssessed = basicCanAssess
+              // Can only assess if the section also requires ASSESSMENT_REVIEWER
+              canAssessed = item.roleRequirement === 'ASSESSMENT_REVIEWER' ? basicCanAssess : false
             }
             // EXAMINER can only assess sections matching their specific role
             else if (userRoleInAssessment === item.roleRequirement) {
@@ -2522,7 +2524,13 @@ export class AssessmentRepo {
     } else if (assessmentSection.templateSection.editBy === 'TRAINER') {
       if (userMainRole === 'TRAINER') {
         if (assessmentSection.templateSection.roleInSubject) {
-          canAssessSection = userRoleInAssessment === assessmentSection.templateSection.roleInSubject
+          // ASSESSMENT_REVIEWER can only assess/edit sections that specifically require ASSESSMENT_REVIEWER role
+          // They can VIEW all sections, but canSave/canUpdate only for matching role sections
+          if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
+            canAssessSection = assessmentSection.templateSection.roleInSubject === 'ASSESSMENT_REVIEWER'
+          } else {
+            canAssessSection = userRoleInAssessment === assessmentSection.templateSection.roleInSubject
+          }
         } else {
           canAssessSection = userRoleInAssessment !== null
         }

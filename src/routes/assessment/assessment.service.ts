@@ -936,8 +936,11 @@ export class AssessmentService {
       if (templateSection.editBy === 'TRAINER') {
         // Section requires trainer access
         if (currentUser.roleName === 'TRAINER') {
-          // Check if section requires specific role in subject/course
-          if (templateSection.roleInSubject) {
+          // ASSESSMENT_REVIEWER can VIEW all TRAINER sections (for review purposes)
+          // But canSave/canUpdate is handled in the repo based on role match
+          if (userRoleInAssessment === 'ASSESSMENT_REVIEWER') {
+            canAccess = true // Can view all TRAINER sections
+          } else if (templateSection.roleInSubject) {
             // Section requires specific assessment role
             canAccess = userRoleInAssessment === templateSection.roleInSubject
           } else {
