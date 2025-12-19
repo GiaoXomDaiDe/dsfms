@@ -1869,7 +1869,7 @@ export class AssessmentRepo {
           } else if (userMainRole === 'TRAINER') {
             // TRAINER can see TRAINEE sections but cannot assess them
             canAssess = true
-          } else if (userMainRole === 'DEPARTMENT HEAD') {
+          } else if (userMainRole === 'DEPARTMENT_HEAD' || userMainRole === 'DEPARTMENT HEAD') {
             // DEPARTMENT_HEAD can see all sections but cannot assess them
             canAssess = true
           }
@@ -1929,7 +1929,7 @@ export class AssessmentRepo {
           // TRAINEE cannot assess TRAINER sections
           canAssessed = false
         }
-      } else if (userMainRole === 'DEPARTMENT HEAD') {
+      } else if (userMainRole === 'DEPARTMENT_HEAD' || userMainRole === 'DEPARTMENT HEAD') {
         // DEPARTMENT_HEAD can view all sections but cannot assess any
         canAssessed = false
       }
