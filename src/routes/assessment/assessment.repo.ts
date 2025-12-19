@@ -3595,6 +3595,11 @@ export class AssessmentRepo {
                 middleName: true
               }
             }
+          },
+          orderBy: {
+            trainee: {
+              eid: 'asc'
+            }
           }
         })
 
@@ -3941,7 +3946,12 @@ export class AssessmentRepo {
             occuranceDate: event.occuranceDate,
             templateId: event.templateId
           },
-          select: { status: true, name: true }
+          select: { status: true, name: true, trainee: { select: { eid: true } } },
+          orderBy: {
+            trainee: {
+              eid: 'asc'
+            }
+          }
         })
 
         // Calculate enhanced statistics
@@ -4339,6 +4349,11 @@ export class AssessmentRepo {
                 lastName: true,
                 middleName: true
               }
+            }
+          },
+          orderBy: {
+            trainee: {
+              eid: 'asc'
             }
           }
         })
