@@ -3637,6 +3637,67 @@ export class AssessmentRepo {
         const totalPassed = allAssessments.filter((assessment) => assessment.resultText === 'PASS').length
         const totalFailed = allAssessments.filter((assessment) => assessment.resultText === 'FAIL').length
 
+        // Get available trainers from Subject/Course Instructors
+        let availableTrainers: Array<{
+          id: string
+          eid: string
+          fullName: string
+          email: string
+          roleInAssessment: string | null
+        }> = []
+
+        if (event.subjectId) {
+          const subjectInstructors = await this.prisma.subjectInstructor.findMany({
+            where: { subjectId: event.subjectId },
+            select: {
+              roleInAssessment: true,
+              trainer: {
+                select: {
+                  id: true,
+                  eid: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true
+                }
+              }
+            }
+          })
+
+          availableTrainers = subjectInstructors.map((instructor) => ({
+            id: instructor.trainer.id,
+            eid: instructor.trainer.eid,
+            fullName: `${instructor.trainer.lastName}${instructor.trainer.middleName ? ' ' + instructor.trainer.middleName : ''} ${instructor.trainer.firstName}`.trim(),
+            email: instructor.trainer.email,
+            roleInAssessment: instructor.roleInAssessment
+          }))
+        } else if (event.courseId) {
+          const courseInstructors = await this.prisma.courseInstructor.findMany({
+            where: { courseId: event.courseId },
+            select: {
+              roleInAssessment: true,
+              trainer: {
+                select: {
+                  id: true,
+                  eid: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true
+                }
+              }
+            }
+          })
+
+          availableTrainers = courseInstructors.map((instructor) => ({
+            id: instructor.trainer.id,
+            eid: instructor.trainer.eid,
+            fullName: `${instructor.trainer.lastName}${instructor.trainer.middleName ? ' ' + instructor.trainer.middleName : ''} ${instructor.trainer.firstName}`.trim(),
+            email: instructor.trainer.email,
+            roleInAssessment: instructor.roleInAssessment
+          }))
+        }
+
         return {
           name: baseName,
           subjectId: event.subjectId,
@@ -3646,6 +3707,8 @@ export class AssessmentRepo {
           totalTrainees: event._count.id,
           totalPassed,
           totalFailed,
+          totalAvailableTrainers: availableTrainers.length,
+          availableTrainers,
           entityInfo: entityInfo || {
             id: '',
             name: 'Unknown',
@@ -3905,6 +3968,67 @@ export class AssessmentRepo {
           })
         }
 
+        // Get available trainers from Subject/Course Instructors
+        let availableTrainers: Array<{
+          id: string
+          eid: string
+          fullName: string
+          email: string
+          roleInAssessment: string | null
+        }> = []
+
+        if (event.subjectId) {
+          const subjectInstructors = await this.prisma.subjectInstructor.findMany({
+            where: { subjectId: event.subjectId },
+            select: {
+              roleInAssessment: true,
+              trainer: {
+                select: {
+                  id: true,
+                  eid: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true
+                }
+              }
+            }
+          })
+
+          availableTrainers = subjectInstructors.map((instructor) => ({
+            id: instructor.trainer.id,
+            eid: instructor.trainer.eid,
+            fullName: `${instructor.trainer.lastName}${instructor.trainer.middleName ? ' ' + instructor.trainer.middleName : ''} ${instructor.trainer.firstName}`.trim(),
+            email: instructor.trainer.email,
+            roleInAssessment: instructor.roleInAssessment
+          }))
+        } else if (event.courseId) {
+          const courseInstructors = await this.prisma.courseInstructor.findMany({
+            where: { courseId: event.courseId },
+            select: {
+              roleInAssessment: true,
+              trainer: {
+                select: {
+                  id: true,
+                  eid: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true
+                }
+              }
+            }
+          })
+
+          availableTrainers = courseInstructors.map((instructor) => ({
+            id: instructor.trainer.id,
+            eid: instructor.trainer.eid,
+            fullName: `${instructor.trainer.lastName}${instructor.trainer.middleName ? ' ' + instructor.trainer.middleName : ''} ${instructor.trainer.firstName}`.trim(),
+            email: instructor.trainer.email,
+            roleInAssessment: instructor.roleInAssessment
+          }))
+        }
+
         // Extract base name from first assessment (get part before dash)
         const baseName = allAssessments.length > 0 ? allAssessments[0].name.split(' - ')[0] : 'Unknown Event'
 
@@ -3940,6 +4064,8 @@ export class AssessmentRepo {
           totalCancelledForm,
           totalSubmittedForm,
           totalTrainers,
+          totalAvailableTrainers: availableTrainers.length,
+          availableTrainers,
           entityInfo: entityInfo || {
             id: '',
             name: 'Unknown',
@@ -4256,6 +4382,67 @@ export class AssessmentRepo {
         const totalPassed = allAssessments.filter((assessment) => assessment.resultText === 'PASS').length
         const totalFailed = allAssessments.filter((assessment) => assessment.resultText === 'FAIL').length
 
+        // Get available trainers from Subject/Course Instructors
+        let availableTrainers: Array<{
+          id: string
+          eid: string
+          fullName: string
+          email: string
+          roleInAssessment: string | null
+        }> = []
+
+        if (event.subjectId) {
+          const subjectInstructors = await this.prisma.subjectInstructor.findMany({
+            where: { subjectId: event.subjectId },
+            select: {
+              roleInAssessment: true,
+              trainer: {
+                select: {
+                  id: true,
+                  eid: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true
+                }
+              }
+            }
+          })
+
+          availableTrainers = subjectInstructors.map((instructor) => ({
+            id: instructor.trainer.id,
+            eid: instructor.trainer.eid,
+            fullName: `${instructor.trainer.lastName}${instructor.trainer.middleName ? ' ' + instructor.trainer.middleName : ''} ${instructor.trainer.firstName}`.trim(),
+            email: instructor.trainer.email,
+            roleInAssessment: instructor.roleInAssessment
+          }))
+        } else if (event.courseId) {
+          const courseInstructors = await this.prisma.courseInstructor.findMany({
+            where: { courseId: event.courseId },
+            select: {
+              roleInAssessment: true,
+              trainer: {
+                select: {
+                  id: true,
+                  eid: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true
+                }
+              }
+            }
+          })
+
+          availableTrainers = courseInstructors.map((instructor) => ({
+            id: instructor.trainer.id,
+            eid: instructor.trainer.eid,
+            fullName: `${instructor.trainer.lastName}${instructor.trainer.middleName ? ' ' + instructor.trainer.middleName : ''} ${instructor.trainer.firstName}`.trim(),
+            email: instructor.trainer.email,
+            roleInAssessment: instructor.roleInAssessment
+          }))
+        }
+
         return {
           name: baseName,
           subjectId: event.subjectId,
@@ -4265,6 +4452,8 @@ export class AssessmentRepo {
           totalTrainees: event._count.id,
           totalPassed,
           totalFailed,
+          totalAvailableTrainers: availableTrainers.length,
+          availableTrainers,
           entityInfo: entityInfo || {
             id: '',
             name: 'Unknown',
