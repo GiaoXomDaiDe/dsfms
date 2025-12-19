@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Executing remote ssh commands using password
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1.2.3
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
