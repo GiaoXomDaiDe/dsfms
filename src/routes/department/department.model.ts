@@ -24,6 +24,7 @@ export const DepartmentResSchema = DepartmentSchema.extend({
   headUser: z
     .object({
       id: z.string(),
+      eid: z.string(),
       firstName: z.string(),
       lastName: z.string(),
       middleName: z.string().nullable(),
