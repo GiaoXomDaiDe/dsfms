@@ -776,7 +776,7 @@ export class AssessmentService {
     }
 
     // DEPARTMENT_HEAD and TRAINER see assessments in their department
-    if (roleName === 'DEPARTMENT_HEAD' || roleName === 'TRAINER') {
+    if (roleName === 'DEPARTMENT_HEAD' || roleName === 'DEPARTMENT HEAD' || roleName === 'TRAINER') {
       // This would require a more complex filter in the repository
       // For now, returning the query as-is and relying on repository-level filtering
       return {
