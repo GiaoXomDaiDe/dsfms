@@ -30,7 +30,6 @@ import {
   SubjectAlreadyArchivedException,
   SubjectCannotAssignTrainerFromCurrentStatusException,
   SubjectCannotBeArchivedFromCurrentStatusException,
-  SubjectCannotRemoveTrainerFromCurrentStatusException,
   SubjectCannotUpdateFromCurrentStatusException,
   SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
@@ -426,10 +425,6 @@ export class SubjectService {
     const subject = await this.sharedSubjectRepo.findById(subjectId)
     if (!subject) {
       throw SubjectNotFoundException
-    }
-
-    if ((subject.status as SubjectStatusValue) !== SubjectStatus.PLANNED) {
-      throw SubjectCannotRemoveTrainerFromCurrentStatusException
     }
 
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
