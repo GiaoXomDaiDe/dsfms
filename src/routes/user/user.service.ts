@@ -38,6 +38,7 @@ import {
   UpdateUserBodyType
 } from '~/routes/user/user.model'
 import { UserRepository } from '~/routes/user/user.repo'
+import envConfig from '~/shared/config'
 import type { RoleNameType } from '~/shared/constants/auth.constant'
 import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import { ROLE_PROFILE_VIOLATION_TYPES } from '~/shared/constants/user.constant'
@@ -123,8 +124,8 @@ export class UserService {
       // Sinh eid theo role
       const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
       // Hash mật khẩu mặc định (tạm disable trong giai đoạn dev)
-      const hashedPassword = await this.hashingService.hashPassword('123')
-      // const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
+      // const hashedPassword = await this.hashingService.hashPassword('123')
+      const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
 
       // Tách profile và role ra khỏi data
       const { trainerProfile, traineeProfile, role, ...userData } = data
