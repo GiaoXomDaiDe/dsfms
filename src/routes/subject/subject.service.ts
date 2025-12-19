@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { round } from 'lodash'
 import { GetCourseEnrollmentBatchesResType } from '~/routes/course/course.model'
 import {
@@ -25,12 +25,9 @@ import {
   CourseAtCapacityException,
   CourseNotFoundException,
   DuplicateInstructorException,
-  DuplicateTraineeEnrollmentException,
-  InvalidTraineeSubmissionException,
   SubjectAlreadyArchivedException,
   SubjectCannotAssignTrainerFromCurrentStatusException,
   SubjectCannotBeArchivedFromCurrentStatusException,
-  SubjectCannotRemoveTrainerFromCurrentStatusException,
   SubjectCannotUpdateFromCurrentStatusException,
   SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
@@ -43,6 +40,7 @@ import {
 import { SubjectMes } from './subject.message'
 import {
   AssignTraineesBodyType,
+  AssignTraineesErrorType,
   AssignTraineesResType,
   AssignTrainerBodyType,
   AssignTrainerResType,
@@ -50,7 +48,6 @@ import {
   BulkCreateSubjectsResType,
   CancelSubjectEnrollmentBodyType,
   CreateSubjectBodyType,
-  GetActiveTraineesBodyType,
   GetActiveTraineesResType,
   GetAvailableTrainersResType,
   GetSubjectDetailResType,
@@ -67,6 +64,8 @@ import {
   RemoveCourseTraineeEnrollmentsResType,
   RemoveEnrollmentsBodyType,
   RemoveEnrollmentsResType,
+  TraineeAssignmentIssueType,
+  TraineeAssignmentUserType,
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
 } from './subject.model'
@@ -106,10 +105,8 @@ export class SubjectService {
     return trainers
   }
 
-  async getActiveTrainees(body: GetActiveTraineesBodyType): Promise<GetActiveTraineesResType> {
-    return await this.subjectRepo.findActiveTrainees({
-      subjectIds: body.subjectIds
-    })
+  async getActiveTrainees(): Promise<GetActiveTraineesResType> {
+    return await this.subjectRepo.findActiveTrainees()
   }
 
   async getTraineesInSubject({
@@ -428,10 +425,6 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
-    if ((subject.status as SubjectStatusValue) !== SubjectStatus.PLANNED) {
-      throw SubjectCannotRemoveTrainerFromCurrentStatusException
-    }
-
     const exists = await this.subjectRepo.isTrainerAssignedToSubject({
       subjectId,
       trainerUserId: trainerId
@@ -460,72 +453,107 @@ export class SubjectService {
     }
   }
 
-  async assignTraineesToSubject({
-    subjectId,
-    data
-  }: {
-    subjectId: string
-    data: AssignTraineesBodyType
-  }): Promise<AssignTraineesResType> {
-    const subject = await this.sharedSubjectRepo.findById(subjectId)
-    if (!subject) {
-      throw SubjectNotFoundException
+  async assignTraineesToSubject({ data }: { data: AssignTraineesBodyType }): Promise<AssignTraineesResType> {
+    const targetSubjectIds = new Set<string>(data.subjectIds)
+    if (targetSubjectIds.size === 0) throw SubjectNotFoundException
+
+    const errors: AssignTraineesErrorType[] = []
+    const invalidIssues: TraineeAssignmentIssueType[] = []
+    const successMessages: string[] = []
+    const errorMessages: string[] = []
+    let createdCount = 0
+
+    const formatEidList = (items: Array<{ eid?: string; userId?: string }>): string =>
+      items
+        .map((item) => item.eid || item.userId)
+        .filter((id): id is string => Boolean(id))
+        .join(', ')
+
+    const buildDuplicateMessage = (subject: SubjectType, duplicates: AssignTraineesErrorType['duplicates']): string => {
+      const eidList = formatEidList(duplicates)
+      return `Trainees with EIDs ${eidList} are already enrolled in subject ${subject.name} (${subject.code}) for batch ${data.batchCode}. Please review and try again.`
     }
 
-    if (subject.status !== SubjectStatus.PLANNED) {
-      throw SubjectEnrollmentNotAllowedFromCurrentStatusException
+    const buildSuccessMessage = (subject: SubjectType, enrolled: TraineeAssignmentUserType[]): string => {
+      const eidList = formatEidList(enrolled)
+      return `Trainees with EIDs ${eidList} have been enrolled successfully in subject ${subject.name} (${subject.code}) for batch ${data.batchCode}.`
     }
 
-    if (subject.startDate) {
-      const now = new Date()
-      const startDate = new Date(subject.startDate)
+    const buildInvalidIssueMessage = (issue: TraineeAssignmentIssueType): string => {
+      const identifier = issue.eid ?? issue.email ?? issue.submittedId
+      const reasonMap: Record<TraineeAssignmentIssueType['reason'], string> = {
+        USER_NOT_FOUND: 'User not found',
+        ROLE_NOT_TRAINEE: 'User role is not trainee',
+        USER_INACTIVE: 'User is inactive or deleted'
+      }
+      const reason = reasonMap[issue.reason] ?? 'Invalid trainee'
+      return `Trainee ${identifier} cannot be enrolled: ${reason}.`
+    }
 
-      if (now >= startDate) {
+    for (const subjectId of targetSubjectIds) {
+      // 1) Guard per subject
+      const subject = await this.sharedSubjectRepo.findById(subjectId)
+      if (!subject) throw SubjectNotFoundException
+      if (subject.status !== SubjectStatus.PLANNED) throw SubjectEnrollmentNotAllowedFromCurrentStatusException
+      if (subject.startDate && new Date() >= new Date(subject.startDate))
         throw SubjectEnrollmentWindowClosedException(subject.startDate)
+
+      if (subject.courseId) {
+        const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.courseId)
+        if (max !== null && current + data.traineeUserIds.length > max) {
+          throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
+        }
+      }
+
+      // 2) Repo: tạo enrollments / tìm duplicates / invalid
+      const result = await this.subjectRepo.assignTraineesToSubject({
+        subjectId,
+        traineeUserIds: data.traineeUserIds,
+        batchCode: data.batchCode,
+        blockingStatuses: this.defaultBlockingEnrollmentStatuses // ENROLLED, ON_GOING
+      })
+
+      // 3) Thu thập invalid, errors
+      if (result.invalid.length > 0) invalidIssues.push(...result.invalid)
+      if (result.duplicates.length > 0) {
+        errorMessages.push(buildDuplicateMessage(subject, result.duplicates))
+        errors.push({
+          subjectId,
+          subjectName: subject.name,
+          subjectCode: subject.code,
+          batchCode: data.batchCode,
+          duplicates: result.duplicates
+        })
+        continue
+      }
+
+      createdCount += result.createdCount
+
+      // 5) Ghi nhận message thành công cho subject
+      if (result.enrolled.length > 0) {
+        successMessages.push(buildSuccessMessage(subject, result.enrolled))
       }
     }
-    // Validation 1: Check course max trainee limit
-    if (subject.courseId) {
-      const { current, max } = await this.subjectRepo.getCourseTraineeCount(subject.courseId)
 
-      if (max !== null && current + data.traineeUserIds.length > max) {
-        throw CourseAtCapacityException(current, max, data.traineeUserIds.length)
-      }
-    }
+    const invalidMessages = invalidIssues.map(buildInvalidIssueMessage)
+    const combinedErrorMessages = [...errorMessages, ...invalidMessages]
 
-    const result = await this.subjectRepo.assignTraineesToSubject({
-      subjectId,
-      traineeUserIds: data.traineeUserIds,
-      batchCode: data.batchCode,
-      blockingStatuses: this.defaultBlockingEnrollmentStatuses
-    })
-
-    if (result.duplicates.length > 0) {
-      const duplicateDetails = result.duplicates.map((item) => ({
-        eid: item.eid,
-        fullName: item.fullName,
-        email: item.email,
-        batchCode: item.batchCode,
-        enrolledAt: item.enrolledAt
-      }))
-
-      throw DuplicateTraineeEnrollmentException({
-        duplicates: duplicateDetails,
-        subjectName: subject.name,
-        subjectCode: subject.code
+    // Nếu không tạo mới bản ghi nào và có lỗi (duplicates/invalid) thì trả lỗi để frontend hiển thị
+    if (createdCount === 0 && (errors.length > 0 || invalidIssues.length > 0)) {
+      throw new BadRequestException({
+        message: 'No enrollments were created. Please review the errors.',
+        data: {
+          successMessages: [],
+          errorMessages: combinedErrorMessages
+        }
       })
     }
 
-    if (result.invalid.length > 0) {
-      throw InvalidTraineeSubmissionException(result.invalid)
-    }
-
     return {
-      enrolledCount: result.enrolled.length,
-      enrolled: result.enrolled
+      successMessages,
+      errorMessages: combinedErrorMessages
     }
   }
-
   async getTraineeEnrollments({
     traineeId,
     query,

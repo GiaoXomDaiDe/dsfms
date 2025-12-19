@@ -10,7 +10,6 @@ import {
   CancelSubjectEnrollmentBodyDto,
   CreateSubjectBodyDto,
   CreateSubjectResDto,
-  GetActiveTraineesBodyDto,
   GetActiveTraineesResDto,
   GetAvailableTrainersQueryDto,
   GetAvailableTrainersResDto,
@@ -67,10 +66,10 @@ export class SubjectController {
     }
   }
 
-  @Post('active-trainees')
+  @Get('active-trainees')
   @ZodSerializerDto(GetActiveTraineesResDto)
-  async getActiveTrainees(@Body() body: GetActiveTraineesBodyDto) {
-    const data = await this.subjectService.getActiveTrainees(body)
+  async getActiveTrainees() {
+    const data = await this.subjectService.getActiveTrainees()
     return {
       message: SubjectMes.ACTIVE_TRAINEES_SUCCESS,
       data
@@ -247,17 +246,11 @@ export class SubjectController {
     }
   }
 
-  @Post(':subjectId/assign-trainees')
+  @Post('assign-trainees')
   @ZodSerializerDto(AssignTraineesResDto)
-  async assignTrainees(@Param() { subjectId }: SubjectIdParamsDto, @Body() body: AssignTraineesBodyDto) {
-    const data = await this.subjectService.assignTraineesToSubject({
-      subjectId,
-      data: body
-    })
-    return {
-      message: SubjectMes.ASSIGN_TRAINEES_SUCCESS,
-      data
-    }
+  async assignTrainees(@Body() body: AssignTraineesBodyDto) {
+    const data = await this.subjectService.assignTraineesToSubject({ data: body })
+    return { message: SubjectMes.ASSIGN_TRAINEES_SUCCESS, data }
   }
 
   @Delete(':subjectId/trainees/:traineeId')
