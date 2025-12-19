@@ -1322,23 +1322,25 @@ export class SubjectRepository {
     // Check if enrollment exists and is ENROLLED
     const enrollment = await this.prisma.subjectEnrollment.findUnique({
       where: {
-        traineeUserId_subjectId: {
+        traineeUserId_subjectId_batchCode: {
           traineeUserId,
-          subjectId
+          subjectId,
+          batchCode
         }
       }
     })
 
-    if (!enrollment || enrollment.batchCode !== batchCode || enrollment.status !== 'ENROLLED') {
+    if (!enrollment || enrollment.status !== 'ENROLLED') {
       return false
     }
 
     // Update to CANCELLED
     await this.prisma.subjectEnrollment.update({
       where: {
-        traineeUserId_subjectId: {
+        traineeUserId_subjectId_batchCode: {
           traineeUserId,
-          subjectId
+          subjectId,
+          batchCode
         }
       },
       data: {
