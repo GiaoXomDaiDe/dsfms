@@ -110,16 +110,27 @@ export class RoleService {
     data: UpdateRoleBodyType
     updatedById: string
   }): Promise<RoleWithPermissionsType> {
+    this.logger.debug(`Update role request received | roleId=${id} | updatedById=${updatedById}`)
     const existingRole = await this.sharedRoleRepo.findById(id)
     if (!existingRole) throw NotFoundRoleException
+
+    this.logger.debug(`Existing role found | name=${existingRole.name} | isActive=${existingRole.isActive}`)
+    this.logger.debug(
+      `Incoming payload | permissionGroupCodes=${data.permissionGroupCodes?.join(', ') ?? 'none'} | dataKeys=${Object.keys(data).join(',')}`
+    )
 
     let permissionIds: string[] | undefined
 
     if (data.permissionGroupCodes && data.permissionGroupCodes.length > 0) {
+      this.logger.debug(`Resolving permission IDs from group codes | count=${data.permissionGroupCodes.length}`)
       const [groupPermissionIds, defaultPermissionIds] = await Promise.all([
         this.resolvePermissionIdsFromGroupCodes(data.permissionGroupCodes),
         this.sharedPermissionRepo.findActiveIdsByNames(getDefaultPermissionNamesForRole(existingRole.name))
       ])
+
+      this.logger.debug(
+        `Resolved IDs | fromGroups=${groupPermissionIds.length} | defaultForRole(${existingRole.name})=${defaultPermissionIds.length}`
+      )
 
       permissionIds = Array.from(new Set([...groupPermissionIds, ...defaultPermissionIds]))
 
@@ -136,17 +147,19 @@ export class RoleService {
     }
 
     try {
+      this.logger.debug(
+        `Persisting role update | roleId=${id} | permissionIds=${permissionIds ? permissionIds.length : 'preserve existing'}`
+      )
       return await this.roleRepo.update({ id, updatedById, data, permissionIds })
     } catch (error) {
+      this.logger.error(
+        `Failed to update role | roleId=${id} | error=${error instanceof Error ? error.message : error}`
+      )
       if (isNotFoundPrismaError(error)) throw NotFoundRoleException
       if (isUniqueConstraintPrismaError(error)) throw RoleAlreadyExistsException
       throw error
     }
   }
-
-  /* =========================================================================
-   * ENABLE / DELETE
-   * ========================================================================= */
 
   async delete({ id, deletedById }: { id: string; deletedById: string }): Promise<{ message: string }> {
     const role = await this.roleRepo.findById(id)
@@ -192,10 +205,14 @@ export class RoleService {
     permissionIds: string[]
     updatedById: string
   }): Promise<AddPermissionsToRoleResType> {
+    this.logger.debug(
+      `Add permissions request | roleId=${roleId} | updatedById=${updatedById} | permissionIds=${permissionIds.join(', ')}`
+    )
     const role = await this.roleRepo.findById(roleId)
     if (!role) throw NotFoundRoleException
 
     await this.sharedPermissionRepo.validatePermissionIds(permissionIds)
+    this.logger.debug(`Validated permission IDs for add | count=${permissionIds.length}`)
 
     try {
       const result = await this.roleRepo.addPermissions({
@@ -203,6 +220,8 @@ export class RoleService {
         permissionIds,
         updatedById
       })
+
+      this.logger.debug(`Add permissions result | addedCount=${result.addedPermissions.length} | roleName=${role.name}`)
 
       if (result.addedPermissions.length === 0) {
         throw NoNewPermissionsToAddException
@@ -228,10 +247,14 @@ export class RoleService {
     permissionIds: string[]
     updatedById: string
   }): Promise<RemovePermissionsFromRoleResType> {
+    this.logger.debug(
+      `Remove permissions request | roleId=${roleId} | updatedById=${updatedById} | permissionIds=${permissionIds.join(', ')}`
+    )
     const role = await this.roleRepo.findById(roleId)
     if (!role) throw NotFoundRoleException
 
     await this.sharedPermissionRepo.validatePermissionIds(permissionIds)
+    this.logger.debug(`Validated permission IDs for remove | count=${permissionIds.length}`)
 
     try {
       const result = await this.roleRepo.removePermissions({
@@ -239,6 +262,10 @@ export class RoleService {
         permissionIds,
         updatedById
       })
+
+      this.logger.debug(
+        `Remove permissions result | removedCount=${result.removedPermissions.length} | roleName=${role.name}`
+      )
 
       if (result.removedPermissions.length === 0) {
         throw NoPermissionsToRemoveException
@@ -256,6 +283,7 @@ export class RoleService {
   }
 
   private async resolvePermissionIdsFromGroupCodes(permissionGroupCodes: string[]): Promise<string[]> {
+    this.logger.debug(`Resolve permissions from group codes | codes=${permissionGroupCodes.join(', ')}`)
     const permissionGroups =
       await this.sharedPermissionGroupRepo.findActivePermissionMappingsByCodes(permissionGroupCodes)
 
@@ -263,11 +291,17 @@ export class RoleService {
     const missingCodes = permissionGroupCodes.filter((code) => !foundCodes.has(code))
 
     if (missingCodes.length > 0) {
+      this.logger.warn(`Permission group codes not found | missing=${missingCodes.join(', ')}`)
       throw createPermissionGroupNotFoundError(missingCodes)
     }
 
     const groupsWithoutPermissions = permissionGroups.filter((group) => group.permissions.length === 0)
     if (groupsWithoutPermissions.length > 0) {
+      this.logger.warn(
+        `Permission groups without permissions | codes=${groupsWithoutPermissions
+          .map((group) => group.permissionGroupCode)
+          .join(', ')}`
+      )
       throw createPermissionGroupWithoutPermissionsError(
         groupsWithoutPermissions.map((group) => group.permissionGroupCode)
       )
@@ -275,6 +309,10 @@ export class RoleService {
 
     const permissionIds = permissionGroups.flatMap((group) =>
       group.permissions.map((permission) => permission.endpointPermissionId)
+    )
+
+    this.logger.debug(
+      `Resolved permission IDs from groups | uniqueCount=${new Set(permissionIds).size} | rawCount=${permissionIds.length}`
     )
 
     return Array.from(new Set(permissionIds))
