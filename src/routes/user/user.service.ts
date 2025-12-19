@@ -123,8 +123,6 @@ export class UserService {
 
       // Sinh eid theo role
       const eid = (await this.eidService.generateEid({ roleName: targetRole.name })) as string
-      // Hash mật khẩu mặc định (tạm disable trong giai đoạn dev)
-      // const hashedPassword = await this.hashingService.hashPassword('123')
       const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
 
       // Tách profile và role ra khỏi data
@@ -155,8 +153,7 @@ export class UserService {
       // Gửi email chào mừng cho user mới
       try {
         const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ')
-        const plainPassword = '123'
-        // const plainPassword = eid + envConfig.PASSWORD_SECRET
+        const plainPassword = eid + envConfig.PASSWORD_SECRET
 
         await this.nodemailerService.sendNewUserAccountEmail(data.email, eid, plainPassword, fullName, targetRole.name)
 
@@ -289,8 +286,7 @@ export class UserService {
 
             try {
               // Hash mật khẩu
-              const hashedPassword = await this.hashingService.hashPassword('123')
-              // const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
+              const hashedPassword = await this.hashingService.hashPassword(eid + envConfig.PASSWORD_SECRET)
 
               const { trainerProfile, traineeProfile, role, ...userBasicData } = userData
 
@@ -362,8 +358,7 @@ export class UserService {
           try {
             const emailUsers = bulkResult.success.map((user) => {
               const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')
-              const plainPassword = '123'
-              // const plainPassword = user.eid + envConfig.PASSWORD_SECRET
+              const plainPassword = user.eid + envConfig.PASSWORD_SECRET
 
               return {
                 email: user.email,
