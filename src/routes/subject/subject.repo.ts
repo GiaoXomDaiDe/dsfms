@@ -694,8 +694,7 @@ export class SubjectRepository {
       where: {
         subjectId,
         traineeUserId: { in: eligibleUserIds },
-        batchCode,
-        status: { in: blockingStatuses }
+        batchCode
       },
       select: {
         traineeUserId: true,
