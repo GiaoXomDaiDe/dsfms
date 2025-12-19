@@ -9,7 +9,6 @@ import { SubjectService } from '../subject/subject.service'
 import {
   CourseCannotAssignTrainerFromCurrentStatusException,
   CourseCannotBeArchivedFromCurrentStatusException,
-  CourseCannotRemoveTrainerFromCurrentStatusException,
   CourseCannotUpdateFromCurrentStatusException,
   CourseCannotUpdateTrainerRoleFromCurrentStatusException,
   CourseCodeAlreadyExistsException,
@@ -271,10 +270,6 @@ export class CourseService {
 
     if (!course) {
       throw CourseNotFoundException
-    }
-
-    if (course.status !== CourseStatus.PLANNED) {
-      throw CourseCannotRemoveTrainerFromCurrentStatusException
     }
 
     const exists = await this.courseRepo.isTrainerAssignedToCourse({

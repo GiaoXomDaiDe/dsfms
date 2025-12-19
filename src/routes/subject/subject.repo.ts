@@ -70,6 +70,7 @@ type AssignTraineesResult = {
   enrolled: TraineeAssignmentUserType[]
   duplicates: TraineeAssignmentDuplicateType[]
   invalid: TraineeAssignmentIssueType[]
+  createdCount: number
 }
 
 type AssignmentUserSummary = Pick<
@@ -305,75 +306,14 @@ export class SubjectRepository {
     return { trainers, totalCount: trainers.length }
   }
 
-  async findActiveTrainees({ subjectIds }: { subjectIds?: string[] }): Promise<GetActiveTraineesResType> {
-    const conflictingUserIds = new Set<string>()
-
-    if (subjectIds && subjectIds.length > 0) {
-      const blockingStatuses: SubjectEnrollmentStatusValue[] = [
-        SubjectEnrollmentStatus.ENROLLED,
-        SubjectEnrollmentStatus.ON_GOING
-      ]
-
-      const uniqueSubjectIds = Array.from(new Set(subjectIds))
-
-      const enrollments = await this.prisma.subjectEnrollment.findMany({
-        where: {
-          subjectId: { in: uniqueSubjectIds },
-          status: { in: blockingStatuses }
-        },
-        select: {
-          subjectId: true,
-          traineeUserId: true
-        }
-      })
-
-      if (uniqueSubjectIds.length === 1) {
-        enrollments.forEach((enrollment) => {
-          if (enrollment.traineeUserId) {
-            conflictingUserIds.add(enrollment.traineeUserId)
-          }
-        })
-      } else {
-        const subjectToTraineeMap = new Map<string, Set<string>>()
-
-        enrollments.forEach((enrollment) => {
-          if (!enrollment.subjectId || !enrollment.traineeUserId) return
-
-          const set = subjectToTraineeMap.get(enrollment.subjectId) ?? new Set<string>()
-          set.add(enrollment.traineeUserId)
-          subjectToTraineeMap.set(enrollment.subjectId, set)
-        })
-
-        const subjectSets = uniqueSubjectIds.map((id) => subjectToTraineeMap.get(id) ?? new Set<string>())
-
-        if (subjectSets.length > 0) {
-          const intersection = new Set<string>(subjectSets[0])
-          for (let i = 1; i < subjectSets.length; i++) {
-            const currentSet = subjectSets[i]
-            for (const traineeId of Array.from(intersection)) {
-              if (!currentSet.has(traineeId)) {
-                intersection.delete(traineeId)
-              }
-            }
-          }
-
-          intersection.forEach((id) => conflictingUserIds.add(id))
-        }
-      }
-    }
-
+  async findActiveTrainees(): Promise<GetActiveTraineesResType> {
     const trainees = await this.prisma.user.findMany({
       where: {
         deletedAt: null,
         status: UserStatus.ACTIVE,
         role: {
           name: RoleName.TRAINEE
-        },
-        ...(conflictingUserIds.size > 0 && {
-          id: {
-            notIn: Array.from(conflictingUserIds)
-          }
-        })
+        }
       },
       select: userTraineeDirectorySelect,
       orderBy: {
@@ -700,6 +640,7 @@ export class SubjectRepository {
 
     return { foundUsers, notFoundIdentifiers }
   }
+  // Repo: xử lý cho 1 subject
   async assignTraineesToSubject({
     subjectId,
     traineeUserIds,
@@ -711,20 +652,19 @@ export class SubjectRepository {
     batchCode: string
     blockingStatuses?: SubjectEnrollmentStatusValue[]
   }): Promise<AssignTraineesResult> {
+    // 1) Resolve user + đánh dấu invalid
     const requestedUsers = await this.sharedUserRepo.findUsersForAssignment(traineeUserIds)
-
-    const requestedUserMap = new Map<string, AssignmentUserForSubject>(requestedUsers.map((user) => [user.id, user]))
-
+    const requestedUserMap = new Map(requestedUsers.map((u) => [u.id, u]))
     const invalidMap = new Map<string, TraineeAssignmentIssueType>()
 
-    const missingIds = traineeUserIds.filter((id) => !requestedUserMap.has(id))
-    missingIds.forEach((id) => {
-      invalidMap.set(id, {
-        submittedId: id,
-        reason: 'USER_NOT_FOUND'
+    // user not found
+    traineeUserIds
+      .filter((id) => !requestedUserMap.has(id))
+      .forEach((id) => {
+        invalidMap.set(id, { submittedId: id, reason: 'USER_NOT_FOUND' })
       })
-    })
 
+    // user inactive hoặc sai role
     requestedUsers.forEach((user) => {
       if (user.deletedAt) {
         invalidMap.set(user.id, {
@@ -736,7 +676,6 @@ export class SubjectRepository {
         })
         return
       }
-
       if (user.role?.name !== RoleName.TRAINEE) {
         invalidMap.set(user.id, {
           submittedId: user.id,
@@ -750,25 +689,27 @@ export class SubjectRepository {
 
     const eligibleUserIds = traineeUserIds.filter((id) => !invalidMap.has(id))
 
+    // 2) Tìm enrollment đã có (trùng) theo subjectId + batchCode + status blocking
     const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
         subjectId,
-        traineeUserId: { in: eligibleUserIds }
+        traineeUserId: { in: eligibleUserIds },
+        batchCode,
+        status: { in: blockingStatuses }
       },
       select: {
         traineeUserId: true,
         batchCode: true,
         enrollmentDate: true,
         status: true,
-        trainee: {
-          select: userTraineeWithDepartmentSelect
-        }
+        trainee: { select: userTraineeWithDepartmentSelect }
       }
     })
 
-    const existingIds = new Set(existingEnrollments.map((enrollment) => enrollment.traineeUserId))
+    const blockedIds = new Set(existingEnrollments.map((e) => e.traineeUserId))
+    const newIds = eligibleUserIds.filter((id) => !blockedIds.has(id))
 
-    const newIds = eligibleUserIds.filter((id) => !existingIds.has(id))
+    // 3) Tạo enrollments mới
     const newEnrollments = newIds.map((id) => ({
       subjectId,
       traineeUserId: id,
@@ -777,37 +718,18 @@ export class SubjectRepository {
       status: SubjectEnrollmentStatus.ENROLLED
     }))
 
+    let createdCount = 0
     if (newEnrollments.length > 0) {
-      await this.prisma.subjectEnrollment.createMany({
-        data: newEnrollments,
-        skipDuplicates: true
+      const createResult = await this.prisma.subjectEnrollment.createMany({
+        data: newEnrollments
       })
+      createdCount = createResult.count
     }
 
-    const reactivatableEnrollments = existingEnrollments.filter(
-      (enrollment) => !blockingStatuses.includes(enrollment.status as SubjectEnrollmentStatusValue)
-    )
-
-    if (reactivatableEnrollments.length > 0) {
-      await this.prisma.subjectEnrollment.updateMany({
-        where: {
-          subjectId,
-          traineeUserId: {
-            in: reactivatableEnrollments.map((enrollment) => enrollment.traineeUserId)
-          }
-        },
-        data: {
-          status: SubjectEnrollmentStatus.ENROLLED,
-          batchCode,
-          enrollmentDate: new Date()
-        }
-      })
-    }
-
+    // 4) Chuẩn hóa payload trả về
     const resolveUserPayload = (user: AssignmentUserSummary): TraineeAssignmentUserType => {
-      const nameParts = [user.firstName ?? '', user.lastName ?? ''].filter((part) => part.trim().length > 0)
+      const nameParts = [user.firstName ?? '', user.lastName ?? ''].filter((p) => p.trim().length > 0)
       const fullName = nameParts.join(' ').trim()
-
       return {
         userId: user.id,
         eid: user.eid,
@@ -819,30 +741,14 @@ export class SubjectRepository {
 
     const enrolledNew = newIds.map((id) => {
       const user = requestedUserMap.get(id)
-      if (!user) {
-        throw TraineeResolutionFailureException(id)
-      }
+      if (!user) throw TraineeResolutionFailureException(id)
       return resolveUserPayload(user)
     })
 
-    const reactivated = reactivatableEnrollments.map((enrollment) => {
+    const duplicates = existingEnrollments.map((enrollment) => {
       const fallbackUser = enrollment.trainee as AssignmentUserSummary
       const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
-      return resolveUserPayload(user)
-    })
-
-    const enrolled = [...enrolledNew, ...reactivated]
-
-    const blockingEnrollments = existingEnrollments.filter((enrollment) =>
-      blockingStatuses.includes(enrollment.status as SubjectEnrollmentStatusValue)
-    )
-
-    const duplicates: TraineeAssignmentDuplicateType[] = blockingEnrollments.map((enrollment) => {
-      const fallbackUser = enrollment.trainee as AssignmentUserSummary
-      const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
-
       const payload = resolveUserPayload(user)
-
       return {
         ...payload,
         enrolledAt: enrollment.enrollmentDate ? enrollment.enrollmentDate.toISOString() : new Date().toISOString(),
@@ -852,11 +758,7 @@ export class SubjectRepository {
 
     const invalid = Array.from(invalidMap.values())
 
-    return {
-      enrolled,
-      duplicates,
-      invalid
-    }
+    return { enrolled: enrolledNew, duplicates, invalid, createdCount }
   }
 
   async getTraineeCoursesWithSubjects({

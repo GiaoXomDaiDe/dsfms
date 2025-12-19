@@ -309,9 +309,32 @@ const TraineeUserIdsSchema = z
     })
   })
 
+const SubjectIdsSchema = z
+  .array(z.uuid())
+  .min(1)
+  .superRefine((ids, ctx) => {
+    const seen = new Map<string, number>()
+
+    ids.forEach((id, index) => {
+      const firstIndex = seen.get(id)
+
+      if (firstIndex !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Duplicate subjectId "${id}"`,
+          path: [index]
+        })
+        return
+      }
+
+      seen.set(id, index)
+    })
+  })
+
 export const AssignTraineesBodySchema = z.object({
   batchCode: z.string().min(1),
-  traineeUserIds: TraineeUserIdsSchema
+  traineeUserIds: TraineeUserIdsSchema,
+  subjectIds: SubjectIdsSchema
 })
 
 export const CancelSubjectEnrollmentBodySchema = z.object({
@@ -368,6 +391,8 @@ export type UpdateTrainerAssignmentResType = z.infer<typeof UpdateTrainerAssignm
 export type LookupTraineesBodyType = z.infer<typeof LookupTraineesBodySchema>
 export type LookupTraineesResType = z.infer<typeof LookupTraineesResSchema>
 export type AssignTraineesBodyType = z.infer<typeof AssignTraineesBodySchema>
+export type AssignTraineesPerSubjectType = z.infer<typeof AssignTraineesPerSubjectSchema>
+export type AssignTraineesErrorType = z.infer<typeof AssignTraineesErrorSchema>
 export type AssignTraineesResType = z.infer<typeof AssignTraineesResSchema>
 export type CancelSubjectEnrollmentBodyType = z.infer<typeof CancelSubjectEnrollmentBodySchema>
 export type GetEnrollmentsQueryType = z.infer<typeof GetEnrollmentsQuerySchema>
@@ -446,9 +471,23 @@ export const TraineeAssignmentIssueSchema = z.object({
   note: z.string().optional()
 })
 
-export const AssignTraineesResSchema = z.object({
+export const AssignTraineesPerSubjectSchema = z.object({
+  subjectId: z.uuid(),
   enrolledCount: z.number().int(),
   enrolled: z.array(TraineeAssignmentUserSchema)
+})
+
+export const AssignTraineesErrorSchema = z.object({
+  subjectId: z.uuid(),
+  subjectName: z.string(),
+  subjectCode: z.string(),
+  batchCode: z.string().optional(),
+  duplicates: z.array(TraineeAssignmentDuplicateSchema).default([])
+})
+
+export const AssignTraineesResSchema = z.object({
+  successMessages: z.array(z.string()).default([]),
+  errorMessages: z.array(z.string()).default([])
 })
 
 const EnrollmentDepartmentSchema = TraineeAssignmentDepartmentSchema
