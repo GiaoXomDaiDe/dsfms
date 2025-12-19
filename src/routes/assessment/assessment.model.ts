@@ -764,6 +764,15 @@ export const AssessmentEventItemSchema = z.object({
   totalTrainees: z.number().int().min(0),
   totalPassed: z.number().int().min(0),
   totalFailed: z.number().int().min(0),
+  // Trainer information
+  totalAvailableTrainers: z.number().int().min(0),
+  availableTrainers: z.array(z.object({
+    id: z.string().uuid(),
+    eid: z.string(),
+    fullName: z.string(),
+    email: z.string(),
+    roleInAssessment: z.string().nullable()
+  })),
   // Additional info about the subject/course
   entityInfo: z.object({
     id: z.string().uuid(),
@@ -921,6 +930,15 @@ export const DepartmentAssessmentEventItemSchema = z.object({
   totalCancelledForm: z.number().int().min(0), // CANCELLED
   totalSubmittedForm: z.number().int().min(0), // SUBMITTED
   totalTrainers: z.number().int().min(0),      // From Subject/Course_Instructor tables
+  // Trainer information
+  totalAvailableTrainers: z.number().int().min(0),
+  availableTrainers: z.array(z.object({
+    id: z.string().uuid(),
+    eid: z.string(),
+    fullName: z.string(),
+    email: z.string(),
+    roleInAssessment: z.string().nullable()
+  })),
   // Additional info about the subject/course
   entityInfo: z.object({
     id: z.string().uuid(),
