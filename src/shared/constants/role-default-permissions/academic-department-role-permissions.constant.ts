@@ -5,8 +5,8 @@ export const ACADEMIC_DEPARTMENT_DEFAULT_ENDPOINT_PERMISSION_NAMES: readonly str
   'GET /assessments/events',
   'POST /assessments/bulk',
   'POST /assessments',
-  // 'GET /templates/pdf/:templateFormId', // có thể xóa
-  // 'GET /templates/department/:departmentId', //approve deny template //có thể xóa
+  'GET /templates/pdf/:templateFormId', // có thể xóa
+  'GET /templates/department/:departmentId', //approve deny template //có thể xóa
   'GET /dashboard/academic/overview',
   'PUT /subjects/:subjectId/trainers/:trainerId',
   'PUT /courses/:courseId/trainers/:trainerId',
