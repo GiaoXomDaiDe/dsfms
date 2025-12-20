@@ -1,6 +1,5 @@
 import z from 'zod'
 import { SubjectInstructorRole, SubjectMethod, SubjectStatus, SubjectType } from '~/shared/constants/subject.constant'
-import { BASIC_TEXT_REGEX, CODE_TEXT_REGEX } from '~/shared/constants/validation.constant'
 import {
   createEnumSchema,
   nullableNumberField,
@@ -8,8 +7,6 @@ import {
   requiredText
 } from '~/shared/helpers/zod-validation.helper'
 
-const SUBJECT_NAME_MESSAGE = 'Subject name invalid'
-const SUBJECT_CODE_MESSAGE = 'Subject code invalid'
 const SUBJECT_METHOD_ERROR_MESSAGE = `Subject method must be one of: ${[
   SubjectMethod.CLASSROOM,
   SubjectMethod.ERO,
@@ -31,20 +28,12 @@ const SUBJECT_INSTRUCTOR_ROLE_ERROR_MESSAGE = `Subject instructor role must be o
 
 export const subjectNameSchema = requiredText({
   field: 'Subject name',
-  max: 255,
-  options: {
-    pattern: BASIC_TEXT_REGEX,
-    message: SUBJECT_NAME_MESSAGE
-  }
+  max: 255
 })
 
 export const subjectCodeSchema = requiredText({
   field: 'Subject code',
-  max: 50,
-  options: {
-    pattern: CODE_TEXT_REGEX,
-    message: SUBJECT_CODE_MESSAGE
-  }
+  max: 50
 })
 
 export const subjectDescriptionSchema = nullableStringField(
@@ -63,12 +52,7 @@ export const subjectTimeSlotSchema = nullableStringField(
   z.string().max(255, 'Time slot must not exceed 255 characters')
 )
 
-export const subjectDurationSchema = nullableNumberField(
-  z.number().refine((val) => Number.isFinite(val) && /^\d+\.\d{2}$/.test(val.toFixed(2)), {
-    message: 'Must have exactly 2 decimal places'
-  })
-  // .nonnegative('Subject duration must be greater than or equal to 0')
-)
+export const subjectDurationSchema = nullableNumberField(z.number())
 
 export const subjectPassScoreSchema = nullableNumberField(
   z

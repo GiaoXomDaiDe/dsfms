@@ -1,41 +1,19 @@
 import z from 'zod'
 import {
-  BASIC_TEXT_REGEX,
-  CODE_TEXT_REGEX,
-  COUNTRY_REGEX,
-  PASSPORT_REGEX
-} from '~/shared/constants/validation.constant'
-import {
   isoDatetimeSchema,
   nullableNumberField,
   optionalText,
   requiredText
 } from '~/shared/helpers/zod-validation.helper'
 
-const SPECIALIZATION_MESSAGE = 'Specialization may only contain letters, numbers, spaces, and common punctuation'
-const CERTIFICATION_MESSAGE =
-  'Certification number may only contain letters, numbers, spaces, dash, slash, or underscore'
-const BIO_MESSAGE = 'Bio contains unsupported characters'
-const TRAINING_BATCH_MESSAGE = 'Training batch may only contain letters, numbers, spaces, dash, slash, or underscore'
-const PASSPORT_MESSAGE = 'Passport number may only contain letters, numbers, spaces, or hyphen'
-const NATION_MESSAGE = 'Nation may only contain alphabetic characters and separators'
-
 export const trainerSpecializationSchema = requiredText({
   field: 'Specialization',
-  max: 100,
-  options: {
-    pattern: BASIC_TEXT_REGEX,
-    message: SPECIALIZATION_MESSAGE
-  }
+  max: 100
 })
 
 export const trainerCertificationNumberSchema = requiredText({
   field: 'Certification number',
-  max: 50,
-  options: {
-    pattern: CODE_TEXT_REGEX,
-    message: CERTIFICATION_MESSAGE
-  }
+  max: 50
 })
 
 export const trainerYearsOfExperienceSchema = nullableNumberField(
@@ -49,29 +27,17 @@ export const trainerYearsOfExperienceSchema = nullableNumberField(
 
 export const traineeTrainingBatchSchema = requiredText({
   field: 'Training batch',
-  max: 100,
-  options: {
-    pattern: CODE_TEXT_REGEX,
-    message: TRAINING_BATCH_MESSAGE
-  }
+  max: 100
 })
 
 export const traineePassportSchema = requiredText({
   field: 'Passport number',
-  max: 100,
-  options: {
-    pattern: PASSPORT_REGEX,
-    message: PASSPORT_MESSAGE
-  }
+  max: 100
 })
 
 export const traineeNationSchema = optionalText({
   field: 'Nation',
-  max: 100,
-  options: {
-    pattern: COUNTRY_REGEX,
-    message: NATION_MESSAGE
-  }
+  max: 100
 })
 
 const INVALID_DOB_MESSAGE = 'Date of birth must be a valid date'

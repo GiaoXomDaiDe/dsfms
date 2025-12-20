@@ -23,7 +23,7 @@ export const CourseSchema = z.object({
   maxNumTrainee: z.number().int().positive(),
   venue: nullableStringField(z.string()),
   note: nullableStringField(z.string()),
-  passScore: coursePassScoreSchema.optional(),
+  passScore: coursePassScoreSchema,
   startDate: isoDateSchema,
   endDate: isoDateSchema,
   level: courseLevelSchema,
