@@ -546,9 +546,11 @@ export class CourseRepository {
       acc.subjectIds.add(enrollment.subjectId)
     }
 
-    return Array.from(traineeMap.values()).map(({ subjectIds, ...info }) => ({
-      ...info,
-      subjectCount: subjectIds.size
-    }))
+    return Array.from(traineeMap.values())
+      .map(({ subjectIds, ...info }) => ({
+        ...info,
+        subjectCount: subjectIds.size
+      }))
+      .sort((a, b) => a.eid.localeCompare(b.eid))
   }
 }
