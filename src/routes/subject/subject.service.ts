@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { round } from 'lodash'
 import { GetCourseEnrollmentBatchesResType } from '~/routes/course/course.model'
 import {
   SubjectEnrollmentStatus,
@@ -722,7 +721,7 @@ export class SubjectService {
     const end = new Date(endDate)
     const diffInMs = end.getTime() - start.getTime()
     const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-    return round(diffInDays / 30, 2)
+    return Math.round(diffInDays)
   }
 
   private isTrainerMutationAllowed(status: SubjectStatusValue): boolean {
