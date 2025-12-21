@@ -1431,7 +1431,19 @@ export class AssessmentRepo {
         resultText: true,
         pdfUrl: true,
         comment: true,
-        isTraineeLocked: true
+        isTraineeLocked: true,
+        subject: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        course: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       },
       orderBy: {
         occuranceDate: 'desc'
@@ -1440,10 +1452,38 @@ export class AssessmentRepo {
       take: limit
     })
 
+    // Map to include entityInfo
+    const mappedAssessments = assessments.map((assessment) => ({
+      id: assessment.id,
+      name: assessment.name,
+      subjectId: assessment.subjectId,
+      courseId: assessment.courseId,
+      occuranceDate: assessment.occuranceDate,
+      status: assessment.status,
+      resultScore: assessment.resultScore,
+      resultText: assessment.resultText,
+      pdfUrl: assessment.pdfUrl,
+      comment: assessment.comment,
+      isTraineeLocked: assessment.isTraineeLocked,
+      entityInfo: assessment.subject
+        ? {
+            id: assessment.subject.id,
+            name: assessment.subject.name,
+            type: 'subject' as const
+          }
+        : assessment.course
+          ? {
+              id: assessment.course.id,
+              name: assessment.course.name,
+              type: 'course' as const
+            }
+          : null
+    }))
+
     const totalPages = Math.ceil(totalItems / limit)
 
     return {
-      assessments: assessments,
+      assessments: mappedAssessments,
       totalItems,
       page,
       limit,
