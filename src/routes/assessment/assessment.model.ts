@@ -433,7 +433,14 @@ export const TraineeAssessmentListItemSchema = z.object({
   resultText: z.nativeEnum(AssessmentResult).nullable(),
   pdfUrl: z.string().nullable(),
   comment: z.string().nullable(),
-  isTraineeLocked: z.boolean()
+  isTraineeLocked: z.boolean(),
+  entityInfo: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      type: z.enum(['subject', 'course'])
+    })
+    .nullable()
 })
 
 export type TraineeAssessmentListItemType = z.infer<typeof TraineeAssessmentListItemSchema>
