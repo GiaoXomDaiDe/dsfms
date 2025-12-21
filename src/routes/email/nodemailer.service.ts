@@ -555,7 +555,6 @@ This account was created on ${creationDate}.`
       let htmlTemplate = await this.loadTemplate('report-response-creator.txt')
 
       // Replace placeholders
-      htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
       htmlTemplate = htmlTemplate.replace(/\[REPORTER_NAME\]/g, reporterName)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportType)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportTitle)
@@ -621,7 +620,6 @@ This account was created on ${creationDate}.`
       let htmlTemplate = await this.loadTemplate('report-response-manager.txt')
 
       // Replace placeholders
-      htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
       htmlTemplate = htmlTemplate.replace(/\[MANAGER_NAME\]/g, managerName)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportType)
       htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportTitle)
@@ -699,7 +697,6 @@ This account was created on ${creationDate}.`
           let htmlTemplate = await this.loadTemplate('new-report-notification.txt')
 
           // Replace placeholders
-          htmlTemplate = htmlTemplate.replace(/\[LOGO_URL\]/g, 'https://via.placeholder.com/150x50?text=DSFMS')
           htmlTemplate = htmlTemplate.replace(/\[REPORT_TYPE\]/g, reportData.reportType)
           htmlTemplate = htmlTemplate.replace(/\[REPORT_TITLE\]/g, reportData.reportTitle)
           htmlTemplate = htmlTemplate.replace(/\[REPORT_SEVERITY\]/g, reportData.reportSeverity || 'Not specified')

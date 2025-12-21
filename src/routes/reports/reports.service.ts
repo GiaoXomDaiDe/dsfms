@@ -54,6 +54,7 @@ export class ReportsService {
     // Send email notifications to all SQA auditors
     try {
       const auditors = await this.getSQAAuditors()
+      
       if (auditors.length > 0) {
         const reportData = {
           reportId: report.id,
@@ -64,7 +65,7 @@ export class ReportsService {
           reporterName: report.isAnonymous
             ? 'Anonymous User'
             : `${report.createdBy?.firstName} ${report.createdBy?.lastName}`,
-          creationDate: report.createdAt.toLocaleDateString('en-US', {
+          creationDate: new Date(report.createdAt).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
@@ -78,6 +79,8 @@ export class ReportsService {
         if (!emailResult.success) {
           console.error('Failed to send some report notifications:', emailResult.results)
         }
+      } else {
+        console.warn('No SQA auditors found to notify about the new report')
       }
     } catch (error) {
       console.error('Error sending report creation notifications:', error)
@@ -157,7 +160,7 @@ export class ReportsService {
         minute: '2-digit'
       })
 
-      const submissionDate = updatedReport.createdAt.toLocaleDateString('en-US', {
+      const submissionDate = new Date(updatedReport.createdAt).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -201,6 +204,8 @@ export class ReportsService {
         if (!managerResult.success) {
           console.error('Failed to send response confirmation to manager:', managerResult.message)
         }
+      } else {
+        console.warn('No manager email found for confirmation')
       }
     } catch (error) {
       console.error('Error sending report response notifications:', error)
