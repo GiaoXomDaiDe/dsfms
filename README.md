@@ -1,4 +1,4 @@
-# DSFMS - Digital Skills and Flight Management System
+# DSFMS - Digitalized Scoring Form Management System for Aviation Academy
 
 <p align="center">
   <img src="https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white" alt="NestJS" />
@@ -20,13 +20,13 @@
 
 ## Description
 
-**DSFMS (Digital Skills and Flight Management System)** is a robust backend API system designed specifically for aviation training institutions. The system provides comprehensive assessment management capabilities, including:
+**DSFMS (Digitalized Scoring Form Management System)** is a robust backend API system designed specifically for aviation training institutions. The system provides comprehensive assessment management capabilities, including:
 
 -  **Assessment Management** - Create, manage, and evaluate trainee assessments
--  **Template System** - Dynamic form templates with nested field structures
+-  **Template Managment** - Dynamic form templates with nested field structures
 -  **User Management** - Role-based access control for trainers, trainees, and department heads
 -  **Reporting & Analytics** - Comprehensive assessment reports and performance tracking
--  **Multi-Department Support** - Manage multiple departments, courses, and subjects
+-  **Academic Management** - Manage multiple departments, courses, and subjects
 -  **Security & Authentication** - JWT-based authentication with role-based permissions
 
 ## Architecture
@@ -37,7 +37,7 @@ The system is built using modern backend technologies:
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: JWT with Passport.js
 - **File Storage**: AWS S3 integration
-- **Email Service**: AWS SES integration
+- **Email Service**: NodeMailer integration
 - **Documentation**: DOCX template generation
 - **Validation**: Class-validator and Zod schemas
 
