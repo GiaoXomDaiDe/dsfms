@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upcoming Assessment Event</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .header {
+            background-color: #1B3C53;
+            color: #ffffff;
+            text-align: center;
+            padding: 30px;
+        }
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 15px;
+        }
+        .title {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+        }
+        .content {
+            padding: 30px;
+        }
+        .highlight {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            border-left: 4px solid #1B3C53;
+        }
+        .important {
+            font-weight: 600;
+            color: #333;
+            margin: 0;
+        }
+        .details {
+            background-color: #fff;
+            padding: 0;
+            margin: 20px 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .details-table td {
+            padding: 10px;
+            border-bottom: 1px solid #f1f1f1;
+            font-size: 14px;
+        }
+        .details-table tr:last-child td {
+            border-bottom: none;
+        }
+        .details-table td:first-child {
+            font-weight: 600;
+            color: #1B3C53;
+            width: 35%;
+        }
+        .info-box {
+            background-color: #eaf7ff;
+            border: 1px solid #d1e7fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .trainee-list {
+            background-color: #f9f9f9;
+            border: 1px solid #eee;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .trainee-item {
+            padding: 5px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #eee;
+        }
+        .trainee-item:last-child {
+            border-bottom: none;
+        }
+        .footer {
+            background-color: #1B3C53;
+            color: #ffffff;
+            padding: 20px;
+            font-size: 12px;
+            text-align: center;
+        }
+        .footer p {
+            margin: 5px 0;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://dsfms.s3.ap-southeast-1.amazonaws.com/images/logo_344422e4-4d55-4775-9bab-09fdd2a39abe.png" alt="DSFMS Logo" class="logo">
+            <h1 class="title">Upcoming Assessment Event</h1>
+        </div>
+
+        <div class="content">
+            <p>Dear [TRAINER_NAME],</p>
+            
+            <div class="highlight">
+                <p class="important">You have been assigned as an instructor for an upcoming assessment event.</p>
+            </div>
+
+            <h3 style="color: #1B3C53; margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Assessment Details</h3>
+            
+            <div class="details">
+                <table class="details-table">
+                    <tr>
+                        <td>Assessment Name:</td>
+                        <td style="font-weight: bold;">[ASSESSMENT_NAME]</td>
+                    </tr>
+                    <tr>
+                        <td>Template:</td>
+                        <td>[TEMPLATE_NAME]</td>
+                    </tr>
+                    <tr>
+                        <td>Date & Time:</td>
+                        <td style="font-weight: bold; color: #d9534f;">[ASSESSMENT_DATE]</td>
+                    </tr>
+                    <tr>
+                        <td>Venue:</td>
+                        <td>[VENUE]</td>
+                    </tr>
+                    <tr>
+                        <td>Course/Subject:</td>
+                        <td>[ENTITY_NAME] ([ENTITY_CODE])</td>
+                    </tr>
+                    <tr>
+                        <td>Department:</td>
+                        <td>[DEPARTMENT_NAME]</td>
+                    </tr>
+                    <tr>
+                        <td>Total Trainees:</td>
+                        <td style="font-weight: bold;">[TOTAL_TRAINEES]</td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3 style="color: #1B3C53; margin-top: 25px; border-bottom: 1px solid #eee; padding-bottom: 10px;">Trainees List</h3>
+            
+            <div class="trainee-list">
+                [TRAINEE_LIST]
+            </div>
+
+            <div class="info-box">
+                <p style="margin: 0; font-size: 14px; color: #0c5460;">
+                    <strong>Action Required:</strong> Please ensure you are prepared for the assessment event. 
+                    Review the assessment template and arrive at the venue on time. If you have any questions, 
+                    please contact the department administrator.
+                </p>
+            </div>
+
+            <p>Thank you for your participation in maintaining the quality of our training programs.</p>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated notification from the DSFMS System.</p>
+            <p>If you have any questions, please contact the system administrator.</p>
+            <p><small>Sent on [CURRENT_DATE]</small></p>
+        </div>
+    </div>
+</body>
+</html>
