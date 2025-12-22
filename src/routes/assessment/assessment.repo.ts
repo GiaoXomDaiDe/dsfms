@@ -3570,10 +3570,10 @@ export class AssessmentRepo {
               id: true, 
               name: true, 
               code: true,
+              roomName: true,
               course: {
                 select: {
-                  name: true,
-                  venue: true
+                  name: true
                 }
               }
             }
@@ -3585,7 +3585,7 @@ export class AssessmentRepo {
               code: subject.code,
               type: 'subject',
               belongToCourseName: subject.course.name,
-              venue: subject.course.venue
+              venue: subject.roomName
             }
           }
         } else if (event.courseId) {
@@ -4329,10 +4329,10 @@ export class AssessmentRepo {
               id: true, 
               name: true, 
               code: true,
+              roomName: true,
               course: {
                 select: {
-                  name: true,
-                  venue: true
+                  name: true
                 }
               }
             }
@@ -4344,7 +4344,7 @@ export class AssessmentRepo {
               code: subject.code,
               type: 'subject',
               belongToCourseName: subject.course.name,
-              venue: subject.course.venue
+              venue: subject.roomName
             }
           }
         } else if (event.courseId) {
@@ -5761,6 +5761,7 @@ export class AssessmentRepo {
     })
   }
 }
+
 
 
 
