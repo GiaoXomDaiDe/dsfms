@@ -786,7 +786,8 @@ export const AssessmentEventItemSchema = z.object({
     name: z.string(),
     code: z.string(),
     type: z.enum(['subject', 'course']),
-    belongToCourseName: z.string().nullable()
+    belongToCourseName: z.string().nullable(),
+    venue: z.string().nullable()
   }),
   // Basic template info
   templateInfo: z.object({
