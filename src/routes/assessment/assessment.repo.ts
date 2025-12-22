@@ -3681,9 +3681,10 @@ export class AssessmentRepo {
           }
         }
 
-        // Calculate totalPassed and totalFailed based on resultText
+        // Calculate totalPassed, totalFailed, and totalCancelled based on resultText and status
         const totalPassed = allAssessments.filter((assessment) => assessment.resultText === 'PASS').length
         const totalFailed = allAssessments.filter((assessment) => assessment.resultText === 'FAIL').length
+        const totalCancelled = allAssessments.filter((assessment) => assessment.status === 'CANCELLED').length
 
         // Get available trainers from Subject/Course Instructors
         let availableTrainers: Array<{
@@ -3755,6 +3756,7 @@ export class AssessmentRepo {
           totalTrainees: event._count.id,
           totalPassed,
           totalFailed,
+          totalCancelled,
           totalAvailableTrainers: availableTrainers.length,
           availableTrainers,
           entityInfo: entityInfo || {
@@ -4440,9 +4442,10 @@ export class AssessmentRepo {
           }
         }
 
-        // Calculate totalPassed and totalFailed based on resultText
+        // Calculate totalPassed, totalFailed, and totalCancelled based on resultText and status
         const totalPassed = allAssessments.filter((assessment) => assessment.resultText === 'PASS').length
         const totalFailed = allAssessments.filter((assessment) => assessment.resultText === 'FAIL').length
+        const totalCancelled = allAssessments.filter((assessment) => assessment.status === 'CANCELLED').length
 
         // Get available trainers from Subject/Course Instructors
         let availableTrainers: Array<{
@@ -4514,6 +4517,7 @@ export class AssessmentRepo {
           totalTrainees: event._count.id,
           totalPassed,
           totalFailed,
+          totalCancelled,
           totalAvailableTrainers: availableTrainers.length,
           availableTrainers,
           entityInfo: entityInfo || {
@@ -5761,6 +5765,8 @@ export class AssessmentRepo {
     })
   }
 }
+
+
 
 
 
