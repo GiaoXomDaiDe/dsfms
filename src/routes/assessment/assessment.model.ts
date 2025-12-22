@@ -771,6 +771,7 @@ export const AssessmentEventItemSchema = z.object({
   totalTrainees: z.number().int().min(0),
   totalPassed: z.number().int().min(0),
   totalFailed: z.number().int().min(0),
+  totalCancelled: z.number().int().min(0),
   // Trainer information
   totalAvailableTrainers: z.number().int().min(0),
   availableTrainers: z.array(z.object({

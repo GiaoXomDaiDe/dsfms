@@ -873,7 +873,7 @@ This account was created on ${creationDate}.`
           const instructorListHtml = assessmentData.instructorList
             .map(
               (instructor) =>
-                `<div class="instructor-item"><strong>${instructor.name}</strong>${instructor.role ? ` - ${instructor.role}` : ''}</div>`
+                `<div class="instructor-item"><strong>${instructor.name}</strong>${instructor.role ? ` - ${instructor.role === 'EXAMINER' ? 'Examiner' : 'Assessment Reviewer'}` : ''}</div>`
             )
             .join('')
 
