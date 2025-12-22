@@ -263,6 +263,14 @@ export class AssessmentService {
         throw AssessmentFormCreationFailedException
       }
 
+      // Send email notifications after successful creation
+      try {
+        await this.sendAssessmentNotifications(createdAssessments, template, subject, course)
+      } catch (error) {
+        console.error('Failed to send assessment notifications:', error)
+        // Don't fail the assessment creation if email fails
+      }
+
       return {
         success: true,
         message: `Successfully created ${createdAssessments.length} assessment(s)`,
@@ -509,6 +517,14 @@ export class AssessmentService {
 
       if (!createdAssessments || createdAssessments.length === 0) {
         throw AssessmentFormCreationFailedException
+      }
+
+      // Send email notifications after successful creation
+      try {
+        await this.sendAssessmentNotifications(createdAssessments, template, subject, course)
+      } catch (error) {
+        console.error('Failed to send assessment notifications:', error)
+        // Don't fail the assessment creation if email fails
       }
 
       return {
@@ -2923,6 +2939,108 @@ export class AssessmentService {
 
       console.error('Archive assessment event failed:', error)
       throw new InternalServerErrorException('Failed to archive assessment event')
+    }
+  }
+
+  /**
+   * Send assessment notifications to trainers and trainees
+   */
+  private async sendAssessmentNotifications(
+    createdAssessments: any[],
+    template: any,
+    subject: any,
+    course: any
+  ): Promise<void> {
+    if (!createdAssessments || createdAssessments.length === 0) {
+      return
+    }
+
+    const firstAssessment = createdAssessments[0]
+    const entity = subject || course
+    const entityType = subject ? 'subject' : 'course'
+
+    // Format assessment date
+    const assessmentDate = new Date(firstAssessment.occuranceDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Bangkok'
+    })
+
+    // Get venue from subject or course
+    const venue = entity.venue || 'TBA'
+    const entityName = entity.name
+    const entityCode = entity.code
+    const departmentName = subject ? subject.course.department.name : course.department.name
+
+    // Prepare trainee list
+    const traineeList = createdAssessments.map((assessment) => ({
+      eid: assessment.trainee.eid,
+      name: `${assessment.trainee.firstName} ${assessment.trainee.lastName}`,
+      email: assessment.trainee.email
+    }))
+
+    // Get instructors based on entity type
+    let instructors: Array<{ email: string; name: string; role: string }> = []
+    
+    if (subject) {
+      const subjectInstructors = await this.assessmentRepo.getSubjectInstructors(subject.id)
+      instructors = subjectInstructors.map((si: any) => ({
+        email: si.trainer.email,
+        name: `${si.trainer.firstName} ${si.trainer.lastName}`,
+        role: si.roleInAssessment || 'Instructor'
+      }))
+    } else if (course) {
+      const courseInstructors = await this.assessmentRepo.getCourseInstructors(course.id)
+      instructors = courseInstructors.map((ci: any) => ({
+        email: ci.trainer.email,
+        name: `${ci.trainer.firstName} ${ci.trainer.lastName}`,
+        role: ci.roleInAssessment || 'Instructor'
+      }))
+    }
+
+    // Prepare assessment data
+    const assessmentData = {
+      assessmentName: firstAssessment.name,
+      templateName: template.name,
+      assessmentDate,
+      venue,
+      entityName,
+      entityCode,
+      departmentName,
+      totalTrainees: traineeList.length
+    }
+
+    // Send notifications to trainers
+    if (instructors.length > 0) {
+      const trainerEmailResult = await this.nodemailerService.sendAssessmentNotificationToTrainers(
+        instructors.map((i) => ({ email: i.email, name: i.name })),
+        {
+          ...assessmentData,
+          traineeList
+        }
+      )
+
+      if (!trainerEmailResult.success) {
+        console.warn('Some trainer notifications failed:', trainerEmailResult.results)
+      }
+    }
+
+    // Send notifications to trainees
+    if (traineeList.length > 0) {
+      const traineeEmailResult = await this.nodemailerService.sendAssessmentNotificationToTrainees(
+        traineeList.map((t) => ({ email: t.email, name: t.name })),
+        {
+          ...assessmentData,
+          instructorList: instructors.map((i) => ({ name: i.name, role: i.role }))
+        }
+      )
+
+      if (!traineeEmailResult.success) {
+        console.warn('Some trainee notifications failed:', traineeEmailResult.results)
+      }
     }
   }
 }

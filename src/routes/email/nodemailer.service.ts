@@ -749,4 +749,184 @@ This account was created on ${creationDate}.`
       results
     }
   }
+
+  /**
+   * Send assessment notification to trainers
+   */
+  async sendAssessmentNotificationToTrainers(
+    trainers: Array<{ email: string; name: string }>,
+    assessmentData: {
+      assessmentName: string
+      templateName: string
+      assessmentDate: string
+      venue: string
+      entityName: string
+      entityCode: string
+      departmentName: string
+      totalTrainees: number
+      traineeList: Array<{ eid: string; name: string }>
+    }
+  ): Promise<{
+    success: boolean
+    results: Array<{
+      email: string
+      success: boolean
+      message: string
+    }>
+  }> {
+    const results = await Promise.all(
+      trainers.map(async (trainer) => {
+        try {
+          let htmlTemplate = await this.loadTemplate('assessment-notification-trainer.txt')
+
+          // Build trainee list HTML
+          const traineeListHtml = assessmentData.traineeList
+            .map(
+              (trainee) =>
+                `<div class="trainee-item"><strong>${trainee.eid}</strong> - ${trainee.name}</div>`
+            )
+            .join('')
+
+          // Replace placeholders
+          htmlTemplate = htmlTemplate.replace(/\[TRAINER_NAME\]/g, trainer.name)
+          htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_NAME\]/g, assessmentData.assessmentName)
+          htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_NAME\]/g, assessmentData.templateName)
+          htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_DATE\]/g, assessmentData.assessmentDate)
+          htmlTemplate = htmlTemplate.replace(/\[VENUE\]/g, assessmentData.venue)
+          htmlTemplate = htmlTemplate.replace(/\[ENTITY_NAME\]/g, assessmentData.entityName)
+          htmlTemplate = htmlTemplate.replace(/\[ENTITY_CODE\]/g, assessmentData.entityCode)
+          htmlTemplate = htmlTemplate.replace(/\[DEPARTMENT_NAME\]/g, assessmentData.departmentName)
+          htmlTemplate = htmlTemplate.replace(/\[TOTAL_TRAINEES\]/g, assessmentData.totalTrainees.toString())
+          htmlTemplate = htmlTemplate.replace(/\[TRAINEE_LIST\]/g, traineeListHtml)
+          htmlTemplate = htmlTemplate.replace(
+            /\[CURRENT_DATE\]/g,
+            new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          )
+
+          const emailData = {
+            to: trainer.email,
+            subject: `Upcoming Assessment: ${assessmentData.assessmentName}`,
+            html: htmlTemplate,
+            text: `You have been assigned as an instructor for the assessment "${assessmentData.assessmentName}" scheduled on ${assessmentData.assessmentDate}.`
+          }
+
+          const result = await this.sendEmail(emailData)
+
+          return {
+            email: trainer.email,
+            success: result.success,
+            message: result.success ? 'Notification sent successfully' : result.error || 'Failed to send notification'
+          }
+        } catch (error) {
+          return {
+            email: trainer.email,
+            success: false,
+            message: `Error sending notification: ${error.message}`
+          }
+        }
+      })
+    )
+
+    const successCount = results.filter((r) => r.success).length
+
+    return {
+      success: successCount === trainers.length,
+      results
+    }
+  }
+
+  /**
+   * Send assessment notification to trainees
+   */
+  async sendAssessmentNotificationToTrainees(
+    trainees: Array<{ email: string; name: string }>,
+    assessmentData: {
+      assessmentName: string
+      templateName: string
+      assessmentDate: string
+      venue: string
+      entityName: string
+      entityCode: string
+      departmentName: string
+      instructorList: Array<{ name: string; role: string }>
+    }
+  ): Promise<{
+    success: boolean
+    results: Array<{
+      email: string
+      success: boolean
+      message: string
+    }>
+  }> {
+    const results = await Promise.all(
+      trainees.map(async (trainee) => {
+        try {
+          let htmlTemplate = await this.loadTemplate('assessment-notification-trainee.txt')
+
+          // Build instructor list HTML
+          const instructorListHtml = assessmentData.instructorList
+            .map(
+              (instructor) =>
+                `<div class="instructor-item"><strong>${instructor.name}</strong>${instructor.role ? ` - ${instructor.role}` : ''}</div>`
+            )
+            .join('')
+
+          // Replace placeholders
+          htmlTemplate = htmlTemplate.replace(/\[TRAINEE_NAME\]/g, trainee.name)
+          htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_NAME\]/g, assessmentData.assessmentName)
+          htmlTemplate = htmlTemplate.replace(/\[TEMPLATE_NAME\]/g, assessmentData.templateName)
+          htmlTemplate = htmlTemplate.replace(/\[ASSESSMENT_DATE\]/g, assessmentData.assessmentDate)
+          htmlTemplate = htmlTemplate.replace(/\[VENUE\]/g, assessmentData.venue)
+          htmlTemplate = htmlTemplate.replace(/\[ENTITY_NAME\]/g, assessmentData.entityName)
+          htmlTemplate = htmlTemplate.replace(/\[ENTITY_CODE\]/g, assessmentData.entityCode)
+          htmlTemplate = htmlTemplate.replace(/\[DEPARTMENT_NAME\]/g, assessmentData.departmentName)
+          htmlTemplate = htmlTemplate.replace(/\[INSTRUCTOR_LIST\]/g, instructorListHtml)
+          htmlTemplate = htmlTemplate.replace(
+            /\[CURRENT_DATE\]/g,
+            new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          )
+
+          const emailData = {
+            to: trainee.email,
+            subject: `Upcoming Assessment: ${assessmentData.assessmentName}`,
+            html: htmlTemplate,
+            text: `You have an upcoming assessment "${assessmentData.assessmentName}" scheduled on ${assessmentData.assessmentDate}.`
+          }
+
+          const result = await this.sendEmail(emailData)
+
+          return {
+            email: trainee.email,
+            success: result.success,
+            message: result.success ? 'Notification sent successfully' : result.error || 'Failed to send notification'
+          }
+        } catch (error) {
+          return {
+            email: trainee.email,
+            success: false,
+            message: `Error sending notification: ${error.message}`
+          }
+        }
+      })
+    )
+
+    const successCount = results.filter((r) => r.success).length
+
+    return {
+      success: successCount === trainees.length,
+      results
+    }
+  }
 }

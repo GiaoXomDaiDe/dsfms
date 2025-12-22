@@ -3560,7 +3560,7 @@ export class AssessmentRepo {
     // Enrich ALL events with subject/course and template information and calculate status
     const allEnrichedEvents = await Promise.all(
       allEvents.map(async (event) => {
-        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course'; belongToCourseName: string | null } | null = null
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course'; belongToCourseName: string | null; venue: string | null } | null = null
 
         // Get subject or course info
         if (event.subjectId) {
@@ -3570,6 +3570,7 @@ export class AssessmentRepo {
               id: true, 
               name: true, 
               code: true,
+              roomName: true,
               course: {
                 select: {
                   name: true
@@ -3583,13 +3584,14 @@ export class AssessmentRepo {
               name: subject.name,
               code: subject.code,
               type: 'subject',
-              belongToCourseName: subject.course.name
+              belongToCourseName: subject.course.name,
+              venue: subject.roomName
             }
           }
         } else if (event.courseId) {
           const course = await this.prisma.course.findUnique({
             where: { id: event.courseId },
-            select: { id: true, name: true, code: true }
+            select: { id: true, name: true, code: true, venue: true }
           })
           if (course) {
             entityInfo = {
@@ -3597,7 +3599,8 @@ export class AssessmentRepo {
               name: course.name,
               code: course.code,
               type: 'course',
-              belongToCourseName: null
+              belongToCourseName: null,
+              venue: course.venue
             }
           }
         }
@@ -3759,7 +3762,8 @@ export class AssessmentRepo {
             name: 'Unknown',
             code: 'UNKNOWN',
             type: event.subjectId ? 'subject' : 'course',
-            belongToCourseName: null
+            belongToCourseName: null,
+            venue: null
           },
           templateInfo: template
             ? {
@@ -4315,7 +4319,7 @@ export class AssessmentRepo {
     // Enrich ALL events with subject/course and template information and calculate status
     const allEnrichedEvents = await Promise.all(
       allEvents.map(async (event) => {
-        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course'; belongToCourseName: string | null } | null = null
+        let entityInfo: { id: string; name: string; code: string; type: 'subject' | 'course'; belongToCourseName: string | null; venue: string | null } | null = null
 
         // Get subject or course info
         if (event.subjectId) {
@@ -4325,6 +4329,7 @@ export class AssessmentRepo {
               id: true, 
               name: true, 
               code: true,
+              roomName: true,
               course: {
                 select: {
                   name: true
@@ -4338,13 +4343,14 @@ export class AssessmentRepo {
               name: subject.name,
               code: subject.code,
               type: 'subject',
-              belongToCourseName: subject.course.name
+              belongToCourseName: subject.course.name,
+              venue: subject.roomName
             }
           }
         } else if (event.courseId) {
           const course = await this.prisma.course.findUnique({
             where: { id: event.courseId },
-            select: { id: true, name: true, code: true }
+            select: { id: true, name: true, code: true, venue: true }
           })
           if (course) {
             entityInfo = {
@@ -4352,7 +4358,8 @@ export class AssessmentRepo {
               name: course.name,
               code: course.code,
               type: 'course',
-              belongToCourseName: null
+              belongToCourseName: null,
+              venue: course.venue
             }
           }
         }
@@ -4514,7 +4521,8 @@ export class AssessmentRepo {
             name: 'Unknown',
             code: 'UNKNOWN',
             type: event.subjectId ? 'subject' : 'course',
-            belongToCourseName: null
+            belongToCourseName: null,
+            venue: null
           },
           templateInfo: template
             ? {
@@ -5696,4 +5704,69 @@ export class AssessmentRepo {
       throw error
     }
   }
+
+  /**
+   * Get instructors for a subject
+   */
+  async getSubjectInstructors(subjectId: string) {
+    return await this.prisma.subjectInstructor.findMany({
+      where: {
+        subjectId,
+        trainer: {
+          status: 'ACTIVE',
+          deletedAt: null
+        }
+      },
+      select: {
+        roleInAssessment: true,
+        trainer: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Get instructors for a course
+   */
+  async getCourseInstructors(courseId: string) {
+    return await this.prisma.courseInstructor.findMany({
+      where: {
+        courseId,
+        trainer: {
+          status: 'ACTIVE',
+          deletedAt: null
+        }
+      },
+      select: {
+        roleInAssessment: true,
+        trainer: {
+          select: {
+            id: true,
+            eid: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true
+          }
+        }
+      }
+    })
+  }
 }
+
+
+
+
+
+
+
+
+
