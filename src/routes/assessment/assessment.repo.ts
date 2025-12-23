@@ -4569,7 +4569,6 @@ export class AssessmentRepo {
    * Update assessment event (name and/or occurrence date for all matching assessment forms)
    */
   async updateAssessmentEvent(
-    currentName: string,
     subjectId: string | undefined,
     courseId: string | undefined,
     currentOccuranceDate: Date,
@@ -4589,13 +4588,13 @@ export class AssessmentRepo {
     // Find all existing assessments for this event
     const existingAssessments = await this.prisma.assessmentForm.findMany({
       where: {
-        name: currentName,
         ...(subjectId ? { subjectId } : { courseId }),
         occuranceDate: currentOccuranceDate,
         templateId: templateId
       },
       select: {
         id: true,
+        name: true,
         status: true,
         traineeId: true
       }
@@ -4605,30 +4604,40 @@ export class AssessmentRepo {
       throw new Error('No assessment forms found for this event')
     }
 
+    // Get the current name from the first assessment
+    const currentName = existingAssessments[0].name
+
     // If only updating name, allow update regardless of date/status
     if (updates.name && !updates.occuranceDate) {
-      const result = await this.prisma.assessmentForm.updateMany({
-        where: {
-          name: currentName,
-          ...(subjectId ? { subjectId } : { courseId }),
-          occuranceDate: currentOccuranceDate,
-          templateId: templateId
-        },
-        data: { name: updates.name }
+      // Update each assessment individually to preserve the EID suffix
+      const updatePromises = existingAssessments.map(async (assessment) => {
+        // Extract EID from current name (format: "Assessment Name - TE000001")
+        const eidMatch = assessment.name.match(/ - ([A-Z]+\d+)$/)
+        const eidSuffix = eidMatch ? ` - ${eidMatch[1]}` : ''
+        
+        // Construct new name with preserved EID
+        const newFullName = updates.name + eidSuffix
+
+        return await this.prisma.assessmentForm.update({
+          where: { id: assessment.id },
+          data: { name: newFullName }
+        })
       })
+
+      await Promise.all(updatePromises)
 
       return {
         success: true,
-        message: `Successfully updated name for ${result.count} assessment form(s)`,
+        message: `Successfully updated name for ${existingAssessments.length} assessment form(s)`,
         data: {
-          updatedCount: result.count,
+          updatedCount: existingAssessments.length,
           eventInfo: {
             name: updates.name,
             subjectId: subjectId || null,
             courseId: courseId || null,
             occuranceDate: currentOccuranceDate,
             templateId: templateId,
-            totalAssessmentForms: result.count
+            totalAssessmentForms: existingAssessments.length
           }
         }
       }
@@ -4656,7 +4665,6 @@ export class AssessmentRepo {
               lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) // Next day
             },
             NOT: {
-              name: currentName,
               occuranceDate: currentOccuranceDate
             }
           }
@@ -4678,38 +4686,71 @@ export class AssessmentRepo {
         }
 
         // Update occurrence date and change status to ON_GOING
-        const updateData: any = {
-          occuranceDate: updates.occuranceDate,
-          status: AssessmentStatus.ON_GOING
-        }
+        // If name is also being updated, update each assessment individually to preserve EID
         if (updates.name) {
-          updateData.name = updates.name
-        }
+          const updatePromises = existingAssessments.map(async (assessment) => {
+            const eidMatch = assessment.name.match(/ - ([A-Z]+\d+)$/)
+            const eidSuffix = eidMatch ? ` - ${eidMatch[1]}` : ''
+            const newFullName = updates.name + eidSuffix
 
-        const result = await this.prisma.assessmentForm.updateMany({
-          where: {
-            name: currentName,
-            ...(subjectId ? { subjectId } : { courseId }),
-            occuranceDate: currentOccuranceDate,
-            templateId: templateId
-          },
-          data: updateData
-        })
+            return await this.prisma.assessmentForm.update({
+              where: { id: assessment.id },
+              data: {
+                name: newFullName,
+                occuranceDate: updates.occuranceDate,
+                status: AssessmentStatus.ON_GOING
+              }
+            })
+          })
 
-        return {
-          success: true,
-          message: `Successfully updated ${result.count} assessment form(s) and changed status to ON_GOING`,
-          data: {
-            updatedCount: result.count,
-            statusChanged: true,
-            newStatus: AssessmentStatus.ON_GOING,
-            eventInfo: {
-              name: updates.name || currentName,
-              subjectId: subjectId || null,
-              courseId: courseId || null,
+          await Promise.all(updatePromises)
+
+          return {
+            success: true,
+            message: `Successfully updated ${existingAssessments.length} assessment form(s) and changed status to ON_GOING`,
+            data: {
+              updatedCount: existingAssessments.length,
+              statusChanged: true,
+              newStatus: AssessmentStatus.ON_GOING,
+              eventInfo: {
+                name: updates.name,
+                subjectId: subjectId || null,
+                courseId: courseId || null,
+                occuranceDate: updates.occuranceDate,
+                templateId: templateId,
+                totalAssessmentForms: existingAssessments.length
+              }
+            }
+          }
+        } else {
+          // Only updating date, use updateMany
+          const result = await this.prisma.assessmentForm.updateMany({
+            where: {
+              ...(subjectId ? { subjectId } : { courseId }),
+              occuranceDate: currentOccuranceDate,
+              templateId: templateId
+            },
+            data: {
               occuranceDate: updates.occuranceDate,
-              templateId: templateId,
-              totalAssessmentForms: result.count
+              status: AssessmentStatus.ON_GOING
+            }
+          })
+
+          return {
+            success: true,
+            message: `Successfully updated ${result.count} assessment form(s) and changed status to ON_GOING`,
+            data: {
+              updatedCount: result.count,
+              statusChanged: true,
+              newStatus: AssessmentStatus.ON_GOING,
+              eventInfo: {
+                name: currentName,
+                subjectId: subjectId || null,
+                courseId: courseId || null,
+                occuranceDate: updates.occuranceDate,
+                templateId: templateId,
+                totalAssessmentForms: result.count
+              }
             }
           }
         }
@@ -4731,38 +4772,71 @@ export class AssessmentRepo {
         }
 
         // Update occurrence date and change status to NOT_STARTED
-        const updateData: any = {
-          occuranceDate: updates.occuranceDate,
-          status: AssessmentStatus.NOT_STARTED
-        }
+        // If name is also being updated, update each assessment individually to preserve EID
         if (updates.name) {
-          updateData.name = updates.name
-        }
+          const updatePromises = existingAssessments.map(async (assessment) => {
+            const eidMatch = assessment.name.match(/ - ([A-Z]+\d+)$/)
+            const eidSuffix = eidMatch ? ` - ${eidMatch[1]}` : ''
+            const newFullName = updates.name + eidSuffix
 
-        const result = await this.prisma.assessmentForm.updateMany({
-          where: {
-            name: currentName,
-            ...(subjectId ? { subjectId } : { courseId }),
-            occuranceDate: currentOccuranceDate,
-            templateId: templateId
-          },
-          data: updateData
-        })
+            return await this.prisma.assessmentForm.update({
+              where: { id: assessment.id },
+              data: {
+                name: newFullName,
+                occuranceDate: updates.occuranceDate,
+                status: AssessmentStatus.NOT_STARTED
+              }
+            })
+          })
 
-        return {
-          success: true,
-          message: `Successfully updated ${result.count} assessment form(s) and changed status to NOT_STARTED`,
-          data: {
-            updatedCount: result.count,
-            statusChanged: true,
-            newStatus: AssessmentStatus.NOT_STARTED,
-            eventInfo: {
-              name: updates.name || currentName,
-              subjectId: subjectId || null,
-              courseId: courseId || null,
+          await Promise.all(updatePromises)
+
+          return {
+            success: true,
+            message: `Successfully updated ${existingAssessments.length} assessment form(s) and changed status to NOT_STARTED`,
+            data: {
+              updatedCount: existingAssessments.length,
+              statusChanged: true,
+              newStatus: AssessmentStatus.NOT_STARTED,
+              eventInfo: {
+                name: updates.name,
+                subjectId: subjectId || null,
+                courseId: courseId || null,
+                occuranceDate: updates.occuranceDate,
+                templateId: templateId,
+                totalAssessmentForms: existingAssessments.length
+              }
+            }
+          }
+        } else {
+          // Only updating date, use updateMany
+          const result = await this.prisma.assessmentForm.updateMany({
+            where: {
+              ...(subjectId ? { subjectId } : { courseId }),
+              occuranceDate: currentOccuranceDate,
+              templateId: templateId
+            },
+            data: {
               occuranceDate: updates.occuranceDate,
-              templateId: templateId,
-              totalAssessmentForms: result.count
+              status: AssessmentStatus.NOT_STARTED
+            }
+          })
+
+          return {
+            success: true,
+            message: `Successfully updated ${result.count} assessment form(s) and changed status to NOT_STARTED`,
+            data: {
+              updatedCount: result.count,
+              statusChanged: true,
+              newStatus: AssessmentStatus.NOT_STARTED,
+              eventInfo: {
+                name: currentName,
+                subjectId: subjectId || null,
+                courseId: courseId || null,
+                occuranceDate: updates.occuranceDate,
+                templateId: templateId,
+                totalAssessmentForms: result.count
+              }
             }
           }
         }
@@ -4781,37 +4855,68 @@ export class AssessmentRepo {
       }
 
       // Standard date update for future dates
-      const updateData: any = {
-        occuranceDate: updates.occuranceDate
-      }
+      // If name is also being updated, update each assessment individually to preserve EID
       if (updates.name) {
-        updateData.name = updates.name
-      }
+        const updatePromises = existingAssessments.map(async (assessment) => {
+          const eidMatch = assessment.name.match(/ - ([A-Z]+\d+)$/)
+          const eidSuffix = eidMatch ? ` - ${eidMatch[1]}` : ''
+          const newFullName = updates.name + eidSuffix
 
-      const result = await this.prisma.assessmentForm.updateMany({
-        where: {
-          name: currentName,
-          ...(subjectId ? { subjectId } : { courseId }),
-          occuranceDate: currentOccuranceDate,
-          templateId: templateId,
-          status: AssessmentStatus.NOT_STARTED
-        },
-        data: updateData
-      })
+          return await this.prisma.assessmentForm.update({
+            where: { id: assessment.id },
+            data: {
+              name: newFullName,
+              occuranceDate: updates.occuranceDate
+            }
+          })
+        })
 
-      return {
-        success: true,
-        message: `Successfully updated ${result.count} assessment form(s)`,
-        data: {
-          updatedCount: result.count,
-          statusChanged: false,
-          eventInfo: {
-            name: updates.name || currentName,
-            subjectId: subjectId || null,
-            courseId: courseId || null,
-            occuranceDate: updates.occuranceDate,
+        await Promise.all(updatePromises)
+
+        return {
+          success: true,
+          message: `Successfully updated ${existingAssessments.length} assessment form(s)`,
+          data: {
+            updatedCount: existingAssessments.length,
+            statusChanged: false,
+            eventInfo: {
+              name: updates.name,
+              subjectId: subjectId || null,
+              courseId: courseId || null,
+              occuranceDate: updates.occuranceDate,
+              templateId: templateId,
+              totalAssessmentForms: existingAssessments.length
+            }
+          }
+        }
+      } else {
+        // Only updating date, use updateMany
+        const result = await this.prisma.assessmentForm.updateMany({
+          where: {
+            ...(subjectId ? { subjectId } : { courseId }),
+            occuranceDate: currentOccuranceDate,
             templateId: templateId,
-            totalAssessmentForms: result.count
+            status: AssessmentStatus.NOT_STARTED
+          },
+          data: {
+            occuranceDate: updates.occuranceDate
+          }
+        })
+
+        return {
+          success: true,
+          message: `Successfully updated ${result.count} assessment form(s)`,
+          data: {
+            updatedCount: result.count,
+            statusChanged: false,
+            eventInfo: {
+              name: currentName,
+              subjectId: subjectId || null,
+              courseId: courseId || null,
+              occuranceDate: updates.occuranceDate,
+              templateId: templateId,
+              totalAssessmentForms: result.count
+            }
           }
         }
       }
@@ -5765,6 +5870,8 @@ export class AssessmentRepo {
     })
   }
 }
+
+
 
 
 
