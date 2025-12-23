@@ -2779,7 +2779,6 @@ export class AssessmentService {
   ): Promise<UpdateAssessmentEventResType> {
     try {
       const result = await this.assessmentRepo.updateAssessmentEvent(
-        params.name,
         params.subjectId,
         params.courseId,
         params.occuranceDate,

@@ -862,7 +862,6 @@ export const UpdateAssessmentEventParamsSchema = z
         message: 'Invalid occurrence date format'
       })
       .transform((val) => new Date(val)),
-    name: z.string().min(1).max(255),
     templateId: z.string().uuid()
   })
   .refine((data) => data.subjectId || data.courseId, {
