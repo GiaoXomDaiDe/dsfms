@@ -515,7 +515,6 @@ export class SubjectService {
           batchCode: data.batchCode,
           duplicates: result.duplicates
         })
-        continue
       }
 
       createdCount += result.createdCount
@@ -530,7 +529,7 @@ export class SubjectService {
     const combinedErrorMessages = [...errorMessages, ...invalidMessages]
 
     // Nếu không tạo mới bản ghi nào và có lỗi (duplicates/invalid) thì trả lỗi để frontend hiển thị
-    if (createdCount === 0 && (errors.length > 0 || invalidIssues.length > 0)) {
+    if (createdCount === 0 && successMessages.length === 0 && (errors.length > 0 || invalidIssues.length > 0)) {
       throw new BadRequestException({
         message: 'No enrollments were created. Please review the errors.',
         data: {
