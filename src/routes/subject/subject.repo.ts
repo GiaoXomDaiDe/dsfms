@@ -651,14 +651,13 @@ export class SubjectRepository {
       eligibleUserIds
     })
 
-    // 2) Tìm enrollment đã có (trùng) theo subjectId + trainee (bỏ qua batch), chặn nếu status chưa cancelled
+    // 2) Tìm enrollment đã có (trùng) theo subjectId + trainee (bỏ qua batch)
+    // - Nếu status thuộc blockingStatuses => duplicate, không tạo
+    // - Nếu status = CANCELLED => reactivate (update lại ENROLLED)
     const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
         subjectId,
-        traineeUserId: { in: eligibleUserIds },
-        status: {
-          not: SubjectEnrollmentStatus.CANCELLED
-        }
+        traineeUserId: { in: eligibleUserIds }
       },
       select: {
         traineeUserId: true,
@@ -669,18 +668,28 @@ export class SubjectRepository {
       }
     })
 
+    const blockedStatuses = new Set(blockingStatuses)
+    const blockedEnrollments = existingEnrollments.filter((e) =>
+      blockedStatuses.has(e.status as SubjectEnrollmentStatusValue)
+    )
+    const cancelledEnrollments = existingEnrollments.filter((e) => e.status === SubjectEnrollmentStatus.CANCELLED)
+
     console.log('[AssignTrainees][Repo] existing enrollments', {
       subjectId,
       existingCount: existingEnrollments.length,
+      blockedCount: blockedEnrollments.length,
+      cancelledCount: cancelledEnrollments.length,
       existingTraineeIds: existingEnrollments.map((e) => e.traineeUserId)
     })
 
-    const blockedIds = new Set(existingEnrollments.map((e) => e.traineeUserId))
-    const newIds = eligibleUserIds.filter((id) => !blockedIds.has(id))
+    const blockedIds = new Set(blockedEnrollments.map((e) => e.traineeUserId))
+    const reactivateIds = new Set(cancelledEnrollments.map((e) => e.traineeUserId))
+    const newIds = eligibleUserIds.filter((id) => !blockedIds.has(id) && !reactivateIds.has(id))
 
-    console.log('[AssignTrainees][Repo] new vs blocked', {
+    console.log('[AssignTrainees][Repo] new vs blocked vs reactivate', {
       newIds,
-      blockedIds: Array.from(blockedIds)
+      blockedIds: Array.from(blockedIds),
+      reactivateIds: Array.from(reactivateIds)
     })
 
     // 3) Tạo enrollments mới
@@ -700,10 +709,34 @@ export class SubjectRepository {
       createdCount = createResult.count
     }
 
+    // Reactivate các bản ghi đã CANCELLED để tránh đụng PK
+    let reactivatedCount = 0
+    if (reactivateIds.size > 0) {
+      const updateResult = await this.prisma.subjectEnrollment.updateMany({
+        where: {
+          subjectId,
+          traineeUserId: { in: Array.from(reactivateIds) },
+          status: SubjectEnrollmentStatus.CANCELLED
+        },
+        data: {
+          status: SubjectEnrollmentStatus.ENROLLED,
+          batchCode,
+          enrollmentDate: new Date(),
+          updatedAt: new Date()
+        }
+      })
+      reactivatedCount = updateResult.count
+    }
+
+    const totalCreated = createdCount + reactivatedCount
+
     console.log('[AssignTrainees][Repo] creation result', {
       subjectId,
       newEnrollments: newEnrollments.map((e) => e.traineeUserId),
-      createdCount
+      reactivatedIds: Array.from(reactivateIds),
+      createdCount,
+      reactivatedCount,
+      totalCreated
     })
 
     // 4) Chuẩn hóa payload trả về
@@ -719,13 +752,13 @@ export class SubjectRepository {
       }
     }
 
-    const enrolledNew = newIds.map((id) => {
+    const enrolledNew = [...newIds, ...reactivateIds].map((id) => {
       const user = requestedUserMap.get(id)
       if (!user) throw TraineeResolutionFailureException(id)
       return resolveUserPayload(user)
     })
 
-    const duplicates = existingEnrollments.map((enrollment) => {
+    const duplicates = blockedEnrollments.map((enrollment) => {
       const fallbackUser = enrollment.trainee as AssignmentUserSummary
       const user = requestedUserMap.get(enrollment.traineeUserId) ?? fallbackUser
       const payload = resolveUserPayload(user)
@@ -738,7 +771,7 @@ export class SubjectRepository {
 
     const invalid = Array.from(invalidMap.values())
 
-    return { enrolled: enrolledNew, duplicates, invalid, createdCount }
+    return { enrolled: enrolledNew, duplicates, invalid, createdCount: totalCreated }
   }
 
   async getTraineeCoursesWithSubjects({
