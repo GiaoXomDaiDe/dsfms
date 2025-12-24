@@ -445,13 +445,21 @@ export class SubjectService {
     const targetSubjectIds = new Set<string>(data.subjectIds)
     if (targetSubjectIds.size === 0) throw SubjectNotFoundException
 
-    let enrolledCount = 0
-    let duplicateCount = 0
-    let invalidCount = 0
+    console.log('[AssignTrainees][Service] request', {
+      subjectIds: Array.from(targetSubjectIds),
+      traineeUserIds: data.traineeUserIds,
+      batchCode: data.batchCode
+    })
 
-    const totalRequested = targetSubjectIds.size * data.traineeUserIds.length
+    const uniqueTraineeIds = Array.from(new Set(data.traineeUserIds))
+    const totalRequested = uniqueTraineeIds.length
+
+    type TraineeStatus = { created: boolean; duplicate: boolean; invalid: boolean }
+    const traineeStatus = new Map<string, TraineeStatus>()
+    uniqueTraineeIds.forEach((id) => traineeStatus.set(id, { created: false, duplicate: false, invalid: false }))
 
     for (const subjectId of targetSubjectIds) {
+      console.log('[AssignTrainees][Service] processing subject', subjectId)
       // 1) Guard per subject
       const subject = await this.sharedSubjectRepo.findById(subjectId)
       if (!subject) throw SubjectNotFoundException
@@ -474,10 +482,49 @@ export class SubjectService {
         blockingStatuses: this.defaultBlockingEnrollmentStatuses // ENROLLED, ON_GOING
       })
 
-      duplicateCount += result.duplicates.length
-      invalidCount += result.invalid.length
-      enrolledCount += result.createdCount
+      console.log('[AssignTrainees][Service] repo result', {
+        subjectId,
+        createdCount: result.createdCount,
+        duplicates: result.duplicates.map((d) => d.eid),
+        invalid: result.invalid.map((i) => ({ id: i.submittedId, eid: i.eid, reason: i.reason }))
+      })
+
+      // Mark per trainee
+      result.enrolled.forEach((u) => {
+        const state = traineeStatus.get(u.userId)
+        if (!state) return
+        state.created = true
+      })
+      result.duplicates.forEach((u) => {
+        const state = traineeStatus.get(u.userId)
+        if (!state) return
+        state.duplicate = true
+      })
+      result.invalid.forEach((i) => {
+        const state = traineeStatus.get(i.submittedId)
+        if (!state) return
+        state.invalid = true
+      })
     }
+
+    let enrolledCount = 0
+    let duplicateCount = 0
+    let invalidCount = 0
+
+    traineeStatus.forEach((state) => {
+      if (state.invalid) {
+        invalidCount += 1
+        return
+      }
+      if (state.duplicate) {
+        duplicateCount += 1
+        return
+      }
+      if (state.created) {
+        enrolledCount += 1
+      }
+    })
+
     const notEnrolledCount = duplicateCount + invalidCount
 
     const summaryMessage = (() => {
@@ -487,7 +534,7 @@ export class SubjectService {
 
       if (invalidCount === 0) {
         // Only duplicates
-        return `Successfully enrolled ${enrolledCount}/${totalRequested} trainees. ${duplicateCount}/${totalRequested} trainees failed as they have already been enrolled into this course.`
+        return `Successfully enrolled ${enrolledCount}/${totalRequested} trainees. ${duplicateCount}/${totalRequested} trainees enrolled fail as they have already been enrolled into this course.`
       }
 
       if (duplicateCount === 0) {
