@@ -601,6 +601,12 @@ export class SubjectRepository {
     batchCode: string
     blockingStatuses?: SubjectEnrollmentStatusValue[]
   }): Promise<AssignTraineesResult> {
+    console.log('[AssignTrainees][Repo] input', {
+      subjectId,
+      batchCode,
+      traineeUserIds,
+      blockingStatuses
+    })
     // 1) Resolve user + đánh dấu invalid
     const requestedUsers = await this.sharedUserRepo.findUsersForAssignment(traineeUserIds)
     const requestedUserMap = new Map(requestedUsers.map((u) => [u.id, u]))
@@ -638,6 +644,13 @@ export class SubjectRepository {
 
     const eligibleUserIds = traineeUserIds.filter((id) => !invalidMap.has(id))
 
+    console.log('[AssignTrainees][Repo] resolved users', {
+      requestedCount: traineeUserIds.length,
+      foundCount: requestedUsers.length,
+      invalidCount: invalidMap.size,
+      eligibleUserIds
+    })
+
     // 2) Tìm enrollment đã có (trùng) theo subjectId + trainee (bỏ qua batch), chặn nếu status chưa cancelled
     const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
@@ -656,8 +669,19 @@ export class SubjectRepository {
       }
     })
 
+    console.log('[AssignTrainees][Repo] existing enrollments', {
+      subjectId,
+      existingCount: existingEnrollments.length,
+      existingTraineeIds: existingEnrollments.map((e) => e.traineeUserId)
+    })
+
     const blockedIds = new Set(existingEnrollments.map((e) => e.traineeUserId))
     const newIds = eligibleUserIds.filter((id) => !blockedIds.has(id))
+
+    console.log('[AssignTrainees][Repo] new vs blocked', {
+      newIds,
+      blockedIds: Array.from(blockedIds)
+    })
 
     // 3) Tạo enrollments mới
     const newEnrollments = newIds.map((id) => ({
@@ -675,6 +699,12 @@ export class SubjectRepository {
       })
       createdCount = createResult.count
     }
+
+    console.log('[AssignTrainees][Repo] creation result', {
+      subjectId,
+      newEnrollments: newEnrollments.map((e) => e.traineeUserId),
+      createdCount
+    })
 
     // 4) Chuẩn hóa payload trả về
     const resolveUserPayload = (user: AssignmentUserSummary): TraineeAssignmentUserType => {
@@ -1273,10 +1303,9 @@ export class SubjectRepository {
     // Check if enrollment exists and is ENROLLED
     const enrollment = await this.prisma.subjectEnrollment.findUnique({
       where: {
-        traineeUserId_subjectId_batchCode: {
+        traineeUserId_subjectId: {
           traineeUserId,
-          subjectId,
-          batchCode
+          subjectId
         }
       }
     })
@@ -1288,10 +1317,9 @@ export class SubjectRepository {
     // Update to CANCELLED
     await this.prisma.subjectEnrollment.update({
       where: {
-        traineeUserId_subjectId_batchCode: {
+        traineeUserId_subjectId: {
           traineeUserId,
-          subjectId,
-          batchCode
+          subjectId
         }
       },
       data: {
