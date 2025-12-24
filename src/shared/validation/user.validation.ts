@@ -1,6 +1,6 @@
 import z from 'zod'
 import { GenderStatus, UserStatus } from '~/shared/constants/auth.constant'
-import { LETTER_REGEX, NAME_REGEX, PHONE_NUMBER_REGEX } from '~/shared/constants/validation.constant'
+import { PHONE_NUMBER_REGEX } from '~/shared/constants/validation.constant'
 import {
   createEnumSchema,
   normalizeWhitespace,
@@ -8,19 +8,14 @@ import {
   requiredText
 } from '~/shared/helpers/zod-validation.helper'
 
-const USER_NAME_MESSAGE = 'Name invalid'
 const PHONE_NUMBER_MESSAGE = 'Phone number must contain digits only'
 const STATUS_ERROR_MESSAGE = `Status must be one of: ${[UserStatus.ACTIVE, UserStatus.DISABLED].join(', ')}`
 const GENDER_ERROR_MESSAGE = `Gender must be one of: ${[GenderStatus.MALE, GenderStatus.FEMALE].join(', ')}`
 
 const baseNameSchema = requiredText({
   field: 'Name',
-  max: 100,
-  options: {
-    pattern: NAME_REGEX,
-    message: USER_NAME_MESSAGE
-  }
-}).refine((val) => LETTER_REGEX.test(val), { message: USER_NAME_MESSAGE })
+  max: 100
+})
 
 const normalizedNameSchema = z
   .string()
@@ -36,7 +31,20 @@ export const userNameSchema = normalizedNameSchema
  * userMiddleNameSchema: cho phép null; nếu nhập toàn khoảng trắng sẽ tự chuyển thành null,
  * còn dữ liệu khác phải thoả điều kiện như first/last name
  */
-export const userMiddleNameSchema = nullableStringField(normalizedNameSchema)
+export const userMiddleNameSchema = z.preprocess((value) => {
+  if (value === undefined || value === null) {
+    return value
+  }
+
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  const trimmed = normalizeWhitespace(value)
+
+  // Empty middle name should be treated as undefined so DB can default to null
+  return trimmed.length === 0 ? undefined : trimmed
+}, normalizedNameSchema.optional().nullable())
 
 /** userAddressSchema: tối đa 255 ký tự, tự đổi chuỗi rỗng thành null để tránh lưu empty string */
 export const userAddressSchema = nullableStringField(z.string().max(255))

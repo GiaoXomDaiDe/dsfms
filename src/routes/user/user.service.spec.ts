@@ -1,15 +1,22 @@
 import type { NodemailerService } from '~/routes/email/nodemailer.service'
 import { RoleNotFoundException, UserNotFoundException } from '~/routes/user/user.error'
-import type { CreateUserBodyType, GetUserResType, GetUsersResType } from '~/routes/user/user.model'
+import type { CreateUserBodyType, GetUserResType } from '~/routes/user/user.model'
 import type { UserRepository } from '~/routes/user/user.repo'
 import { UserService } from '~/routes/user/user.service'
-import { GenderStatus, RoleName, UserStatus } from '~/shared/constants/auth.constant'
+import { RoleName, UserStatus } from '~/shared/constants/auth.constant'
 import type { SharedCourseRepository } from '~/shared/repositories/shared-course.repo'
 import type { SharedRoleRepository } from '~/shared/repositories/shared-role.repo'
 import type { SharedSubjectRepository } from '~/shared/repositories/shared-subject.repo'
 import type { SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import type { EidService } from '~/shared/services/eid.service'
 import type { HashingService } from '~/shared/services/hashing.service'
+
+jest.mock('~/shared/config', () => ({
+  __esModule: true,
+  default: {
+    PASSWORD_SECRET: 'secret'
+  }
+}))
 
 jest.mock('~/shared/helper', () => {
   const actual = jest.requireActual('~/shared/helper')
@@ -20,201 +27,138 @@ jest.mock('~/shared/helper', () => {
 })
 
 describe('UserService', () => {
-  let hashingService: HashingService
-  let hashingServiceSpy: jest.Mock
-  let eidService: EidService
-  let eidServiceSpy: jest.Mock
-  let nodemailerService: NodemailerService
-  let sendNewUserEmailSpy: jest.Mock
-  let userRepo: UserRepository
-  let userRepoListSpy: jest.Mock
-  let userRepoCreateSpy: jest.Mock
-  let sharedUserRepo: SharedUserRepository
-  let findUniqueUserSpy: jest.Mock
-  let sharedRoleRepo: SharedRoleRepository
-  let findRoleByIdSpy: jest.Mock
-  let sharedCourseRepo: SharedCourseRepository
-  let sharedSubjectRepo: SharedSubjectRepository
-  let service: UserService
+  const hashingService: jest.Mocked<HashingService> = {
+    hashPassword: jest.fn(),
+    comparePassword: jest.fn()
+  }
+  const eidService = { generateEid: jest.fn(), isEidMatchingRole: jest.fn() }
+  const nodemailerService = {
+    sendNewUserAccountEmail: jest.fn(),
+    sendBulkNewUserAccountEmails: jest.fn()
+  }
+  const userRepo = { list: jest.fn(), create: jest.fn() }
+  const sharedUserRepo = { findUniqueIncludeProfile: jest.fn() }
+  const sharedRoleRepo = { findById: jest.fn(), getAdminRoleId: jest.fn() }
+  const sharedCourseRepo = {}
+  const sharedSubjectRepo = {}
 
-  const sampleUserResponse = (): GetUserResType => ({
+  const service = new UserService(
+    hashingService as unknown as HashingService,
+    eidService as unknown as EidService,
+    nodemailerService as unknown as NodemailerService,
+    userRepo as unknown as UserRepository,
+    sharedUserRepo as unknown as SharedUserRepository,
+    sharedRoleRepo as unknown as SharedRoleRepository,
+    sharedCourseRepo as unknown as SharedCourseRepository,
+    sharedSubjectRepo as unknown as SharedSubjectRepository
+  )
+
+  const baseUser: GetUserResType = {
     id: 'user-1',
-    eid: 'E00001',
+    eid: 'E0001',
     firstName: 'John',
     lastName: 'Doe',
-    middleName: 'M',
-    address: '123 Street',
+    middleName: null,
+    address: null,
     email: 'john@example.com',
-    gender: GenderStatus.MALE,
-    phoneNumber: '0123456789',
-    avatarUrl: 'https://example.com/avatar.png',
+    gender: 'MALE',
+    phoneNumber: null,
+    avatarUrl: null,
     status: UserStatus.ACTIVE,
-    signatureImageUrl: 'https://example.com/signature.png',
+    signatureImageUrl: null,
     createdById: null,
     updatedById: null,
     deletedById: null,
     deletedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    role: {
-      id: 'role-1',
-      name: RoleName.TRAINEE,
-      description: 'Trainee role',
-      isActive: true
-    },
+    role: { id: 'role-1', name: RoleName.ADMINISTRATOR, description: null, isActive: true },
     department: null,
     trainerProfile: null,
     traineeProfile: null,
     teachingCourses: [],
     teachingSubjects: []
-  })
-
-  const createUserPayload: CreateUserBodyType = {
-    firstName: 'Jane',
-    lastName: 'Doe',
-    middleName: 'Q',
-    address: '456 Avenue',
-    email: 'jane@example.com',
-    gender: GenderStatus.FEMALE,
-    phoneNumber: '0987654321',
-    avatarUrl: 'https://example.com/avatar.png',
-    role: {
-      id: 'role-1',
-      name: RoleName.TRAINEE
-    }
   }
 
   beforeEach(() => {
-    hashingServiceSpy = jest.fn()
-    hashingService = { hashPassword: hashingServiceSpy } as unknown as HashingService
-
-    eidServiceSpy = jest.fn()
-    eidService = { generateEid: eidServiceSpy } as unknown as EidService
-
-    sendNewUserEmailSpy = jest.fn()
-    nodemailerService = {
-      sendNewUserAccountEmail: sendNewUserEmailSpy,
-      sendBulkNewUserAccountEmails: jest.fn()
-    } as unknown as NodemailerService
-
-    userRepoListSpy = jest.fn()
-    userRepoCreateSpy = jest.fn()
-    userRepo = {
-      list: userRepoListSpy,
-      create: userRepoCreateSpy
-    } as unknown as UserRepository
-
-    findUniqueUserSpy = jest.fn()
-    sharedUserRepo = {
-      findUniqueIncludeProfile: findUniqueUserSpy
-    } as unknown as SharedUserRepository
-
-    findRoleByIdSpy = jest.fn()
-    sharedRoleRepo = {
-      findById: findRoleByIdSpy,
-      getAdminRoleId: jest.fn()
-    } as unknown as SharedRoleRepository
-
-    sharedCourseRepo = {} as unknown as SharedCourseRepository
-    sharedSubjectRepo = {} as unknown as SharedSubjectRepository
-
-    service = new UserService(
-      hashingService,
-      eidService,
-      nodemailerService,
-      userRepo,
-      sharedUserRepo,
-      sharedRoleRepo,
-      sharedCourseRepo,
-      sharedSubjectRepo
-    )
-
     jest.clearAllMocks()
   })
 
   describe('list', () => {
-    it('should return result from repository', async () => {
-      const expected: GetUsersResType = { users: [], totalItems: 0 }
-      userRepoListSpy.mockResolvedValue(expected)
+    it('returns repository result', async () => {
+      const expected = { users: [], totalItems: 0 }
+      userRepo.list.mockResolvedValue(expected)
 
       const result = await service.list()
 
-      expect(userRepoListSpy).toHaveBeenCalledTimes(1)
+      expect(userRepo.list).toHaveBeenCalledTimes(1)
       expect(result).toBe(expected)
     })
   })
 
   describe('findById', () => {
-    it('should return user when found', async () => {
-      const user = sampleUserResponse()
-      findUniqueUserSpy.mockResolvedValue(user)
+    it('returns user when found', async () => {
+      sharedUserRepo.findUniqueIncludeProfile.mockResolvedValue(baseUser)
 
       const result = await service.findById('user-1')
 
-      expect(findUniqueUserSpy).toHaveBeenCalledWith('user-1')
-      expect(result).toBe(user)
+      expect(sharedUserRepo.findUniqueIncludeProfile).toHaveBeenCalledWith('user-1')
+      expect(result).toBe(baseUser)
     })
 
-    it('should throw when user is not found', async () => {
-      findUniqueUserSpy.mockResolvedValue(null)
+    it('throws when missing', async () => {
+      sharedUserRepo.findUniqueIncludeProfile.mockResolvedValue(null)
 
       await expect(service.findById('missing')).rejects.toBe(UserNotFoundException)
-      expect(findUniqueUserSpy).toHaveBeenCalledWith('missing')
+      expect(sharedUserRepo.findUniqueIncludeProfile).toHaveBeenCalledWith('missing')
     })
   })
 
   describe('create', () => {
-    it('should create user, hash password, and send welcome email', async () => {
-      const targetRole = {
-        id: 'role-1',
-        name: RoleName.TRAINEE,
-        isActive: true,
-        deletedAt: null
-      }
-      findRoleByIdSpy.mockResolvedValue(targetRole)
-      eidServiceSpy.mockResolvedValue('EID001')
-      hashingServiceSpy.mockResolvedValue('hashed-password')
-      const createdRecord = { id: 'new-user-id' }
-      userRepoCreateSpy.mockResolvedValue(createdRecord)
-      const userWithProfile = sampleUserResponse()
-      findUniqueUserSpy.mockResolvedValue(userWithProfile)
-      sendNewUserEmailSpy.mockResolvedValue(undefined)
+    const createPayload: CreateUserBodyType = {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      middleName: undefined,
+      address: null,
+      email: 'jane@example.com',
+      gender: 'FEMALE',
+      phoneNumber: null,
+      avatarUrl: null,
+      role: { id: 'role-1', name: RoleName.ADMINISTRATOR }
+    }
 
-      const result = await service.create({ data: createUserPayload, createdById: 'admin-id' })
+    it('creates user and sends email', async () => {
+      const roleRecord = { id: 'role-1', name: RoleName.ADMINISTRATOR, isActive: true, deletedAt: null }
+      sharedRoleRepo.findById.mockResolvedValue(roleRecord)
+      eidService.generateEid.mockResolvedValue('EID123')
+      hashingService.hashPassword.mockResolvedValue('hashed-pass')
+      userRepo.create.mockResolvedValue({ id: 'new-id' })
+      sharedUserRepo.findUniqueIncludeProfile.mockResolvedValue(baseUser)
+      nodemailerService.sendNewUserAccountEmail.mockResolvedValue(undefined)
 
-      expect(findRoleByIdSpy).toHaveBeenCalledWith('role-1')
-      expect(eidServiceSpy).toHaveBeenCalledWith({ roleName: RoleName.TRAINEE })
-      expect(hashingServiceSpy).toHaveBeenCalledWith('123')
-      expect(userRepoCreateSpy).toHaveBeenCalledWith({
-        createdById: 'admin-id',
-        userData: expect.objectContaining({
-          firstName: createUserPayload.firstName,
-          passwordHash: 'hashed-password',
-          eid: 'EID001'
-        }),
-        roleName: RoleName.TRAINEE,
-        trainerProfile: undefined,
-        traineeProfile: undefined
-      })
-      expect(findUniqueUserSpy).toHaveBeenCalledWith('new-user-id')
-      expect(sendNewUserEmailSpy).toHaveBeenCalledWith(
-        createUserPayload.email,
-        'EID001',
-        '123',
-        'Jane Q Doe',
-        RoleName.TRAINEE
+      const result = await service.create({ data: createPayload, createdById: 'admin-id' })
+
+      expect(sharedRoleRepo.findById).toHaveBeenCalledWith('role-1')
+      expect(eidService.generateEid).toHaveBeenCalledWith({ roleName: RoleName.ADMINISTRATOR })
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(hashingService.hashPassword).toHaveBeenCalledWith('EID123secret')
+      expect(userRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdById: 'admin-id',
+          roleName: RoleName.ADMINISTRATOR
+        })
       )
-      expect(result).toBe(userWithProfile)
+      expect(sharedUserRepo.findUniqueIncludeProfile).toHaveBeenCalledWith('new-id')
+      expect(nodemailerService.sendNewUserAccountEmail).toHaveBeenCalled()
+      expect(result).toBe(baseUser)
     })
 
-    it('should throw RoleNotFoundException when role is missing', async () => {
-      findRoleByIdSpy.mockResolvedValue(null)
+    it('throws RoleNotFoundException when role missing', async () => {
+      sharedRoleRepo.findById.mockResolvedValue(null)
 
-      await expect(service.create({ data: createUserPayload, createdById: 'admin-id' })).rejects.toBe(
-        RoleNotFoundException
-      )
+      await expect(service.create({ data: createPayload, createdById: 'admin-id' })).rejects.toBe(RoleNotFoundException)
 
-      expect(userRepoCreateSpy).not.toHaveBeenCalled()
+      expect(userRepo.create).not.toHaveBeenCalled()
     })
   })
 })

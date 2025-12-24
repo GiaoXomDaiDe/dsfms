@@ -316,8 +316,8 @@ export class DashboardRepository {
       ])
 
     const completionRate = totalAssessments === 0 ? 0 : approvedAssessments / totalAssessments
-    const passRatio = totalAssessments === 0 ? 0 : passCount / totalAssessments
-    const failRatio = totalAssessments === 0 ? 0 : failCount / totalAssessments
+    const passRatio = totalAssessments === 0 ? 0 : passCount / approvedAssessments
+    const failRatio = totalAssessments === 0 ? 0 : failCount / approvedAssessments
 
     return {
       assessmentProgress: {
@@ -332,7 +332,7 @@ export class DashboardRepository {
       assessmentRatios: {
         passCount,
         failCount,
-        totalAssessments,
+        totalAssessments: approvedAssessments,
         passRatio,
         failRatio
       }

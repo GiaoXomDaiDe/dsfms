@@ -26,7 +26,6 @@ import {
   DuplicateInstructorException,
   SubjectAlreadyArchivedException,
   SubjectCannotAssignTrainerFromCurrentStatusException,
-  SubjectCannotBeArchivedFromCurrentStatusException,
   SubjectCannotUpdateFromCurrentStatusException,
   SubjectCannotUpdateTrainerAssignmentFromCurrentStatusException,
   SubjectCodeAlreadyExistsException,
@@ -315,20 +314,13 @@ export class SubjectService {
       throw SubjectNotFoundException
     }
 
-    const subjectStatus = existingSubject.status as string
-
-    if (subjectStatus === SubjectStatus.ARCHIVED) {
+    if ((existingSubject.status as SubjectStatusValue) === SubjectStatus.ARCHIVED) {
       throw SubjectAlreadyArchivedException
-    }
-
-    if (subjectStatus !== SubjectStatus.PLANNED && subjectStatus !== SubjectStatus.ON_GOING) {
-      throw SubjectCannotBeArchivedFromCurrentStatusException
     }
 
     await this.subjectRepo.archive({
       id,
-      archivedById,
-      status: subjectStatus
+      archivedById
     })
 
     return { message: SubjectMes.ARCHIVE_SUCCESS }
@@ -470,7 +462,7 @@ export class SubjectService {
 
     const buildDuplicateMessage = (subject: SubjectType, duplicates: AssignTraineesErrorType['duplicates']): string => {
       const eidList = formatEidList(duplicates)
-      return `Trainees with EIDs ${eidList} are already enrolled in subject ${subject.name} (${subject.code}) for batch ${data.batchCode}. Please review and try again.`
+      return `Trainee(s) with EIDs ${eidList} have already enrolled in subject ${subject.name} (${subject.code}).`
     }
 
     const buildSuccessMessage = (subject: SubjectType, enrolled: TraineeAssignmentUserType[]): string => {
