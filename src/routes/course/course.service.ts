@@ -153,13 +153,11 @@ export class CourseService {
       throw CourseNotFoundException
     }
 
-    const courseStatus = existingCourse.status
-
-    if (courseStatus !== CourseStatus.PLANNED && courseStatus !== CourseStatus.ON_GOING) {
+    if (existingCourse.status === CourseStatus.ARCHIVED) {
       throw CourseCannotBeArchivedFromCurrentStatusException
     }
 
-    await this.courseRepo.archive({ id, deletedById, status: courseStatus })
+    await this.courseRepo.archive({ id, deletedById })
 
     return { message: 'Course archived successfully' }
   }

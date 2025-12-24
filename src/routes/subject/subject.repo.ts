@@ -32,7 +32,6 @@ import { SharedSubjectEnrollmentRepository } from '~/shared/repositories/shared-
 import { AssignmentUserForSubject, SharedUserRepository } from '~/shared/repositories/shared-user.repo'
 import { PrismaService } from '~/shared/services/prisma.service'
 import {
-  CannotArchiveSubjectWithNonCancelledEnrollmentsException,
   CourseNotFoundException,
   SubjectEnrollmentRemovalNotAllowedFromCurrentStatusException,
   SubjectNotFoundException,
@@ -392,82 +391,32 @@ export class SubjectRepository {
     return subject
   }
 
-  async archive({
-    id,
-    archivedById,
-    status
-  }: {
-    id: string
-    archivedById: string
-    status: string
-  }): Promise<SubjectType> {
+  async archive({ id, archivedById }: { id: string; archivedById: string }): Promise<SubjectType> {
     const now = new Date()
-
-    if (status === SubjectStatus.PLANNED) {
-      return await this.prisma.$transaction(async (tx) => {
-        await tx.subjectEnrollment.updateMany({
-          where: {
-            subjectId: id,
-            status: {
-              not: SubjectEnrollmentStatus.CANCELLED
-            }
-          },
-          data: {
-            status: SubjectEnrollmentStatus.CANCELLED,
-            updatedAt: now
+    return this.prisma.$transaction(async (tx) => {
+      await tx.subjectEnrollment.updateMany({
+        where: {
+          subjectId: id,
+          status: {
+            not: SubjectEnrollmentStatus.CANCELLED
           }
-        })
-
-        return tx.subject.update({
-          where: { id },
-          data: {
-            status: SubjectStatus.ARCHIVED,
-            deletedAt: now,
-            deletedById: archivedById,
-            updatedAt: now,
-            updatedById: archivedById
-          }
-        })
-      })
-    }
-
-    if (status === SubjectStatus.ON_GOING) {
-      return await this.prisma.$transaction(async (tx) => {
-        const activeEnrollmentCount = await tx.subjectEnrollment.count({
-          where: {
-            subjectId: id,
-            status: {
-              not: SubjectEnrollmentStatus.CANCELLED
-            }
-          }
-        })
-
-        if (activeEnrollmentCount > 0) {
-          throw CannotArchiveSubjectWithNonCancelledEnrollmentsException
+        },
+        data: {
+          status: SubjectEnrollmentStatus.CANCELLED,
+          updatedAt: now
         }
-
-        return tx.subject.update({
-          where: { id },
-          data: {
-            status: SubjectStatus.ARCHIVED,
-            deletedAt: now,
-            deletedById: archivedById,
-            updatedAt: now,
-            updatedById: archivedById
-          }
-        })
       })
-    }
 
-    return this.prisma.subject.update({
-      where: { id },
-      data: {
-        status: SubjectStatus.ARCHIVED,
-        deletedAt: now,
-        deletedById: archivedById,
-        updatedAt: now,
-        updatedById: archivedById
-      }
+      return tx.subject.update({
+        where: { id },
+        data: {
+          status: SubjectStatus.ARCHIVED,
+          deletedAt: now,
+          deletedById: archivedById,
+          updatedAt: now,
+          updatedById: archivedById
+        }
+      })
     })
   }
 
@@ -689,12 +638,14 @@ export class SubjectRepository {
 
     const eligibleUserIds = traineeUserIds.filter((id) => !invalidMap.has(id))
 
-    // 2) Tìm enrollment đã có (trùng) theo subjectId + batchCode + status blocking
+    // 2) Tìm enrollment đã có (trùng) theo subjectId + trainee (bỏ qua batch), chặn nếu status chưa cancelled
     const existingEnrollments = await this.prisma.subjectEnrollment.findMany({
       where: {
         subjectId,
         traineeUserId: { in: eligibleUserIds },
-        batchCode
+        status: {
+          not: SubjectEnrollmentStatus.CANCELLED
+        }
       },
       select: {
         traineeUserId: true,

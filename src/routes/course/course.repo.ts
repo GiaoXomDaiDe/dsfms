@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common'
 import {
-  CannotArchiveCourseWithActiveSubjectsException,
-  CannotArchiveCourseWithNonCancelledEnrollmentsException
-} from '~/routes/course/course.error'
-import {
   AssignCourseTrainerResType,
   CourseTraineeInfoType,
   CreateCourseBodyType,
@@ -267,109 +263,52 @@ export class CourseRepository {
     })
   }
 
-  async archive({ id, deletedById, status }: { id: string; deletedById: string; status: string }): Promise<CourseType> {
+  async archive({ id, deletedById }: { id: string; deletedById: string }): Promise<CourseType> {
     const now = new Date()
 
-    if (status === CourseStatus.PLANNED) {
-      return await this.prismaService.$transaction(async (tx) => {
-        await tx.subjectEnrollment.updateMany({
-          where: {
-            subject: {
-              courseId: id
-            },
-            status: {
-              not: SubjectEnrollmentStatus.CANCELLED
-            }
+    return this.prismaService.$transaction(async (tx) => {
+      await tx.subjectEnrollment.updateMany({
+        where: {
+          subject: {
+            courseId: id
           },
-          data: {
-            status: SubjectEnrollmentStatus.CANCELLED,
-            updatedAt: now
+          status: {
+            not: SubjectEnrollmentStatus.CANCELLED
           }
-        })
-
-        await tx.subject.updateMany({
-          where: {
-            courseId: id,
-            deletedAt: null,
-            status: {
-              not: SubjectStatus.ARCHIVED
-            }
-          },
-          data: {
-            status: SubjectStatus.ARCHIVED,
-            deletedAt: now,
-            deletedById,
-            updatedAt: now,
-            updatedById: deletedById
-          }
-        })
-
-        return tx.course.update({
-          where: { id },
-          data: {
-            deletedAt: now,
-            deletedById,
-            status: CourseStatus.ARCHIVED,
-            updatedById: deletedById,
-            updatedAt: now
-          }
-        })
-      })
-    }
-
-    if (status === CourseStatus.ON_GOING) {
-      return await this.prismaService.$transaction(async (tx) => {
-        const activeSubjectCount = await tx.subject.count({
-          where: {
-            courseId: id,
-            deletedAt: null,
-            status: {
-              not: SubjectStatus.ARCHIVED
-            }
-          }
-        })
-
-        if (activeSubjectCount > 0) {
-          throw CannotArchiveCourseWithActiveSubjectsException
+        },
+        data: {
+          status: SubjectEnrollmentStatus.CANCELLED,
+          updatedAt: now
         }
-
-        const activeEnrollmentCount = await tx.subjectEnrollment.count({
-          where: {
-            subject: {
-              courseId: id
-            },
-            status: {
-              not: SubjectEnrollmentStatus.CANCELLED
-            }
-          }
-        })
-
-        if (activeEnrollmentCount > 0) {
-          throw CannotArchiveCourseWithNonCancelledEnrollmentsException
-        }
-
-        return tx.course.update({
-          where: { id },
-          data: {
-            deletedAt: now,
-            deletedById,
-            status: CourseStatus.ARCHIVED,
-            updatedById: deletedById,
-            updatedAt: now
-          }
-        })
       })
-    }
 
-    return this.prismaService.course.update({
-      where: { id },
-      data: {
-        deletedAt: now,
-        deletedById,
-        status: CourseStatus.ARCHIVED,
-        updatedById: deletedById,
-        updatedAt: now
-      }
+      await tx.subject.updateMany({
+        where: {
+          courseId: id,
+          deletedAt: null,
+          status: {
+            not: SubjectStatus.ARCHIVED
+          }
+        },
+        data: {
+          status: SubjectStatus.ARCHIVED,
+          deletedAt: now,
+          deletedById,
+          updatedAt: now,
+          updatedById: deletedById
+        }
+      })
+
+      return tx.course.update({
+        where: { id },
+        data: {
+          deletedAt: now,
+          deletedById,
+          status: CourseStatus.ARCHIVED,
+          updatedById: deletedById,
+          updatedAt: now
+        }
+      })
     })
   }
 
