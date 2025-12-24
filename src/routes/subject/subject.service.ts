@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { GetCourseEnrollmentBatchesResType } from '~/routes/course/course.model'
 import {
   SubjectEnrollmentStatus,
@@ -38,7 +38,6 @@ import {
 import { SubjectMes } from './subject.message'
 import {
   AssignTraineesBodyType,
-  AssignTraineesErrorType,
   AssignTraineesResType,
   AssignTrainerBodyType,
   AssignTrainerResType,
@@ -62,8 +61,6 @@ import {
   RemoveCourseTraineeEnrollmentsResType,
   RemoveEnrollmentsBodyType,
   RemoveEnrollmentsResType,
-  TraineeAssignmentIssueType,
-  TraineeAssignmentUserType,
   UpdateSubjectBodyType,
   UpdateTrainerAssignmentResType
 } from './subject.model'
@@ -448,38 +445,11 @@ export class SubjectService {
     const targetSubjectIds = new Set<string>(data.subjectIds)
     if (targetSubjectIds.size === 0) throw SubjectNotFoundException
 
-    const errors: AssignTraineesErrorType[] = []
-    const invalidIssues: TraineeAssignmentIssueType[] = []
-    const successMessages: string[] = []
-    const errorMessages: string[] = []
-    let createdCount = 0
+    let enrolledCount = 0
+    let duplicateCount = 0
+    let invalidCount = 0
 
-    const formatEidList = (items: Array<{ eid?: string; userId?: string }>): string =>
-      items
-        .map((item) => item.eid || item.userId)
-        .filter((id): id is string => Boolean(id))
-        .join(', ')
-
-    const buildDuplicateMessage = (subject: SubjectType, duplicates: AssignTraineesErrorType['duplicates']): string => {
-      const eidList = formatEidList(duplicates)
-      return `Trainee(s) with EIDs ${eidList} have already enrolled in subject ${subject.name} (${subject.code}).`
-    }
-
-    const buildSuccessMessage = (subject: SubjectType, enrolled: TraineeAssignmentUserType[]): string => {
-      const eidList = formatEidList(enrolled)
-      return `Trainees with EIDs ${eidList} have been enrolled successfully in subject ${subject.name} (${subject.code}) for batch ${data.batchCode}.`
-    }
-
-    const buildInvalidIssueMessage = (issue: TraineeAssignmentIssueType): string => {
-      const identifier = issue.eid ?? issue.email ?? issue.submittedId
-      const reasonMap: Record<TraineeAssignmentIssueType['reason'], string> = {
-        USER_NOT_FOUND: 'User not found',
-        ROLE_NOT_TRAINEE: 'User role is not trainee',
-        USER_INACTIVE: 'User is inactive or deleted'
-      }
-      const reason = reasonMap[issue.reason] ?? 'Invalid trainee'
-      return `Trainee ${identifier} cannot be enrolled: ${reason}.`
-    }
+    const totalRequested = targetSubjectIds.size * data.traineeUserIds.length
 
     for (const subjectId of targetSubjectIds) {
       // 1) Guard per subject
@@ -504,44 +474,37 @@ export class SubjectService {
         blockingStatuses: this.defaultBlockingEnrollmentStatuses // ENROLLED, ON_GOING
       })
 
-      // 3) Thu thập invalid, errors
-      if (result.invalid.length > 0) invalidIssues.push(...result.invalid)
-      if (result.duplicates.length > 0) {
-        errorMessages.push(buildDuplicateMessage(subject, result.duplicates))
-        errors.push({
-          subjectId,
-          subjectName: subject.name,
-          subjectCode: subject.code,
-          batchCode: data.batchCode,
-          duplicates: result.duplicates
-        })
+      duplicateCount += result.duplicates.length
+      invalidCount += result.invalid.length
+      enrolledCount += result.createdCount
+    }
+    const notEnrolledCount = duplicateCount + invalidCount
+
+    const summaryMessage = (() => {
+      if (notEnrolledCount === 0) {
+        return `Successfully enrolled ${enrolledCount}/${totalRequested} trainees.`
       }
 
-      createdCount += result.createdCount
-
-      // 5) Ghi nhận message thành công cho subject
-      if (result.enrolled.length > 0) {
-        successMessages.push(buildSuccessMessage(subject, result.enrolled))
+      if (invalidCount === 0) {
+        // Only duplicates
+        return `Successfully enrolled ${enrolledCount}/${totalRequested} trainees. ${duplicateCount}/${totalRequested} trainees failed as they have already been enrolled into this course.`
       }
-    }
 
-    const invalidMessages = invalidIssues.map(buildInvalidIssueMessage)
-    const combinedErrorMessages = [...errorMessages, ...invalidMessages]
+      if (duplicateCount === 0) {
+        // Only invalid
+        return `Successfully enrolled ${enrolledCount}/${totalRequested} trainees. ${invalidCount}/${totalRequested} trainees failed due to invalid or ineligible status.`
+      }
 
-    // Nếu không tạo mới bản ghi nào và có lỗi (duplicates/invalid) thì trả lỗi để frontend hiển thị
-    if (createdCount === 0 && successMessages.length === 0 && (errors.length > 0 || invalidIssues.length > 0)) {
-      throw new BadRequestException({
-        message: 'No enrollments were created. Please review the errors.',
-        data: {
-          successMessages: [],
-          errorMessages: combinedErrorMessages
-        }
-      })
-    }
+      // Mixed duplicates + invalid
+      return `Successfully enrolled ${enrolledCount}/${totalRequested} trainees. ${notEnrolledCount}/${totalRequested} trainees failed (${duplicateCount} already enrolled, ${invalidCount} invalid or ineligible).`
+    })()
 
     return {
-      successMessages,
-      errorMessages: combinedErrorMessages
+      summaryMessage,
+      totalRequested,
+      enrolledCount,
+      duplicateCount,
+      invalidCount
     }
   }
   async getTraineeEnrollments({

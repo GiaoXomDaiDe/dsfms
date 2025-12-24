@@ -486,8 +486,11 @@ export const AssignTraineesErrorSchema = z.object({
 })
 
 export const AssignTraineesResSchema = z.object({
-  successMessages: z.array(z.string()).default([]),
-  errorMessages: z.array(z.string()).default([])
+  summaryMessage: z.string(),
+  totalRequested: z.number().int(),
+  enrolledCount: z.number().int(),
+  duplicateCount: z.number().int(),
+  invalidCount: z.number().int()
 })
 
 const EnrollmentDepartmentSchema = TraineeAssignmentDepartmentSchema
